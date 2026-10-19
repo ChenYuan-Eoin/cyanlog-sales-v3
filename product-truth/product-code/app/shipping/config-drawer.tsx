@@ -19,6 +19,7 @@ async function request<T>(init?: RequestInit): Promise<T> {
 }
 
 type ConfigurationReply = {
+  credentialStorageReady?: boolean
   deploymentEnvironment?: 'production' | 'preview' | 'development' | 'unknown'
   configuration?: ShippingConfiguration
   navigationAvailable?: boolean
@@ -47,6 +48,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('production')
   const [deploymentEnvironment, setDeploymentEnvironment] = useState<NonNullable<ConfigurationReply['deploymentEnvironment']>>('unknown')
   const [saveFailed, setSaveFailed] = useState(false)
+  const [credentialStorageReady, setCredentialStorageReady] = useState(true)
   const [section, setSection] = useState<ConfigSection>('carrier')
   const panelTitle = useRef<HTMLHeadingElement>(null)
   const [partnerId, setPartnerId] = useState('')
@@ -84,6 +86,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       return
     }
     setConfiguration(data.configuration)
+    setCredentialStorageReady(data.credentialStorageReady !== false)
     setDeploymentEnvironment(data.deploymentEnvironment || 'unknown')
     if (data.legacyConfigurationAvailable) setLegacyConfigurationAvailable(data.legacyConfigurationAvailable)
     if (data.operatorAccess) {
@@ -130,6 +133,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   }
 
   async function saveConnection() {
+    if (!credentialStorageReady) return
     if (!partnerId.trim() || !checkWord.trim()) { setMessage('请填写 PartnerID 和应用密钥。'); return }
     setProbeMessage(''); setProbePassed(false)
     const saved = await mutate('connection', 'save_connection', { environment, partnerId, checkWord, services: authorizedServices })
@@ -167,6 +171,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   }
 
   async function saveAccount() {
+    if (!credentialStorageReady) return
     if (!accountNumber.trim()) { setMessage('请输入月结卡号。'); return }
     const saved = await mutate('account', 'add_billing_account', { accountNumber, displayName: accountName, environment })
     if (saved) { setAccountNumber('') }
@@ -209,6 +214,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
         <div className={styles.panelHeading}><h3 ref={panelTitle} tabIndex={-1}>{currentSection.label}</h3></div>
 
         <section id="shipping-panel-carrier" hidden={section !== 'carrier'} aria-label="顺丰接入内容">
+          {!credentialStorageReady && <p className={styles.message} role="alert">当前站点暂时无法保存应用密钥和月结账号，请联系管理员修复。已保存的信息仍显示在下方，无需重新填写。</p>}
           <div className={styles.environmentBar}>
             <label>顺丰接口环境<select aria-label="运行环境" value={environment} disabled={!!busy} onChange={event => changeEnvironment(event.target.value as Environment)}><option value="production">生产</option><option value="sandbox">沙盒</option></select></label>
           </div>
@@ -225,7 +231,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
                   <label>PartnerID<input autoComplete="off" value={partnerId} onChange={event => setPartnerId(event.target.value)} placeholder="顺丰应用编号"/></label>
                   <label>应用密钥<input autoComplete="new-password" type="password" value={checkWord} onChange={event => setCheckWord(event.target.value)} placeholder={connection ? '填写新密钥' : '顺丰应用密钥'}/></label>
                 </div>
-                <div className={styles.actions}><button disabled={!!busy} onClick={() => void saveConnection()}>{busy === 'connection' ? '保存中…' : '保存连接'}</button></div>
+                <div className={styles.actions}><button disabled={!!busy || !credentialStorageReady} onClick={() => void saveConnection()}>{busy === 'connection' ? '保存中…' : '保存连接'}</button></div>
               </details>
               <div className={styles.actions}>
                 <button className={styles.secondary} disabled={!!busy || !connection} onClick={() => void testConnection()}>{busy === 'probe' ? <><LoaderCircle size={14}/>测试中…</> : environment === 'sandbox' ? '测试沙盒连接' : '测试生产连接（只读）'}</button>
@@ -256,7 +262,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
                 <label>月结卡号<input autoComplete="off" inputMode="numeric" value={accountNumber} onChange={event => setAccountNumber(event.target.value.replace(/\D/g, '').slice(0, 32))} placeholder="输入完整月结卡号"/></label>
                 <label>备注说明（选填）<input value={accountName} onChange={event => setAccountName(event.target.value)} maxLength={80}/></label>
               </div>
-              <div className={styles.actions}><button className={styles.secondary} disabled={!!busy} onClick={() => void saveAccount()}>{busy === 'account' ? '保存中…' : <><Plus size={14}/>保存月结账号</>}</button></div>
+              <div className={styles.actions}><button className={styles.secondary} disabled={!!busy || !credentialStorageReady} onClick={() => void saveAccount()}>{busy === 'account' ? '保存中…' : <><Plus size={14}/>保存月结账号</>}</button></div>
 
               <div className={styles.serviceHeading}><h5 className={styles.groupTitle}>可提报服务</h5><span>当前顺丰应用下的月结账号共用</span></div>
               <div className={styles.services}>{authorizedServices.map((service, index) => <div key={service.id}>

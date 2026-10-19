@@ -63,6 +63,40 @@ describe('shipping configuration drawer', () => {
     expect(screen.queryByText(/尚未保存月结账号/)).toBeNull()
   })
 
+  it('disables encrypted saves when storage is unavailable while retaining saved accounts', async () => {
+    fetcher.mockResolvedValue(Response.json({ credentialStorageReady: false, configuration: { connections: [], sender: null, billingAccounts: [{ id: 'p', environment: 'production', displayName: '总部月结', tail: '5616', status: 'active', isDefault: true }] } }))
+    render(<ShippingConfigDrawer embedded />)
+    await openSection('顺丰接入')
+    expect(screen.getByText('总部月结')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '保存连接' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: '保存月结账号' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('alert').textContent).toContain('暂时无法保存')
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+  })
+
+  it('loads a saved account remark again after the configuration view is remounted', async () => {
+    let accounts: object[] = []
+    fetcher.mockImplementation(async (_url, init) => {
+      if (init?.method === 'POST') {
+        const body = JSON.parse(init.body)
+        accounts = [{ id: 'saved', environment: body.environment, displayName: body.displayName, tail: body.accountNumber.slice(-4), status: 'active', isDefault: true }]
+      }
+      return Response.json({ credentialStorageReady: true, configuration: { connections: [], sender: null, billingAccounts: accounts } })
+    })
+    const view = render(<ShippingConfigDrawer embedded />)
+    await openSection('顺丰接入')
+    fireEvent.change(screen.getByLabelText('月结卡号'), { target: { value: '1234565616' } })
+    fireEvent.change(screen.getByLabelText('备注说明（选填）'), { target: { value: '总部月结' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存月结账号' }))
+    await screen.findByText('总部月结')
+    view.unmount()
+    render(<ShippingConfigDrawer embedded />)
+    await openSection('顺丰接入')
+    expect(screen.getByText('总部月结')).toBeTruthy()
+    expect(screen.getByText(/5616/)).toBeTruthy()
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
+  })
+
   it('does not present an empty editable account list when configuration loading fails', async () => {
     fetcher.mockImplementation(async () => Response.json({ error: '寄件配置读取失败。' }, { status: 503 }))
     render(<ShippingConfigDrawer embedded />)

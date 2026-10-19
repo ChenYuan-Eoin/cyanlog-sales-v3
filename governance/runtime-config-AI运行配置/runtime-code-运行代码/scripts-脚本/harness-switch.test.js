@@ -238,3 +238,18 @@ test('hook Git pointers cannot redirect registry evidence, notes or a switch int
   protectedFiles.forEach((file, index) => assert.deepEqual(fs.readFileSync(file), protectedBytes[index], file));
   assert.equal(git(foreign.target, 'for-each-ref', 'refs/notes'), foreignNotes);
 });
+
+
+test('advisory Harness allows idle runtime but still rejects an invalid product baseline', t => {
+  const f = fixture(t);
+  const state = JSON.parse(fs.readFileSync(path.join(f.target, SCHEDULER), 'utf8'));
+  state.scheduling_policy.harness_mode = 'advisory';
+  write(path.join(f.target, SCHEDULER), state);
+  write(core.paths(f.target).statePath, { mode: 'permissive', activeGates: [] });
+  fs.rmSync(core.paths(f.target).contractPath);
+  assert.equal(registry.validateSchedulerState({ repoRoot: f.target }).ok, true);
+  state.active_task.kind = 'product';
+  state.product_baseline.status = 'draft';
+  write(path.join(f.target, SCHEDULER), state);
+  assert.equal(registry.validateSchedulerState({ repoRoot: f.target }).ok, false);
+});

@@ -643,6 +643,8 @@ function validateSchedulerSnapshot(options, candidate) {
     errors.push(`Harness settings are invalid: ${error.message}`);
   }
 
+  // Advisory Harness cannot veto an otherwise valid development queue.
+  if (state.scheduling_policy?.harness_mode !== 'advisory') {
   try {
     const {
       statePath: harnessStatePath,
@@ -714,6 +716,8 @@ function validateSchedulerSnapshot(options, candidate) {
     }
   } catch (error) {
     errors.push(`Harness state is invalid: ${error.message}`);
+  }
+
   }
 
   const baselineStatus = state.product_baseline && state.product_baseline.status;

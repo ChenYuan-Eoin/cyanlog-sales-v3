@@ -1,4 +1,13 @@
 #!/usr/bin/env node
+// Honor project hook removal even when a running client has cached registration.
+{
+  const hookFs = require('fs');
+  const hookPath = require('path').join(__dirname, '..', 'hooks.json');
+  const hookConfig = JSON.parse(hookFs.readFileSync(hookPath, 'utf8'));
+  const registered = Object.values(hookConfig.hooks || {}).some(groups =>
+    groups.some(group => (group.hooks || []).some(hook => (hook.command || '').includes('harness-adapter.js'))));
+  if (!registered) process.exit(0);
+}
 
 const fs = require('fs');
 const path = require('path');
