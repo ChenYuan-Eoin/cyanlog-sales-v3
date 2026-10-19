@@ -40,3 +40,63 @@
     "database_writes": false
   }
 }
+
+{
+  "sha": "960dbcf7b604d04070600fb2d6312b6a37165fb0",
+  "input": "IN-20261019-033",
+  "scope": "shipping config select arrow alignment only",
+  "root_cause": "native appearance auto: arrow does not honor content padding",
+  "fix": {
+    "appearance": "none",
+    "arrow": "16px SVG chevron",
+    "position": "right 12px center",
+    "padding_right": "40px",
+    "forced_colors": "native appearance restored"
+  },
+  "checks": {
+    "target_tests": 27,
+    "full_tests": 2699,
+    "skipped": 5,
+    "lint": "passed",
+    "typecheck": "passed",
+    "build": "passed",
+    "diff_and_sensitive_files": "passed"
+  },
+  "data_changes": false,
+  "at": "2026-10-19T09:57:52.959104+00:00",
+  "preview": {
+    "deployment": "dpl_EKLqQNqMFwvn4joMhnd6p2gTaFWk",
+    "url": "https://cyanlog-sales-v3-config-preview.vercel.app/configs?tab=shipping",
+    "clean_committed_sha": "960dbcf7b604d04070600fb2d6312b6a37165fb0",
+    "browser": "existing Chrome tab1110515411",
+    "computed_styles_both_controls": {
+      "widths": [
+        100,
+        945
+      ],
+      "position": "calc(100% - 12px) 50%",
+      "size": "16px 16px",
+      "padding_right": "40px"
+    },
+    "visual_verified": true,
+    "select_and_escape_verified": true,
+    "database_writes": false
+  },
+  "release": {
+    "status": "production_released",
+    "deployment": "dpl_83ronr6RriLWSvDRNUpiLMpvWkG2",
+    "deployment_state": "READY",
+    "domain": "https://sales.cyanlog.icu",
+    "remote_main_and_production": "960dbcf7b604d04070600fb2d6312b6a37165fb0",
+    "operator_browser": "user existing Chrome tab1110515270",
+    "operator_path": "/configs?tab=shipping → 顺丰接入",
+    "verified": [
+      "both computed arrow offsets right12px center",
+      "native dropdown opens/closes",
+      "service arrow visual",
+      "unsaved input retained"
+    ],
+    "screenshot": "select-arrow-production.png",
+    "at": "2026-10-19T10:05:46.827940+00:00"
+  }
+}
