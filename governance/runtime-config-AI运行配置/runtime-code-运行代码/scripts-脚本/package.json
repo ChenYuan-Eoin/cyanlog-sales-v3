@@ -9,8 +9,8 @@
     "codex-trust-worktree": "node codex-trust-worktree.js",
     "goal": "node harness-goal.js",
     "ready": "node harness-doctor.js --strict",
-    "selftest": "node harness-selftest.js",
-    "test": "node harness-selftest.js"
+    "selftest": "node harness-selftest.js && node --test harness-workspace.test.js harness-switch.test.js",
+    "test": "npm run selftest"
   },
   "dependencies": {
     "js-yaml": "^4.1.0"

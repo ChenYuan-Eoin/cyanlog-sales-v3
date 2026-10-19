@@ -120,6 +120,9 @@ function usage() {
     '  harness-goal.js status [--json]',
     '  harness-goal.js preflight [--tools comma-separated-tools] [--paths comma-separated-paths]',
     '  harness-goal.js bind --caller /checkout --workspace /registered-worktree --authority IN-id',
+    '  harness-goal.js switch-check --caller /checkout --workspace /registered-worktree --authority IN-id --candidate /absolute/candidate.json',
+    '  harness-goal.js switch --caller /checkout --workspace /registered-worktree --authority IN-id --candidate /absolute/candidate.json',
+    '  harness-goal.js recover-switch --caller /checkout --workspace /registered-worktree --authority IN-id',
     '  harness-goal.js template',
     '  harness-goal.js clear'
   ].join('\n'));
@@ -131,6 +134,19 @@ function main() {
   const { options, rest } = parseOptions(args);
 
   try {
+    if (['switch-check', 'switch', 'recover-switch'].includes(command)) {
+      if (!options.caller || !options.workspace || !options.authority) throw new Error('switch requires caller, workspace and authority');
+      const switches = require('./harness-switch');
+      const input = { caller: options.caller, workspace: options.workspace, authority: options.authority };
+      if (command !== 'recover-switch') {
+        if (!options.candidate) throw new Error('switch requires a candidate JSON path');
+        input.candidate = readJson(options.candidate);
+      }
+      const result = command === 'switch-check' ? switches.checkSwitch(input) : command === 'switch' ? switches.switchWorkspace(input) : switches.recoverSwitch(input);
+      console.log(JSON.stringify(result, null, 2));
+      if (result.ok === false) process.exitCode = 2;
+      return;
+    }
     if (command === 'bind') {
       if (!options.caller || !options.workspace || !options.authority) throw new Error('bind requires caller, workspace and authority');
       console.log(JSON.stringify(bindWorkspace(options.caller, options.workspace, options.authority), null, 2));
@@ -139,7 +155,11 @@ function main() {
     if (command === 'preflight') {
       const scheduler = registry.validateSchedulerState({ repoRoot });
       const state = loadState(repoRoot), contract = loadContract(repoRoot);
-      const tools = String(options.tools || 'Read,AskUserQuestion,Bash').split(',').filter(Boolean);
+      const defaults = ['Read', 'AskUserQuestion', 'get_goal', 'create_goal', 'update_goal'];
+      if (['research', 'execute', 'verify'].includes(state.phase)) defaults.push('Bash');
+      if (['research', 'contract_review', 'execute', 'verify'].includes(state.phase)) defaults.push('Delegate');
+      if (['execute', 'verify'].includes(state.phase)) defaults.push('Browser');
+      const tools = String(options.tools || defaults.join(',')).split(',').filter(Boolean);
       const toolChecks = tools.map(tool => {
         const result = core.evaluateToolUse(repoRoot, { tool_name: tool });
         return { tool, ok: result.ok, reason: result.reason || null };

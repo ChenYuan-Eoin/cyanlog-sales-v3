@@ -56,6 +56,8 @@ const READ_TOOLS = new Set(['Read', 'Grep', 'Glob', 'LS']);
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'apply_patch']);
 const ASK_TOOLS = new Set(['AskUserQuestion']);
 const COMMAND_TOOLS = new Set(['Bash']);
+const GOAL_READ_TOOLS = new Set(['get_goal', 'functions.get_goal', 'functions__get_goal']);
+const GOAL_MANAGE_TOOLS = new Set(['create_goal', 'functions.create_goal', 'functions__create_goal', 'update_goal', 'functions.update_goal', 'functions__update_goal']);
 
 const HIGH_RISK_PATTERNS = [
   { pattern: /(\s|^)rm\s+-[^;\n]*r[^;\n]*f\s+(\/|\*|\.|\.\.)/, reason: 'recursive forced deletion' },
@@ -110,6 +112,14 @@ function repoRootFromRegistry() {
   return loadRegistry().repoRoot;
 }
 
+function repositoryGitEnvironment() {
+  const env = { ...process.env };
+  // Git hooks export repository/index/config pointers. A supplied cwd must be
+  // authoritative for these repository-scoped reads, including other worktrees.
+  for (const name of Object.keys(env)) if (name.startsWith('GIT_')) delete env[name];
+  return env;
+}
+
 function harnessRuntimeDir(repoRoot) {
   if (process.env.PRICE_V3_HARNESS_RUNTIME_DIR) {
     return path.resolve(process.env.PRICE_V3_HARNESS_RUNTIME_DIR);
@@ -121,6 +131,7 @@ function harnessRuntimeDir(repoRoot) {
     'codex-runtime/harness'
   ], {
     cwd: repoRoot,
+    env: repositoryGitEnvironment(),
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe']
   });
@@ -787,11 +798,15 @@ function normalizeToolName(name) {
   if (['web__run', 'web.run', 'webrun'].includes(raw)) return 'WebRead';
   if (['mcp__cua_repl__js', 'mcp__cua_repl.js'].includes(raw)) return 'Browser';
   if (['wait', 'functions.wait', 'functions__wait', 'clock.sleep', 'clock__sleep'].includes(raw)) return 'Wait';
+  // Native conversation goals are separate from this repository's Harness goal.
+  // Management needs its own gate entry and never grants local approval/completion.
+  if (GOAL_READ_TOOLS.has(raw)) return 'Read';
+  if (GOAL_MANAGE_TOOLS.has(raw)) return 'GoalManage';
   if (!raw) {
     return '';
   }
   // Exact read-only connectors; do not classify arbitrary MCP tools by suffix.
-  if (/^mcp__codex_apps__vercel__(get_deployment|get_project|list_deployments|get_project_domain|list_project_domains)$/.test(raw)
+  if (/^mcp__codex_apps__vercel_{1,2}(get_deployment|get_project|list_deployments|get_project_domain|list_project_domains|list_deployment_files|get_deployment_file_contents)$/.test(raw)
     || /^mcp__codex_app__(list_artifacts|get_worktree_creation_status)$/.test(raw)) return 'Read';
   // This tool creates a managed local checkout for the current repository only.
   if (raw === 'mcp__codex_app__create_worktree') return 'Edit';
@@ -835,7 +850,7 @@ function isHarnessControlCommand(repoRoot, command) {
   if (!['node', process.execPath].includes(binary)) return false;
   const expected = path.join(repoRoot, 'governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-goal.js');
   if (!script || path.resolve(repoRoot, script) !== expected) return false;
-  return ['status', 'template', 'approve', 'approve-action', 'revise', 'evidence', 'checkpoint', 'audit', 'phase', 'complete', 'clear', 'bind', 'preflight'].includes(operation);
+  return ['status', 'template', 'approve', 'approve-action', 'revise', 'evidence', 'checkpoint', 'audit', 'phase', 'complete', 'clear', 'bind', 'preflight', 'switch-check', 'switch', 'recover-switch'].includes(operation);
 }
 
 function detectCommandRisk(command = '') {
@@ -851,7 +866,9 @@ function detectCommandRisk(command = '') {
 // Only a literal document read is exempt. Shell expansion, redirection, pipes
 // and command composition deliberately fall through to the normal checks.
 function isPlainDocumentRead(command) {
-  return /^cat[ \t]+(?:\/[A-Za-z0-9_./-]+\.md)(?:[ \t]+\/[A-Za-z0-9_./-]+\.md)*[ \t]*$/.test(command);
+  if (/[\\$`|&<>;\r\n\0]/.test(command)) return false;
+  const argument = /(?:\/[A-Za-z0-9_./-]+\.md|'\/[^'\r\n]+\.md'|"\/[^"\r\n]+\.md")/.source;
+  return new RegExp(`^cat[ \\t]+${argument}(?:[ \\t]+${argument})*[ \\t]*$`).test(command);
 }
 
 // Supplement existing gates with a single-use grant, never a blanket bypass.
@@ -860,7 +877,7 @@ function actionWorkspace(repoRoot, cwd) {
   const root = fs.realpathSync(repoRoot), directory = fs.realpathSync(cwd);
   if (directory === root || directory.startsWith(`${root}${path.sep}`)) return root;
   const gitPath = (at, argument) => {
-    const result = spawnSync('git', ['rev-parse', argument], { cwd: at, encoding: 'utf8' });
+    const result = spawnSync('git', ['rev-parse', argument], { cwd: at, env: repositoryGitEnvironment(), encoding: 'utf8' });
     if (result.status !== 0) throw new Error('action workspace is not a repository');
     return fs.realpathSync(path.resolve(at, result.stdout.trim()));
   };
@@ -881,12 +898,13 @@ function actionBinding(repoRoot, command, cwd) {
   const root = fs.realpathSync(repoRoot);
   if (directory !== root && !directory.startsWith(`${root}${path.sep}`)) throw new Error('cwd outside workspace');
   const git = (args) => {
-    const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+    const result = spawnSync('git', args, { cwd: root, env: repositoryGitEnvironment(), encoding: 'utf8' });
     if (result.status !== 0) throw new Error('cannot bind approval to git state');
     return result.stdout.trim();
   };
   let target, environment, action, deploymentId = null, refObject = null;
-  const previewDeploy = /^(?:\/[A-Za-z0-9_./-]+\/)?vercel deploy --target preview --scope [A-Za-z0-9_-]+(?: --yes)?$/.test(command);
+  const previewMatch = /^((?:\/[A-Za-z0-9_./-]+\/)?vercel deploy --target preview --scope [A-Za-z0-9_-]+(?: --yes)?)(?: --meta gitCommitSha=([a-f0-9]{40}|[a-f0-9]{64}))?$/.exec(command);
+  const previewDeploy = Boolean(previewMatch);
   const productionDeploy = /^(?:\/[A-Za-z0-9_./-]+\/)?vercel deploy --prod --skip-domain --scope [A-Za-z0-9_-]+(?: --yes)?$/.test(command);
   const productionPromote = /^(?:\/[A-Za-z0-9_./-]+\/)?vercel promote dpl_[A-Za-z0-9]+ --scope [A-Za-z0-9_-]+(?: --yes)?$/.test(command);
   if (previewDeploy || productionDeploy || productionPromote) {
@@ -914,9 +932,14 @@ function actionBinding(repoRoot, command, cwd) {
     action = 'sandbox_database_push';
   } else throw new Error('unsupported approval action');
   if (git(['status', '--porcelain']).length) throw new Error('approval requires clean committed workspace');
+  const head = git(['rev-parse', 'HEAD']);
+  if (previewMatch?.[2] && previewMatch[2] !== head) throw new Error('Preview gitCommitSha metadata must match current HEAD');
   const contract = loadContract(repoRoot);
   if (contract?.status !== 'approved') throw new Error('approved goal required');
-  return { commandHash: hashText(literalCommand), cwd: directory, workspace: root, head: git(['rev-parse', 'HEAD']),
+  // Only this exact Preview suffix may reuse the base command's authority.
+  // The actual single-use grant still hashes the complete literal and HEAD.
+  const metadataAuthority = previewMatch?.[2] ? { authorityCommandHash: hashText(previewMatch[1]) } : {};
+  return { commandHash: hashText(literalCommand), ...metadataAuthority, cwd: directory, workspace: root, head,
     goalHash: hashText(JSON.stringify([contract.id, contract.objective, contract.boundaries, contract.revisions])), target, environment, action, deploymentId, refObject };
 }
 
@@ -925,9 +948,13 @@ function actionAuthority(repoRoot, authority, binding) {
   const inbox = fs.readFileSync(path.join(repoRoot, 'governance/runtime-state/demand-inbox.jsonl'), 'utf8');
   const entry = inbox.split('\n').filter(Boolean).map((line) => JSON.parse(line)).find((item) => item.id === authority);
   const allowed = entry?.action_approval;
+  const commandMatches = allowed?.commandHash === binding.commandHash || (
+    binding.action === 'preview_deploy' && binding.environment === 'preview' &&
+    binding.authorityCommandHash && allowed?.commandHash === binding.authorityCommandHash
+  );
   if (entry?.state !== 'user_authorized' || allowed?.by !== 'user' ||
       allowed.target !== binding.target || allowed.environment !== binding.environment ||
-      allowed.commandHash !== binding.commandHash || allowed.cwd !== binding.cwd) throw new Error('matching explicit user action authority required');
+      !commandMatches || allowed.cwd !== binding.cwd) throw new Error('matching explicit user action authority required');
   if (binding.environment === 'production') {
     const state = readJson(path.join(repoRoot, 'governance/runtime-state/active-task.json'));
     const contract = state?.active_task?.delivery_contract;
@@ -1034,6 +1061,7 @@ function commandTextFromPayload(payload = {}) {
 
 function toolCategory(toolName) {
   if (READ_TOOLS.has(toolName)) return 'read';
+  if (toolName === 'GoalManage') return 'goal';
   if (EDIT_TOOLS.has(toolName)) return 'edit';
   if (COMMAND_TOOLS.has(toolName)) return 'command';
   if (ASK_TOOLS.has(toolName)) return 'ask';
@@ -1353,7 +1381,8 @@ function buildActionEvaluationMatrix(repoRoot, details) {
     documentRisk
   } = details;
   const rel = normalizeRepoRelative(repoRoot, payloadFilePath(payload));
-  const targetObject = actionTargetObject(repoRoot, payload, command);
+  const conversationGoal = GOAL_READ_TOOLS.has(rawToolName) || GOAL_MANAGE_TOOLS.has(rawToolName);
+  const targetObject = conversationGoal ? 'conversation-goal' : actionTargetObject(repoRoot, payload, command);
   const impact = actionImpact(category, targetObject, commandRisk, controlRisk);
   const driftRisk = targetDriftRisk(contract, targetObject, category);
   const artifact = category === 'edit' && payloadFilePath(payload) ? runtimePathPolicy(repoRoot, payloadFilePath(payload)) : null;
@@ -1414,7 +1443,9 @@ function buildActionEvaluationMatrix(repoRoot, details) {
       'control_plane',
       'Control-plane protection',
       controlRisk ? MATRIX_STATUS.BLOCK : MATRIX_STATUS.PASS,
-      controlRisk || `target=${targetObject}; controlPlane=${targetObject === 'harness-control-plane' || targetObject === 'harness-runtime-state'}`
+      controlRisk || (conversationGoal
+        ? 'conversation goal only; local Harness approval, phase and delivery state remain independent'
+        : `target=${targetObject}; controlPlane=${targetObject === 'harness-control-plane' || targetObject === 'harness-runtime-state'}`)
     ),
     matrixRow(
       'document_governance',
@@ -1434,7 +1465,9 @@ function buildActionEvaluationMatrix(repoRoot, details) {
       'evidence',
       'Evidence requirement',
       MATRIX_STATUS.INFO,
-      impact === 'high'
+      conversationGoal
+        ? 'conversation goal status is not repository delivery evidence; existing delivery checks still apply'
+        : impact === 'high'
         ? 'record command, result, target, risk, and rollback in evidence ledger'
         : 'record validation evidence before claiming completion'
     )

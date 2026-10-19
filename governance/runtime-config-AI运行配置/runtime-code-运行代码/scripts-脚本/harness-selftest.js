@@ -918,7 +918,9 @@ function runSelftest(repoRoot) {
     const environmentWorktreeRedirect = validateSchedulerState({ repoRoot });
     assert.strictEqual(environmentWorktreeRedirect.ok, false);
     assert.ok(environmentWorktreeRedirect.errors.some((error) => error.includes('GIT_WORK_TREE must be unset')));
-    assert.ok(environmentWorktreeRedirect.errors.some((error) => error.includes('Git top-level mismatch')));
+    // The override remains prohibited, but isolated Git reads must no longer
+    // follow it into the other repository while checking the violation.
+    assert.ok(!environmentWorktreeRedirect.errors.some((error) => error.includes('Git top-level mismatch')));
   } finally {
     if (previousGitWorkTree === undefined) delete process.env.GIT_WORK_TREE;
     else process.env.GIT_WORK_TREE = previousGitWorkTree;

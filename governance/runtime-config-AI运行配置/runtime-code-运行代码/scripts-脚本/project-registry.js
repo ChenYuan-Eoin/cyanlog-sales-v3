@@ -407,7 +407,24 @@ function shippingRuntimeEvidenceBlockers(section, environment) {
 }
 
 function validateSchedulerState(options = {}) {
-  const { repoRoot, state } = loadSchedulerState(options);
+  // Normal hooks always inspect disk; candidate data is accepted only by the
+  // separately named read-only preflight API below.
+  return validateSchedulerSnapshot(options, null);
+}
+
+function validateSchedulerCandidate(options = {}) {
+  for (const key of ['scheduler', 'harnessState', 'harnessContract']) {
+    if (!options[key] || typeof options[key] !== 'object' || Array.isArray(options[key])) {
+      return { ok: false, errors: [`Candidate ${key} must be an object`] };
+    }
+  }
+  return validateSchedulerSnapshot({ repoRoot: options.repoRoot }, options);
+}
+
+function validateSchedulerSnapshot(options, candidate) {
+  const { repoRoot, state } = candidate
+    ? { repoRoot: options.repoRoot || findRepoRoot(), state: candidate.scheduler }
+    : loadSchedulerState(options);
   const { records: inboxRecords, parseErrors: inboxParseErrors } = loadDemandInbox(options);
   const errors = [];
   const worktreeIsolation = inspectGitWorktreeIsolation(repoRoot);
@@ -606,8 +623,8 @@ function validateSchedulerState(options = {}) {
     } = resolveHarnessRuntimePaths(repoRoot);
     let harnessState = null;
     let harnessContract = null;
-    if (fs.existsSync(harnessStatePath)) {
-      harnessState = JSON.parse(fs.readFileSync(harnessStatePath, 'utf8'));
+    if (candidate || fs.existsSync(harnessStatePath)) {
+      harnessState = candidate ? candidate.harnessState : JSON.parse(fs.readFileSync(harnessStatePath, 'utf8'));
       const activeGates = harnessState.activeGates || [];
       const invalidActiveGates = activeGates.filter(
         (id) => !REQUIRED_HARNESS_GATE_IDS.includes(id)
@@ -633,10 +650,10 @@ function validateSchedulerState(options = {}) {
       errors.push('active work package requires a worktree-local Harness state');
     }
     if (state.active_task?.status === 'active') {
-      if (!fs.existsSync(harnessContractPath)) {
+      if (!candidate && !fs.existsSync(harnessContractPath)) {
         errors.push('active work package requires a worktree-local Harness goal contract');
       } else {
-        harnessContract = JSON.parse(fs.readFileSync(harnessContractPath, 'utf8'));
+        harnessContract = candidate ? candidate.harnessContract : JSON.parse(fs.readFileSync(harnessContractPath, 'utf8'));
         if (harnessContract.workPackageId !== activeId) {
           errors.push(`Harness contract work package mismatch: expected ${activeId}, got ${harnessContract.workPackageId || 'missing'}`);
         }
@@ -686,9 +703,15 @@ function validateSchedulerState(options = {}) {
 }
 
 function runGit(repoRoot, args, options = {}) {
+  // Every invocation here names its repository explicitly. Hook-local Git
+  // pointers (including GIT_DIR/INDEX_FILE/OBJECT_DIRECTORY) belong to the
+  // caller and must never redirect a fixture or another worktree into it.
+  const env = { ...process.env };
+  for (const name of Object.keys(env)) if (name.startsWith('GIT_')) delete env[name];
   const result = spawnSync('git', args, {
     cwd: repoRoot,
     encoding: 'utf8',
+    env,
     stdio: ['ignore', 'pipe', 'pipe'],
     ...(options.timeoutMs ? { timeout: options.timeoutMs, killSignal: 'SIGTERM' } : {})
   });
@@ -1211,15 +1234,7 @@ function sealDeliveryAttestation(options = {}) {
     noteInputPath,
     head
   ];
-  const result = spawnSync('git', noteArgs, {
-    cwd: repoRoot,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
-  fs.unlinkSync(noteInputPath);
-  if (result.status !== 0) {
-    throw new Error((result.stderr || 'failed to seal delivery Git note').trim());
-  }
+  try { runGit(repoRoot, noteArgs); } finally { fs.unlinkSync(noteInputPath); }
   return {
     commit: head,
     ref: DELIVERY_ATTESTATION_REF,
@@ -2369,6 +2384,7 @@ module.exports = {
   runProjectRegistryCli,
   toRepoRelative,
   validateSchedulerState,
+  validateSchedulerCandidate,
   runSchedulerPressureTest
 };
 
