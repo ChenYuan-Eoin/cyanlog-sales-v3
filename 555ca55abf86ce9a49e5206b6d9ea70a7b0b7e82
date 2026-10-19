@@ -1,0 +1,24 @@
+{
+  "work_package": "WP41",
+  "candidate_sha": "555ca55abf86ce9a49e5206b6d9ea70a7b0b7e82",
+  "at": "2026-10-19T09:41:54.680872+00:00",
+  "code_checks": {
+    "target_tests": 15,
+    "transport_tests": 8,
+    "full_tests": 2699,
+    "skipped": 5,
+    "lint": "passed",
+    "typecheck": "passed",
+    "build": "passed",
+    "sensitive_files": "passed",
+    "diff_check": "passed"
+  },
+  "authentication": "wp41-authentication.json",
+  "scope": "机器人配置区分长连接和旧回调；加密保存保留空Secret；本机真实认证通过",
+  "not_verified": [
+    "聊天提报、下单、回单号、取消和轨迹业务闭环",
+    "本机常驻运行及网页在线状态回报"
+  ],
+  "release_authority": "沿用用户要求修复并落实正式站；本次仅代码与明确提供的机器人配置，不迁移数据库、不创建或修改运单。",
+  "harness": "advisory as explicitly requested; legacy delivery-check still demands enforcing/HG4, not re-enabled; factual evidence recorded separately"
+}
