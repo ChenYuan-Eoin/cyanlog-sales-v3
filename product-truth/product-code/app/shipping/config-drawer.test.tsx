@@ -120,16 +120,22 @@ describe('shipping configuration drawer', () => {
     expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
   })
 
-  it('does not overwrite sender fields when pasted text cannot be parsed', async () => {
+  it('preserves every sender field and reports no filled values when pasted text cannot be parsed', async () => {
     render(<ShippingConfigDrawer embedded />)
     await openSection('企业接入')
     const parse = screen.getByRole('button', { name: '解析默认寄方信息' })
     expect(parse).toHaveProperty('disabled', true)
-    fireEvent.change(screen.getByLabelText('姓名'), { target: { value: '原寄件人' } })
-    fireEvent.change(screen.getByLabelText('默认寄方地址文本'), { target: { value: '资料不全' } })
+    const senderFields = { 姓名: '原寄件人', 电话: '13800138000', 省: '广东省', 市: '深圳市', 区县: '南山区', 详细地址: '科技路1号' }
+    for (const [label, value] of Object.entries(senderFields)) {
+      fireEvent.change(screen.getByLabelText(label), { target: { value } })
+    }
+    fireEvent.change(screen.getByLabelText('默认寄方地址文本'), { target: { value: '无效地址' } })
     fireEvent.click(parse)
-    expect(screen.getByLabelText('姓名')).toHaveProperty('value', '原寄件人')
-    expect(screen.getByText(/未识别出完整寄方，原资料已保留/)).toBeTruthy()
+    for (const [label, value] of Object.entries(senderFields)) {
+      expect(screen.getByLabelText(label)).toHaveProperty('value', value)
+    }
+    expect(screen.queryByText(/已识别内容已填入/)).toBeNull()
+    expect(screen.getByText('未识别出完整寄方，原资料已保留。请补齐姓名、电话和完整地址后重试。')).toBeTruthy()
     expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
   })
 

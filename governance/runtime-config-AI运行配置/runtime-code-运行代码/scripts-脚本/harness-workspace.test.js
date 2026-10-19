@@ -157,6 +157,29 @@ test('only exact read-only Vercel deployment-file tool aliases are admitted', ()
     core.setPhase(root, 'execute');
   }
 });
+test('only exact Vercel protected fetch aliases receive WebRead without protection-management access', () => {
+  try {
+    for (const phase of ['execute', 'verify']) {
+      core.setPhase(root, phase);
+      for (const separator of ['_', '__']) {
+        const name = `mcp__codex_apps__vercel${separator}web_fetch_vercel_url`;
+        assert.equal(core.normalizeToolName(name), 'WebRead', name);
+        assert.equal(core.evaluateToolUse(root, { tool_name: name, tool_input: { url: 'https://candidate.vercel.app/api/shipping/settings' } }).ok, true, `${phase}: ${name}`);
+        for (const operation of ['update_project_protection_bypass', 'create_protection_bypass', 'create_access_to_vercel_url', 'web_fetch_vercel_url_extra']) {
+          const rejected = `mcp__codex_apps__vercel${separator}${operation}`;
+          assert.equal(core.normalizeToolName(rejected), rejected);
+          assert.equal(core.evaluateToolUse(root, { tool_name: rejected }).ok, false, `${phase}: ${rejected}`);
+        }
+      }
+      for (const name of ['mcp__untrusted__web_fetch_vercel_url', 'mcp__codex_apps__vercel___web_fetch_vercel_url']) {
+        assert.equal(core.normalizeToolName(name), name);
+        assert.equal(core.evaluateToolUse(root, { tool_name: name }).ok, false, `${phase}: ${name}`);
+      }
+    }
+  } finally {
+    core.setPhase(root, 'execute');
+  }
+});
 test('questions work in every stage; verification supports Chrome but refuses file edits', () => {
   for (const phase of ['intake','research','contract_review','execute','verify','approval']) {
     core.setPhase(root, phase);

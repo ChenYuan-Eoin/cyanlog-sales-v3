@@ -43,6 +43,9 @@ const VERCEL_PRODUCTION_CONTRACT = Object.freeze({
 const SHIPPING_RUNTIME_ITEMS = Object.freeze(['shipping_provider', 'shipping_request', 'shipping_tracking', 'shipping_access']);
 const SHIPPING_REPLAY_ACTIONS = Object.freeze(['paste_address', 'select_sender', 'confirm_submission', 'query_tracking', 'reload_recent', 'verify_access']);
 const SHIPPING_WORKSPACE_ITEMS = Object.freeze(['shipping_workspace', 'shipping_tracking', 'shipping_access']);
+const SHIPPING_CONFIG_UI_ITEMS = Object.freeze(['shipping_workspace', 'shipping_access']);
+const SHIPPING_CONFIG_UI_ACTIONS = Object.freeze(['open_configuration_center', 'inspect_carrier_configuration', 'inspect_enterprise_configuration', 'retain_unsaved_draft', 'verify_environment_scoping', 'verify_masked_configuration', 'verify_parse_button_layout', 'verify_configuration_copy', 'verify_configuration_access']);
+const SHIPPING_CONFIG_UI_FLAGS = Object.freeze(['page_accessible', 'configuration_center', 'carrier_configuration_grouped', 'enterprise_configuration_grouped', 'shared_services_labelled', 'bot_url_mode', 'parameters_and_statuses_clear', 'existing_accounts_preserved', 'draft_retention', 'environment_scoping', 'credentials_masked', 'parse_button_not_stretched', 'responsive_layout', 'no_internal_copy', 'no_business_mutations']);
 const SHIPPING_RECOVERY_ACTIONS = Object.freeze(['inspect_failure_reason', 'review_recovered_orders', 'verify_unknown_lookup_only', 'query_tracking', 'reload_ledger', 'verify_organization_access']);
 const SHIPPING_RECOVERY_FLAGS = Object.freeze(['page_accessible', 'failure_reason_visible', 'recovered_orders_visible', 'unknown_orders_lookup_only', 'no_carrier_write']);
 const SHIPPING_INTAKE_ACTIONS = Object.freeze(['open_sales_intake', 'verify_employee_identity', 'choose_company_address', 'choose_personal_address', 'edit_and_cancel_address', 'validate_empty_form', 'preview_intake', 'change_address_requires_preview', 'read_my_requests', 'open_configuration_center', 'verify_deployment_environment', 'verify_existing_billing_account', 'query_tracking', 'verify_organization_access']);
@@ -303,6 +306,7 @@ function runtimeContractVersionOf(state) {
   return state.active_task?.delivery_contract?.runtime_contract_version || null;
 }
 function requiredReplayActions(state) {
+  if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === 'f054-config-ui-v1') return SHIPPING_CONFIG_UI_ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === 'f054-intake-v1') return SHIPPING_INTAKE_ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === 'f054-recovery-v1') return SHIPPING_RECOVERY_ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === 'f054-ui-v1') return SHIPPING_UI_ACTIONS;
@@ -313,6 +317,28 @@ function requiredReplayActions(state) {
 function shippingWorkspaceEvidenceBlockers(section, environment, expectedContractVersion = null) {
   const errors = [], workspace = section.shipping_workspace?.payload || {}, tracking = section.shipping_tracking?.payload || {}, access = section.shipping_access?.payload || {};
   if (expectedContractVersion && workspace.contract_version !== expectedContractVersion) errors.push('Shipping workspace evidence contract version does not match the Active contract');
+  if (workspace.contract_version === 'f054-config-ui-v1') {
+    if (!['sandbox', 'preview'].includes(environment) || workspace.environment !== 'preview' || access.environment !== 'preview') errors.push('Configuration UI contract is Preview-only');
+    for (const key of SHIPPING_CONFIG_UI_FLAGS) if (workspace[key] !== true) errors.push(`Configuration UI proof missing: ${key}`);
+    if (JSON.stringify(workspace.integration_entries) !== JSON.stringify(['carrier', 'enterprise'])) errors.push('Configuration UI must verify the two approved integration entries');
+    if (workspace.observation_source !== 'existing_chrome_operator' || workspace.operator_observations_are_attested !== true) errors.push('Configuration UI observations require explicit operator attestation');
+    if (workspace.cancel_before_collection_verified !== undefined || workspace.production_submission_enabled !== undefined) errors.push('Configuration UI evidence must not claim carrier operations');
+    if (access.authenticated_configuration_visible !== true || access.authenticated_observation_source !== 'existing_chrome_operator'
+      || access.operator_observations_are_attested !== true || access.cross_account_live_verified !== false || access.no_business_mutations !== true) errors.push('Configuration access must distinguish operator observations from cross-account regression');
+    if (access.anonymous_settings_denied !== true || access.anonymous_observation_source !== 'http_response'
+      || access.anonymous_status !== 401 || access.application_response !== true) errors.push('Anonymous configuration denial needs an application HTTP 401 response');
+    try {
+      const origin = new URL(workspace.origin);
+      if (origin.protocol !== 'https:' || origin.origin !== workspace.origin || access.anonymous_endpoint !== `${origin.origin}/api/shipping/settings`) errors.push('Configuration access endpoint does not match the Preview origin');
+    } catch { errors.push('Configuration UI origin is missing or invalid'); }
+    const regression = access.permission_regression;
+    if (regression?.source !== 'automated_tests' || regression.result !== 'pass' || regression.commit !== access.commit
+      || !/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(regression?.commit || '')
+      || JSON.stringify(regression.coverage) !== JSON.stringify(['role_access', 'cross_organization'])
+      || typeof regression.artifact_path !== 'string' || !/^[0-9a-f]{64}$/.test(regression?.log_sha256 || '')
+      || !Array.isArray(access.attachments) || !access.attachments.some(item => item.path === regression.artifact_path && item.sha256 === regression.log_sha256)) errors.push('Current-commit permission regression needs its hashed test artifact');
+    return errors;
+  }
   if (workspace.contract_version === 'f054-recovery-v1') {
     for (const key of SHIPPING_RECOVERY_FLAGS) if (workspace[key] !== true) errors.push(`Shipping recovery proof missing: ${key}`);
     for (const key of ['guest_ledger_denied', 'owner_can_read', 'organization_matched']) if (access[key] !== true) errors.push(`Shipping recovery access proof missing: ${key}`);
@@ -492,8 +518,9 @@ function validateSchedulerSnapshot(options, candidate) {
   if (!['ai', 'shipping', 'shipping_workspace'].includes(profile)) errors.push('Unknown runtime evidence profile');
   if (['shipping', 'shipping_workspace'].includes(profile) && state.active_task?.feature_id !== 'F054') errors.push('Shipping evidence profile requires the F054 feature binding');
   const contractVersion = runtimeContractVersionOf(state);
-  if (contractVersion && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1'].includes(contractVersion))) errors.push('Unknown or mismatched shipping workspace contract version');
-  const canonicalRuntimeEvidence = profile === 'shipping_workspace' ? SHIPPING_WORKSPACE_ITEMS : profile === 'shipping' ? SHIPPING_RUNTIME_ITEMS : ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
+  if (contractVersion && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1'].includes(contractVersion))) errors.push('Unknown or mismatched shipping workspace contract version');
+  if (contractVersion === 'f054-config-ui-v1' && (!['code_green', 'clean_preview_green'].includes(deliveryContract.target_state) || deliveryContract.production_database_mode !== 'read_only')) errors.push('Configuration UI contract is limited to read-only Preview acceptance');
+  const canonicalRuntimeEvidence = profile === 'shipping_workspace' ? (contractVersion === 'f054-config-ui-v1' ? SHIPPING_CONFIG_UI_ITEMS : SHIPPING_WORKSPACE_ITEMS) : profile === 'shipping' ? SHIPPING_RUNTIME_ITEMS : ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
   if (
     deliveryContract
     && (
@@ -1838,7 +1865,7 @@ function checkDeliveryStage(stage, options = {}) {
       } else {
         if (envelope.payload.commit !== status.git.head) blockers.push(`runtime evidence commit mismatch: ${item}`);
         if (envelope.payload.deployment_id !== evidence.preview?.deployment_id) blockers.push(`runtime evidence deployment mismatch: ${item}`);
-        if (['f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1'].includes(status.runtimeContractVersion)) {
+        if (['f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1'].includes(status.runtimeContractVersion)) {
           try {
             const origin = new URL(envelope.payload.origin);
             if (origin.protocol !== 'https:' || origin.origin !== new URL(evidence.preview.url).origin) blockers.push(`runtime evidence origin mismatch: ${item}`);
@@ -2344,6 +2371,9 @@ module.exports = {
   SHIPPING_RUNTIME_ITEMS,
   SHIPPING_REPLAY_ACTIONS,
   SHIPPING_COLLABORATION_ACTIONS,
+  SHIPPING_CONFIG_UI_ITEMS,
+  SHIPPING_CONFIG_UI_ACTIONS,
+  SHIPPING_CONFIG_UI_FLAGS,
   SHIPPING_UI_ACTIONS,
   SHIPPING_UI_FLAGS,
   SHIPPING_INTAKE_FLAGS,

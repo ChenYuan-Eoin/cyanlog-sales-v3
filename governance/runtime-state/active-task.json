@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-19T05:11:59.181Z",
+  "updated_at": "2026-10-19T06:10:26.113Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -177,15 +177,15 @@
       ],
       "required_runtime_evidence": [
         "shipping_workspace",
-        "shipping_tracking",
         "shipping_access"
       ],
-      "note": "WP40精炼寄件接入配置UI；不改变数据模型、权限、认证协议；Production发布须另绑定本批批准。",
+      "note": "WP40精炼寄件接入配置UI；013纠正配置页验收合同，只接受精确候选的真实Preview证据和权限回归，不改变旧合同或Production门禁；发布另行授权。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
-      "runtime_contract_version": "f054-intake-v1"
+      "runtime_contract_version": "f054-config-ui-v1"
     },
-    "started_at": "2026-10-19T04:23:47.946789+00:00"
+    "started_at": "2026-10-19T04:23:47.946789+00:00",
+    "reason": "保存产品候选和真实浏览器验收，等待配置页合同匹配"
   },
   "execution_queue": {
     "active": {
@@ -2244,7 +2244,7 @@
       "status": "awaiting_integration",
       "objective": "修复工具分类、工作区状态绑定和运行产物范围；开工预检一次报告阻断。保留外部高风险操作、运行状态及Git元数据保护。",
       "execution_workspace": "/Users/nsss/.codex/worktrees/wp39-harness-repair/Price-v3",
-      "activation_basis": "IN-20261019-007；012复验推翻Harness已完成的假设，恢复原授权独立修复",
+      "activation_basis": "IN-20261019-007及013：既有Harness修复验收发现配置页合同错配，独立修正后恢复WP40",
       "allowed_paths": [
         "governance/runtime-state/active-task.json",
         "governance/runtime-state/demand-inbox.jsonl",
@@ -2293,7 +2293,7 @@
         "runtime_contract_version": "f054-intake-v1"
       },
       "started_at": "2026-10-19T04:56:23.197Z",
-      "reason": "保留独立Harness修复候选；恢复原授权接入配置验收。"
+      "reason": "配置UI合同及精确只读工具分类已有本地修复和目标验证；恢复产品候选验收"
     }
   }
 }

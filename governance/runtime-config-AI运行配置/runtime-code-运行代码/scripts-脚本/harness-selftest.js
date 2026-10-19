@@ -11,6 +11,9 @@ const {
   DELIVERY_ATTESTATION_REF,
   REQUIRED_DEFECT_REPLAY_ACTIONS,
   SHIPPING_COLLABORATION_ACTIONS,
+  SHIPPING_CONFIG_UI_ITEMS,
+  SHIPPING_CONFIG_UI_ACTIONS,
+  SHIPPING_CONFIG_UI_FLAGS,
   VERCEL_PRODUCTION_CONTRACT,
   checkDeliveryStage,
   getDeliveryStatus,
@@ -403,6 +406,124 @@ function makeSchedulerFixture(repoRoot) {
     }),
     JSON.stringify({ id: 'IN-SELFTEST-CLARIFICATION', type: 'release_clarification' })
   ].join('\n') + '\n');
+}
+
+function runConfigurationUiSelftest(repoRoot) {
+  runGit(repoRoot, ['init', '--quiet']);
+  runGit(repoRoot, ['config', 'user.name', 'Harness Selftest']);
+  runGit(repoRoot, ['config', 'user.email', 'harness-selftest@example.invalid']);
+  makeSettings(repoRoot);
+  makeSchedulerFixture(repoRoot);
+  const schedulerPath = path.join(repoRoot, 'governance/runtime-state/active-task.json');
+  const scheduler = JSON.parse(fs.readFileSync(schedulerPath, 'utf8'));
+  scheduler.active_task.feature_id = 'F054';
+  scheduler.active_task.delivery_contract = {
+    target_state: 'clean_preview_green', allowed_states: ['executing', 'code_green', 'clean_preview_green'],
+    integration_branch: 'main', production_branch: 'production', production_release_separate: true,
+    same_release_commit_required: true, attestation_ref: DELIVERY_ATTESTATION_REF,
+    required_code_checks: ['target_tests', 'full_tests', 'lint', 'typecheck', 'build'],
+    required_runtime_evidence: [...SHIPPING_CONFIG_UI_ITEMS], runtime_profile: 'shipping_workspace',
+    runtime_contract_version: 'f054-config-ui-v1', production_database_mode: 'read_only'
+  };
+  writeJson(schedulerPath, scheduler);
+  core.startGoal(repoRoot, 'Verify the two shipping configuration entries', { level: 'A1', workPackageId: 'WP99', scopes: 'app', success: 'configuration accepted' });
+  core.approveContract(repoRoot, { level: 'A1', by: 'selftest' });
+  core.setPhase(repoRoot, 'verify');
+  assert.deepStrictEqual(validateSchedulerState({ repoRoot }).errors, []);
+  assert.deepStrictEqual(requiredReplayActions(scheduler), SHIPPING_CONFIG_UI_ACTIONS);
+  for (const change of [
+    state => { state.active_task.delivery_contract.target_state = 'integration_ready'; state.active_task.delivery_contract.allowed_states.push('integration_ready'); },
+    state => { state.active_task.delivery_contract.production_database_mode = 'controlled_write_approved'; },
+    state => { state.active_task.delivery_contract.required_runtime_evidence = ['shipping_workspace']; },
+    state => { state.active_task.feature_id = 'F001'; }
+  ]) {
+    const invalid = structuredClone(scheduler); change(invalid); writeJson(schedulerPath, invalid);
+    assert.strictEqual(validateSchedulerState({ repoRoot }).ok, false);
+  }
+  writeJson(schedulerPath, scheduler);
+  assert.ok(shippingProductionVerifierScopeBlockers({ activeId: 'WP99', featureId: 'F054', runtimeProfile: 'shipping_workspace', runtimeContractVersion: 'f054-config-ui-v1', targetState: 'production_released', productionDatabaseMode: 'read_only', productionReleaseAuthorization: { status: 'approved_code_only' } }).length);
+  const old = structuredClone(scheduler);
+  old.active_task.delivery_contract.runtime_contract_version = 'f054-intake-v1';
+  assert.strictEqual(requiredReplayActions(old).length, 14);
+  assert.strictEqual(requiredReplayActions(old)[0], 'open_sales_intake');
+
+  fs.writeFileSync(path.join(repoRoot, '.gitignore'), '.runtime/\n');
+  runGit(repoRoot, ['add', '.']); runGit(repoRoot, ['commit', '--quiet', '-m', 'Configuration contract fixture']);
+  fs.writeFileSync(path.join(repoRoot, 'candidate.txt'), 'configuration candidate\n');
+  runGit(repoRoot, ['add', '.']); runGit(repoRoot, ['commit', '--quiet', '-m', 'Configuration candidate']);
+  const head = runGit(repoRoot, ['rev-parse', 'HEAD']), deploymentId = 'dpl_ConfigUiSelftest', origin = 'https://config-preview.example.invalid';
+  const options = { repoRoot, remoteSnapshot: {} };
+  const behavior = writeBehaviorEvidence(repoRoot, makeBehaviorEntry(repoRoot, head));
+  const checks = scheduler.active_task.delivery_contract.required_code_checks;
+  recordDeliveryEvidence('code', { commit: head, checks: Object.fromEntries(checks.map(name => [name, true])), behavior_log: behavior.behavior_log,
+    commands: checks.map(name => ({ name, exit_code: 0, ...behavior.commandArtifact })) }, options);
+  assert.strictEqual(transitionDeliveryState('code_green', options).ok, true);
+  const common = { commit: head, deployment_id: deploymentId, origin, environment: 'preview' };
+  const permissionLog = writeRuntimeArtifact(repoRoot, 'checks/config-permissions.log', 'selftest fixture: role access and cross-organization permission regression passed\n');
+  const workspacePayload = { ...common, contract_version: 'f054-config-ui-v1', integration_entries: ['carrier', 'enterprise'],
+    observation_source: 'existing_chrome_operator', operator_observations_are_attested: true,
+    ...Object.fromEntries(SHIPPING_CONFIG_UI_FLAGS.map(key => [key, true])) };
+  const accessPayload = { ...common, authenticated_configuration_visible: true, authenticated_observation_source: 'existing_chrome_operator',
+    operator_observations_are_attested: true, anonymous_settings_denied: true, anonymous_observation_source: 'http_response', anonymous_status: 401, application_response: true,
+    anonymous_endpoint: origin + '/api/shipping/settings', cross_account_live_verified: false, no_business_mutations: true,
+    permission_regression: { source: 'automated_tests', commit: head, result: 'pass', coverage: ['role_access', 'cross_organization'], artifact_path: permissionLog.path, log_sha256: permissionLog.sha256 }, attachments: [permissionLog] };
+  const runtime = { shipping_workspace: evidenceEnvelope(repoRoot, 'config-workspace', workspacePayload), shipping_access: evidenceEnvelope(repoRoot, 'config-access', accessPayload) };
+  assert.deepStrictEqual(shippingWorkspaceEvidenceBlockers(runtime, 'sandbox', 'f054-config-ui-v1'), []);
+  for (const flag of SHIPPING_CONFIG_UI_FLAGS) {
+    const invalid = structuredClone(runtime); invalid.shipping_workspace.payload[flag] = false;
+    assert.ok(shippingWorkspaceEvidenceBlockers(invalid, 'sandbox', 'f054-config-ui-v1').some(message => message.includes(flag)));
+  }
+  for (const mutate of [
+    value => { value.shipping_workspace.payload.integration_entries = ['carrier', 'enterprise', 'tracking']; },
+    value => { value.shipping_workspace.payload.observation_source = 'machine_proof'; },
+    value => { value.shipping_access.payload.anonymous_status = 403; },
+    value => { value.shipping_access.payload.anonymous_observation_source = 'existing_chrome_operator'; },
+    value => { value.shipping_access.payload.application_response = false; },
+    value => { value.shipping_access.payload.authenticated_configuration_visible = false; },
+    value => { value.shipping_access.payload.cross_account_live_verified = true; },
+    value => { value.shipping_access.payload.anonymous_endpoint = 'https://other.example.invalid/api/shipping/settings'; },
+    value => { value.shipping_access.payload.permission_regression.commit = 'b'.repeat(40); },
+    value => { value.shipping_access.payload.permission_regression.coverage = ['role_access']; },
+    value => { value.shipping_access.payload.attachments = []; },
+    value => { value.shipping_workspace.payload.cancel_before_collection_verified = true; }
+  ]) {
+    const invalid = structuredClone(runtime); mutate(invalid);
+    assert.ok(shippingWorkspaceEvidenceBlockers(invalid, 'sandbox', 'f054-config-ui-v1').length);
+  }
+  assert.ok(shippingWorkspaceEvidenceBlockers(runtime, 'production', 'f054-config-ui-v1').length);
+  assert.ok(shippingWorkspaceEvidenceBlockers(runtime, 'sandbox', 'f054-ui-v1').some(message => message.includes('version')));
+  const legacy = structuredClone(runtime); legacy.shipping_workspace.payload.contract_version = 'f054-ui-v1';
+  assert.ok(shippingWorkspaceEvidenceBlockers(legacy, 'sandbox', 'f054-ui-v1').some(message => message.includes('six_sections_available')));
+  recordDeliveryEvidence('runtime', runtime, options);
+  const replay = { ...common, url: origin + '/configs?tab=shipping', actions: [...SHIPPING_CONFIG_UI_ACTIONS], result: 'pass', overlays_after: 0, body_scroll_lock_released: true, app_inert_after: false };
+  recordDeliveryEvidence('preview', { commit: head, provider_source_commit: head, deployment_id: deploymentId, url: origin, ready: true, git_dirty: false,
+    journeys: { desktop: true, ipad: true, blocking_defect_replay: true }, artifacts: {
+      desktop: evidenceEnvelope(repoRoot, 'config-desktop', { ...common, viewport: { width: 1440, height: 1000 }, result: 'pass' }),
+      ipad: evidenceEnvelope(repoRoot, 'config-ipad', { ...common, viewport: { width: 1024, height: 768 }, result: 'pass' }),
+      defect_replay: evidenceEnvelope(repoRoot, 'config-replay', replay)
+    } }, options);
+  const transition = transitionDeliveryState('clean_preview_green', options);
+  assert.deepStrictEqual(transition.blockers || [], []);
+  assert.strictEqual(transition.ok, true);
+  const status = getDeliveryStatus(options);
+  let sequence = 0;
+  const envelope = payload => evidenceEnvelope(repoRoot, `config-negative-${++sequence}`, payload);
+  for (const mutate of [
+    value => { value.evidence.preview.provider_source_commit = 'b'.repeat(40); },
+    value => { value.evidence.runtime.shipping_workspace = envelope({ ...workspacePayload, commit: 'b'.repeat(40) }); },
+    value => { value.evidence.runtime.shipping_access = envelope({ ...accessPayload, deployment_id: 'dpl_Other' }); },
+    value => { value.evidence.runtime.shipping_access = envelope({ ...accessPayload, origin: 'https://other.example.invalid' }); },
+    value => { value.evidence.preview.artifacts.defect_replay = envelope({ ...replay, actions: [...SHIPPING_CONFIG_UI_ACTIONS].reverse() }); },
+    value => { value.evidence.preview.artifacts.desktop = envelope({ ...common, viewport: { width: 600, height: 900 } }); },
+    value => { value.evidence.preview.artifacts.ipad = envelope({ ...common, viewport: { width: 1440, height: 900 } }); },
+    value => { value.evidence.runtime.shipping_workspace.sha256 = '0'.repeat(64); }
+  ]) {
+    const invalid = structuredClone(status); mutate(invalid);
+    assert.strictEqual(checkDeliveryStage('clean_preview_green', { ...options, status: invalid }).ok, false);
+  }
+  fs.appendFileSync(path.join(deliveryRuntimeRoot(repoRoot), permissionLog.path), 'tampered');
+  assert.strictEqual(checkDeliveryStage('clean_preview_green', { ...options, status }).ok, false);
+  console.log('configuration UI Preview contract selftest ok');
 }
 
 function makeTestVercelApiResponses(productionCommit) {
@@ -1230,11 +1351,19 @@ function main() {
   process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(repoRoot, '.runtime', 'harness');
 
   try {
+    if (process.argv.includes('--config-ui-only')) {
+      runConfigurationUiSelftest(repoRoot);
+      return;
+    }
     const verifierTests = spawnSync(process.execPath, ['--test', path.join(__dirname, 'shipping-workspace-verifier.test.js')], {
       encoding: 'utf8', timeout: 60000
     });
     assert.strictEqual(verifierTests.status, 0, verifierTests.stderr || verifierTests.stdout || 'Shipping verifier offline tests failed');
     runSelftest(repoRoot);
+    const configurationRoot = path.join(repoRoot, 'configuration-fixture');
+    fs.mkdirSync(configurationRoot);
+    process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(configurationRoot, '.runtime', 'harness');
+    runConfigurationUiSelftest(configurationRoot);
     const approvalRoot = path.join(repoRoot, 'approval-fixture');
     fs.mkdirSync(approvalRoot);
     process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(approvalRoot, '.runtime', 'harness');

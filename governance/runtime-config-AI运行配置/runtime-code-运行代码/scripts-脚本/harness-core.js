@@ -806,6 +806,8 @@ function normalizeToolName(name) {
     return '';
   }
   // Exact read-only connectors; do not classify arbitrary MCP tools by suffix.
+  // Fetches through the caller's existing Vercel access; project protection mutation is not included.
+  if (/^mcp__codex_apps__vercel_{1,2}web_fetch_vercel_url$/.test(raw)) return 'WebRead';
   if (/^mcp__codex_apps__vercel_{1,2}(get_deployment|get_project|list_deployments|get_project_domain|list_project_domains|list_deployment_files|get_deployment_file_contents)$/.test(raw)
     || /^mcp__codex_app__(list_artifacts|get_worktree_creation_status)$/.test(raw)) return 'Read';
   // This tool creates a managed local checkout for the current repository only.
