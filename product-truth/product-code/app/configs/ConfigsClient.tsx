@@ -178,9 +178,15 @@ const CONFIG_SECTIONS: Array<{
 }> = [
   {
     id: 'trading',
-    label: '交易配置',
+    label: '定价与审批',
     description: '价盘、税率和审批。',
     tabs: ['price-list', 'price-matrix', 'price-matrix-import', 'product-versions', 'business-params', 'approval-chains', 'approval-rules', 'tax', 'approval'],
+  },
+  {
+    id: 'quote-output',
+    label: '报价输出',
+    description: '报价模板、条款和单号。',
+    tabs: ['field-dictionary', 'output-templates', 'clause-mappings', 'numbering-rules'],
   },
   {
     id: 'contract-rules',
@@ -189,16 +195,10 @@ const CONFIG_SECTIONS: Array<{
     tabs: ['rules'],
   },
   {
-    id: 'ai-platform',
-    label: 'AI 平台',
-    description: '模型连接与功能设置。',
-    tabs: ['ai'],
-  },
-  {
-    id: 'quote-output',
-    label: '报价输出',
-    description: '报价模板、条款和单号。',
-    tabs: ['field-dictionary', 'output-templates', 'clause-mappings', 'numbering-rules'],
+    id: 'shipping',
+    label: '寄件配置',
+    description: '顺丰、企业微信与寄件资料。',
+    tabs: ['shipping'],
   },
   {
     id: 'org-access',
@@ -208,15 +208,15 @@ const CONFIG_SECTIONS: Array<{
   },
   {
     id: 'experience',
-    label: '界面与体验',
+    label: '品牌与主题',
     description: '品牌颜色和界面主题。',
     tabs: ['theme'],
   },
   {
-    id: 'shipping',
-    label: '寄件配置',
-    description: '顺丰、企业微信与寄件资料。',
-    tabs: ['shipping'],
+    id: 'ai-platform',
+    label: 'AI 平台',
+    description: '模型连接与功能设置。',
+    tabs: ['ai'],
   },
 ]
 
@@ -925,18 +925,6 @@ export default function ConfigsClient({
     return String(moduleCounts[tabId] || 0)
   }, [activeTab, activeTabLoading, error, loadedTabs, moduleCounts])
 
-  const formatSectionCount = useCallback((sectionTabs: ConfigTabId[]) => {
-    if (activeTabLoading && sectionTabs.includes(activeTab)) {
-      return '…'
-    }
-    const knownTotal = sectionTabs.reduce((total, tab) => total + (moduleCounts[tab] || 0), 0)
-    const hasUnloadedTabs = sectionTabs.some((tab) => !loadedTabs.has(tab))
-    if (hasUnloadedTabs) {
-      return knownTotal > 0 ? `${knownTotal}+` : '…'
-    }
-    return String(knownTotal)
-  }, [activeTab, activeTabLoading, loadedTabs, moduleCounts])
-
   const activeModuleMetrics = useMemo(() => {
     const countValue = (count: number) => {
       if (activeTabLoading) return '…'
@@ -1633,11 +1621,7 @@ export default function ConfigsClient({
       <div className="mx-auto max-w-[1480px] px-4 py-4 pl-14 lg:px-8 lg:pl-8 xl:py-6">
         <div className="mb-4 flex flex-col gap-4 xl:mb-8 xl:flex-row xl:items-start xl:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-              <SettingsIcon size={14} />
-              组织设置
-            </div>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">配置中心</h1>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">配置中心</h1>
           </div>
 
           <div className={activeTab === 'shipping' ? 'hidden' : 'hidden gap-3 sm:grid-cols-3 xl:grid xl:min-w-[420px]'}>
@@ -1680,9 +1664,6 @@ export default function ConfigsClient({
                   }`}
                 >
                   {section.label}
-                  <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${isActiveSection ? 'bg-white/10' : 'bg-slate-100'}`}>
-                    {section.id === 'shipping' ? '独立设置' : `${formatSectionCount(section.tabs)} 项`}
-                  </span>
                 </button>
               )
             })}
@@ -1691,37 +1672,34 @@ export default function ConfigsClient({
           <aside className="hidden self-start xl:sticky xl:top-8 xl:block">
             <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
               <div className="px-3 pb-3 pt-2">
-                <div className="text-sm font-semibold text-slate-900">配置域</div>
+                <div className="text-sm font-semibold text-slate-900">应用配置</div>
               </div>
 
               <div className="space-y-2">
                 {CONFIG_SECTIONS.map((section) => {
                   const isActiveSection = section.id === activeSection
                   return (
-                    <button
-                      key={section.id}
-                      type="button"
-                      onClick={() => switchSection(section.id)}
-                      className={`w-full rounded-2xl border px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 focus-visible:ring-offset-2 ${
-                        isActiveSection
-                          ? 'border-slate-900 bg-slate-900 text-white'
-                          : 'border-transparent bg-slate-50 text-slate-700 hover:border-slate-200 hover:bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-sm font-semibold">{section.label}</div>
-                        <div className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          isActiveSection ? 'bg-white/10 text-slate-100' : 'bg-white text-slate-500'
-                        }`}>
-                          {section.id === 'shipping' ? '独立设置' : `${formatSectionCount(section.tabs)} 项`}
+                    <div key={section.id} className={section.id === 'org-access' ? 'border-t border-slate-200 pt-3' : undefined}>
+                      {section.id === 'org-access' && <div className="px-3 pb-3 text-sm font-semibold text-slate-900">基础设置</div>}
+                      <button
+                        type="button"
+                        onClick={() => switchSection(section.id)}
+                        className={`w-full rounded-2xl border px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 focus-visible:ring-offset-2 ${
+                          isActiveSection
+                            ? 'border-slate-900 bg-slate-900 text-white'
+                            : 'border-transparent bg-slate-50 text-slate-700 hover:border-slate-200 hover:bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm font-semibold">{section.label}</div>
                         </div>
-                      </div>
-                      <p className={`mt-2 text-xs leading-5 ${
-                        isActiveSection ? 'text-slate-300' : 'text-slate-500'
-                      }`}>
-                        {section.description}
-                      </p>
-                    </button>
+                        <p className={`mt-2 text-xs leading-5 ${
+                          isActiveSection ? 'text-slate-300' : 'text-slate-500'
+                        }`}>
+                          {section.description}
+                        </p>
+                      </button>
+                    </div>
                   )
                 })}
               </div>
@@ -1801,7 +1779,7 @@ export default function ConfigsClient({
               </div>
             </div>
 
-            <div className="mt-6 space-y-6">
+            <div className={activeTab === 'shipping' ? 'space-y-6' : 'mt-6 space-y-6'}>
               <TabsContent
                 activeTab={activeTab}
                 loading={loading && !loadedTabs.has(activeTab)}
