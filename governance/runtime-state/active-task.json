@@ -148,7 +148,8 @@
       "product-truth/product-code/app/shipping/wecom-configuration.test.tsx",
       "product-truth/product-code/lib/shipping/wecom-bot-settings.ts",
       "product-truth/product-code/lib/shipping/wecom-bot-settings.test.ts",
-      "product-truth/product-code/app/api/shipping/wecom/bot/route.ts"
+      "product-truth/product-code/app/api/shipping/wecom/bot/route.ts",
+      "product-truth/product-code/app/shipping/config-drawer.module.css"
     ],
     "feature_id": "F054",
     "delivery_contract": {
@@ -180,7 +181,13 @@
       "runtime_contract_version": "f054-intake-v1"
     },
     "started_at": "2026-10-19T09:27:59.479976+00:00",
-    "reason": "用户明确先修基础配置持久化；长连接候选保留"
+    "reason": "用户明确先修基础配置持久化；长连接候选保留",
+    "micro_fixes": [
+      {
+        "id": "IN-20261019-033",
+        "scope": "已发布配置界面共用下拉框箭头对齐，不变更业务配置或接入方向"
+      }
+    ]
   },
   "execution_queue": {
     "active": {
