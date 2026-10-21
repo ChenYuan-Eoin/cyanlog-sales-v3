@@ -11,6 +11,10 @@ const {
   DELIVERY_ATTESTATION_REF,
   REQUIRED_DEFECT_REPLAY_ACTIONS,
   APPLICATION_PERMISSION_ITEMS,
+  APPLICATION_PERMISSION_PRODUCTION_ITEMS,
+  APPLICATION_PERMISSION_CONTRACT,
+  APPLICATION_PERMISSION_ACTIONS,
+  APPLICATION_PERMISSION_PRODUCTION_ACTIONS,
   SHIPPING_COLLABORATION_ACTIONS,
   SHIPPING_CONFIG_UI_ITEMS,
   SHIPPING_CONFIG_UI_ACTIONS,
@@ -19,6 +23,7 @@ const {
   checkDeliveryStage,
   getDeliveryStatus,
   recordDeliveryEvidence,
+  productionRuntimeEvidenceBlockers,
   requiredReplayActions,
   shippingWorkspaceEvidenceBlockers,
   shippingProductionVerifierScopeBlockers,
@@ -473,7 +478,163 @@ function runApplicationPermissionSelftest(repoRoot) {
   assert.strictEqual(checkDeliveryStage('code_green', options).ok, true);
   assert.strictEqual(transitionDeliveryState('clean_preview_green', options).ok, false, 'Code-only application profile cannot authorize Preview');
   assert.strictEqual(checkDeliveryStage('production_released', options).ok, false, 'Code-only application profile cannot authorize Production');
+  runApplicationPermissionReleaseSelftest(repoRoot, scheduler, options);
   console.log('application permission profile selftest ok');
+}
+
+function runApplicationPermissionReleaseSelftest(repoRoot, scheduler, options) {
+  const verifier = require('./application-permissions-verifier');
+  const schedulerPath = path.join(repoRoot, 'governance/runtime-state/active-task.json');
+  const release = structuredClone(scheduler);
+  Object.assign(release.active_task.delivery_contract, {
+    runtime_contract_version: APPLICATION_PERMISSION_CONTRACT,
+    target_state: 'production_released',
+    allowed_states: ['executing', 'code_green', 'clean_preview_green', 'integration_ready', 'main_integrated', 'production_released'],
+    required_production_runtime_evidence: [...APPLICATION_PERMISSION_PRODUCTION_ITEMS],
+    production_release_authorization: {
+      status: 'approved_code_only', micro_fix_approval_id: 'IN-SELFTEST-MICROFIX-APPROVAL', clarification_id: 'IN-SELFTEST-CLARIFICATION',
+      final_release_approval_id: 'IN-SELFTEST-FINAL-APPROVAL', micro_fix_scope: 'F003 permissions',
+      final_scope: 'selftest controlled Production runtime and release', database_write_authorized: false
+    },
+    final_acceptance: { browser: 'trusted_operator_attestation_from_user_existing_chrome_only', production_database_mode: 'read_only' }
+  });
+  const inboxPath = path.join(repoRoot, 'governance/runtime-state/demand-inbox.jsonl');
+  const inbox = fs.readFileSync(inboxPath, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  Object.assign(inbox.find(row => row.id === 'IN-SELFTEST-FINAL-APPROVAL'), { code_release_authorized: true, production_database_write_authorized: false });
+  fs.writeFileSync(inboxPath, inbox.map(row => JSON.stringify(row)).join('\n') + '\n');
+  writeJson(schedulerPath, release);
+  assert.deepStrictEqual(validateSchedulerState({ repoRoot }).errors, []);
+  assert.deepStrictEqual(requiredReplayActions(release), APPLICATION_PERMISSION_ACTIONS);
+  assert.deepStrictEqual(requiredReplayActions(release, 'production'), APPLICATION_PERMISSION_PRODUCTION_ACTIONS);
+  for (const mutate of [
+    value => { value.active_task.delivery_contract.runtime_contract_version = 'unknown'; },
+    value => { value.active_task.delivery_contract.runtime_profile = 'ai'; },
+    value => { value.active_task.feature_id = 'F054'; value.active_task.delivery_contract.runtime_profile = 'shipping_workspace'; },
+    value => { value.active_task.delivery_contract.production_release_authorization.status = 'approved_for_final_release'; },
+    value => { value.active_task.delivery_contract.final_acceptance.production_database_mode = 'controlled_write_approved'; },
+    value => { value.active_task.delivery_contract.required_production_runtime_evidence = [...APPLICATION_PERMISSION_ITEMS]; }
+  ]) {
+    const invalid = structuredClone(release); mutate(invalid); writeJson(schedulerPath, invalid);
+    assert.strictEqual(validateSchedulerState({ repoRoot }).ok, false);
+  }
+  writeJson(schedulerPath, release);
+  runGit(repoRoot, ['add', '.']); runGit(repoRoot, ['commit', '--quiet', '-m', 'Application read-only release contract']);
+  const head = runGit(repoRoot, ['rev-parse', 'HEAD']), deploymentId = 'dpl_ApplicationSelftest', origin = 'https://permission-preview.example.invalid';
+  const behavior = writeBehaviorEvidence(repoRoot, makeBehaviorEntry(repoRoot, head));
+  const checks = release.active_task.delivery_contract.required_code_checks;
+  recordDeliveryEvidence('code', { commit: head, checks: Object.fromEntries(checks.map(name => [name, true])), behavior_log: behavior.behavior_log,
+    commands: checks.map(name => ({ name, exit_code: 0, ...behavior.commandArtifact })) }, options);
+  assert.strictEqual(transitionDeliveryState('code_green', options).ok, true);
+  const common = { contract_version: APPLICATION_PERMISSION_CONTRACT, environment: 'preview', source: 'preview_api', isolated_project_ref: 'vsfropnfsmnonkotywsx', commit: head, deployment_id: deploymentId, origin, org_id: 'org-selftest', role_id: 'role-selftest', actor_id: 'actor-selftest' };
+  const raw = [{ filename: 'http.json', contents: JSON.stringify({ fixture: true, status: 200 }) }];
+  const runtime = {
+    role_edit_save: evidenceEnvelope(repoRoot, 'application-save', { ...common, before_permissions: ['*'], saved_permissions: ['role:manage'], restored_permissions: ['*'],
+      read_before_status: 200, read_after_status: 200, read_restored_status: 200, save_status: 200, restore_status: 200,
+      persisted_readback: true, template_unchanged: true, other_settings_preserved: true, restored: true }, raw),
+    role_access_enforcement: evidenceEnvelope(repoRoot, 'application-access', { ...common, role_id: 'ordinary-role', revoke_status: 200, revoked_permissions: [],
+      revoked_readback: true, revoked_access_status: 403, non_root_patch_status: 403, cross_org_patch_status: 403, stale_snapshot_status: 409, restored: true }, raw)
+  };
+  assert.deepStrictEqual(verifier.previewBlockers(runtime), []);
+  for (const [item, key, value] of [
+    ['role_edit_save', 'persisted_readback', false], ['role_edit_save', 'template_unchanged', false],
+    ['role_edit_save', 'saved_permissions', ['*']], ['role_edit_save', 'restored_permissions', []],
+    ['role_access_enforcement', 'revoked_permissions', ['config:read']], ['role_access_enforcement', 'revoked_access_status', 200],
+    ['role_access_enforcement', 'stale_snapshot_status', 200], ['role_access_enforcement', 'attachments', []],
+    ['role_edit_save', 'environment', 'production'], ['role_edit_save', 'isolated_project_ref', 'production-project']
+  ]) {
+    const invalid = structuredClone(runtime); invalid[item].payload[key] = value;
+    assert.ok(verifier.previewBlockers(invalid).length, `${item}.${key} must fail closed`);
+  }
+  recordDeliveryEvidence('runtime', runtime, options);
+  recordDeliveryEvidence('preview', { commit: head, provider_source_commit: head, deployment_id: deploymentId, url: origin, ready: true, git_dirty: false,
+    journeys: { desktop: true, blocking_defect_replay: true }, artifacts: {
+      desktop: evidenceEnvelope(repoRoot, 'application-desktop', { viewport: { width: 1440, height: 1000 }, browser_context: 'existing_user_chrome', new_tabs: 0, new_browser_contexts: 0, result: 'pass' }, raw),
+      defect_replay: evidenceEnvelope(repoRoot, 'application-replay', { commit: head, deployment_id: deploymentId, url: origin, actions: APPLICATION_PERMISSION_ACTIONS, result: 'pass' })
+    } }, options);
+  const transition = transitionDeliveryState('clean_preview_green', options);
+  assert.deepStrictEqual(transition.blockers || [], []);
+  assert.strictEqual(transition.ok, true);
+  const status = getDeliveryStatus(options);
+  for (const mutate of [
+    value => { delete value.evidence.preview.artifacts.desktop; },
+    value => { value.evidence.preview.journeys.blocking_defect_replay = false; },
+    value => { value.evidence.preview.artifacts.desktop.payload.browser_context = 'new_chrome'; },
+    value => { value.evidence.preview.artifacts.defect_replay.payload.actions = []; }
+  ]) {
+    const invalid = structuredClone(status); mutate(invalid);
+    assert.strictEqual(checkDeliveryStage('clean_preview_green', { ...options, status: invalid }).ok, false);
+  }
+  for (const profile of ['ai', 'shipping', 'shipping_workspace']) {
+    const legacy = structuredClone(status); legacy.runtimeProfile = profile; legacy.runtimeContractVersion = null;
+    assert.strictEqual(checkDeliveryStage('clean_preview_green', { ...options, status: legacy }).ok, false, `application cannot substitute ${profile} evidence`);
+  }
+  const invalidHash = structuredClone(status); invalidHash.evidence.runtime.role_edit_save.sha256 = '0'.repeat(64);
+  assert.strictEqual(checkDeliveryStage('clean_preview_green', { ...options, status: invalidHash }).ok, false);
+  const expected = { commit: head, deploymentId, runtimeContractVersion: APPLICATION_PERMISSION_CONTRACT };
+  const operator = { contract_version: APPLICATION_PERMISSION_CONTRACT, commit: head, deployment_id: deploymentId, origin: 'https://sales.cyanlog.icu', url: 'https://sales.cyanlog.icu/configs?tab=roles',
+    environment: 'production', org_id: 'org-selftest', operator_id: 'operator-selftest', role_id: 'role-selftest', super_admin: true, role_list_read: true, effective_permissions_read: true,
+    permission_checkbox_changed: true, changes_discarded: true, save_submitted: false, business_mutations: false, persistence_verified: false,
+    actions: APPLICATION_PERMISSION_PRODUCTION_ACTIONS, attested_at: new Date().toISOString(), attested_by: 'selftest', attestation_type: 'trusted_operator_browser',
+    trust_boundary: 'operator_attestation_not_machine_proof', attestation_method: 'codex_chrome_control_existing_session', browser_context: 'existing_user_chrome', existing_tab_id: 'selftest-tab', new_tabs: 0, new_browser_contexts: 0, result: 'pass', attachments: [{ path: 'fixture.json', sha256: 'a'.repeat(64) }] };
+  assert.deepStrictEqual(verifier.productionOperatorBlockers(operator, expected), []);
+  for (const [key, value] of [['save_submitted', true], ['business_mutations', true], ['persistence_verified', true], ['changes_discarded', false], ['new_tabs', 1], ['commit', '0'.repeat(40)], ['actions', APPLICATION_PERMISSION_ACTIONS]]) {
+    assert.ok(verifier.productionOperatorBlockers({ ...operator, [key]: value }, expected).length, `Production ${key} must fail closed`);
+  }
+  const productionRoot = 'production-runtime-verifier/f003-selftest';
+  const productionCommon = { contract_version: APPLICATION_PERMISSION_CONTRACT, commit: head, deployment_id: deploymentId, origin: 'https://sales.cyanlog.icu', environment: 'production', business_mutations: false, persistence_verified: false };
+  const probes = ['GET', 'PATCH'].map(method => {
+    const endpoint = method === 'GET' ? '/api/roles' : '/api/roles/role-selftest';
+    const response = writeRuntimeArtifact(repoRoot, `${productionRoot}/${method}.json`, JSON.stringify({ method, path: endpoint, status: 401, credentials: 'omit', content_type: 'application/json', response_body: JSON.stringify({ error: { code: 'A001' } }) }));
+    return { method, path: endpoint, status: 401, credentials: 'omit', content_type: 'application/json', application_error_code: 'A001', response_artifact: response };
+  });
+  const apiAttachments = probes.map(probe => probe.response_artifact);
+  const production = {
+    verifier: evidenceEnvelope(repoRoot, 'verifier', { ...productionCommon, source: 'live_production_application_verifier', read_only: true, request_count: 2, observed_at: new Date().toISOString(), source_operator_sha256: 'a'.repeat(64), attachments: apiAttachments }, [], productionRoot),
+    role_read_edit: evidenceEnvelope(repoRoot, 'read', { ...operator, ...productionCommon, source: 'trusted_existing_chrome_operator', source_operator_sha256: 'a'.repeat(64), attachments: apiAttachments }, [], productionRoot),
+    role_unauthorized_access: evidenceEnvelope(repoRoot, 'access', { ...productionCommon, source: 'production_api', probes, attachments: apiAttachments }, [], productionRoot)
+  };
+  assert.deepStrictEqual(productionRuntimeEvidenceBlockers({ production_runtime: production }, APPLICATION_PERMISSION_PRODUCTION_ITEMS, repoRoot, expected), []);
+  for (const mutate of [
+    value => { value.role_unauthorized_access.payload.probes[1].status = 200; },
+    value => { value.role_unauthorized_access.payload.probes[0].credentials = 'include'; },
+    value => { value.role_unauthorized_access.payload.probes[0].content_type = 'text/html'; },
+    value => { value.role_unauthorized_access.payload.probes[0].application_error_code = 'DEPLOYMENT_PROTECTED'; },
+    value => { value.role_read_edit.payload.persistence_verified = true; },
+    value => { value.verifier.payload.source = 'manual_assertion'; },
+    value => { value.verifier.payload.source_operator_sha256 = 'b'.repeat(64); },
+    value => { value.role_unauthorized_access.payload.probes[0].response_artifact = { path: 'missing.json', sha256: 'a'.repeat(64) }; }
+  ]) {
+    const invalid = structuredClone(production); mutate(invalid);
+    assert.ok(verifier.productionBlockers(invalid, expected).length, 'Invalid Production application evidence must fail closed');
+  }
+  assert.ok(productionRuntimeEvidenceBlockers({ production_runtime: runtime }, APPLICATION_PERMISSION_PRODUCTION_ITEMS, repoRoot, expected).length, 'Preview evidence must not substitute Production');
+  assert.throws(() => recordDeliveryEvidence('production_runtime', {}, options), /controlled live Production verifier/);
+  // Exercise the actual collector with an in-process HTTP double in a separate
+  // selftest process. These temporary artifacts are never delivery receipts.
+  const operatorEnvelope = evidenceEnvelope(repoRoot, 'application-operator', operator, raw);
+  const collectorTest = spawnSync(process.execPath, ['-e', `
+    const assert = require('node:assert/strict');
+    const verifier = require(${JSON.stringify(require.resolve('./application-permissions-verifier'))});
+    const options = ${JSON.stringify({ runtime: deliveryRuntimeRoot(repoRoot), operator: operatorEnvelope, commit: head, deploymentId })};
+    (async () => {
+      const requests = [];
+      global.fetch = async (url, init) => {
+        requests.push({ url, init });
+        assert.equal(init.credentials, 'omit'); assert.equal(init.redirect, 'manual');
+        assert.equal(init.headers.authorization, undefined); assert.equal(init.headers.cookie, undefined);
+        if (init.method === 'PATCH') assert.equal(init.body, '{}');
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'content-type': 'application/json' } });
+      };
+      const result = await verifier.verify(options);
+      assert.deepEqual(requests.map(item => [item.init.method, item.url]), [['GET','https://sales.cyanlog.icu/api/roles'],['PATCH','https://sales.cyanlog.icu/api/roles/role-selftest']]);
+      assert.equal(result.verifier.payload.persistence_verified, false);
+      global.fetch = async () => new Response('<html>CDN protection</html>', { status: 401, headers: { 'content-type': 'text/html' } });
+      await assert.rejects(verifier.verify(options));
+      global.fetch = async () => new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+      await assert.rejects(verifier.verify(options));
+    })().catch(error => { console.error(error); process.exitCode = 1; });
+  `], { encoding: 'utf8' });
+  assert.strictEqual(collectorTest.status, 0, collectorTest.stderr || collectorTest.stdout);
 }
 
 function runConfigurationUiSelftest(repoRoot) {

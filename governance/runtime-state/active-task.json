@@ -192,14 +192,20 @@
       "product-truth/product-code/lib/shipping/connection-authorization.ts",
       "product-truth/product-code/lib/shipping/connection-authorization.test.ts",
       "product-truth/product-code/lib/ask/submit-response.test.ts",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.test.js"
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.test.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/application-permissions-verifier.js",
+      "product-truth/product-code/.vercel/project.json"
     ],
     "feature_id": "F003",
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -217,9 +223,41 @@
         "role_edit_save",
         "role_access_enforcement"
       ],
-      "note": "WP43仅验证系统角色组织级有效权限和核心防锁死；自定义角色暂停。生产权限数据不自动改写，发布待单独批准。",
+      "note": "发布WP43组织级角色权限修复及其必要发布证据适配；允许提交、推送、隔离Preview验证、精确SHA Production部署和现有Chrome只读复验。Production不做数据库迁移、不修改业务角色权限，不以只读复验声称生产持久化已验收。",
       "production_database_mode": "read_only",
-      "runtime_profile": "application"
+      "runtime_profile": "application",
+      "runtime_contract_version": "f003-role-permissions-v1",
+      "required_production_runtime_evidence": [
+        "role_read_edit",
+        "role_unauthorized_access"
+      ],
+      "required_production_evidence": [
+        "exact_production_commit",
+        "vercel_deployment_ready_and_promoted",
+        "sales.cyanlog.icu_alias",
+        "controlled_production_security_and_runtime_verifier",
+        "trusted_existing_chrome_operator_attestation"
+      ],
+      "production_release_authorization": {
+        "status": "approved_code_only",
+        "micro_fix_approval_id": "IN-20261021-013",
+        "clarification_id": "IN-20261021-015",
+        "micro_fix_scope": "恢复系统角色（含SUPER_ADMIN）的组织级权限编辑、保存和真实授权生效；超管保留恢复权限配置必需核心权限，非核心业务权限可收紧；自定义角色留待后续。",
+        "final_release_approval_id": "IN-20261021-015",
+        "final_scope": "发布WP43组织级角色权限修复及其必要发布证据适配；允许提交、推送、隔离Preview验证、精确SHA Production部署和现有Chrome只读复验。Production不做数据库迁移、不修改业务角色权限，不以只读复验声称生产持久化已验收。",
+        "database_write_authorized": false,
+        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
+      },
+      "final_acceptance": {
+        "origin": "https://sales.cyanlog.icu",
+        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+        "new_local_browser_or_context_prohibited": true,
+        "new_tab_prohibited": true,
+        "local_and_preview_role": "diagnostic_only_not_completion",
+        "production_database_mode": "read_only",
+        "trust_boundary": "Git、Vercel与固定HTTP拒绝探针提供机器证据；现有Chrome提供已登录超管读取与编辑后放弃的操作员证明。生产无写验收不证明真实持久化，隔离Preview验证保存和撤权。"
+      }
     },
     "started_at": "2026-10-20T10:39:32Z",
     "reason": "优先恢复当前组织的角色编辑、保存与真实权限生效。",

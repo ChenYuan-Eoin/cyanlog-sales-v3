@@ -41,9 +41,11 @@ const VERCEL_PRODUCTION_CONTRACT = Object.freeze({
   productionBranch: 'production'
 });
 const SHIPPING_RUNTIME_ITEMS = Object.freeze(['shipping_provider', 'shipping_request', 'shipping_tracking', 'shipping_access']);
-// F003 currently authorizes a code candidate only. Naming its future runtime
-// evidence must not substitute AI evidence or authorize Preview/Production.
 const APPLICATION_PERMISSION_ITEMS = Object.freeze(['role_edit_save', 'role_access_enforcement']);
+const APPLICATION_PERMISSION_PRODUCTION_ITEMS = Object.freeze(['role_read_edit', 'role_unauthorized_access']);
+const APPLICATION_PERMISSION_CONTRACT = 'f003-role-permissions-v1';
+const APPLICATION_PERMISSION_ACTIONS = Object.freeze(['open_roles', 'save_role_permissions', 'verify_saved_permissions', 'revoke_role_permissions', 'verify_access_denied', 'restore_role_permissions']);
+const APPLICATION_PERMISSION_PRODUCTION_ACTIONS = Object.freeze(['open_roles', 'read_effective_permissions', 'edit_role_permissions', 'discard_role_changes', 'verify_no_saved_change']);
 const SHIPPING_REPLAY_ACTIONS = Object.freeze(['paste_address', 'select_sender', 'confirm_submission', 'query_tracking', 'reload_recent', 'verify_access']);
 const SHIPPING_WORKSPACE_ITEMS = Object.freeze(['shipping_workspace', 'shipping_tracking', 'shipping_access']);
 const SHIPPING_CONFIG_UI_ITEMS = Object.freeze(['shipping_workspace', 'shipping_access']);
@@ -308,7 +310,8 @@ function runtimeProfileOf(state) {
 function runtimeContractVersionOf(state) {
   return state.active_task?.delivery_contract?.runtime_contract_version || null;
 }
-function requiredReplayActions(state) {
+function requiredReplayActions(state, environment = 'preview') {
+  if (runtimeProfileOf(state) === 'application' && runtimeContractVersionOf(state) === APPLICATION_PERMISSION_CONTRACT) return environment === 'production' ? APPLICATION_PERMISSION_PRODUCTION_ACTIONS : APPLICATION_PERMISSION_ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === 'f054-config-ui-v1') return SHIPPING_CONFIG_UI_ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === 'f054-intake-v1') return SHIPPING_INTAKE_ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === 'f054-recovery-v1') return SHIPPING_RECOVERY_ACTIONS;
@@ -521,12 +524,13 @@ function validateSchedulerSnapshot(options, candidate) {
   if (!['ai', 'shipping', 'shipping_workspace', 'application'].includes(profile)) errors.push('Unknown runtime evidence profile');
   if (profile === 'application' && (
     state.active_task?.feature_id !== 'F003'
-    || deliveryContract.target_state !== 'code_green'
+    || (deliveryContract.target_state !== 'code_green' && runtimeContractVersionOf(state) !== APPLICATION_PERMISSION_CONTRACT)
     || deliveryContract.production_database_mode !== 'read_only'
-  )) errors.push('Application permission profile requires F003, code_green and read-only Production');
+  )) errors.push('Application permission profile requires F003, a scoped release contract and read-only Production');
   if (['shipping', 'shipping_workspace'].includes(profile) && state.active_task?.feature_id !== 'F054') errors.push('Shipping evidence profile requires the F054 feature binding');
   const contractVersion = runtimeContractVersionOf(state);
-  if (contractVersion && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1'].includes(contractVersion))) errors.push('Unknown or mismatched shipping workspace contract version');
+  const applicationRelease = profile === 'application' && contractVersion === APPLICATION_PERMISSION_CONTRACT;
+  if (contractVersion && !applicationRelease && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1'].includes(contractVersion))) errors.push('Unknown or mismatched runtime contract version');
   if (contractVersion === 'f054-config-ui-v1' && (!['code_green', 'clean_preview_green'].includes(deliveryContract.target_state) || deliveryContract.production_database_mode !== 'read_only')) errors.push('Configuration UI contract is limited to read-only Preview acceptance');
   const canonicalRuntimeEvidence = profile === 'application' ? APPLICATION_PERMISSION_ITEMS : profile === 'shipping_workspace' ? (contractVersion === 'f054-config-ui-v1' ? SHIPPING_CONFIG_UI_ITEMS : SHIPPING_WORKSPACE_ITEMS) : profile === 'shipping' ? SHIPPING_RUNTIME_ITEMS : ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
   if (
@@ -541,12 +545,13 @@ function validateSchedulerSnapshot(options, candidate) {
   }
   if (deliveryContract?.target_state === 'production_released') {
     const requiredProductionRuntimeEvidence = deliveryContract.required_production_runtime_evidence;
+    const canonicalProductionEvidence = applicationRelease ? APPLICATION_PERMISSION_PRODUCTION_ITEMS : canonicalRuntimeEvidence;
     if (
       !Array.isArray(requiredProductionRuntimeEvidence)
-      || canonicalRuntimeEvidence.some((item) => !requiredProductionRuntimeEvidence.includes(item))
+      || canonicalProductionEvidence.some((item) => !requiredProductionRuntimeEvidence.includes(item))
       || new Set(requiredProductionRuntimeEvidence).size !== requiredProductionRuntimeEvidence.length
     ) {
-      errors.push(`active_task.delivery_contract.required_production_runtime_evidence must include ${canonicalRuntimeEvidence.join(', ')}`);
+      errors.push(`active_task.delivery_contract.required_production_runtime_evidence must include ${canonicalProductionEvidence.join(', ')}`);
     }
     const releaseAuthorization = deliveryContract.production_release_authorization;
     for (const field of ['status', 'micro_fix_approval_id', 'clarification_id', 'micro_fix_scope', 'final_scope']) {
@@ -570,7 +575,8 @@ function validateSchedulerSnapshot(options, candidate) {
     if (releaseAuthorization?.status === 'approved_for_final_release' && databaseMode !== 'controlled_write_approved') {
       errors.push('final Production release approval requires controlled_write_approved database mode');
     }
-    if (releaseAuthorization?.status === 'approved_code_only' && (databaseMode !== 'read_only' || !['f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1'].includes(contractVersion)
+    if (applicationRelease && releaseAuthorization?.status !== 'approved_code_only') errors.push('Application permission Production acceptance is code-only and must not authorize business writes');
+    if (releaseAuthorization?.status === 'approved_code_only' && (databaseMode !== 'read_only' || (!applicationRelease && !['f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1'].includes(contractVersion))
       || releaseAuthorization.database_write_authorized !== false)) errors.push('Code-only release requires the UI or recovery contract and explicit read-only database boundary');
   }
   for (const dynamicKey of ['evidence', 'release_control', 'releaseControl', 'completionState', 'completion_state', 'defects']) {
@@ -1401,6 +1407,21 @@ function productionBrowserOperatorAttestationBlockers(envelope, repoRoot, expect
 function productionRuntimeEvidenceBlockers(evidence, requiredItems, repoRoot, expected) {
   const blockers = [];
   const section = evidence.production_runtime || {};
+  if (expected.runtimeContractVersion === APPLICATION_PERMISSION_CONTRACT) {
+    for (const item of ['verifier', ...APPLICATION_PERMISSION_PRODUCTION_ITEMS]) {
+      const envelope = section[item];
+      if (!evidenceEnvelopeValid(envelope, repoRoot) || !evidenceEnvelopeUnderPrefix(envelope, 'production-runtime-verifier')) {
+        blockers.push(`Application Production controlled evidence missing or invalid: ${item}`);
+        continue;
+      }
+      const payload = envelope.payload;
+      if (payload.commit !== expected.commit || payload.deployment_id !== expected.deploymentId) blockers.push(`Application Production evidence binding mismatch: ${item}`);
+      if (!isExactProductionUrl(payload.origin) || payload.environment !== 'production') blockers.push(`Application Production evidence origin/environment mismatch: ${item}`);
+      if (!Array.isArray(payload.attachments) || payload.attachments.length === 0) blockers.push(`Application Production evidence has no raw attachment: ${item}`);
+    }
+    blockers.push(...require('./application-permissions-verifier').productionBlockers(section, expected));
+    return blockers;
+  }
   const securityGate = section.security_gate;
   const runtimeVerifier = section.verifier;
   if (!evidenceEnvelopeValid(securityGate, repoRoot) || !evidenceEnvelopeUnderPrefix(securityGate, 'production-runtime-verifier')) {
@@ -1632,7 +1653,7 @@ function unresolvedBlockingDefects(state, runtimeDefects = {}, head = '', previe
     const productionVerified = !productionTarget || (
       proof?.production_verified === true
       && evidenceEnvelopeValid(productionArtifacts.browser_acceptance, repoRoot)
-      && JSON.stringify(productionArtifacts.browser_acceptance?.payload?.actions) === JSON.stringify(requiredReplayActions(state))
+      && JSON.stringify(productionArtifacts.browser_acceptance?.payload?.actions) === JSON.stringify(requiredReplayActions(state, 'production'))
       && proof.production_regression_artifact_sha256 === productionArtifacts.browser_acceptance.sha256
       && proof.production_commit === head
     );
@@ -1846,30 +1867,36 @@ function checkDeliveryStage(stage, options = {}) {
     }
   }
   if (deliveryStateAtLeast(stage, 'clean_preview_green')) {
+    const applicationPermissions = status.runtimeProfile === 'application' && status.runtimeContractVersion === APPLICATION_PERMISSION_CONTRACT;
     if (evidence.preview?.commit !== status.git.head) blockers.push('Preview commit does not equal HEAD');
     if (evidence.preview?.provider_source_commit !== status.git.head) blockers.push('Preview provider source commit does not equal HEAD');
     if (!/^dpl_[A-Za-z0-9]+$/.test(String(evidence.preview?.deployment_id || ''))) blockers.push('Preview deployment ID is missing');
     if (!/^https:\/\//.test(String(evidence.preview?.url || ''))) blockers.push('Preview URL is missing');
     if (evidence.preview?.ready !== true) blockers.push('Preview is not READY');
     if (evidence.preview?.git_dirty !== false) blockers.push('Preview was built from dirty source');
-    for (const journey of ['desktop', 'ipad', 'blocking_defect_replay']) {
+    for (const journey of applicationPermissions ? ['desktop', 'blocking_defect_replay'] : ['desktop', 'ipad', 'blocking_defect_replay']) {
       if (evidence.preview?.journeys?.[journey] !== true) blockers.push(`Preview journey missing: ${journey}`);
     }
-    for (const artifact of ['desktop', 'ipad', 'defect_replay']) {
+    for (const artifact of applicationPermissions ? ['desktop', 'defect_replay'] : ['desktop', 'ipad', 'defect_replay']) {
       if (!evidenceEnvelopeValid(evidence.preview?.artifacts?.[artifact], repoRoot)) blockers.push(`Preview evidence envelope missing or invalid: ${artifact}`);
     }
     if ((evidence.preview?.artifacts?.desktop?.payload?.viewport?.width || 0) < 1200) blockers.push('desktop Preview evidence has no desktop viewport');
     const ipadWidth = evidence.preview?.artifacts?.ipad?.payload?.viewport?.width || 0;
-    if (ipadWidth < 768 || ipadWidth > 1366) blockers.push('iPad Preview evidence has no tablet viewport');
+    if (!applicationPermissions && (ipadWidth < 768 || ipadWidth > 1366)) blockers.push('iPad Preview evidence has no tablet viewport');
+    if (applicationPermissions) {
+      const desktop = evidence.preview?.artifacts?.desktop?.payload;
+      if (desktop?.browser_context !== 'existing_user_chrome' || desktop?.new_tabs !== 0 || desktop?.new_browser_contexts !== 0
+        || desktop?.result !== 'pass' || !Array.isArray(desktop?.attachments) || !desktop.attachments.length) blockers.push('Application Preview requires the existing-Chrome desktop observation and attachment');
+    }
     const defectReplayPayload = evidence.preview?.artifacts?.defect_replay?.payload;
     if (defectReplayPayload?.commit !== status.git.head) blockers.push('defect replay payload commit does not equal HEAD');
     if (defectReplayPayload?.deployment_id !== evidence.preview?.deployment_id) blockers.push('defect replay payload deployment does not equal Preview deployment');
     if (!/^https:\/\//.test(String(defectReplayPayload?.url || ''))) blockers.push('defect replay payload has no HTTPS URL');
     if (JSON.stringify(defectReplayPayload?.actions) !== JSON.stringify(status.requiredReplayActions)) blockers.push('defect replay payload does not contain the complete ordered action sequence');
     if (defectReplayPayload?.result !== 'pass') blockers.push('defect replay did not pass');
-    if (defectReplayPayload?.overlays_after !== 0) blockers.push('defect replay left overlays behind');
-    if (defectReplayPayload?.body_scroll_lock_released !== true) blockers.push('defect replay did not release body scroll lock');
-    if (defectReplayPayload?.app_inert_after !== false) blockers.push('defect replay left the application inert');
+    if (!applicationPermissions && defectReplayPayload?.overlays_after !== 0) blockers.push('defect replay left overlays behind');
+    if (!applicationPermissions && defectReplayPayload?.body_scroll_lock_released !== true) blockers.push('defect replay did not release body scroll lock');
+    if (!applicationPermissions && defectReplayPayload?.app_inert_after !== false) blockers.push('defect replay left the application inert');
     for (const item of status.requiredRuntimeEvidence) {
       const envelope = evidence.runtime?.[item];
       if (!evidenceEnvelopeValid(envelope, repoRoot)) {
@@ -1877,7 +1904,7 @@ function checkDeliveryStage(stage, options = {}) {
       } else {
         if (envelope.payload.commit !== status.git.head) blockers.push(`runtime evidence commit mismatch: ${item}`);
         if (envelope.payload.deployment_id !== evidence.preview?.deployment_id) blockers.push(`runtime evidence deployment mismatch: ${item}`);
-        if (['f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1'].includes(status.runtimeContractVersion)) {
+        if (['f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', APPLICATION_PERMISSION_CONTRACT].includes(status.runtimeContractVersion)) {
           try {
             const origin = new URL(envelope.payload.origin);
             if (origin.protocol !== 'https:' || origin.origin !== new URL(evidence.preview.url).origin) blockers.push(`runtime evidence origin mismatch: ${item}`);
@@ -1885,7 +1912,9 @@ function checkDeliveryStage(stage, options = {}) {
         }
       }
     }
-    if (status.runtimeProfile === 'shipping_workspace') {
+    if (status.runtimeProfile === 'application' && status.runtimeContractVersion === APPLICATION_PERMISSION_CONTRACT) {
+      blockers.push(...require('./application-permissions-verifier').previewBlockers(evidence.runtime || {}));
+    } else if (status.runtimeProfile === 'shipping_workspace') {
       blockers.push(...shippingWorkspaceEvidenceBlockers(evidence.runtime || {}, 'sandbox', status.runtimeContractVersion));
     } else if (status.runtimeProfile === 'shipping') {
       blockers.push(...shippingRuntimeEvidenceBlockers(evidence.runtime || {}, 'sandbox'));
@@ -2010,7 +2039,7 @@ function checkDeliveryStage(stage, options = {}) {
     if (status.git.remoteProduction !== status.git.head) blockers.push('origin/production does not equal released candidate HEAD');
     const codeOnly = status.productionReleaseAuthorization?.status === 'approved_code_only';
     if (!codeOnly && status.productionReleaseAuthorization?.status !== 'approved_for_final_release') blockers.push('Final Production release authorization is still pending');
-    if (codeOnly ? status.productionDatabaseMode !== 'read_only' || !['f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1'].includes(status.runtimeContractVersion) : status.productionDatabaseMode !== 'controlled_write_approved') blockers.push('Production database boundary does not match the authorized release mode');
+    if (codeOnly ? status.productionDatabaseMode !== 'read_only' || !['f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', APPLICATION_PERMISSION_CONTRACT].includes(status.runtimeContractVersion) : status.productionDatabaseMode !== 'controlled_write_approved') blockers.push('Production database boundary does not match the authorized release mode');
     const approvalRecord = status.productionReleaseAuthorizationRecord;
     if (approvalRecord?.type !== 'final_production_release_authorization') blockers.push('Final Production authorization record type is invalid');
     if (approvalRecord?.state !== 'approved') blockers.push('Final Production authorization record is not approved');
@@ -2052,6 +2081,13 @@ function checkDeliveryStage(stage, options = {}) {
         deploymentId: liveVercel.snapshot?.deployment?.id
       }
     ));
+    if (status.runtimeProfile === 'application' && status.runtimeContractVersion === APPLICATION_PERMISSION_CONTRACT) {
+      blockers.push(...require('./application-permissions-verifier').productionOperatorBlockers(evidence.production?.browser_acceptance?.payload, {
+        commit: status.git.head, deploymentId: liveVercel.snapshot?.deployment?.id,
+        now: Date.parse(evidence.production_runtime?.verifier?.payload?.observed_at || '')
+      }));
+      if (evidence.production_runtime?.role_read_edit?.payload?.source_operator_sha256 !== evidence.production?.browser_acceptance?.sha256) blockers.push('Application Production runtime is not bound to the accepted Chrome operator evidence');
+    }
 
     if (!options.skipSealCheck && !deliveryStateAtLeast(status.sealedCompletionState, stage)) {
       blockers.push(`Git note attestation has not been sealed for ${stage}`);
@@ -2087,6 +2123,30 @@ function checkDeliveryStage(stage, options = {}) {
 }
 
 const LIVE_SHIPPING_WORKSPACE_RECEIPT = Symbol('live shipping workspace verifier receipt');
+const LIVE_APPLICATION_PERMISSION_RECEIPT = Symbol('live application permission verifier receipt');
+async function verifyApplicationPermissionsProduction(options = {}) {
+  const status = getDeliveryStatus(options), repoRoot = status.repoRoot;
+  if (!status.scheduler.ok || status.featureId !== 'F003' || status.runtimeProfile !== 'application'
+    || status.runtimeContractVersion !== APPLICATION_PERMISSION_CONTRACT || status.targetState !== 'production_released'
+    || status.productionReleaseAuthorization?.status !== 'approved_code_only' || status.productionDatabaseMode !== 'read_only') {
+    throw new Error('Application verifier requires the scoped F003 code-only read-only Production release');
+  }
+  if (status.git.remoteProduction !== status.git.head || !status.git.clean) throw new Error('Verifier requires the clean deployed production commit');
+  const live = verifyVercelProductionState(repoRoot, status.git.head, { stage: 'production_released' });
+  if (live.blockers.length) throw new Error(live.blockers.join('; '));
+  const expected = { commit: status.git.head, deploymentId: live.snapshot.deployment.id, runtimeContractVersion: status.runtimeContractVersion };
+  const operatorBlockers = productionBrowserOperatorAttestationBlockers(options.operator, repoRoot, expected);
+  operatorBlockers.push(...require('./application-permissions-verifier').productionOperatorBlockers(options.operator?.payload, expected));
+  if (operatorBlockers.length) throw new Error(operatorBlockers.join('; '));
+  const { runtimePath } = loadDeliveryMutableBase({ repoRoot });
+  // Only verified fields enter the live verifier; callers cannot inject HTTP or target overrides.
+  const payload = await require('./application-permissions-verifier').verify({
+    runtime: path.dirname(runtimePath), operator: options.operator, commit: expected.commit, deploymentId: expected.deploymentId
+  });
+  const blockers = productionRuntimeEvidenceBlockers({ production_runtime: payload }, status.requiredProductionRuntimeEvidence, repoRoot, expected);
+  if (blockers.length) throw new Error(blockers.join('; '));
+  return recordDeliveryEvidence('production_runtime', payload, { repoRoot, liveApplicationPermissionReceipt: LIVE_APPLICATION_PERMISSION_RECEIPT });
+}
 async function verifyShippingWorkspaceProduction(options = {}) {
   const status = getDeliveryStatus(options), repoRoot = status.repoRoot;
   const scopeBlockers = shippingProductionVerifierScopeBlockers(status);
@@ -2110,6 +2170,7 @@ function recordDeliveryEvidence(section, payload, options = {}) {
     if (
       section === 'production_runtime'
       && options.liveShippingWorkspaceReceipt !== LIVE_SHIPPING_WORKSPACE_RECEIPT
+      && options.liveApplicationPermissionReceipt !== LIVE_APPLICATION_PERMISSION_RECEIPT
       && !(options.testOnlyControlledProductionRuntime === true && loadRegistry(options.repoRoot).registry.version === 'selftest')
     ) {
       throw new Error('production_runtime can only be written by the controlled live Production verifier; generic delivery-record JSON is forbidden');
@@ -2381,6 +2442,10 @@ module.exports = {
   DELIVERY_ATTESTATION_REF,
   REQUIRED_DEFECT_REPLAY_ACTIONS,
   APPLICATION_PERMISSION_ITEMS,
+  APPLICATION_PERMISSION_PRODUCTION_ITEMS,
+  APPLICATION_PERMISSION_CONTRACT,
+  APPLICATION_PERMISSION_ACTIONS,
+  APPLICATION_PERMISSION_PRODUCTION_ACTIONS,
   SHIPPING_RUNTIME_ITEMS,
   SHIPPING_REPLAY_ACTIONS,
   SHIPPING_COLLABORATION_ACTIONS,
@@ -2414,6 +2479,8 @@ module.exports = {
   loadDeliveryRuntime,
   recordDeliveryEvidence,
   verifyShippingWorkspaceProduction,
+  verifyApplicationPermissionsProduction,
+  productionRuntimeEvidenceBlockers,
   resolveVercelDeploymentCommit,
   sealDeliveryAttestation,
   transitionDeliveryState,
