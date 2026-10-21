@@ -18,6 +18,8 @@ interface RoleAccessTabProps {
   }>
   currentUserId: string | null
   savingRoleId: string | null
+  permissionsEditable?: boolean
+  permissionsEditBlockReason?: string | null
   orgSummary: OrgSummaryPayload | null
   onSaveRole: (roleId: string, newPerms: string[]) => void
   onRefresh: () => void | Promise<void>
@@ -38,6 +40,8 @@ export default function RoleAccessTab({
   roles,
   currentUserId,
   savingRoleId,
+  permissionsEditable = false,
+  permissionsEditBlockReason,
   orgSummary,
   onSaveRole,
   onRefresh,
@@ -177,6 +181,8 @@ export default function RoleAccessTab({
         {selectedRole ? (
           <RoleDetailPanel
             role={selectedRole}
+            permissionsEditable={permissionsEditable}
+            permissionsEditBlockReason={permissionsEditBlockReason}
             currentUserId={currentUserId}
             saving={savingRoleId === selectedRole.id}
             onSave={(perms) => onSaveRole(selectedRole.id, perms)}
@@ -210,7 +216,7 @@ export default function RoleAccessTab({
               <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                 <span className="text-slate-500">权限点</span>
                 <span className="font-semibold text-slate-900">
-                  {selectedRole.isSuperAdmin ? '全部' : (selectedRole.permissions?.length ?? 0)}
+                  {selectedRole.permissions?.includes('*') ? '全部' : (selectedRole.permissions?.length ?? 0)}
                 </span>
               </div>
               <div className="rounded-lg border border-slate-200 px-3 py-2 text-xs leading-5 text-slate-500">

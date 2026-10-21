@@ -9,7 +9,7 @@ import type { AuthUser } from '@/lib/auth'
 import {
   getDefaultOrgId,
   getOrgPermissions,
-  getOrgRoleCodes,
+  getOrgAuthorizationRoleCodes,
   getUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
 import { hasPermission } from '@/lib/permissions'
@@ -70,7 +70,7 @@ export async function withPermission<T>(
 ): Promise<T | Response> {
   return withAuthAndOrg(req, async (user, orgId) => {
     const assignments = await getUserScopedRoleAssignments(user.id)
-    const roleCodes = getOrgRoleCodes(assignments, orgId)
+    const roleCodes = getOrgAuthorizationRoleCodes(assignments, orgId)
     const permissions = getOrgPermissions(assignments, orgId)
     if (roleCodes.includes('SUPER_ADMIN')) {
       permissions.push('*')

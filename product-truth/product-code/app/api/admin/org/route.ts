@@ -224,7 +224,9 @@ async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
       .map((permission) => permission.trim())
       .filter(Boolean)
 
-    if (!canAccessOrgAdmin(permissions, roleCodes)) {
+    const authorizationRoleCodes = (req.headers.get('x-user-authorization-role-codes') ?? roleCodes.join(','))
+      .split(',').map((code) => code.trim()).filter(Boolean)
+    if (!canAccessOrgAdmin(permissions, authorizationRoleCodes)) {
       return null
     }
 

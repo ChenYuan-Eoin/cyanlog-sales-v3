@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import type { AuthUser } from '@/lib/auth'
-import { getDefaultOrgId, listAccessibleSalesSpaces } from '@/lib/scoped-access'
+import { getFreshDefaultOrgId, listAccessibleSalesSpaces } from '@/lib/scoped-access'
+import { loadOrgRolePermissionSettings } from '@/lib/org-role-permissions'
 
 type CustomerRow = {
   id: string
@@ -140,7 +141,7 @@ async function loadDashboardPayloadFromRpc(user: AuthUser, requestedSpaceId?: st
 }
 
 async function loadDashboardPayloadViaQueries(user: AuthUser, requestedSpaceId?: string | null): Promise<DashboardPayload> {
-  const orgId = user.org_id || await getDefaultOrgId(user.id)
+  const orgId = user.org_id || await getFreshDefaultOrgId(user.id)
   const { spaces } = await listAccessibleSalesSpaces(user.id, orgId)
   const normalizedSpaces = spaces
     .map((space) => ({
@@ -255,7 +256,23 @@ async function loadDashboardPayload(user: AuthUser, requestedSpaceId?: string | 
 }
 
 export async function getDashboardPayload(user: AuthUser, requestedSpaceId?: string | null): Promise<DashboardPayload> {
-  const key = cacheKey(user, requestedSpaceId)
+  // Bind every request to the current default organization before considering
+  // legacy RPC payloads or cached visible data.
+  const orgId = await getFreshDefaultOrgId(user.id)
+  const scopedUser = { ...user, org_id: orgId }
+  const settings = await loadOrgRolePermissionSettings(orgId)
+  if (settings !== null && (typeof settings !== 'object' || Array.isArray(settings))) {
+    throw new Error('Invalid organization permission settings')
+  }
+  const overrides = settings && typeof settings === 'object'
+    ? (settings as { role_permission_overrides?: unknown }).role_permission_overrides
+    : undefined
+  const key = cacheKey(scopedUser, requestedSpaceId)
+  if (overrides !== undefined) {
+    // Malformed overrides must also avoid the legacy template-based RPC.
+    dashboardCache.delete(key)
+    return loadDashboardPayloadViaQueries(scopedUser, requestedSpaceId)
+  }
   const cached = dashboardCache.get(key)
   if (cached && cached.expiresAt >= Date.now()) {
     return cached.value
@@ -267,7 +284,7 @@ export async function getDashboardPayload(user: AuthUser, requestedSpaceId?: str
   const inflight = dashboardInflight.get(key)
   if (inflight) return inflight
 
-  const request = loadDashboardPayload(user, requestedSpaceId)
+  const request = loadDashboardPayload(scopedUser, requestedSpaceId)
     .then((value) => {
       dashboardCache.set(key, {
         value,
@@ -284,14 +301,10 @@ export async function getDashboardPayload(user: AuthUser, requestedSpaceId?: str
 }
 
 export function getCachedDashboardPayload(user: AuthUser, requestedSpaceId?: string | null): DashboardPayload | null {
-  const key = cacheKey(user, requestedSpaceId)
-  const cached = dashboardCache.get(key)
-  if (cached && cached.expiresAt >= Date.now()) {
-    return cached.value
-  }
-  if (cached) {
-    dashboardCache.delete(key)
-  }
+  // Login cannot revalidate a synchronous cached authorization snapshot.
+  // The dashboard page uses the async loader, which checks current overrides.
+  void user
+  void requestedSpaceId
   return null
 }
 

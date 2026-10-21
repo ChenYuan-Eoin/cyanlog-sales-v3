@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-19T09:27:59.479976+00:00",
+  "updated_at": "2026-10-21T07:29:29.082357+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -129,29 +129,72 @@
     "harness_mode": "advisory"
   },
   "active_task": {
-    "id": "WP41",
-    "slug": "wecom-bot-long-connection",
-    "name": "企微智能机器人长连接接入",
+    "id": "WP43",
+    "slug": "org-scoped-role-permissions",
+    "name": "组织级角色权限收紧与生效",
     "kind": "product",
     "status": "active",
-    "objective": "企微长连接接入：安全保存Bot ID/Secret，配置页默认长连接并隔离旧URL回调，验证本机认证及连接状态；不将凭据保存或认证通过宣称为订单闭环。",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/wp39-harness-repair/Price-v3",
-    "activation_basis": "IN-20261019-031",
+    "objective": "恢复系统角色（含SUPER_ADMIN）的组织级权限编辑、保存和真实授权生效；超管保留恢复权限配置必需核心权限，非核心业务权限可收紧；自定义角色留待后续。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/wp41-org-role-permissions/Price-v3",
+    "activation_basis": "IN-20261021-013：用户明确先修复权限配置；取代此前暂停决定",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/product-code/services/wecom-bot",
-      "product-truth/feature-packets/F054-sf-self-service-order.md",
-      "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "product-truth/product-code/app/shipping/wecom-bot-configuration.tsx",
-      "product-truth/product-code/app/shipping/wecom-bot-configuration.test.tsx",
-      "product-truth/product-code/app/shipping/wecom-configuration.test.tsx",
-      "product-truth/product-code/lib/shipping/wecom-bot-settings.ts",
-      "product-truth/product-code/lib/shipping/wecom-bot-settings.test.ts",
-      "product-truth/product-code/app/api/shipping/wecom/bot/route.ts",
-      "product-truth/product-code/app/shipping/config-drawer.module.css"
+      "product-truth/REQ_REGISTRY.yml",
+      "product-truth/feature-packets/F003-account-auth.md",
+      "product-truth/product-code/app/configs/ConfigsClient.tsx",
+      "product-truth/product-code/app/configs/types.ts",
+      "product-truth/product-code/app/configs/tabs/RoleAccessTab.tsx",
+      "product-truth/product-code/app/configs/tabs/RoleAccessTab.test.tsx",
+      "product-truth/product-code/app/configs/tabs/RoleDetailPanel.tsx",
+      "product-truth/product-code/app/configs/tabs/RoleDetailPanel.test.tsx",
+      "product-truth/product-code/app/configs/tabs/TabsContent.tsx",
+      "product-truth/product-code/app/api/roles/route.ts",
+      "product-truth/product-code/app/api/roles/route.test.ts",
+      "product-truth/product-code/app/api/roles/[id]/route.ts",
+      "product-truth/product-code/app/api/roles/[id]/route.test.ts",
+      "product-truth/product-code/app/api/admin/org/route.ts",
+      "product-truth/product-code/app/api/admin/org/route.test.ts",
+      "product-truth/product-code/app/api/admin/users/route.ts",
+      "product-truth/product-code/app/api/admin/users/route.test.ts",
+      "product-truth/product-code/app/api/admin/users/[id]/roles/route.ts",
+      "product-truth/product-code/app/api/admin/users/[id]/roles/route.test.ts",
+      "product-truth/product-code/app/api/auth/context/route.ts",
+      "product-truth/product-code/app/api/auth/context/route.test.ts",
+      "product-truth/product-code/lib/api/auth-wrapper.ts",
+      "product-truth/product-code/lib/api/auth-wrapper.test.ts",
+      "product-truth/product-code/lib/admin/org-membership.ts",
+      "product-truth/product-code/lib/admin/org-membership.test.ts",
+      "product-truth/product-code/lib/admin/org-role-authority.ts",
+      "product-truth/product-code/lib/admin/org-role-authority.test.ts",
+      "product-truth/product-code/lib/configs/access.ts",
+      "product-truth/product-code/lib/configs/access.test.ts",
+      "product-truth/product-code/lib/permissions.ts",
+      "product-truth/product-code/lib/permissions.test.ts",
+      "product-truth/product-code/lib/scoped-access.ts",
+      "product-truth/product-code/lib/scoped-access.test.ts",
+      "product-truth/product-code/lib/scoped-access.sales-space.test.ts",
+      "product-truth/product-code/lib/schema-check.ts",
+      "product-truth/product-code/lib/schema-check.test.ts",
+      "product-truth/product-code/supabase/migrations",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
+      "product-truth/product-code/lib/org-role-permissions.ts",
+      "product-truth/product-code/lib/org-role-permissions.test.ts",
+      "product-truth/product-code/lib/role-permission-policy.ts",
+      "product-truth/product-code/lib/role-permission-policy.test.ts",
+      "product-truth/product-code/middleware.ts",
+      "product-truth/product-code/middleware.test.ts",
+      "product-truth/product-code/lib/dashboard-data.ts",
+      "product-truth/product-code/lib/dashboard-data.test.ts",
+      "product-truth/product-code/lib/ask/permissions.ts",
+      "product-truth/product-code/lib/ask/permissions.test.ts",
+      "product-truth/product-code/lib/shipping/connection-authorization.ts",
+      "product-truth/product-code/lib/shipping/connection-authorization.test.ts",
+      "product-truth/product-code/lib/ask/submit-response.test.ts",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.test.js"
     ],
-    "feature_id": "F054",
+    "feature_id": "F003",
     "delivery_contract": {
       "target_state": "code_green",
       "allowed_states": [
@@ -171,31 +214,35 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "shipping_workspace",
-        "shipping_tracking",
-        "shipping_access"
+        "role_edit_save",
+        "role_access_enforcement"
       ],
-      "note": "长连接接入独立工作包；code_green仅表示代码验证，必须另存真实认证/连接和运行位置证据，不能宣称业务闭环或Production交付。",
+      "note": "WP43仅验证系统角色组织级有效权限和核心防锁死；自定义角色暂停。生产权限数据不自动改写，发布待单独批准。",
       "production_database_mode": "read_only",
-      "runtime_profile": "shipping_workspace",
-      "runtime_contract_version": "f054-intake-v1"
+      "runtime_profile": "application"
     },
-    "started_at": "2026-10-19T09:27:59.479976+00:00",
-    "reason": "用户明确先修基础配置持久化；长连接候选保留",
+    "started_at": "2026-10-20T10:39:32Z",
+    "reason": "优先恢复当前组织的角色编辑、保存与真实权限生效。",
     "micro_fixes": [
       {
-        "id": "IN-20261019-033",
-        "scope": "已发布配置界面共用下拉框箭头对齐，不变更业务配置或接入方向"
+        "id": "IN-20261020-004",
+        "scope": "修正通用非 AI/非顺丰工作包被强制要求 ReviewRun/token 证据的调度器缺口"
       }
     ]
   },
   "execution_queue": {
     "active": {
-      "id": "WP41",
-      "slug": "wecom-bot-long-connection",
-      "name": "企微智能机器人长连接接入"
+      "id": "WP43",
+      "slug": "org-scoped-role-permissions",
+      "name": "组织级角色权限收紧与生效"
     },
-    "next": null,
+    "next": {
+      "id": "WP34",
+      "slug": "shipping-auth-recovery",
+      "name": "顺丰认证失败与原单安全恢复",
+      "entry_gate": "WP43权限修复后恢复寄件收尾",
+      "entry_gate_status": "waiting_active_completion"
+    },
     "ready": [
       {
         "id": "WP35",
@@ -344,6 +391,13 @@
         "name": "企微企业接入与员工提报校验",
         "reason": "用户批准WP39先修Harness；已发布候选与本地UI微修复保留，未把历史门禁声明为完成",
         "execution_workspace": "/Users/nsss/.codex/worktrees/wp35-sales-intake/Price-v3"
+      },
+      {
+        "id": "WP41",
+        "slug": "wecom-bot-long-connection",
+        "name": "企微智能机器人长连接接入",
+        "reason": "用户批准切换至F003权限模型；长连接候选保留，未宣称完成",
+        "execution_workspace": "/Users/nsss/.codex/worktrees/wp39-harness-repair/Price-v3"
       }
     ],
     "completed": [
@@ -444,11 +498,6 @@
         "evidence_commit": "a987f85d5701a38a13a245e0ebc5484cadecb3ab",
         "preview_deployment": "dpl_2P11eFtwxutsQXMUoU8R46XdDGUx",
         "result": "四类合同任务、源文件身份与上传编排候选已固化；同一隔离 Preview 的真实合同列表入口默认进入审查，桌面/iPad 选中第 45 页风险后只滚动 DOCX 内部正文，window 不移动；临时风险和认证 token 已精确清理，Production 未写入或部署"
-      },
-      {
-        "id": "WP34",
-        "slug": "shipping-auth-recovery",
-        "result": "认证失败分类与原单恢复已生产发布，证据留存WP34 worktree runtime；不表示完整顺丰CRUD通过。"
       }
     ]
   },
@@ -2411,6 +2460,103 @@
       },
       "started_at": "2026-10-19T08:14:11.052773+00:00",
       "release_evidence": "worktree codex-runtime/checks/wp42/production-release.json"
+    },
+    "WP34": {
+      "id": "WP34",
+      "slug": "shipping-auth-recovery",
+      "name": "顺丰认证失败与原单安全恢复",
+      "kind": "product",
+      "status": "parked",
+      "objective": "修复生产OAuth认证失败被误判为下单结果未知的问题；保留明确未发单错误并支持原单安全恢复，发送后不确定请求始终先查回。排查认证网络故障，不新增生产测试单或改动受保护运单。",
+      "started_at": "2026-10-15T07:45:54.444Z",
+      "activation_basis": "IN-20261015-077/078：生产下单阻断，依据生产事故例外优先处理",
+      "execution_workspace": "/Users/nsss/.codex/worktrees/wp34-shipping-auth-recovery/Price-v3",
+      "allowed_paths": [
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "product-truth/product-code/lib/shipping",
+        "product-truth/product-code/app/api/shipping",
+        "product-truth/product-code/app/shipping",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js"
+      ],
+      "delivery_contract": {
+        "target_state": "production_released",
+        "allowed_states": [
+          "executing",
+          "code_green",
+          "clean_preview_green",
+          "integration_ready",
+          "main_integrated",
+          "production_released"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "shipping_workspace",
+          "shipping_tracking",
+          "shipping_access"
+        ],
+        "required_production_runtime_evidence": [
+          "shipping_workspace",
+          "shipping_tracking",
+          "shipping_access"
+        ],
+        "required_production_evidence": [
+          "exact_production_commit",
+          "vercel_deployment_ready_and_promoted",
+          "sales.cyanlog.icu_alias",
+          "controlled_production_security_and_runtime_verifier",
+          "trusted_existing_chrome_operator_attestation"
+        ],
+        "note": "WP34生产事故最小修复；发布仅限认证失败分类、原单恢复及对应回归，不含界面扩展、数据库迁移、凭据修改或新增真实测试订单。WP33已部署界面保留，形式验收门禁阻断仍单独记录。",
+        "production_database_mode": "read_only",
+        "runtime_profile": "shipping_workspace",
+        "final_acceptance": {
+          "origin": "https://sales.cyanlog.icu",
+          "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+          "new_local_browser_or_context_prohibited": true,
+          "new_tab_prohibited": true,
+          "local_and_preview_role": "diagnostic_only_not_completion",
+          "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
+          "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
+          "production_database_mode": "read_only"
+        },
+        "production_release_authorization": {
+          "status": "approved_code_only",
+          "final_release_approval_id": "IN-20261016-002",
+          "final_scope": "WP34认证失败分类、原单安全恢复和专项验收的代码发布；允许必要提交、推送、隔离验证及精确SHA生产发布；无数据库迁移、凭据修改、新生产测试单或受保护运单变更。",
+          "database_write_authorized": false,
+          "micro_fix_approval_id": "IN-20261015-077",
+          "clarification_id": "IN-20261016-001",
+          "micro_fix_scope": "OAuth未发单分类、失败原因保存及原单安全恢复；范围和安全边界已授权，部署凭证待绑定本次候选",
+          "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
+        },
+        "blocking_acceptance_defects": [
+          "IN-20261015-077"
+        ],
+        "runtime_contract_version": "f054-recovery-v1"
+      },
+      "feature_id": "F054",
+      "integration_decision": {
+        "strategy": "minimal_incident_fix_on_verified_production_base",
+        "authority": "IN-20261016-002",
+        "requested_target": "production_released",
+        "constraint": "code-only release; no schema or new production shipment"
+      }
     }
   }
 }

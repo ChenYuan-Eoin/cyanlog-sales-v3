@@ -62,7 +62,9 @@ function queryBuilder(result: { data: unknown; error?: unknown }, terminal: 'sin
 function mockExactOrgAuth(options: {
   token: string
   orgId: string
-  roles: Array<{ roles: { code: string; permissions: string[] } }>
+  roles: Array<{ roles: { id?: string; code: string; permissions: string[] } }>
+  settings?: unknown
+  settingsError?: unknown
   status?: string
   loginEnabled?: boolean
 }) {
@@ -80,11 +82,13 @@ function mockExactOrgAuth(options: {
   }, 'maybeSingle')
   const membershipQuery = queryBuilder({ data: { org_id: options.orgId }, error: null }, 'maybeSingle')
   const rolesQuery = queryBuilder({ data: options.roles }, 'await')
+  const organizationQuery = queryBuilder({ data: {settings: options.settings ?? {}}, error: options.settingsError }, 'maybeSingle')
   const from = vi.fn((table: string) => {
     if (table === 'auth_tokens') return tokenQuery
     if (table === 'users') return userQuery
     if (table === 'user_organizations') return membershipQuery
     if (table === 'user_roles') return rolesQuery
+    if (table === 'organizations') return organizationQuery
     throw new Error(`unexpected table ${table}`)
   })
 
@@ -199,7 +203,7 @@ describe('middleware exact organization authorization', () => {
     const { rolesQuery } = mockExactOrgAuth({
       token: 'scope-token-a',
       orgId: 'org-a',
-      roles: [{ roles: { code: 'SALES', permissions: ['config:read'] } }],
+      roles: [{ roles: { id: 'role-test', code: 'SALES', permissions: ['config:read'] } }],
     })
     const req = makeRequest('https://sales.cyanlog.icu/configs', { host: 'sales.cyanlog.icu' })
     req.cookies.get = vi.fn().mockReturnValue({ value: 'scope-token-a' })
@@ -230,11 +234,47 @@ describe('middleware exact organization authorization', () => {
     expect(rolesQuery.eq).toHaveBeenCalledWith('scope_id', 'org-a')
   })
 
+  it('超管覆盖后的权限和兼容授权头都不重新获得通配符', async () => {
+    mockExactOrgAuth({ token:'example-override-token', orgId:'org-a',
+      roles:[{roles:{id:'root-role',code:'SUPER_ADMIN',permissions:['*']}}],
+      settings:{role_permission_overrides:{'root-role':['config:read']}},
+    })
+    const req = makeRequest('https://sales.cyanlog.icu/configs', {host:'sales.cyanlog.icu'})
+    req.cookies.get = vi.fn().mockReturnValue({value:'example-override-token'})
+    const res = await middleware(req)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('x-middleware-request-x-user-permissions')).toBe('config:read')
+    expect(res.headers.get('x-middleware-request-x-user-role-codes')).toBe('SUPER_ADMIN')
+    expect(res.headers.get('x-middleware-request-x-user-authorization-role-codes')).toBe('')
+  })
+
+  it('缺失角色ID的异常行不会恢复超管通配权限', async () => {
+    mockExactOrgAuth({token:'example-missing-role-id',orgId:'org-a',
+      roles:[{roles:{code:'SUPER_ADMIN',permissions:['*']}}],
+      settings:{role_permission_overrides:{'root-role':[]}},
+    })
+    const req = makeRequest('https://sales.cyanlog.icu/configs', {host:'sales.cyanlog.icu'})
+    req.cookies.get = vi.fn().mockReturnValue({value:'example-missing-role-id'})
+    expect((await middleware(req)).headers.get('location')).toContain('denied=config%3Aread')
+  })
+
+  it('空覆盖阻止超管访问后台且覆盖读取失败时关闭访问', async () => {
+    mockExactOrgAuth({token:'example-empty-override',orgId:'org-a',
+      roles:[{roles:{id:'root-role',code:'SUPER_ADMIN',permissions:['*']}}],
+      settings:{role_permission_overrides:{'root-role':[]}},
+    })
+    const req = makeRequest('https://sales.cyanlog.icu/admin', {host:'sales.cyanlog.icu'})
+    req.cookies.get = vi.fn().mockReturnValue({value:'example-empty-override'})
+    expect((await middleware(req)).headers.get('location')).toContain('denied=admin%3Aaccess')
+    mockExactOrgAuth({token:'example-empty-override',orgId:'org-a',roles:[],settingsError:new Error('read failed')})
+    expect((await middleware(req)).status).toBe(307)
+  })
+
   it('用户停用后旧 token 下一次请求立即失效', async () => {
     const { from } = mockExactOrgAuth({
       token: 'disabled-token',
       orgId: 'org-a',
-      roles: [{ roles: { code: 'ADMIN', permissions: ['*'] } }],
+      roles: [{ roles: { id: 'role-test', code: 'ADMIN', permissions: ['*'] } }],
       status: 'suspended',
       loginEnabled: false,
     })

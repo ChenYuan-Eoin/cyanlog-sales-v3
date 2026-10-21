@@ -10,6 +10,7 @@ import {
 import {
   getDefaultOrgId,
   getOrgPermissions,
+  getOrgAuthorizationRoleCodes,
   getOrgRoleCodes,
   getUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
@@ -44,8 +45,9 @@ export async function POST(req: NextRequest) {
     }
 
     const roleCodes = getOrgRoleCodes(assignments, orgId)
+    const authorizationRoleCodes = getOrgAuthorizationRoleCodes(assignments, orgId)
     const allPermissions = getOrgPermissions(assignments, orgId)
-    if (roleCodes.includes('SUPER_ADMIN')) {
+    if (authorizationRoleCodes.includes('SUPER_ADMIN')) {
       allPermissions.push('*')
     }
 

@@ -150,4 +150,25 @@ describe('GET /api/admin/org', () => {
     expect(res.headers.get('Allow')).toBe('GET')
     expect(body.code).toBe('ORG_AGGREGATE_READ_ONLY')
   })
+
+  it('显式空授权角色不能回退到原 SUPER_ADMIN 身份重新获得访问', async () => {
+    const actual = await vi.importActual<typeof import('@/lib/permissions')>('@/lib/permissions')
+    vi.mocked(canAccessOrgAdmin).mockImplementation(actual.canAccessOrgAdmin)
+    const req: any = new Request('https://example.test/api/admin/org', {
+      headers: {
+        'x-user-id': 'u-1',
+        'x-org-id': 'org-1',
+        'x-user-role-codes': 'SUPER_ADMIN',
+        'x-user-authorization-role-codes': '',
+        'x-user-permissions': '',
+      },
+    })
+
+    const res = await GET(req)
+
+    expect(res.status).toBe(403)
+    expect(canAccessOrgAdmin).toHaveBeenCalledWith([], [])
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
 })

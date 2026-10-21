@@ -1,4 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase'
+import { loadOrgRolePermissionSettings } from '@/lib/org-role-permissions'
+import { resolveRolePermissions } from '@/lib/role-permission-policy'
 import {
   canAccessOrgAdmin,
   canReviewContracts as canReviewContractsByPermission,
@@ -74,6 +76,7 @@ export interface ScopedRoleAssignment {
   roleCode: string
   roleName: string
   permissions: string[]
+  permissionsOverridden?: boolean
 }
 
 export type ContractBusinessAction = 'view' | 'create_or_upload' | 'review'
@@ -324,6 +327,43 @@ async function loadUserScopedRoleAssignments(userId: string): Promise<ScopedRole
     .filter((assignment): assignment is ScopedRoleAssignment => Boolean(assignment))
 }
 
+/** Read organization overrides on every authorization request, never from the role cache. */
+export async function loadRolePermissionSettingsForScopes(
+  scopes: Array<{ scopeType: string; scopeId: string | null }>,
+): Promise<Map<string, unknown>> {
+  const scopeOrgs = new Map<string, string>()
+  for (const scope of scopes) {
+    if (scope.scopeType === 'org' && scope.scopeId) scopeOrgs.set(`org:${scope.scopeId}`, scope.scopeId)
+  }
+  for (const [scopeType, table] of [['department', 'departments'], ['space', 'sales_spaces']] as const) {
+    const ids = uniqueStrings(scopes.filter((scope) => scope.scopeType === scopeType).map((scope) => scope.scopeId))
+    if (ids.length === 0) continue
+    const { data, error } = await supabaseAdmin.from(table).select('id, org_id').in('id', ids)
+    if (error) throw error
+    for (const row of data || []) {
+      if (row.id && row.org_id) scopeOrgs.set(`${scopeType}:${row.id}`, row.org_id)
+    }
+  }
+  const settingsByOrg = new Map(await Promise.all(
+    [...new Set(scopeOrgs.values())].map(async (orgId) => [orgId, await loadOrgRolePermissionSettings(orgId)] as const),
+  ))
+  return new Map([...scopeOrgs].map(([scope, orgId]) => [scope, settingsByOrg.get(orgId)]))
+}
+
+async function applyCurrentRolePermissionOverrides(assignments: ScopedRoleAssignment[]): Promise<ScopedRoleAssignment[]> {
+  const settingsByScope = await loadRolePermissionSettingsForScopes(assignments)
+  return assignments.map((assignment) => {
+    const key = `${assignment.scopeType}:${assignment.scopeId}`
+    if (!settingsByScope.has(key)) {
+      return { ...assignment, permissions: [], permissionsOverridden: true }
+    }
+    const effective = resolveRolePermissions(settingsByScope.get(key), {
+      id: assignment.roleId, code: assignment.roleCode, permissions: assignment.permissions,
+    })
+    return { ...assignment, permissions: effective.permissions, permissionsOverridden: effective.overridden }
+  })
+}
+
 /**
  * Load role assignments directly from the database for authorization checks
  * that guard a state-changing operation. Read-oriented callers may use the
@@ -347,10 +387,10 @@ export async function getFreshUserScopedRoleAssignments(
     })
   }
 
-  return assignments
+  return applyCurrentRolePermissionOverrides(assignments)
 }
 
-export async function getUserScopedRoleAssignments(userId: string): Promise<ScopedRoleAssignment[]> {
+async function getCachedRoleTemplates(userId: string): Promise<ScopedRoleAssignment[]> {
   const cached = scopedRoleCache.get(userId)
   if (cached && cached.expiresAt >= Date.now()) {
     return cached.assignments
@@ -381,6 +421,10 @@ export async function getUserScopedRoleAssignments(userId: string): Promise<Scop
   return promise
 }
 
+export async function getUserScopedRoleAssignments(userId: string): Promise<ScopedRoleAssignment[]> {
+  return applyCurrentRolePermissionOverrides(await getCachedRoleTemplates(userId))
+}
+
 export function getOrgScopedAssignments(
   assignments: ScopedRoleAssignment[],
   orgId: string
@@ -397,6 +441,13 @@ export function getOrgRoleCodes(assignments: ScopedRoleAssignment[], orgId: stri
   ))
 }
 
+/** Role identities are retained; legacy role-code grants only apply to untouched templates. */
+export function getOrgAuthorizationRoleCodes(assignments: ScopedRoleAssignment[], orgId: string): string[] {
+  return Array.from(new Set(getOrgScopedAssignments(assignments, orgId)
+    .filter((assignment) => !assignment.permissionsOverridden)
+    .map((assignment) => assignment.roleCode)))
+}
+
 export function getOrgPermissions(assignments: ScopedRoleAssignment[], orgId: string): string[] {
   return Array.from(new Set(
     getOrgScopedAssignments(assignments, orgId).flatMap((assignment) => assignment.permissions)
@@ -406,13 +457,13 @@ export function getOrgPermissions(assignments: ScopedRoleAssignment[], orgId: st
 export function canManageOrg(assignments: ScopedRoleAssignment[], orgId: string): boolean {
   return canAccessOrgAdmin(
     getOrgPermissions(assignments, orgId),
-    getOrgRoleCodes(assignments, orgId)
+    getOrgAuthorizationRoleCodes(assignments, orgId)
   )
 }
 
 export function canMutateOrgUsers(assignments: ScopedRoleAssignment[], orgId: string): boolean {
   const permissions = getOrgPermissions(assignments, orgId)
-  const roleCodes = getOrgRoleCodes(assignments, orgId)
+  const roleCodes = getOrgAuthorizationRoleCodes(assignments, orgId)
 
   return roleCodes.includes('SUPER_ADMIN')
     || roleCodes.includes('ADMIN')
@@ -422,7 +473,7 @@ export function canMutateOrgUsers(assignments: ScopedRoleAssignment[], orgId: st
 
 export function canMutateOrgDepartments(assignments: ScopedRoleAssignment[], orgId: string): boolean {
   const permissions = getOrgPermissions(assignments, orgId)
-  const roleCodes = getOrgRoleCodes(assignments, orgId)
+  const roleCodes = getOrgAuthorizationRoleCodes(assignments, orgId)
 
   return roleCodes.includes('SUPER_ADMIN')
     || roleCodes.includes('ADMIN')
@@ -430,12 +481,12 @@ export function canMutateOrgDepartments(assignments: ScopedRoleAssignment[], org
     || hasPermission(permissions, 'org:write')
 }
 
-async function loadAccessibleSalesSpaces(userId: string, orgId: string): Promise<{
+async function loadAccessibleSalesSpaces(userId: string, orgId: string, currentAssignments: ScopedRoleAssignment[]): Promise<{
   assignments: ScopedRoleAssignment[]
   spaces: SalesSpaceSummary[]
 }> {
   const [assignments, memberResult] = await Promise.all([
-    getUserScopedRoleAssignments(userId),
+    Promise.resolve(currentAssignments),
     supabaseAdmin
       .from('sales_space_members')
       .select('space:sales_spaces!inner(id, org_id, name, description, department_id, owner_id, active_opportunities, pending_milestones)')
@@ -521,30 +572,22 @@ export async function listAccessibleSalesSpaces(userId: string, orgId: string): 
   assignments: ScopedRoleAssignment[]
   spaces: SalesSpaceSummary[]
 }> {
-  const cacheKey = `${userId}:${orgId}`
+  // Fresh settings must be applied before reading any cached visible-data set.
+  // Include effective permissions in the key so a change from another instance
+  // cannot reuse data computed under the old authority.
+  const assignments = await getUserScopedRoleAssignments(userId)
+  const cacheKey = `${userId}:${orgId}:${JSON.stringify(assignments)}`
   const cached = salesSpacesCache.get(cacheKey)
-  if (cached && cached.expiresAt >= Date.now()) {
-    return cached.value
-  }
-  if (cached) {
-    salesSpacesCache.delete(cacheKey)
-  }
-
+  if (cached && cached.expiresAt >= Date.now()) return cached.value
+  if (cached) salesSpacesCache.delete(cacheKey)
   const inflight = salesSpacesInflight.get(cacheKey)
   if (inflight) return inflight
-
-  const promise = loadAccessibleSalesSpaces(userId, orgId)
+  const promise = loadAccessibleSalesSpaces(userId, orgId, assignments)
     .then((value) => {
-      salesSpacesCache.set(cacheKey, {
-        value,
-        expiresAt: Date.now() + ORG_CACHE_TTL_MS,
-      })
+      salesSpacesCache.set(cacheKey, { value, expiresAt: Date.now() + ORG_CACHE_TTL_MS })
       return value
     })
-    .finally(() => {
-      salesSpacesInflight.delete(cacheKey)
-    })
-
+    .finally(() => { salesSpacesInflight.delete(cacheKey) })
   salesSpacesInflight.set(cacheKey, promise)
   return promise
 }
@@ -726,7 +769,7 @@ export function canAccessContractAction(
   action: ContractBusinessAction,
 ): boolean {
   const permissions = getOrgPermissions(assignments, orgId)
-  const roleCodes = getOrgRoleCodes(assignments, orgId)
+  const roleCodes = getOrgAuthorizationRoleCodes(assignments, orgId)
 
   if (CONTRACT_ACTION_ROLES[action].some((roleCode) => roleCodes.includes(roleCode))) {
     return true

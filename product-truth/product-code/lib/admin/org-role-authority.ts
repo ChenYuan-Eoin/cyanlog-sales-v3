@@ -4,6 +4,8 @@ import {
   type ScopedRoleAssignment,
 } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
+import { loadOrgRolePermissionSettings } from '@/lib/org-role-permissions'
+import { resolveRolePermissions } from '@/lib/role-permission-policy'
 
 type AssignableRoleRow = {
   id: string
@@ -85,10 +87,9 @@ export async function validateOrgRoleAssignment(
   }
 
   const actorPermissions = getOrgPermissions(actorAssignments, orgId)
+  const settings = await loadOrgRolePermissionSettings(orgId)
   const exceedsActorAuthority = roles.some((role) => {
-    const permissions = Array.isArray(role.permissions)
-      ? role.permissions.filter((permission): permission is string => typeof permission === 'string')
-      : []
+    const { permissions } = resolveRolePermissions(settings, role)
 
     return role.code === 'SUPER_ADMIN'
       || permissions.includes('*')

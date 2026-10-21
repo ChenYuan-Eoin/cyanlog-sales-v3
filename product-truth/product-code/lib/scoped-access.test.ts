@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('@/lib/org-role-permissions', () => ({ loadOrgRolePermissionSettings: vi.fn(async () => ({})) }))
+
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     from: vi.fn(),
@@ -16,6 +18,9 @@ import {
   getDefaultOrgId,
   getFreshDefaultOrgId,
   getOrgPermissions,
+  getOrgAuthorizationRoleCodes,
+  getUserScopedRoleAssignments,
+  loadRolePermissionSettingsForScopes,
   getOrgRoleCodes,
   getOrgScopedAssignments,
   listAccessibleUserIds,
@@ -23,6 +28,7 @@ import {
   type ScopedRoleAssignment,
 } from './scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
+import { loadOrgRolePermissionSettings } from '@/lib/org-role-permissions'
 
 function makeDefaultOrgQuery(result: unknown | Promise<unknown>) {
   const query: any = {}
@@ -272,5 +278,64 @@ describe('fresh mutation access scope', () => {
     await expect(listFreshAccessibleUserIds('fresh-access-user', 'org-fresh-access'))
       .resolves.toMatchObject({ userIds: ['fresh-access-user'] })
     expect(supabaseAdmin.from).toHaveBeenCalledTimes(4)
+  })
+})
+
+
+describe('organization role permission overrides', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(loadOrgRolePermissionSettings).mockResolvedValue({})
+  })
+
+  it('保留超管身份但阻止覆盖角色的隐式管理和合同权限', () => {
+    const overridden = [{ ...assignment('org-a', 'SUPER_ADMIN', []), permissionsOverridden: true }]
+    expect(getOrgRoleCodes(overridden, 'org-a')).toEqual(['SUPER_ADMIN'])
+    expect(getOrgAuthorizationRoleCodes(overridden, 'org-a')).toEqual([])
+    expect(canManageOrg(overridden, 'org-a')).toBe(false)
+    expect(canMutateOrgUsers(overridden, 'org-a')).toBe(false)
+    expect(canMutateOrgDepartments(overridden, 'org-a')).toBe(false)
+    expect(canAccessContractAction(overridden, 'org-a', 'view')).toBe(false)
+    expect(canAccessContractAction(overridden, 'org-a', 'review')).toBe(false)
+  })
+
+  it('角色模板被缓存时仍每次读取当前组织覆盖，并保留组织隔离', async () => {
+    vi.mocked(supabaseAdmin.from).mockReturnValue(makeCollectionQuery({ data: [
+      {scope_type:'org',scope_id:'org-override-a',granted_at:null,role:{id:'same-role',code:'SUPER_ADMIN',name:'管理员',permissions:['*']}},
+      {scope_type:'org',scope_id:'org-override-b',granted_at:null,role:{id:'same-role',code:'SUPER_ADMIN',name:'管理员',permissions:['*']}},
+    ],error:null}))
+    let revoked = false
+    vi.mocked(loadOrgRolePermissionSettings).mockImplementation(async orgId => (
+      revoked && orgId === 'org-override-a' ? {role_permission_overrides:{'same-role':[]}} : {}
+    ))
+    const before = await getUserScopedRoleAssignments('override-cache-user')
+    expect(getOrgPermissions(before,'org-override-a')).toEqual(['*'])
+    revoked = true
+    const after = await getUserScopedRoleAssignments('override-cache-user')
+    expect(getOrgPermissions(after,'org-override-a')).toEqual([])
+    expect(getOrgPermissions(after,'org-override-b')).toEqual(['*'])
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+    expect(loadOrgRolePermissionSettings).toHaveBeenCalledTimes(4)
+  })
+
+  it('已缓存模板不会在组织覆盖读取失败时恢复授权', async () => {
+    vi.mocked(supabaseAdmin.from).mockReturnValue(makeCollectionQuery({data:[
+      {scope_type:'org',scope_id:'org-unavailable',granted_at:null,role:{id:'r',code:'SUPER_ADMIN',name:'管理员',permissions:['*']}},
+    ],error:null}))
+    await getUserScopedRoleAssignments('override-failure-user')
+    vi.mocked(loadOrgRolePermissionSettings).mockRejectedValueOnce(new Error('permission store unavailable'))
+    await expect(getUserScopedRoleAssignments('override-failure-user')).rejects.toThrow('permission store unavailable')
+  })
+
+  it('部门和空间作用域根据其实际组织读取覆盖', async () => {
+    vi.mocked(supabaseAdmin.from)
+      .mockReturnValueOnce(makeCollectionQuery({data:[{id:'dept-a',org_id:'org-a'}],error:null}))
+      .mockReturnValueOnce(makeCollectionQuery({data:[{id:'space-b',org_id:'org-b'}],error:null}))
+    vi.mocked(loadOrgRolePermissionSettings).mockImplementation(async orgId => ({orgId}))
+    const settings = await loadRolePermissionSettingsForScopes([
+      {scopeType:'department',scopeId:'dept-a'}, {scopeType:'space',scopeId:'space-b'},
+    ])
+    expect(settings.get('department:dept-a')).toEqual({orgId:'org-a'})
+    expect(settings.get('space:space-b')).toEqual({orgId:'org-b'})
   })
 })

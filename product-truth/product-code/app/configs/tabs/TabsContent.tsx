@@ -96,6 +96,8 @@ export interface TabsContentProps {
     sort_order: number | null
   }>
   savingRoleId: string | null
+  permissionsEditable?: boolean
+  permissionsEditBlockReason?: string | null
   onSaveRole: (roleId: string, newPerms: string[]) => void
 }
 
@@ -131,6 +133,8 @@ export default function TabsContent({
   onRefreshOrg,
   roles,
   savingRoleId,
+  permissionsEditable,
+  permissionsEditBlockReason,
   onSaveRole,
 }: TabsContentProps) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -303,6 +307,8 @@ export default function TabsContent({
           roles={roles}
           currentUserId={currentUserId}
           savingRoleId={savingRoleId}
+          permissionsEditable={permissionsEditable}
+          permissionsEditBlockReason={permissionsEditBlockReason}
           orgSummary={orgSummary}
           onSaveRole={onSaveRole}
           onRefresh={onRefreshOrg}

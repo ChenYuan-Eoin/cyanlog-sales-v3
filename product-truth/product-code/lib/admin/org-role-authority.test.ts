@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('@/lib/org-role-permissions', () => ({ loadOrgRolePermissionSettings: vi.fn(async () => ({})) }))
+
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     from: vi.fn(),
@@ -10,6 +12,7 @@ vi.mock('@/lib/supabase', () => ({
 import { supabaseAdmin } from '@/lib/supabase'
 import type { ScopedRoleAssignment } from '@/lib/scoped-access'
 import { userHasOrgRoleCode, validateOrgRoleAssignment } from './org-role-authority'
+import { loadOrgRolePermissionSettings } from '@/lib/org-role-permissions'
 
 function actor(permissions: string[]): ScopedRoleAssignment[] {
   return [{
@@ -77,6 +80,13 @@ describe('validateOrgRoleAssignment', () => {
       'org-a',
       ['missing-role']
     )).resolves.toEqual({ ok: false, reason: 'ROLE_NOT_FOUND' })
+  })
+
+  it('按组织覆盖后的权限防止借分配业务角色获得管理员权限', async () => {
+    mockRoles([{ id: 'role-sales', code: 'SALES', permissions: ['contract:view'] }])
+    vi.mocked(loadOrgRolePermissionSettings).mockResolvedValueOnce({ role_permission_overrides: { 'role-sales': ['role:manage'] } })
+    await expect(validateOrgRoleAssignment(actor(['user:*']), 'org-a', ['role-sales']))
+      .resolves.toEqual({ ok: false, reason: 'ROLE_ESCALATION_FORBIDDEN' })
   })
 })
 

@@ -228,7 +228,7 @@ requirements:
     name: Account（认证与权限）
     module: Account
     source: Account.md
-    status: completed
+    status: in_progress
     priority: P0
     feature_packet: product-truth/feature-packets/F003-account-auth.md
     code_locations:
@@ -238,18 +238,27 @@ requirements:
       - lib/supabase.ts
       - middleware.ts
       - app/api/roles/[id]/route.ts
+      - app/api/roles/route.ts
+      - lib/org-role-permissions.ts
+      - lib/role-permission-policy.ts
+      - lib/scoped-access.ts
       - app/api/access/feishu/sync/route.ts
       - app/configs/page.tsx
     description: 登录认证、角色权限、用户管理（自主可控 + 可配置 RBAC）
     audit_supplement:
-      status_caveat: "completed 状态需要复核；线上配置中心 0 数据与飞书 Unauthorized 暴露出会话、默认组织、权限解析与错误呈现仍可能不闭环。"
+      status_caveat: "WP43 正在修复角色权限全量只读；历史认证实现保留，本轮权限修复未声明 Production 发布。既有会话、默认组织、权限解析和错误呈现验收仍保留。"
       supplemental_requirements:
         - "登录成功用户必须解析到稳定 org context；缺默认组织时要返回可诊断错误或自动修复路径。"
         - "认证、鉴权、组织上下文失败必须有统一错误码，不得被消费页面吞掉。"
         - "Feishu 同步调用前必须先区分登录态、角色权限、组织上下文和外部配置状态。"
+        - "WP43：组织根超管可编辑并保存系统角色的组织级覆盖 organizations.settings.role_permission_overrides[roleId]，不能改写全局模板；空覆盖表示无权限。"
+        - "SUPER_ADMIN 保留 admin:access、config:read、config:write、role:manage 核心权限；非核心业务权限可收紧。普通配置管理员不能修改角色授权。"
+        - "新请求的 Middleware、API 和业务数据范围须尊重组织覆盖，不由角色名、通配符或旧缓存恢复已撤销权限；保存使用并发冲突检测。"
+        - "自定义角色暂缓；当前 code_green 目标不包含生产发布或生产角色数据改写授权。"
       acceptance_requirements:
         - "使用超管、管理员、普通销售、缺默认组织用户分别验证 `/api/auth/me`、`/api/admin/org`、配置中心和合同中心。"
         - "401/403/ORG_CONTEXT_MISSING 在前端显示为错误态或修复指引，不显示为 0 数据。"
+        - "验证组织隔离、空覆盖、通配符细项取消、降权后下一请求拒绝、并发保存409、普通管理员越权拒绝以及超管核心防锁死。"
 
   F004:
     name: 三级审批

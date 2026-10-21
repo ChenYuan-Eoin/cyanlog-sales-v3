@@ -361,6 +361,12 @@ type ConfigRoleRecord = {
   sort_order: number | null
 }
 
+type RoleAccessPayload = {
+  roles?: ConfigRoleRecord[]
+  permissions_editable?: boolean
+  permissions_edit_block_reason?: string | null
+}
+
 type ConfigsRouteState = {
   tab?: string | string[]
   ruleId?: string | string[]
@@ -496,6 +502,8 @@ export default function ConfigsClient({
   const [feishuSyncing, setFeishuSyncing] = useState(false)
   const [feishuFeedback, setFeishuFeedback] = useState<FeishuSyncFeedback | null>(null)
   const [orgSummary, setOrgSummary] = useState<OrgSummaryPayload | null>(null)
+  const [permissionsEditable, setPermissionsEditable] = useState(false)
+  const [permissionsEditBlockReason, setPermissionsEditBlockReason] = useState<string | null>('正在确认当前组织的角色管理权限。')
   const [hasInitialData] = useState(() => Boolean(initialData))
   const [loadedTabs, setLoadedTabs] = useState<Set<ConfigTabId>>(new Set(hasInitialData ? ['price-list'] : []))
   const loadedTabsRef = useRef(loadedTabs)
@@ -704,14 +712,15 @@ export default function ConfigsClient({
 
         case 'role-access': {
           const orgCacheKey = scopedCacheKey(token, 'configs:org-structure')
-          const [nextRoles, nextOrgSummary] = await Promise.all([
-            loadInflightTabValue<ConfigRoleRecord[]>(cacheKey, async () => {
-              const rolesJson = await fetchJsonOrThrow<{ data?: { roles?: ConfigRoleRecord[] } }>(
+          setPermissionsEditable(false)
+          const [rolePayload, nextOrgSummary] = await Promise.all([
+            loadInflightTabValue<RoleAccessPayload>(cacheKey, async () => {
+              const rolesJson = await fetchJsonOrThrow<{ data?: RoleAccessPayload }>(
                 '/api/roles',
-                { headers },
+                { headers, cache: 'no-store' },
                 '角色权限加载失败'
               )
-              return rolesJson.data?.roles ?? []
+              return rolesJson.data ?? {}
             }),
             loadInflightTabValue<OrgSummaryPayload>(orgCacheKey, async () => {
               return fetchJsonOrThrow<OrgSummaryPayload>(
@@ -721,8 +730,11 @@ export default function ConfigsClient({
               )
             }),
           ])
-          if (nextRoles) {
+          if (rolePayload) {
+            const nextRoles = rolePayload.roles ?? []
             setRoles(nextRoles)
+            setPermissionsEditable(rolePayload.permissions_editable === true)
+            setPermissionsEditBlockReason(rolePayload.permissions_edit_block_reason ?? null)
             writeBrowserCache(cacheKey, nextRoles)
             didLoad = true
           }
@@ -840,6 +852,7 @@ export default function ConfigsClient({
     const token = localStorage.getItem('token')
     const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
     const cacheKeys = clearOrgAccessBrowserCache(token)
+    setPermissionsEditable(false)
     setError('')
     const [orgRes, rolesRes] = await Promise.all([
       fetch('/api/admin/org', {
@@ -866,6 +879,8 @@ export default function ConfigsClient({
       const rolesData = await rolesRes.json()
       const nextRoles = (rolesData.data?.roles ?? []) as ConfigRoleRecord[]
       setRoles(nextRoles)
+      setPermissionsEditable(rolesData.data?.permissions_editable === true)
+      setPermissionsEditBlockReason(rolesData.data?.permissions_edit_block_reason ?? null)
       writeBrowserCache(cacheKeys.roles, nextRoles)
     } else if (loadedTabsRef.current.has('role-access')) {
       const data = await rolesRes.json().catch(() => ({}))
@@ -1010,14 +1025,22 @@ export default function ConfigsClient({
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ permissions: newPerms }),
+        body: JSON.stringify({ permissions: newPerms, expected_permissions: roles.find(role => role.id === roleId)?.permissions ?? [] }),
       })
       if (res.ok) {
+        const data = await res.json() as { data?: { role?: ConfigRoleRecord } }
+        const savedRole = data.data?.role
+        if (!savedRole || savedRole.id !== roleId || !Array.isArray(savedRole.permissions)) {
+          setError('保存响应不完整，请刷新角色列表核实。')
+          return
+        }
+        setError('')
         setRoles((rs) => {
-          const nextRoles = rs.map((r) => r.id === roleId ? { ...r, permissions: newPerms } : r)
+          const nextRoles = rs.map((r) => r.id === roleId ? { ...r, ...savedRole } : r)
           writeBrowserCache(scopedCacheKey(token, 'configs:role-access'), nextRoles)
           return nextRoles
         })
+        await refreshOrgSummary()
       } else {
         const data = await res.json().catch(() => ({}))
         setError(getApiErrorMessage(data, '保存失败'))
@@ -1812,6 +1835,8 @@ export default function ConfigsClient({
                 onRefreshOrg={refreshOrgSummary}
                 roles={roles}
                 savingRoleId={savingRoleId}
+                permissionsEditable={permissionsEditable}
+                permissionsEditBlockReason={permissionsEditBlockReason}
                 onSaveRole={handleSaveRole}
               />
             </div>

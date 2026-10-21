@@ -9,6 +9,8 @@ import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import type { AuthUser } from '@/lib/auth'
 import { userHasOrgConfigAccess } from '@/lib/configs/access'
 import { canManageOrg, getUserScopedRoleAssignments } from '@/lib/scoped-access'
+import { canEditRolePermissions, loadOrgRolePermissionSettings } from '@/lib/org-role-permissions'
+import { PERMISSION_KEYS, resolveRolePermissions } from '@/lib/role-permission-policy'
 
 export async function GET(req: NextRequest) {
   return withAuthAndOrg(req, async (user: AuthUser, orgId: string) => {
@@ -21,8 +23,8 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url)
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100)
-    const offset = parseInt(searchParams.get('offset') || '0', 10)
+    const limit = Math.min(Math.max(Number.parseInt(searchParams.get('limit') || '50', 10) || 50, 1), 100)
+    const offset = Math.max(Number.parseInt(searchParams.get('offset') || '0', 10) || 0, 0)
 
     const { data, error, count } = await supabaseAdmin
       .from('roles')
@@ -35,18 +37,22 @@ export async function GET(req: NextRequest) {
       return errorResponse(createApiError('DB_ERROR', '查询失败'))
     }
 
-    const permissionKeys = Array.from(new Set(
-      (data || [])
+    const settings = await loadOrgRolePermissionSettings(orgId)
+    const roles = (data || []).map((role) => ({ ...role, permissions: resolveRolePermissions(settings, role).permissions }))
+    const permissionKeys = Array.from(new Set([
+      ...PERMISSION_KEYS,
+      ...roles
         .flatMap((role) => Array.isArray(role.permissions) ? role.permissions : [])
         .filter((permission): permission is string => typeof permission === 'string' && permission.length > 0)
-    )).sort()
+    ])).sort()
+    const editable = canEditRolePermissions(assignments, orgId)
 
     return successResponse(
       {
-        roles: data ?? [],
+        roles,
         permission_keys: permissionKeys,
-        permissions_editable: false,
-        permissions_edit_block_reason: '系统角色是全局只读模板；组织级角色模型完成前禁止在线修改。',
+        permissions_editable: editable,
+        permissions_edit_block_reason: editable ? null : '仅当前组织的超级管理员可修改角色权限。',
       },
       {
         total: count || 0,

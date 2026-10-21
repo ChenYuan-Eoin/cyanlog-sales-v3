@@ -9,7 +9,7 @@ vi.mock('@/lib/auth', () => ({
 vi.mock('@/lib/scoped-access', () => ({
   getDefaultOrgId: vi.fn(),
   getUserScopedRoleAssignments: vi.fn(),
-  getOrgRoleCodes: vi.fn(),
+  getOrgAuthorizationRoleCodes: vi.fn(),
   getOrgPermissions: vi.fn(),
 }))
 
@@ -17,7 +17,7 @@ import { requireAuth } from '@/lib/auth'
 import {
   getDefaultOrgId,
   getOrgPermissions,
-  getOrgRoleCodes,
+  getOrgAuthorizationRoleCodes,
   getUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
 import { withPermission } from './auth-wrapper'
@@ -28,7 +28,7 @@ describe('withPermission', () => {
     vi.mocked(requireAuth).mockResolvedValue({ id: 'user-1' } as any)
     vi.mocked(getDefaultOrgId).mockResolvedValue('org-a')
     vi.mocked(getUserScopedRoleAssignments).mockResolvedValue([])
-    vi.mocked(getOrgRoleCodes).mockReturnValue([])
+    vi.mocked(getOrgAuthorizationRoleCodes).mockReturnValue([])
     vi.mocked(getOrgPermissions).mockReturnValue([])
   })
 
@@ -39,6 +39,15 @@ describe('withPermission', () => {
 
     expect(response.status).toBe(403)
     expect(getOrgPermissions).toHaveBeenCalledWith([], 'org-a')
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('覆盖后的超级管理员不会重新获得通配符', async () => {
+    vi.mocked(getOrgAuthorizationRoleCodes).mockReturnValue([])
+    vi.mocked(getOrgPermissions).mockReturnValue(['config:read'])
+    const handler = vi.fn()
+    const response = await withPermission({} as any, 'contract:review', handler) as Response
+    expect(response.status).toBe(403)
     expect(handler).not.toHaveBeenCalled()
   })
 

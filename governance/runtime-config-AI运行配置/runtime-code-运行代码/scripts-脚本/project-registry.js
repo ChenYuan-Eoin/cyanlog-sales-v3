@@ -41,6 +41,9 @@ const VERCEL_PRODUCTION_CONTRACT = Object.freeze({
   productionBranch: 'production'
 });
 const SHIPPING_RUNTIME_ITEMS = Object.freeze(['shipping_provider', 'shipping_request', 'shipping_tracking', 'shipping_access']);
+// F003 currently authorizes a code candidate only. Naming its future runtime
+// evidence must not substitute AI evidence or authorize Preview/Production.
+const APPLICATION_PERMISSION_ITEMS = Object.freeze(['role_edit_save', 'role_access_enforcement']);
 const SHIPPING_REPLAY_ACTIONS = Object.freeze(['paste_address', 'select_sender', 'confirm_submission', 'query_tracking', 'reload_recent', 'verify_access']);
 const SHIPPING_WORKSPACE_ITEMS = Object.freeze(['shipping_workspace', 'shipping_tracking', 'shipping_access']);
 const SHIPPING_CONFIG_UI_ITEMS = Object.freeze(['shipping_workspace', 'shipping_access']);
@@ -515,12 +518,17 @@ function validateSchedulerSnapshot(options, candidate) {
   }
   const requiredRuntimeEvidence = deliveryContract?.required_runtime_evidence;
   const profile = runtimeProfileOf(state);
-  if (!['ai', 'shipping', 'shipping_workspace'].includes(profile)) errors.push('Unknown runtime evidence profile');
+  if (!['ai', 'shipping', 'shipping_workspace', 'application'].includes(profile)) errors.push('Unknown runtime evidence profile');
+  if (profile === 'application' && (
+    state.active_task?.feature_id !== 'F003'
+    || deliveryContract.target_state !== 'code_green'
+    || deliveryContract.production_database_mode !== 'read_only'
+  )) errors.push('Application permission profile requires F003, code_green and read-only Production');
   if (['shipping', 'shipping_workspace'].includes(profile) && state.active_task?.feature_id !== 'F054') errors.push('Shipping evidence profile requires the F054 feature binding');
   const contractVersion = runtimeContractVersionOf(state);
   if (contractVersion && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1'].includes(contractVersion))) errors.push('Unknown or mismatched shipping workspace contract version');
   if (contractVersion === 'f054-config-ui-v1' && (!['code_green', 'clean_preview_green'].includes(deliveryContract.target_state) || deliveryContract.production_database_mode !== 'read_only')) errors.push('Configuration UI contract is limited to read-only Preview acceptance');
-  const canonicalRuntimeEvidence = profile === 'shipping_workspace' ? (contractVersion === 'f054-config-ui-v1' ? SHIPPING_CONFIG_UI_ITEMS : SHIPPING_WORKSPACE_ITEMS) : profile === 'shipping' ? SHIPPING_RUNTIME_ITEMS : ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
+  const canonicalRuntimeEvidence = profile === 'application' ? APPLICATION_PERMISSION_ITEMS : profile === 'shipping_workspace' ? (contractVersion === 'f054-config-ui-v1' ? SHIPPING_CONFIG_UI_ITEMS : SHIPPING_WORKSPACE_ITEMS) : profile === 'shipping' ? SHIPPING_RUNTIME_ITEMS : ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
   if (
     deliveryContract
     && (
@@ -2372,6 +2380,7 @@ module.exports = {
   DELIVERY_RUNTIME_FILE,
   DELIVERY_ATTESTATION_REF,
   REQUIRED_DEFECT_REPLAY_ACTIONS,
+  APPLICATION_PERMISSION_ITEMS,
   SHIPPING_RUNTIME_ITEMS,
   SHIPPING_REPLAY_ACTIONS,
   SHIPPING_COLLABORATION_ACTIONS,

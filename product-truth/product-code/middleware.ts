@@ -34,6 +34,7 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getRequestAuthToken } from '@/lib/auth-token'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
+import { resolveRolePermissions } from '@/lib/role-permission-policy'
 
 const PUBLIC_PATHS = ['/login', '/register', '/sales-portal']
 const PRIMARY_HOST = 'sales.cyanlog.icu'
@@ -72,6 +73,7 @@ type MiddlewareAuthContext = {
   orgId: string
   mustChangePassword: boolean
   roleCodes: string[]
+  authorizationRoleCodes: string[]
   allPermissions: string[]
 }
 
@@ -135,12 +137,12 @@ function createMiddlewareSupabaseClient() {
   })
 }
 
-function roleRecordOf(value: unknown): { code: string; permissions: string[] | null } | null {
+function roleRecordOf(value: unknown): { id: string; code: string; permissions: string[] | null } | null {
   if (Array.isArray(value)) {
     return roleRecordOf(value[0])
   }
   if (!value || typeof value !== 'object') return null
-  return value as { code: string; permissions: string[] | null }
+  return value as { id: string; code: string; permissions: string[] | null }
 }
 
 async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthContext | null> {
@@ -181,25 +183,33 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
   const orgId = defaultMembership?.org_id || userRow.org_id
   if (!orgId) return null
 
-  const { data: userRolesData } = await supabase
+  const { data: userRolesData, error: userRolesError } = await supabase
     .from('user_roles')
-    .select('scope_type, scope_id, roles:roles(code, permissions)')
+    .select('scope_type, scope_id, roles:roles(id, code, permissions)')
     .eq('user_id', userId)
     .eq('scope_type', 'org')
     .eq('scope_id', orgId)
 
+  if (userRolesError) throw userRolesError
+  const { data: organization, error: organizationError } = await supabase
+    .from('organizations').select('settings').eq('id', orgId).maybeSingle()
+  if (organizationError || !organization) throw organizationError || new Error('Organization permissions unavailable')
+
   const allPermissions: string[] = []
   const roleCodes: string[] = []
+  const authorizationRoleCodes: string[] = []
 
   for (const ur of userRolesData ?? []) {
     const r = roleRecordOf((ur as { roles?: unknown }).roles)
-    if (r?.code) {
+    if (r?.id && r.code) {
       roleCodes.push(r.code)
-      if (r.permissions) allPermissions.push(...r.permissions)
+      const effective = resolveRolePermissions(organization.settings, r)
+      allPermissions.push(...effective.permissions)
+      if (!effective.overridden) authorizationRoleCodes.push(r.code)
     }
   }
 
-  if (roleCodes.includes('SUPER_ADMIN')) {
+  if (authorizationRoleCodes.includes('SUPER_ADMIN')) {
     allPermissions.push('*')
   }
 
@@ -208,6 +218,7 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
     orgId,
     mustChangePassword: Boolean(userRow.must_change_password),
     roleCodes,
+    authorizationRoleCodes,
     allPermissions,
   }
 }
@@ -267,7 +278,7 @@ export async function middleware(request: NextRequest) {
 
     // 路径级权限校验
     const allowed = required === 'admin:access'
-      ? canAccessOrgAdmin(authContext.allPermissions, authContext.roleCodes)
+      ? canAccessOrgAdmin(authContext.allPermissions, authContext.authorizationRoleCodes)
       : (!required || hasPermission(authContext.allPermissions, required))
 
     if (required && !allowed) {
@@ -283,6 +294,7 @@ export async function middleware(request: NextRequest) {
     requestHeaders.set('x-org-id', authContext.orgId)
     requestHeaders.set('x-user-roles', authContext.roleCodes.join(','))
     requestHeaders.set('x-user-role-codes', authContext.roleCodes.join(','))
+    requestHeaders.set('x-user-authorization-role-codes', authContext.authorizationRoleCodes.join(','))
     requestHeaders.set('x-user-permissions', authContext.allPermissions.join(','))
 
     return NextResponse.next({ request: { headers: requestHeaders } })

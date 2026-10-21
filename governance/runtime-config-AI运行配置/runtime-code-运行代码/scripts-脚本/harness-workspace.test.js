@@ -25,6 +25,10 @@ write(path.join(root, registry.REGISTRY_RELATIVE_PATH), fs.readFileSync(path.joi
 write(path.join(root, registry.SCHEDULER_RELATIVE_PATH || 'governance/runtime-state/active-task.json'), fs.readFileSync(path.join(actual, 'governance/runtime-state/active-task.json'), 'utf8'));
 write(path.join(root, registry.DEMAND_INBOX_RELATIVE_PATH), fs.readFileSync(path.join(actual, registry.DEMAND_INBOX_RELATIVE_PATH), 'utf8'));
 write(path.join(root, '.codex/hooks/harness-adapter.js'), fs.readFileSync(path.join(actual, '.codex/hooks/harness-adapter.js'), 'utf8'));
+// This fixture exercises an enabled adapter, independent of the user's hook registration.
+write(path.join(root, '.codex/hooks.json'), {
+  hooks: { PreToolUse: [{ hooks: [{ command: 'node .codex/hooks/harness-adapter.js PreToolUse' }] }] }
+});
 git(root, 'add', '.'); git(root, 'commit', '-m', 'fixture'); git(root, 'worktree', 'add', '-b', 'candidate', target);
 function prepare(directory) {
   const schedulerPath = path.join(directory, 'governance/runtime-state/active-task.json');

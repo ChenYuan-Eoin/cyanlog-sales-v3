@@ -6,6 +6,10 @@ vi.mock('@/lib/scoped-access', () => ({
   getOrgRoleCodes: (assignments: Array<{ roleCode?: string }>) => (
     assignments.map((assignment) => assignment.roleCode).filter(Boolean)
   ),
+  getOrgAuthorizationRoleCodes: (assignments: Array<{ roleCode?: string; permissionsOverridden?: boolean }>) => (
+    assignments.filter((assignment) => !assignment.permissionsOverridden)
+      .map((assignment) => assignment.roleCode).filter(Boolean)
+  ),
   getOrgPermissions: (assignments: Array<{ permissions?: string[] }>) => (
     assignments.flatMap((assignment) => assignment.permissions || [])
   ),

@@ -1,6 +1,7 @@
 import {
   canReviewContracts,
   getOrgPermissions,
+  getOrgAuthorizationRoleCodes,
   getOrgRoleCodes,
   type ScopedRoleAssignment,
 } from '@/lib/scoped-access'
@@ -40,7 +41,7 @@ export function getAskRoleCodes(assignments: ScopedRoleAssignment[], orgId: stri
 }
 
 export function canManageAllAsks(assignments: ScopedRoleAssignment[], orgId: string): boolean {
-  const roleCodes = getOrgRoleCodes(assignments, orgId)
+  const roleCodes = getOrgAuthorizationRoleCodes(assignments, orgId)
   return (
     roleCodes.includes('SUPER_ADMIN')
     || roleCodes.includes('ADMIN')

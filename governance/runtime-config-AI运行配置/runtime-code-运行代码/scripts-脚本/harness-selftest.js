@@ -10,6 +10,7 @@ const core = require('./harness-core');
 const {
   DELIVERY_ATTESTATION_REF,
   REQUIRED_DEFECT_REPLAY_ACTIONS,
+  APPLICATION_PERMISSION_ITEMS,
   SHIPPING_COLLABORATION_ACTIONS,
   SHIPPING_CONFIG_UI_ITEMS,
   SHIPPING_CONFIG_UI_ACTIONS,
@@ -406,6 +407,73 @@ function makeSchedulerFixture(repoRoot) {
     }),
     JSON.stringify({ id: 'IN-SELFTEST-CLARIFICATION', type: 'release_clarification' })
   ].join('\n') + '\n');
+}
+
+function runApplicationPermissionSelftest(repoRoot) {
+  runGit(repoRoot, ['init', '--quiet']);
+  runGit(repoRoot, ['config', 'user.name', 'Harness Selftest']);
+  runGit(repoRoot, ['config', 'user.email', 'harness-selftest@example.invalid']);
+  makeSettings(repoRoot);
+  makeSchedulerFixture(repoRoot);
+  const schedulerPath = path.join(repoRoot, 'governance/runtime-state/active-task.json');
+  const scheduler = JSON.parse(fs.readFileSync(schedulerPath, 'utf8'));
+  scheduler.active_task.feature_id = 'F003';
+  scheduler.active_task.delivery_contract = {
+    target_state: 'code_green', allowed_states: ['executing', 'code_green'],
+    integration_branch: 'main', production_branch: 'production', production_release_separate: true,
+    same_release_commit_required: true, attestation_ref: DELIVERY_ATTESTATION_REF,
+    required_code_checks: ['target_tests', 'full_tests', 'lint', 'typecheck', 'build'],
+    required_runtime_evidence: [...APPLICATION_PERMISSION_ITEMS], runtime_profile: 'application',
+    production_database_mode: 'read_only'
+  };
+  writeJson(schedulerPath, scheduler);
+  core.startGoal(repoRoot, 'Verify organization role permissions', { level: 'A1', workPackageId: 'WP99', scopes: 'app', success: 'permission code verified' });
+  core.approveContract(repoRoot, { level: 'A1', by: 'selftest' });
+  core.setPhase(repoRoot, 'verify');
+  assert.deepStrictEqual(validateSchedulerState({ repoRoot }).errors, []);
+
+  for (const change of [
+    state => { state.active_task.delivery_contract.runtime_profile = 'unknown'; },
+    state => { state.active_task.feature_id = 'F054'; },
+    state => { state.active_task.delivery_contract.production_database_mode = 'controlled_write_approved'; },
+    state => { state.active_task.delivery_contract.required_runtime_evidence = ['role_edit_save']; },
+    state => { state.active_task.delivery_contract.target_state = 'clean_preview_green'; state.active_task.delivery_contract.allowed_states.push('clean_preview_green'); },
+    state => { state.active_task.delivery_contract.runtime_profile = 'ai'; },
+    state => { state.active_task.delivery_contract.runtime_profile = 'shipping'; state.active_task.feature_id = 'F054'; },
+    state => { state.active_task.delivery_contract.runtime_profile = 'shipping_workspace'; state.active_task.feature_id = 'F054'; },
+    state => { state.active_task.delivery_contract.required_code_checks = ['target_tests']; }
+  ]) {
+    const invalid = structuredClone(scheduler); change(invalid); writeJson(schedulerPath, invalid);
+    assert.strictEqual(validateSchedulerState({ repoRoot }).ok, false);
+  }
+  // The new profile must not change the existing AI default or evidence gates.
+  const ai = structuredClone(scheduler);
+  delete ai.active_task.delivery_contract.runtime_profile;
+  ai.active_task.delivery_contract.required_runtime_evidence = ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
+  writeJson(schedulerPath, ai);
+  assert.deepStrictEqual(validateSchedulerState({ repoRoot }).errors, []);
+  writeJson(schedulerPath, scheduler);
+
+  fs.writeFileSync(path.join(repoRoot, '.gitignore'), '.runtime/\n');
+  runGit(repoRoot, ['add', '.']); runGit(repoRoot, ['commit', '--quiet', '-m', 'Application permission fixture']);
+  const head = runGit(repoRoot, ['rev-parse', 'HEAD']);
+  const options = { repoRoot, remoteSnapshot: {} };
+  const behavior = writeBehaviorEvidence(repoRoot, makeBehaviorEntry(repoRoot, head));
+  const checks = scheduler.active_task.delivery_contract.required_code_checks;
+  recordDeliveryEvidence('code', {
+    commit: head, checks: Object.fromEntries(checks.map(name => [name, true])),
+    behavior_log: behavior.behavior_log,
+    commands: checks.filter(name => name !== 'build').map(name => ({ name, exit_code: 0, ...behavior.commandArtifact }))
+  }, options);
+  assert.strictEqual(transitionDeliveryState('code_green', options).ok, false, 'Application still requires build command evidence');
+  recordDeliveryEvidence('code', {
+    commands: checks.map(name => ({ name, exit_code: 0, ...behavior.commandArtifact }))
+  }, options);
+  assert.strictEqual(transitionDeliveryState('code_green', options).ok, true);
+  assert.strictEqual(checkDeliveryStage('code_green', options).ok, true);
+  assert.strictEqual(transitionDeliveryState('clean_preview_green', options).ok, false, 'Code-only application profile cannot authorize Preview');
+  assert.strictEqual(checkDeliveryStage('production_released', options).ok, false, 'Code-only application profile cannot authorize Production');
+  console.log('application permission profile selftest ok');
 }
 
 function runConfigurationUiSelftest(repoRoot) {
@@ -1351,6 +1419,10 @@ function main() {
   process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(repoRoot, '.runtime', 'harness');
 
   try {
+    if (process.argv.includes('--application-only')) {
+      runApplicationPermissionSelftest(repoRoot);
+      return;
+    }
     if (process.argv.includes('--config-ui-only')) {
       runConfigurationUiSelftest(repoRoot);
       return;
@@ -1360,6 +1432,10 @@ function main() {
     });
     assert.strictEqual(verifierTests.status, 0, verifierTests.stderr || verifierTests.stdout || 'Shipping verifier offline tests failed');
     runSelftest(repoRoot);
+    const applicationRoot = path.join(repoRoot, 'application-fixture');
+    fs.mkdirSync(applicationRoot);
+    process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(applicationRoot, '.runtime', 'harness');
+    runApplicationPermissionSelftest(applicationRoot);
     const configurationRoot = path.join(repoRoot, 'configuration-fixture');
     fs.mkdirSync(configurationRoot);
     process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(configurationRoot, '.runtime', 'harness');

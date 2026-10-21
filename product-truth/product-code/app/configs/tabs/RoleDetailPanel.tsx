@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import Fuse from 'fuse.js'
+import { PERMISSION_KEYS, SUPER_ADMIN_CORE_PERMISSIONS, isRolePermissionEnabled, toggleRolePermission } from '@/lib/role-permission-policy'
 import { success, error, confirmAction } from '@/lib/toast'
 import type {
   OrgSummaryUser,
@@ -52,7 +53,11 @@ const PERMISSION_CATALOG: PermissionCatalogGroup[] = [
     description: '决定用户是否能进入组织管理、配置中心和管理入口。',
     items: [
       { key: 'admin:access', label: '管理后台访问', description: '允许进入组织管理与后台入口。' },
-      { key: 'config:*', label: '配置中心访问', description: '允许进入并维护配置中心能力域。' },
+      { key: 'config:*', label: '配置中心全部权限', description: '包含读取、修改与发布配置。' },
+      { key: 'config:read', label: '配置中心查看', description: '允许读取当前组织的配置。' },
+      { key: 'config:write', label: '配置中心修改', description: '允许修改当前组织的配置。' },
+      { key: 'config:publish', label: '配置发布', description: '允许发布当前组织的配置。' },
+      { key: 'role:manage', label: '角色权限管理', description: '允许超级管理员维护当前组织角色权限。' },
       { key: 'report:*', label: '经营报表访问', description: '允许查看组织级经营报表与统计。' },
       { key: 'report:dept', label: '部门报表访问', description: '允许查看所在部门经营数据。' },
       { key: 'report:finance', label: '财务报表访问', description: '允许查看财务口径报表。' },
@@ -67,6 +72,7 @@ const PERMISSION_CATALOG: PermissionCatalogGroup[] = [
       { key: 'org:write', label: '组织设置修改', description: '允许修改组织级管理项。' },
       { key: 'dept:*', label: '部门维护', description: '允许新建、调整和停用部门。' },
       { key: 'dept:view', label: '部门查看', description: '允许查看部门树和成员归属。' },
+      { key: 'dept:write', label: '部门编辑', description: '允许调整部门结构。' },
       { key: 'user:*', label: '成员维护', description: '允许创建成员、分配角色、重置密码。' },
       { key: 'user:view', label: '成员查看', description: '允许查看成员档案和角色绑定。' },
       { key: 'user:write', label: '成员编辑', description: '允许调整成员状态与角色。' },
@@ -98,6 +104,7 @@ const PERMISSION_CATALOG: PermissionCatalogGroup[] = [
       { key: 'contract:*', label: '合同全量管理', description: '允许维护与处理全部合同动作。' },
       { key: 'contract:view', label: '合同查看', description: '允许查看合同记录与审核结果。' },
       { key: 'contract:upload', label: '合同上传', description: '允许上传待审核合同。' },
+      { key: 'contract:create', label: '合同创建', description: '允许创建合同记录。' },
       { key: 'contract:write', label: '合同编辑', description: '允许编辑合同相关记录。' },
       { key: 'contract:review', label: '合同审核执行', description: '允许执行规则与模型审核。' },
       { key: 'contract:approve', label: '合同审批', description: '允许对合同结果进行审批。' },
@@ -115,6 +122,15 @@ const PERMISSION_CATALOG: PermissionCatalogGroup[] = [
   },
 ]
 
+const EXTRA_PERMISSION_GROUP: PermissionCatalogGroup = {
+  id: 'shipping-domain', label: '寄件操作', description: '管理寄件业务与承运商连接。',
+  items: [
+    { key: 'shipping:*', label: '寄件全部权限', description: '包含寄件操作与连接配置。' },
+    { key: 'shipping:operate', label: '寄件操作', description: '允许执行寄件业务操作。' },
+    { key: 'shipping:manage_connections', label: '寄件连接管理', description: '允许维护寄件接入配置。' },
+  ],
+}
+
 // ============ Props 类型 ============
 
 interface RoleDetailPanelProps {
@@ -129,6 +145,7 @@ interface RoleDetailPanelProps {
   saving: boolean
   onSave: (perms: string[]) => void
   permissionsEditable?: boolean
+  permissionsEditBlockReason?: string | null
   users: OrgSummaryUser[]
   departments: OrgSummaryDepartment[]
   _spaces: OrgSummarySpace[]
@@ -143,6 +160,7 @@ export function RoleDetailPanel({
   saving,
   onSave,
   permissionsEditable = false,
+  permissionsEditBlockReason,
   users,
   departments,
   _spaces,
@@ -169,18 +187,15 @@ export function RoleDetailPanel({
   }, [users, role.code])
 
   // 权限变更时同步
-  useMemo(() => {
+  useEffect(() => {
     setPerms(role.permissions ?? [])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role.permissions])
+  }, [role.id, role.permissions])
 
   const hasChanges = JSON.stringify([...perms].sort()) !== JSON.stringify([...(role.permissions ?? [])].sort())
 
   function togglePermission(key: string) {
-    if (isSuperAdmin || !permissionsEditable) return
-    setPerms(cur =>
-      cur.includes(key) ? cur.filter(p => p !== key) : [...cur, key]
-    )
+    if (!permissionsEditable || saving) return
+    setPerms(cur => toggleRolePermission(cur, key, isSuperAdmin ? SUPER_ADMIN_CORE_PERMISSIONS : []))
   }
 
   return (
@@ -201,7 +216,7 @@ export function RoleDetailPanel({
                 <h2 className="text-xl font-semibold text-slate-900">{role.name}</h2>
                 {isSuperAdmin && (
                   <Badge className="bg-amber-100 text-amber-800 border-amber-200">
-                    拥有所有权限
+                    {role.permissions?.includes('*') ? '全部权限' : '组织内已配置'}
                   </Badge>
                 )}
               </div>
@@ -213,7 +228,7 @@ export function RoleDetailPanel({
               )}
             </div>
           </div>
-          {!isSuperAdmin && permissionsEditable && activeTab === 'permissions' && (
+          {permissionsEditable && activeTab === 'permissions' && (
             <Button
               onClick={() => onSave(perms)}
               disabled={saving || !hasChanges}
@@ -263,7 +278,8 @@ export function RoleDetailPanel({
           <PermissionSettingTab
             perms={perms}
             isSuperAdmin={isSuperAdmin}
-            readOnly={!permissionsEditable}
+            readOnly={!permissionsEditable || saving}
+            blockReason={permissionsEditBlockReason}
             onToggle={togglePermission}
           />
         </TabsContent>
@@ -725,12 +741,18 @@ interface PermissionSettingTabProps {
   perms: string[]
   isSuperAdmin: boolean
   readOnly: boolean
+  blockReason?: string | null
   onToggle: (key: string) => void
 }
 
-function PermissionSettingTab({ perms, isSuperAdmin, readOnly, onToggle }: PermissionSettingTabProps) {
+function PermissionSettingTab({ perms, isSuperAdmin, readOnly, blockReason, onToggle }: PermissionSettingTabProps) {
+  const unknownPermissions = perms.filter(key => !PERMISSION_KEYS.includes(key))
+  const groups: PermissionCatalogGroup[] = [...PERMISSION_CATALOG, EXTRA_PERMISSION_GROUP, ...(unknownPermissions.length ? [{
+    id: 'existing-extra', label: '其他已保存权限', description: '保留现有权限项，可按需要调整。',
+    items: unknownPermissions.map(key => ({ key, label: key, description: '已保存的权限标识。' })),
+  }] : [])]
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
-    () => new Set(PERMISSION_CATALOG.map(g => g.id))
+    () => new Set([...PERMISSION_CATALOG.map(g => g.id), 'shipping-domain', 'existing-extra'])
   )
 
   const toggleGroup = (groupId: string) => {
@@ -750,25 +772,24 @@ function PermissionSettingTab({ perms, isSuperAdmin, readOnly, onToggle }: Permi
       {isSuperAdmin && (
         <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
           <ShieldIcon className="inline-block h-4 w-4 mr-2" />
-          超级管理员拥有系统中的所有权限，无需单独配置。
+          权限更改仅作用于当前组织。为保证可以恢复配置，管理后台访问、配置中心查看与修改、角色权限管理始终保留。
         </div>
       )}
 
-      {!isSuperAdmin && readOnly && (
+      {readOnly && blockReason && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
-          系统角色是跨组织共享的只读模板。为避免某个组织修改全局权限或自我提权，
-          组织级角色模型完成前这里只展示当前权限，不提供在线编辑。
+          {blockReason}
         </div>
       )}
 
-      {PERMISSION_CATALOG.map(group => {
+      {groups.map(group => {
         const isExpanded = expandedGroups.has(group.id)
         const groupPermissions = group.items.map(item => item.key)
         const hasAllInGroup = groupPermissions.every(p =>
-          perms.includes(p) || perms.includes('*')
+          isRolePermissionEnabled(perms, p)
         )
         const hasSomeInGroup = groupPermissions.some(p =>
-          perms.includes(p) || perms.includes('*')
+          isRolePermissionEnabled(perms, p)
         )
 
         return (
@@ -799,12 +820,14 @@ function PermissionSettingTab({ perms, isSuperAdmin, readOnly, onToggle }: Permi
               <div className="border-t px-4 py-4 bg-slate-50/50">
                 <div className="grid gap-3 md:grid-cols-2">
                   {group.items.map(item => {
-                    const checked = isSuperAdmin || perms.includes(item.key) || perms.includes('*')
+                    const checked = isRolePermissionEnabled(perms, item.key)
+                    const isCore = isSuperAdmin && SUPER_ADMIN_CORE_PERMISSIONS.includes(item.key)
+                    const disabled = readOnly || isCore
                     return (
                       <label
                         key={item.key}
                         className={`flex items-start gap-3 rounded-lg border bg-white p-3 ${
-                          isSuperAdmin || readOnly
+                          disabled
                             ? 'opacity-60 cursor-not-allowed'
                             : 'cursor-pointer hover:border-slate-300'
                         }`}
@@ -812,13 +835,13 @@ function PermissionSettingTab({ perms, isSuperAdmin, readOnly, onToggle }: Permi
                         <input
                           type="checkbox"
                           checked={checked}
-                          disabled={isSuperAdmin || readOnly}
+                          disabled={disabled}
                           onChange={() => onToggle(item.key)}
                           className="mt-0.5 rounded"
                         />
                         <div className="flex-1">
-                          <div className={`text-sm font-medium ${isSuperAdmin || readOnly ? 'text-slate-500' : 'text-slate-900'}`}>
-                            {item.label}
+                          <div className={`text-sm font-medium ${disabled ? 'text-slate-500' : 'text-slate-900'}`}>
+                            {item.label}{isCore ? <span className="ml-2 text-xs text-amber-700">核心权限</span> : null}
                           </div>
                           <div className="text-xs text-slate-500 mt-0.5">{item.description}</div>
                         </div>
