@@ -59,4 +59,20 @@ describe('explicit shipping simulation', () => {
     await expect(request('/api/shipping/settings', { method: 'POST', body: '{}' })).rejects.toThrow('示例单据')
     expect(fetcher).not.toHaveBeenCalled()
   })
+
+  it('previews the carrier-accepted Xiongan shorthand and extracts the company abbreviation', async () => {
+    render(<ShippingDemo />)
+    await screen.findByText('模拟：快件运输中')
+    fireEvent.change(screen.getByLabelText('多行地址文本'), {
+      target: {
+        value: '中核华辉验收文件            收货人：韩寿帅\n手机号：18733506883\n所在地区：河北雄安新区容城县\n详细地址：北京中核华辉科技发展有限公司中关村科技园B3栋北楼中核华辉',
+      },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
+
+    expect((screen.getByLabelText('第1行收件人') as HTMLInputElement).value).toBe('韩寿帅')
+    expect((screen.getByLabelText('第1行联系电话') as HTMLInputElement).value).toBe('18733506883')
+    expect(screen.queryByText('地址需包含完整省市区，请补充后重新确认')).toBeNull()
+    expect(fetcher).not.toHaveBeenCalled()
+  })
 })

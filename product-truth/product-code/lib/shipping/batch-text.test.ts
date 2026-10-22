@@ -257,4 +257,30 @@ describe('shipping text intake', () => {
   it('ignores blank lines and gives an empty input no synthetic recipient', () => {
     expect(parseShippingText(' \n\r\n ')).toEqual([])
   })
+
+  it('extracts the company abbreviation from a company document heading and keeps the complete address valid', () => {
+    const originalText = '中核华辉验收文件            收货人：韩寿帅\n手机号：18733506883\n所在地区：河北雄安新区容城县\n详细地址：北京中核华辉科技发展有限公司中关村科技园B3栋北楼中核华辉'
+    const [row] = parseShippingText(originalText)
+
+    expect(row).toMatchObject({
+      recipient: '韩寿帅',
+      phone: '18733506883',
+      customerName: '中核华辉',
+      originalText,
+    })
+    const prepared = prepareBatchRecipient(row)
+    expect(prepared.recipient).toMatchObject({
+      province: '河北省',
+      city: '雄安新区',
+      county: '容城县',
+    })
+    expect(prepared.errors).toEqual([])
+  })
+
+  it('uses explicit company fields without treating a person or detailed-address company as the abbreviation', () => {
+    const [row] = parseShippingText('公司名称：中核华辉科技有限公司\n收货人：韩寿帅\n手机号：18733506883\n地址：河北省雄安新区容城县中核华辉科技园1号楼')
+    expect(row.customerName).toBe('中核华辉科技有限公司')
+    expect(row.recipient).toBe('韩寿帅')
+    expect(row.address).not.toContain('公司名称')
+  })
 })

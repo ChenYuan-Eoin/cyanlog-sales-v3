@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-21T07:29:29.082357+00:00",
+  "updated_at": "2026-10-22T09:30:00Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -129,74 +129,32 @@
     "harness_mode": "advisory"
   },
   "active_task": {
-    "id": "WP43",
-    "slug": "org-scoped-role-permissions",
-    "name": "组织级角色权限收紧与生效",
+    "id": "WP63",
+    "slug": "strict-address-company-parser",
+    "name": "寄件文本省市区与公司简称严格解析",
     "kind": "product",
     "status": "active",
-    "objective": "恢复系统角色（含SUPER_ADMIN）的组织级权限编辑、保存和真实授权生效；超管保留恢复权限配置必需核心权限，非核心业务权限可收紧；自定义角色留待后续。",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/wp41-org-role-permissions/Price-v3",
-    "activation_basis": "IN-20261021-013：用户明确先修复权限配置；取代此前暂停决定",
+    "objective": "修复寄件文本解析：省、地市、区县三级必须唯一可确定，支持承运商认可的省/市/区县简称但不得猜测缺失层级；公司简称从明确公司字段或公司文档标题提取，不得把联系人或详细地址中的公司全称误判为公司，并保留原文供人工核对。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/prod-address-parser-hotfix/Price-v3",
+    "activation_basis": "IN-20261022-021：用户提供线上截图并明确指出残缺地址仍被组合、省市区必须完整才能识别，以及公司简称长期识别错误，要求优先修复。WP62已达到code_green并重新绑定当前SHA，用户明确插队处理该解析缺陷。",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
       "product-truth/REQ_REGISTRY.yml",
-      "product-truth/feature-packets/F003-account-auth.md",
-      "product-truth/product-code/app/configs/ConfigsClient.tsx",
-      "product-truth/product-code/app/configs/types.ts",
-      "product-truth/product-code/app/configs/tabs/RoleAccessTab.tsx",
-      "product-truth/product-code/app/configs/tabs/RoleAccessTab.test.tsx",
-      "product-truth/product-code/app/configs/tabs/RoleDetailPanel.tsx",
-      "product-truth/product-code/app/configs/tabs/RoleDetailPanel.test.tsx",
-      "product-truth/product-code/app/configs/tabs/TabsContent.tsx",
-      "product-truth/product-code/app/api/roles/route.ts",
-      "product-truth/product-code/app/api/roles/route.test.ts",
-      "product-truth/product-code/app/api/roles/[id]/route.ts",
-      "product-truth/product-code/app/api/roles/[id]/route.test.ts",
-      "product-truth/product-code/app/api/admin/org/route.ts",
-      "product-truth/product-code/app/api/admin/org/route.test.ts",
-      "product-truth/product-code/app/api/admin/users/route.ts",
-      "product-truth/product-code/app/api/admin/users/route.test.ts",
-      "product-truth/product-code/app/api/admin/users/[id]/roles/route.ts",
-      "product-truth/product-code/app/api/admin/users/[id]/roles/route.test.ts",
-      "product-truth/product-code/app/api/auth/context/route.ts",
-      "product-truth/product-code/app/api/auth/context/route.test.ts",
-      "product-truth/product-code/lib/api/auth-wrapper.ts",
-      "product-truth/product-code/lib/api/auth-wrapper.test.ts",
-      "product-truth/product-code/lib/admin/org-membership.ts",
-      "product-truth/product-code/lib/admin/org-membership.test.ts",
-      "product-truth/product-code/lib/admin/org-role-authority.ts",
-      "product-truth/product-code/lib/admin/org-role-authority.test.ts",
-      "product-truth/product-code/lib/configs/access.ts",
-      "product-truth/product-code/lib/configs/access.test.ts",
-      "product-truth/product-code/lib/permissions.ts",
-      "product-truth/product-code/lib/permissions.test.ts",
-      "product-truth/product-code/lib/scoped-access.ts",
-      "product-truth/product-code/lib/scoped-access.test.ts",
-      "product-truth/product-code/lib/scoped-access.sales-space.test.ts",
-      "product-truth/product-code/lib/schema-check.ts",
-      "product-truth/product-code/lib/schema-check.test.ts",
-      "product-truth/product-code/supabase/migrations",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
-      "product-truth/product-code/lib/org-role-permissions.ts",
-      "product-truth/product-code/lib/org-role-permissions.test.ts",
-      "product-truth/product-code/lib/role-permission-policy.ts",
-      "product-truth/product-code/lib/role-permission-policy.test.ts",
-      "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/middleware.test.ts",
-      "product-truth/product-code/lib/dashboard-data.ts",
-      "product-truth/product-code/lib/dashboard-data.test.ts",
-      "product-truth/product-code/lib/ask/permissions.ts",
-      "product-truth/product-code/lib/ask/permissions.test.ts",
-      "product-truth/product-code/lib/shipping/connection-authorization.ts",
-      "product-truth/product-code/lib/shipping/connection-authorization.test.ts",
-      "product-truth/product-code/lib/ask/submit-response.test.ts",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.test.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/application-permissions-verifier.js",
-      "product-truth/product-code/.vercel/project.json"
+      "product-truth/feature-packets/F054-sf-self-service-order.md",
+      "product-truth/product-code/app/shipping",
+      "product-truth/product-code/lib/shipping/address.ts",
+      "product-truth/product-code/lib/shipping/address.test.ts",
+      "product-truth/product-code/lib/shipping/batch-text.ts",
+      "product-truth/product-code/lib/shipping/batch-text.test.ts",
+      "product-truth/product-code/lib/shipping/import-parser.ts",
+      "product-truth/product-code/lib/shipping/import-parser.test.ts",
+      "product-truth/product-code/lib/shipping/import-contacts.ts",
+      "product-truth/product-code/lib/shipping/import-contacts.test.ts",
+      "product-truth/product-code/lib/shipping/shipping.test.ts",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本"
     ],
-    "feature_id": "F003",
+    "feature_id": "F054",
     "delivery_contract": {
       "target_state": "production_released",
       "allowed_states": [
@@ -220,82 +178,53 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "role_edit_save",
-        "role_access_enforcement"
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access",
+        "strict_address_hierarchy",
+        "company_abbreviation_extraction"
       ],
-      "note": "发布WP43组织级角色权限修复及其必要发布证据适配；允许提交、推送、隔离Preview验证、精确SHA Production部署和现有Chrome只读复验。Production不做数据库迁移、不修改业务角色权限，不以只读复验声称生产持久化已验收。",
-      "production_database_mode": "read_only",
-      "runtime_profile": "application",
-      "runtime_contract_version": "f003-role-permissions-v1",
       "required_production_runtime_evidence": [
-        "role_read_edit",
-        "role_unauthorized_access"
-      ],
-      "required_production_evidence": [
-        "exact_production_commit",
-        "vercel_deployment_ready_and_promoted",
-        "sales.cyanlog.icu_alias",
-        "controlled_production_security_and_runtime_verifier",
-        "trusted_existing_chrome_operator_attestation"
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
       ],
       "production_release_authorization": {
         "status": "approved_code_only",
-        "micro_fix_approval_id": "IN-20261021-013",
-        "clarification_id": "IN-20261021-015",
-        "micro_fix_scope": "恢复系统角色（含SUPER_ADMIN）的组织级权限编辑、保存和真实授权生效；超管保留恢复权限配置必需核心权限，非核心业务权限可收紧；自定义角色留待后续。",
-        "final_release_approval_id": "IN-20261021-015",
-        "final_scope": "发布WP43组织级角色权限修复及其必要发布证据适配；允许提交、推送、隔离Preview验证、精确SHA Production部署和现有Chrome只读复验。Production不做数据库迁移、不修改业务角色权限，不以只读复验声称生产持久化已验收。",
-        "database_write_authorized": false,
-        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
-        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
+        "micro_fix_approval_id": "IN-20261022-021",
+        "clarification_id": "IN-20261022-015",
+        "micro_fix_scope": "WP63 address and company parser hotfix only; exact-head main and production integration plus Vercel Production deployment; production database remains read-only",
+        "final_scope": "WP63 address and company parser hotfix only; exact-head main and production integration plus Vercel Production deployment; production database remains read-only",
+        "final_release_approval_id": "IN-20261022-022",
+        "database_write_authorized": false
       },
       "final_acceptance": {
-        "origin": "https://sales.cyanlog.icu",
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
-        "new_local_browser_or_context_prohibited": true,
-        "new_tab_prohibited": true,
-        "local_and_preview_role": "diagnostic_only_not_completion",
-        "production_database_mode": "read_only",
-        "trust_boundary": "Git、Vercel与固定HTTP拒绝探针提供机器证据；现有Chrome提供已登录超管读取与编辑后放弃的操作员证明。生产无写验收不证明真实持久化，隔离Preview验证保存和撤权。"
-      }
+        "production_database_mode": "read_only"
+      },
+      "note": "WP63只发布地址与公司解析热修；Production数据库只读，不执行迁移或配置写入。真实下单由发布后的操作员使用现有Chrome完成。",
+      "production_database_mode": "read_only",
+      "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-ui-v1"
     },
-    "started_at": "2026-10-20T10:39:32Z",
-    "reason": "优先恢复当前组织的角色编辑、保存与真实权限生效。",
-    "micro_fixes": [
-      {
-        "id": "IN-20261020-004",
-        "scope": "修正通用非 AI/非顺丰工作包被强制要求 ReviewRun/token 证据的调度器缺口"
-      }
-    ]
+    "started_at": "2026-10-22T09:30:00Z",
+    "reason": "WP62组织来源绑定已在49296217达到code_green；用户明确要求优先修复省市区与公司简称解析缺陷。",
+    "micro_fixes": []
   },
   "execution_queue": {
     "active": {
-      "id": "WP43",
-      "slug": "org-scoped-role-permissions",
-      "name": "组织级角色权限收紧与生效"
+      "id": "WP63",
+      "slug": "strict-address-company-parser",
+      "name": "寄件文本省市区与公司简称严格解析"
     },
     "next": {
-      "id": "WP34",
-      "slug": "shipping-auth-recovery",
-      "name": "顺丰认证失败与原单安全恢复",
-      "entry_gate": "WP43权限修复后恢复寄件收尾",
+      "id": "WP35",
+      "slug": "sales-intake-experience",
+      "name": "销售寄件提报体验",
+      "entry_gate": "WP63 strict shipping text parsing",
       "entry_gate_status": "waiting_active_completion"
     },
     "ready": [
-      {
-        "id": "WP35",
-        "slug": "sales-intake-experience",
-        "name": "销售寄件提报体验",
-        "entry_gate": "WP19边界收敛后恢复既有候选的正式站验收",
-        "entry_gate_status": "waiting_active_completion"
-      },
-      {
-        "id": "WP36",
-        "slug": "workorder-review-expansion",
-        "name": "工单展开核对与操作",
-        "entry_gate": "WP35正式站验收后独立实施",
-        "entry_gate_status": "waiting_active_completion"
-      },
       {
         "id": "WP32",
         "slug": "sf-push-progress",
@@ -314,13 +243,6 @@
         "id": "WP24",
         "slug": "monthly-rejection-recovery",
         "name": "月结拒绝后的原单恢复",
-        "entry_gate": "按F054编号顺序，前一项验收后进入",
-        "entry_gate_status": "waiting_active_completion"
-      },
-      {
-        "id": "WP27",
-        "slug": "scheduled-tracking-refresh",
-        "name": "轨迹半小时更新与异常通知",
         "entry_gate": "按F054编号顺序，前一项验收后进入",
         "entry_gate_status": "waiting_active_completion"
       },
@@ -352,6 +274,12 @@
       "Production没有托管备份/PITR；如后续需再执行DDL或不可逆数据操作，先另行确认可恢复备份。"
     ],
     "parked": [
+      {
+        "id": "WP43",
+        "slug": "org-scoped-role-permissions",
+        "name": "组织级角色权限收紧与生效",
+        "reason": "用户批准切换WP46；发布WP43组织级角色权限修复及其必要发布证据适配；允许提交、推送、隔离Preview验证、精确SHA Production部署和现有Chrome只读复验。Production不做数据库迁移、不修改业务角色权限，不以只读复验声称生产持久化已验收。；权限语义仍由IN-20261021-021阻断，不以Production部署代替验收。"
+      },
       {
         "id": "WP11",
         "slug": "shipping-collaboration",
@@ -407,12 +335,6 @@
         "reason": "本地候选保留，外部取消状态文档及真实验证待续接；未上线"
       },
       {
-        "id": "WP30",
-        "slug": "submitted-shipment-amendment",
-        "name": "未出号原工单修改",
-        "reason": "用户批准切换WP31；WP30本地候选保留，未宣称交付。"
-      },
-      {
         "id": "WP31",
         "slug": "bulk-review-selection",
         "reason": "本地候选eca8056a保留，尚未发布；用户明确开始推送接收下一步"
@@ -439,6 +361,131 @@
       }
     ],
     "completed": [
+      {
+        "id": "WP62",
+        "slug": "organization-source-bindings",
+        "name": "组织来源绑定解绑换绑与提供方状态",
+        "completed_at": "2026-10-22T09:15:00Z",
+        "evidence_commit": "49296217fb298b5d6e744b2f309c9f803492c05d",
+        "result": "达到code_green：组织来源绑定、解绑、换绑、来源1权威、提供方能力状态和飞书持久化来源读取已实现；原子迁移函数支持失败回滚。全量391文件2889测试、严格10/10、typecheck/lint与99页build通过，并补充迁移版本唯一性门禁；隔离数据库尚未应用迁移，真实飞书/企微/钉钉、Preview和Production未验收。",
+        "evidence": "codex-runtime/wp62-organization-source-bindings/, codex-runtime/wp62-migration-closure/"
+      },
+      {
+        "id": "WP27",
+        "slug": "scheduled-tracking-refresh",
+        "name": "轨迹半小时更新与异常通知",
+        "completed_at": "2026-10-22T08:40:00Z",
+        "evidence_commit": "395c659b8829d5beada9c138ea8649a2050b7ec4",
+        "result": "达到code_green：活跃运单以30分钟updated_at租约领取，并发实例不重复查询；终态运单与订单收敛；单票失败保留旧轨迹，操作员异常提醒24小时去重且写入失败独立计数。受影响11文件136测试、全量2879通过/5跳过、严格10/10、lint/typecheck与98页build通过；Vercel套餐兼容、真实cron/顺丰批量、Preview与Production未验收。",
+        "evidence": "codex-runtime/wp27-tracking-refresh/"
+      },
+      {
+        "id": "WP61",
+        "slug": "permission-checkbox-semantics",
+        "name": "权限复选框显式授权与依赖解释",
+        "completed_at": "2026-10-22T08:18:00Z",
+        "evidence_commit": "27b636b1b9870d0fc2f96bb5f808cd3789351601",
+        "result": "达到code_green：复选框改为精确显式授权，依赖/通配符派生访问以独立“当前有效”和来源解释；单项切换不再连带其他复选框，组全选与组清除保持明确批量语义。目标及受影响9文件72测试、全量2871通过/5跳过、严格10/10、lint/typecheck与98页build通过；Preview、Production、真实角色写入和现有Chrome验收未完成。",
+        "evidence": "codex-runtime/wp61-permission-checkbox/"
+      },
+      {
+        "id": "WP36",
+        "slug": "workorder-review-expansion",
+        "name": "双栏三栏工单展开核对与详情闭环",
+        "completed_at": "2026-10-22T07:51:00Z",
+        "evidence_commit": "20b05e778c8f3f6b90011222c6d1385a77b1134c",
+        "result": "达到code_green：工作台实现真实三栏/两栏/单列，移动端页面级滚动；卡片正文与展开按钮分离，未发单展开服务核对、已发单展开递送信息；正式参数改为轻量box的两列事项:信息并默认隐藏详细控件；选中出号工单自动刷新轨迹。目标5文件80测试、全量2862通过/5跳过、严格10/10、98页build通过；1440/1024/390真实浏览器无横向溢出，截图保存在wp36-workbench。Preview、Production和现有Chrome验收未完成。",
+        "evidence": "codex-runtime/wp36-workbench/"
+      },
+      {
+        "id": "WP60",
+        "slug": "middleware-hot-path-performance",
+        "name": "中间件高频路径负载与请求收敛",
+        "completed_at": "2026-10-22T02:40:00Z",
+        "evidence_commit": "f5fdf0689313b39310de198037504661d6cb3988",
+        "result": "达到code_green：middleware改为原生PostgREST精确读取并移除完整Supabase客户端与权限目录，普通配置tab不再请求auth/me，寄件配置抽屉动态加载，tab悬停/聚焦后台预取不切换可见loading。middleware 203→146 kB、/configs first-load 273→210 kB；全量2858通过/5跳过、严格10/10和98页build通过；Preview与Production Web Vitals未验收。",
+        "evidence": "codex-runtime/wp60-middleware-performance/"
+      },
+      {
+        "id": "WP59",
+        "slug": "external-org-source-priority",
+        "name": "外部组织来源优先级与唯一身份匹配",
+        "completed_at": "2026-10-22T01:50:00Z",
+        "evidence_commit": "dfdddf75715e1c675425b79f5f997b820c446582",
+        "result": "达到code_green：来源1独占部门层级、主部门、任职和离职协调；来源2/3/4不再写组织骨架或创建成员，只按唯一工号/邮箱/手机补充缺失资料；同标识多人命中转conflict、零命中转unresolved、姓名不参与匹配，补充来源只需用户写权限。目标3文件27测试、全量2853通过/5跳过、lint/typecheck/98页build与严格10/10通过；真实飞书外呼、隔离迁移、Preview和Production未验收。",
+        "evidence": "codex-runtime/wp59-external-org-source/"
+      },
+      {
+        "id": "WP58",
+        "slug": "membership-invitation-scope-completion",
+        "name": "成员邀请生命周期与角色作用域补全",
+        "completed_at": "2026-10-22T01:10:00Z",
+        "evidence_commit": "447cc74240669dcfb0c9473032041cf66a64e561",
+        "result": "达到code_green：邀请撤销与invited成员关系原子结束，新增独立租户成员移除、多组织默认关系切换、最后管理员/根管理员保护、组织聚合显式成员状态，以及部门/销售空间作用域展示与撤销。目标5文件18测试、全量2846通过/5跳过、lint/typecheck/98页build与严格10/10通过；隔离迁移、Preview、邮件投递、Production人员写入与现有Chrome验收未完成。",
+        "evidence": "codex-runtime/wp58-membership-removal/"
+      },
+      {
+        "id": "WP57",
+        "slug": "project-review-performance",
+        "name": "项目评审与高频路径性能修复",
+        "completed_at": "2026-10-21T23:45:36Z",
+        "evidence_commit": "dfeb15727e462ed075248c1975096ecb6aecc254",
+        "result": "达到code_green：Sidebar寄件导航权限按token缓存并合并并发请求，换页不再重复读取寄件设置；中间件用户/成员与角色/组织设置分两批并行，将五段串行缩短为三段且保留即时撤权。全量2832通过/5跳过、lint/typecheck/98页build与严格10/10通过；Production Web Vitals和路由延迟未验收。",
+        "evidence": "codex-runtime/wp57-project-review/"
+      },
+      {
+        "id": "WP30",
+        "slug": "submitted-shipment-amendment",
+        "name": "未出号原工单修改",
+        "completed_at": "2026-10-21T23:17:46Z",
+        "evidence_commit": "159b9ffeb04f81eade7e6e3a21c89ba31f9ab0de",
+        "result": "达到code_green：仅待核对/已退回且无运单的工单可版本化修改；每次保存 revision+1、保留created_by/身份快照、写入before/after审计并重新待核对，不自动下单。目标3文件59测试、全量2831通过/5跳过、lint/typecheck/98页build与严格10/10通过；隔离迁移、Preview和Production未验收。",
+        "evidence": "codex-runtime/wp30-shipping-amendment/"
+      },
+      {
+        "id": "WP49",
+        "slug": "shipping-domain-authorization",
+        "name": "顺丰业务域身份与授权收敛",
+        "completed_at": "2026-10-21T22:33:51Z",
+        "evidence_commit": "e3b81c54cc2c5222c2adac1ecb77de8361b3ca3e",
+        "result": "达到code_green：顺丰后台操作员统一来自中央 SHIPPING_OPERATOR 角色与 shipping:operate 权限，legacy直接授权迁移后删除第二来源；本人订单按tenant+owner查询，操作员台账/轨迹/动作继续走独立权限。目标3文件25测试、全量2826通过/5跳过、lint/typecheck/98页build与严格10/10通过；隔离迁移、Preview、真实顺丰写入与生产人员授权未验收。",
+        "evidence": "codex-runtime/wp49-shipping-authorization/"
+      },
+      {
+        "id": "WP47",
+        "slug": "personnel-lifecycle-management",
+        "name": "人员生命周期与组织来源协调",
+        "completed_at": "2026-10-21T21:53:27Z",
+        "evidence_commit": "3aff7dc3fb5ddc4861e2fa492841a4e4e9f3fe96",
+        "result": "达到code_green：待激活邀请与公开激活页、任职周期/审计、原子调岗/角色/账户/密码/汇报/离职/复职、最后管理员保护、来源1完整快照离职协调及离职/复职UI已实现。目标12文件99测试、全量2824通过/5跳过、lint/typecheck/98页build与严格10/10通过；隔离迁移、邮件发送、Preview和生产人员写入未验收。",
+        "evidence": "codex-runtime/wp47-personnel-lifecycle/"
+      },
+      {
+        "id": "WP48",
+        "slug": "permission-catalog-lifecycle",
+        "name": "权限点目录生命周期与清晰授权层级",
+        "completed_at": "2026-10-21T19:09:37Z",
+        "evidence_commit": "ec045b1e00cd9c12f920e0aa797143ba067d1acc",
+        "result": "达到code_green：单一版本化权限注册表、草稿到停用/软删除/恢复生命周期、执行消费者校验、平台目录管理 UI、清晰直接/组合/依赖/未接入授权语义和角色保存限制已实现。目标42测试、全量2809通过/5跳过、lint/typecheck/build与严格10/10通过；隔离迁移、平台管理员环境绑定、Preview和生产写入未验收。",
+        "evidence": "codex-runtime/wp48-permission-registry/"
+      },
+      {
+        "id": "WP46",
+        "slug": "tenant-membership-isolation-foundation",
+        "name": "租户成员与强制数据隔离基座",
+        "completed_at": "2026-10-21T17:44:14Z",
+        "evidence_commit": "8ece0a3283a57cf7de20b6089510d7a967cf07c6",
+        "result": "达到code_green：唯一有效租户/成员解析、外部组织来源优先级、人员写路径实时成员上下文、跨租户组合约束与知识内容租户隔离已实现。目标24文件191测试、全量2788通过/5跳过、lint/typecheck/build与严格提交10/10通过；隔离数据库迁移和Preview仍未验收。",
+        "evidence": "codex-runtime/wp46-tenant-membership/"
+      },
+      {
+        "id": "WP45",
+        "slug": "tenant-identity-access-assessment",
+        "name": "多租户身份权限与人员架构体检",
+        "completed_at": "2026-10-21T14:25:27Z",
+        "result": "完成身份、成员、外部组织优先级、权限控制面、资源隔离、人员生命周期、顺丰边界和WP46-WP49验收合同；决策清单D01-D21获用户批准。",
+        "evidence": "codex-runtime/wp45-tenant-identity-access-assessment/"
+      },
       {
         "id": "WP22",
         "slug": "reusable-sender-intake",
@@ -1550,148 +1597,6 @@
         "branch_consolidation": "User goal: integrate useful unique changes, archive and retire fully integrated or superseded branches, preserve dirty worktrees"
       },
       "resume_condition": "取消本地候选通过code_green；外部状态文档读取授权、供应商验证和生产验收仍待完成。"
-    },
-    "WP30": {
-      "id": "WP30",
-      "slug": "submitted-shipment-amendment",
-      "name": "未出号原工单修改",
-      "kind": "product",
-      "status": "active",
-      "objective": "F054 WP30：仅修改尚未发送承运商的原工单，保留原提交人、原始资料及修改记录；修改后重新核对，不自动下单；已发送、已出号及结果未知冻结。",
-      "started_at": "2026-10-14T04:38:03.178469+00:00",
-      "activation_basis": "IN-20261014-015：用户既定目标与队列顺序，WP29代码候选已保留；未知/已出号冻结边界明确，进入独立本地改单开发。",
-      "execution_workspace": "/Users/nsss/Documents/ChatGPT/Price-v3",
-      "allowed_paths": [
-        "governance/runtime-state/active-task.json",
-        "governance/runtime-state/demand-inbox.jsonl",
-        "product-truth/product-code/.env.example",
-        "product-truth/product-code/scripts/SHIPPING-SETUP.md",
-        "product-truth/product-code/scripts/check-env.mjs",
-        "product-truth/product-code/supabase/migrations",
-        "product-truth/product-code/lib/shipping",
-        "product-truth/product-code/app/shipping",
-        "product-truth/product-code/app/api/shipping",
-        "product-truth/product-code/app/configs",
-        "product-truth/product-code/lib/config-center",
-        "product-truth/product-code/lib/permissions.ts",
-        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
-        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
-        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
-        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-core.js",
-        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-goal.js",
-        ".codex/hooks.json",
-        ".codex/hooks/harness-adapter.js",
-        "product-truth/feature-packets/F054-sf-self-service-order.md",
-        "product-truth/REQ_REGISTRY.yml",
-        "product-truth/product-code/app/sales-portal",
-        "product-truth/product-code/package.json",
-        "product-truth/product-code/pnpm-lock.yaml",
-        "product-truth/product-code/.env.local",
-        ".env.local",
-        ".github/workflows/ci.yml",
-        ".github/workflows/skills.yml",
-        ".gitignore",
-        ".opencode/lib/project-guard-core.mjs",
-        ".opencode/plugins/price-v3-guard.js",
-        ".vercel/.env.production.local",
-        "README.md",
-        "manifest.yaml",
-        "product-truth/feature-packets/F099-current-goal-ledger.md",
-        "product-truth/product-code/.vercel/.env.development.local",
-        "product-truth/product-code/app/api/quotes/[id]/derive-order/route.ts",
-        "product-truth/product-code/app/api/quotes/[id]/derive-seal/route.ts",
-        "product-truth/product-code/app/api/quotes/[id]/derive-tender/route.ts",
-        "product-truth/product-code/app/api/quotes/derive-routes.test.ts",
-        "product-truth/product-code/lib/quote/downstream-derive.ts",
-        "product-truth/product-code/lib/quote/downstream-persistence.test.ts",
-        "product-truth/product-code/scripts/WP10-RELEASE-REPAIR.md",
-        "product-truth/product-code/scripts/check-preview-target.mjs",
-        "product-truth/product-code/scripts/check-requirement-structure.mjs",
-        "product-truth/product-code/scripts/check-requirement-structure.test.ts",
-        "product-truth/product-code/scripts/check-sensitive-tracked.mjs",
-        "product-truth/product-code/scripts/check-sensitive-tracked.test.ts",
-        "product-truth/product-code/scripts/prepare-wp10-release.mjs",
-        "product-truth/product-code/scripts/project-guard.test.ts",
-        "product-truth/product-code/supabase/migrations/20260910000002_atomic_quote_derivations.sql",
-        "governance/runtime-config-AI运行配置/config-配置文件/settings-claude运行配置.json",
-        "product-truth/product-code/node_modules",
-        "product-truth/product-code/.next"
-      ],
-      "delivery_contract": {
-        "target_state": "production_released",
-        "allowed_states": [
-          "executing",
-          "code_green",
-          "clean_preview_green",
-          "integration_ready",
-          "main_integrated",
-          "production_released"
-        ],
-        "integration_branch": "main",
-        "production_branch": "production",
-        "production_release_separate": true,
-        "same_release_commit_required": true,
-        "attestation_ref": "refs/notes/price-v3-delivery",
-        "required_code_checks": [
-          "target_tests",
-          "full_tests",
-          "lint",
-          "typecheck",
-          "build"
-        ],
-        "required_runtime_evidence": [
-          "shipping_workspace",
-          "shipping_tracking",
-          "shipping_access"
-        ],
-        "required_production_runtime_evidence": [
-          "shipping_workspace",
-          "shipping_tracking",
-          "shipping_access"
-        ],
-        "required_production_evidence": [
-          "exact_production_commit",
-          "vercel_deployment_ready_and_promoted",
-          "sales.cyanlog.icu_alias",
-          "controlled_production_security_and_runtime_verifier",
-          "trusted_existing_chrome_operator_attestation"
-        ],
-        "note": "IN-20260923-014授权必要Production写入和精确SHA发布。2026-09-24 Supabase迁移清单已确认Production与隔离Preview均按序存在20260922000001、20260923074619、20260923081415；只读Postgres核验确认7张寄件表均启用RLS，anon/authenticated没有SELECT权限且service_role具备所需CRUD权限，故当前不再需要执行或重放DDL。Production没有托管备份/PITR恢复点；未经单独核验恢复策略不得再做Production DDL或破坏性数据操作。不得DROP/TRUNCATE或将Production联系人数据导出到Agent工作区。真实下单前由用户核对收件信息和费用；未通过现有Chrome受信验收不得标记production_released。",
-        "production_database_mode": "read_only_pending_security_gate_and_final_approval",
-        "runtime_profile": "shipping_workspace",
-        "final_acceptance": {
-          "origin": "https://sales.cyanlog.icu",
-          "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
-          "new_local_browser_or_context_prohibited": true,
-          "new_tab_prohibited": true,
-          "local_and_preview_role": "diagnostic_only_not_completion",
-          "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
-          "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
-          "production_database_mode": "read_only_pending_security_gate_and_final_approval"
-        },
-        "production_release_authorization": {
-          "status": "pending_security_gate_and_final_write_approval",
-          "clarification_id": "IN-20261014-001",
-          "micro_fix_scope": "WP30原工单修改与权限并发验证",
-          "final_scope": "仅可逆开发验证；生产数据修改与发布仍待批准",
-          "micro_fix_approval_id": "IN-20261014-001"
-        },
-        "blocking_acceptance_defects": [
-          "IN-20261014-015"
-        ],
-        "runtime_contract_version": "f054-v2"
-      },
-      "feature_id": "F054",
-      "integration_decision": {
-        "authority": "IN-20261010-001",
-        "strategy": "integrate_complete_candidate_into_main",
-        "scope": "Current shipping-collaboration-console development including existing quotation changes; preserve protected dirty workspace",
-        "action": "commit, fast-forward push main, verify hosted build",
-        "supersedes": "pending shipping-only release-order exception",
-        "branch_consolidation": "User goal: integrate useful unique changes, archive and retire fully integrated or superseded branches, preserve dirty worktrees"
-      },
-      "resume_condition": "本地候选4f8ac03e保留；权限专项、远端验证与线上验收尚未完成。"
     },
     "WP31": {
       "id": "WP31",

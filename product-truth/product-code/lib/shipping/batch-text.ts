@@ -17,6 +17,36 @@ const mobilePhone = /^1[3-9]\d{9}$/
 const namedPhone = new RegExp(`(?:^|[\\s，,；;：:])([\\p{L}·][\\p{L}·.'-]{0,59})\\s*(?=${phoneCandidates.source})`, 'gu')
 
 function clean(value: string) { return value.replace(/[，,；;。/／\t]/g, ' ').replace(/\s+/g, ' ').trim() }
+function companyValue(value: string) {
+  const candidate = value
+    .split(/(?:收货人|收件人|联系人|联系电话|手机号码|手机号|电话|所在地区|详细地址|地址)\s*[:：]/u)[0]
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (candidate.length < 2 || candidate.length > 120 || /\d{5,}/.test(candidate)) return ''
+  if (/(?:收货人|收件人|联系人|所在地区|详细地址|联系电话|手机号)/u.test(candidate)) return ''
+  return candidate
+}
+function extractCompanyAbbreviation(raw: string): string | undefined {
+  const labelled = raw.match(/(?:客户公司|公司名称|单位名称|客户单位)\s*[:：]\s*([^\n；;]{2,160})/u)
+  if (labelled) {
+    const value = companyValue(labelled[1])
+    if (value) return value
+  }
+
+  const firstLine = raw.split(/\r?\n/).map(line => line.trim()).find(Boolean) || ''
+  const documentHeading = firstLine.match(/^\s*([^：:\s]{2,80}?)(?:验收文件|寄件资料|寄件文件|资料|文件|合同|样品|礼品)/u)
+  if (documentHeading) {
+    const value = companyValue(documentHeading[1])
+    if (value) return value
+  }
+
+  const leadingPrefix = firstLine.match(/^\s*([^：:\n]{2,80})[：:]/u)
+  if (leadingPrefix && /(?:公司|集团|单位|中心|大学|医院|银行|科技|实业|工作室)$/u.test(leadingPrefix[1].trim())) {
+    const value = companyValue(leadingPrefix[1])
+    if (value) return value
+  }
+  return undefined
+}
 function fieldOf(label: string): TextField {
   if (/地址/.test(label)) return 'address'
   if (/电话|手机/.test(label)) return 'phone'
@@ -102,7 +132,7 @@ function recordsFromText(text: string): string[] {
   return records
 }
 
-function parseFields(original: string) {
+function parseFields(original: string, customerName = '') {
   const raw = textForFields(original)
   const parts = fieldParts(raw)
   const phones = [...new Set([...raw.matchAll(phoneCandidates)].map(match => normalizeDomesticShippingPhone(match[0])))]
@@ -110,6 +140,10 @@ function parseFields(original: string) {
   const onlyMobileWithLandlines = mobiles.length === 1 && phones.every(phone => DOMESTIC_SHIPPING_PHONE_PATTERN.test(phone) || /^[2-9]\d{6,7}$/.test(phone))
   const phone = onlyMobileWithLandlines ? mobiles[0] : phones.length ? phones.join(' / ') : (parts.find(part => part.field === 'phone')?.value || '')
   let address = withoutPhones(raw.replace(labels, ' '))
+  if (customerName) {
+    const escaped = customerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    address = clean(address.replace(new RegExp(`^${escaped}(?:验收文件|寄件资料|寄件文件|资料|文件|合同|样品|礼品)?\\s*`, 'u'), ' '))
+  }
   let recipient = ''
   const named = parts.find(part => part.field === 'name')
   if (named) {
@@ -143,7 +177,17 @@ function parseFields(original: string) {
 
 export function parseShippingText(text: string, cargo = '文件/合同'): BatchDraftRow[] {
   if (text.length > SHIPPING_TEXT_MAX_LENGTH) throw new Error(`文本不能超过 ${SHIPPING_TEXT_MAX_LENGTH.toLocaleString('en-US')} 字，请分批粘贴。`)
-  return recordsFromText(text).map((originalText, index) => ({ id: index + 1, key: crypto.randomUUID(), ...parseFields(originalText), cargo, originalText }))
+  return recordsFromText(text).map((originalText, index) => {
+    const customerName = extractCompanyAbbreviation(originalText)
+    return {
+      id: index + 1,
+      key: crypto.randomUUID(),
+      ...parseFields(originalText, customerName),
+      ...(customerName ? { customerName } : {}),
+      cargo,
+      originalText,
+    }
+  })
 }
 
 /** The preview and the submitted payload share this exact prepared contact. */

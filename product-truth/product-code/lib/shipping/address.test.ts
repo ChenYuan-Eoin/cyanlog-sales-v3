@@ -26,4 +26,16 @@ describe('shared domestic address parsing', () => {
     expect(result.contact.province).toBe('')
     expect(result.contact.address).toContain('朝阳区测试路1号')
   })
+  it('recognises the Xiongan shorthand used by the carrier without inventing missing levels', () => {
+    const result = parseAddress('收货人：韩寿帅 手机号：18733506883 所在地区：河北雄安新区容城县 详细地址：北京中核华辉科技发展有限公司中关村科技园B3栋北楼中核华辉')
+    expect(result.contact).toMatchObject({
+      name: '韩寿帅',
+      phone: '18733506883',
+      province: '河北省',
+      city: '雄安新区',
+      county: '容城县',
+      address: '北京中核华辉科技发展有限公司中关村科技园B3栋北楼中核华辉',
+    })
+    expect(result.warnings).not.toContain('省市区未完整识别；已识别内容已填入，其余原文保留，请补齐缺项。')
+  })
 })

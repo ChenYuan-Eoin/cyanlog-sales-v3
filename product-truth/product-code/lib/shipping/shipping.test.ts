@@ -36,7 +36,7 @@ describe('address extraction', () => {
   })
   it('handles labeled municipality and landline', () => { const r = parseAddress('收件人：李四 电话：010-12345678 地址：北京市朝阳区测试路2号'); expect(r.contact.city).toBe('北京市'); expect(r.contact.county).toBe('朝阳区'); expect(r.contact.name).toBe('李四'); expect(r.contact.phone).toBe('010-12345678') })
   it('does not select one of multiple recipients', () => { const r = parseAddress('张三13800000000李四13900000000'); expect(r.contact.phone).toBe(''); expect(r.warnings.join()).toContain('多个') })
-  it('preserves unresolved addresses for manual correction', () => { const r = parseAddress('深圳南山测试园区'); expect(r.contact.province).toBe(''); expect(r.contact.address).toBe('深圳南山测试园区') })
+  it('resolves a unique city and county shorthand without inventing an ambiguous county', () => { const r = parseAddress('深圳南山测试园区'); expect(r.contact).toMatchObject({ province: '广东省', city: '深圳市', county: '南山区', address: '测试园区' }) })
 })
 describe('boundary validation', () => {
   it.each(['', '   ', '甲', '甲乙丙', '  甲乙丙  ', undefined])('requires a company name of at least four characters: %s', customerName => {

@@ -16,4 +16,9 @@ describe('shipping batch import', () => {
     const row = parseCsv('姓名,手机,地址\n董洁,1360013601,科技路1号')[0]
     expect(batchRowErrors(row)).toEqual(['手机号需为11位', '地址需包含省市区及门牌'])
   })
+  it('requires explicit or uniquely resolvable province, city and county levels for imported addresses', () => {
+    const [incomplete, xiongan] = parseCsv('姓名,手机,地址\n董洁,13600136000,河北省科技路1号\n韩寿帅,18733506883,河北雄安新区容城县中核华辉科技园1号楼')
+    expect(batchRowErrors(incomplete)).toContain('地址需包含省市区及门牌')
+    expect(batchRowErrors(xiongan)).toEqual([])
+  })
 })

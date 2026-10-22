@@ -1,3 +1,5 @@
+import { parseAddress } from './address'
+
 export type BatchDraftRow = { customerName?: string; team?: string; id: number; key: string; recipient: string; phone: string; address: string; cargo: string; originalText?: string; result?: 'pending' | 'success' | 'failed'; error?: string; waybill?: string }
 
 const headerAliases: Record<string, keyof Pick<BatchDraftRow, 'recipient' | 'phone' | 'address' | 'cargo' | 'customerName' | 'team'>> = {
@@ -80,8 +82,9 @@ export async function buildShippingTemplate(): Promise<Blob> {
 
 export function batchRowErrors(row: BatchDraftRow) {
   const errors: string[] = []
+  const address = parseAddress(row.address).contact
   if (!row.recipient.trim()) errors.push('缺少收件人')
   if (!/^1[3-9]\d{9}$/.test(row.phone.trim())) errors.push('手机号需为11位')
-  if (row.address.trim().length < 8 || !/[省市区县]/.test(row.address)) errors.push('地址需包含省市区及门牌')
+  if (!address.province || !address.city || !address.county || address.address.length < 3) errors.push('地址需包含省市区及门牌')
   return errors
 }
