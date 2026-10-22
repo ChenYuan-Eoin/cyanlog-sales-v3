@@ -193,16 +193,16 @@
         "status": "approved_code_only",
         "micro_fix_approval_id": "IN-20261022-021",
         "clarification_id": "IN-20261022-015",
-        "micro_fix_scope": "WP63 address and company parser hotfix only; exact-head main and production integration plus Vercel Production deployment; production database remains read-only",
-        "final_scope": "WP63 address and company parser hotfix only; exact-head main and production integration plus Vercel Production deployment; production database remains read-only",
-        "final_release_approval_id": "IN-20261022-022",
+        "micro_fix_scope": "WP63 address parsing plus WP36 responsive workbench, stateful expansion, compact dispatch parameters and selected-order tracking freshness; exact-head main and production integration plus Vercel Production deployment; production database remains read-only",
+        "final_scope": "WP63 address parsing plus WP36 responsive workbench, stateful expansion, compact dispatch parameters and selected-order tracking freshness; exact-head main and production integration plus Vercel Production deployment; production database remains read-only",
+        "final_release_approval_id": "IN-20261023-001",
         "database_write_authorized": false
       },
       "final_acceptance": {
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
         "production_database_mode": "read_only"
       },
-      "note": "WP63只发布地址与公司解析热修；Production数据库只读，不执行迁移或配置写入。真实下单由发布后的操作员使用现有Chrome完成。",
+      "note": "WP63本次发布地址解析与WP36寄件工作台界面；Production数据库只读，不执行迁移或配置写入。WP30工单修改仍需迁移与备份门禁。真实下单由发布后的操作员使用现有Chrome完成。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "runtime_contract_version": "f054-ui-v1"
