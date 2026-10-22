@@ -21,6 +21,10 @@ const maySubmitRow = (row: BatchRow) => !row.result || row.result === 'failed'
 
 function cityOf(order: ShipmentOrder) { return order.input.recipient.city || order.input.recipient.province }
 function customerOf(order: ShipmentOrder) { return order.input.customerName || order.relation.customerRef || '未填写客户' }
+function serviceNameOf(order: ShipmentOrder, selectedServiceId: string, services: ShippingSettings['services']) {
+  const selected = services.find(service => String(service.id) === selectedServiceId)
+  return selected?.name || order.input.serviceName || (order.input.servicePreference === 'urgent' ? '加急偏好' : '标准偏好')
+}
 
 function senderForReview(order: ShipmentOrder, companySender: Contact): { contact: Contact | null; source: string } {
   const saved = contactSchema.safeParse(order.input.sender)
@@ -66,6 +70,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   const [editingSender, setEditingSender] = useState(!contactSchema.safeParse(settings.sender).success)
   const senderSection = useRef<HTMLDivElement>(null)
   const senderTextInput = useRef<HTMLTextAreaElement>(null)
+  const expandedReviewSection = useRef<HTMLElement | null>(null)
   const [returnDraft, setReturnDraft] = useState<{ orderId: string; reason: string; error: string } | null>(null)
   const returnRunning = useRef(false)
   const batchSender = senderOverride || settings.sender
@@ -166,6 +171,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     ? Boolean(selectedConnection?.status === 'connected' && (payment !== 'sender_monthly' || availableAccounts.some(account => account.id === billingAccountId)) && selectedServices.length > 0 && (!serviceId || selectedServices.some(service => String(service.id) === serviceId)) && (selectedConnection.environment !== 'production' || selectedConnection.orderCapability !== 'unavailable'))
     : settings.canSubmit
   const reviewedOrders = filtered.filter(order => reviewIds.includes(order.id) && order.status === 'awaiting_confirmation')
+  const expandedSingleReview = Boolean(expandedOrderId && reviewedOrders.length === 1 && reviewedOrders[0].id === expandedOrderId)
   const reviewedSendersReady = reviewedOrders.every(order => senderForReview(order, settings.sender).contact !== null)
   const productionOrderUnverified = selectedConnection?.environment === 'production' && selectedConnection.orderCapability === 'not_tested'
 
@@ -228,6 +234,13 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     const accounts = (settings.billingAccounts || []).filter(account => account.connectionId === nextId && account.status === 'active')
     setBillingAccountId(accounts.find(account => account.isDefault)?.id || accounts[0]?.id || '')
   }
+  useEffect(() => {
+    if (!expandedOrderId) return
+    const frame = window.requestAnimationFrame(() => {
+      expandedReviewSection.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [expandedOrderId, selected?.status])
   function parseBulk() {
     if (inputLocked || !confirmReplacement()) return
     setMessage('')
@@ -523,7 +536,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
           <label className={styles.search}><Search size={14}/><input aria-label="搜索台账" value={search} onChange={event => setSearch(event.target.value)} placeholder="销售、客户、收件人、工单号、运单号"/></label>
         </div>
         <div className={styles.orderList}>
-          {reviewedOrders.length > 0 && <section className={`${styles.bulkSettings} ${styles.orderParameterPanel}`} aria-label="正式下单参数">
+          {reviewedOrders.length > 0 && !expandedSingleReview && <section className={`${styles.bulkSettings} ${styles.orderParameterPanel}`} aria-label="正式下单参数">
             <div className={styles.parameterHead}>
               <div><h3>正式下单参数</h3><small>已选 {reviewedOrders.length} 票 · 默认取自当前寄件配置</small></div>
               <button type="button" className={styles.parameterToggle} aria-label={orderParamsExpanded ? '收起参数' : '调整参数'} title={orderParamsExpanded ? '收起参数' : '调整参数'} aria-expanded={orderParamsExpanded} onClick={() => setOrderParamsExpanded(value => !value)}><SlidersHorizontal size={13}/></button>
@@ -536,9 +549,9 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
             </div>
             <div className={styles.parameterGrid} hidden={!orderParamsExpanded}>
               <label>承运商连接<select disabled={confirmationBusy} value={connectionId} onChange={event => changeConnection(event.target.value)}>{!settings.carrierConnections?.length && <option value="">顺丰 · 生产 · 待配置接口</option>}{(settings.carrierConnections || []).map(connection => <option key={connection.id} value={connection.id}>顺丰 · {connection.environment === 'sandbox' ? '沙盒' : '生产'} · {connection.status === 'connected' ? '已连接' : '待验证'}</option>)}</select></label>
-              <label>本批付款方式<select disabled={confirmationBusy} value={payment} onChange={event => { setPayment(event.target.value as ShippingPayment); setReviewIds([]) }}><option value="sender_monthly">公司月结</option><option value="sender_cash">寄方现结</option><option value="recipient">收方到付</option></select></label>
+              <label>本批付款方式<select disabled={confirmationBusy} value={payment} onChange={event => setPayment(event.target.value as ShippingPayment)}><option value="sender_monthly">公司月结</option><option value="sender_cash">寄方现结</option><option value="recipient">收方到付</option></select></label>
               {payment === 'sender_monthly' && <label>月结账号<select disabled={confirmationBusy} value={billingAccountId} onChange={event => setBillingAccountId(event.target.value)}>{!availableAccounts.length && <option value="">当前承运商环境暂无月结账号</option>}{availableAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName} · 尾号 {account.tail}{account.isDefault ? ' · 默认' : ''}</option>)}</select></label>}
-              <label>寄件服务<select disabled={confirmationBusy} value={serviceId} onChange={event => { setServiceId(event.target.value); setReviewIds([]) }}><option value="">按每票工单所选产品</option>{selectedServices.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
+              <label>寄件服务<select disabled={confirmationBusy} value={serviceId} onChange={event => setServiceId(event.target.value)}><option value="">按每票工单所选产品</option>{selectedServices.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
             </div>
             <p className={styles.intakeHint}>确认后才向承运商发单；实际寄件人按各工单保存资料使用。{productionOrderUnverified ? '生产首票需单独确认。' : ''}</p>
             {!canSubmitCurrent && <p className={styles.bad}>{payment === 'sender_monthly' ? '连接、月结账号或寄件服务未就绪，请在配置中心处理后正式下单。' : '快递连接或寄件服务未就绪，请在配置中心处理后正式下单。'}</p>}
@@ -568,13 +581,25 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                 {returnDraft.error && <p role="alert">{returnDraft.error}</p>}
                 <div><button type="submit" className={styles.reject} disabled={!!busy || returnDraft.reason.trim().length < 2 || returnDraft.reason.trim().length > 300}>{busy === order.id ? '退回中…' : '确认退回'}</button><button type="button" className={styles.secondaryButton} disabled={!!busy} onClick={() => setReturnDraft(null)}>取消</button></div>
               </form>}
-              {(expandedOrderId === order.id || reviewIds.includes(order.id)) && !orderHasDispatch(order) && <section className={styles.workorderReview} aria-label={`工单 ${order.orderNo} 收寄预览`}>
+              {(expandedOrderId === order.id || reviewIds.includes(order.id)) && !orderHasDispatch(order) && <section ref={expandedOrderId === order.id ? expandedReviewSection : undefined} className={styles.workorderReview} aria-label={`工单 ${order.orderNo} 收寄预览`}>
                 <div className={styles.reviewHeading}><h3>服务与时效核对</h3><span>确认前可修改</span></div>
                 <div className={styles.reviewKeyFacts}>
                   <div><small>收件人</small><strong>{order.input.recipient.name}</strong><span>{order.input.recipient.phone}</span></div>
-                  <div><small>客户</small><strong>{customerOf(order)}</strong><span>{cityOf(order)}</span></div>
-                  <div><small>服务偏好</small><strong>{order.input.serviceName || (order.input.servicePreference === 'urgent' ? '加急偏好' : '标准偏好')}</strong><span>{order.input.cargo} · {order.input.weight}kg</span></div>
+                  <div><small>服务与物品</small><strong>{serviceNameOf(order, serviceId, selectedServices)}</strong><span>{order.input.cargo} · {order.input.weight}kg</span></div>
                 </div>
+                {expandedOrderId === order.id && <div className={styles.inlineCheckout}>
+                  <div className={styles.inlineServiceChoices} role="radiogroup" aria-label={`工单 ${order.orderNo} 快递服务`}>
+                    <span>快递服务</span>
+                    {selectedServices.map(service => <button key={service.id} type="button" role="radio" aria-checked={serviceId === String(service.id)} className={serviceId === String(service.id) ? styles.serviceSelected : ''} disabled={confirmationBusy} onClick={() => setServiceId(String(service.id))}>{service.name}<small>{service.preference === 'urgent' ? '加急' : '标准'}</small></button>)}
+                    {!selectedServices.length && <small>当前连接暂无可用服务</small>}
+                  </div>
+                  <div className={styles.inlineCheckoutGrid}>
+                    <label><span>连接</span><select aria-label={`工单 ${order.orderNo} 承运商连接`} disabled={confirmationBusy} value={connectionId} onChange={event => changeConnection(event.target.value)}>{!settings.carrierConnections?.length && <option value="">顺丰 · 待配置接口</option>}{(settings.carrierConnections || []).map(connection => <option key={connection.id} value={connection.id}>顺丰 · {connection.environment === 'sandbox' ? '沙盒' : '生产'} · {connection.status === 'connected' ? '已连接' : '待验证'}</option>)}</select></label>
+                    <label><span>付款</span><select aria-label={`工单 ${order.orderNo} 付款方式`} disabled={confirmationBusy} value={payment} onChange={event => setPayment(event.target.value as ShippingPayment)}><option value="sender_monthly">公司月结</option><option value="sender_cash">寄方现结</option><option value="recipient">收方到付</option></select></label>
+                    <label><span>月结账号</span><select aria-label={`工单 ${order.orderNo} 月结账号`} disabled={confirmationBusy || payment !== 'sender_monthly'} value={payment === 'sender_monthly' ? billingAccountId : ''} onChange={event => setBillingAccountId(event.target.value)}>{payment !== 'sender_monthly' ? <option value="">无需月结账号</option> : !availableAccounts.length ? <option value="">暂无月结账号</option> : availableAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName} · 尾号 {account.tail}{account.isDefault ? ' · 默认' : ''}</option>)}</select></label>
+                    <div className={styles.inlineCheckoutStatus}><span>当前</span><b>{canSubmitCurrent ? '参数可用' : '需补全配置'}</b><small>{order.input.recipient.province}{order.input.recipient.city}{order.input.recipient.county}</small></div>
+                  </div>
+                </div>}
                 {!senderReview.contact && <p className={styles.bad} role="alert">{senderReview.source === '公司寄件资料待补齐' ? <>此工单缺少寄件人、联系电话或揽收地址。请在<a href="/configs?tab=shipping">配置中心</a>补齐后重新核对工单。</> : '工单寄件资料不完整。请退回工单，由提报人补齐实际寄件资料后重新提报。'}</p>}
                 <details className={styles.reviewDetails}><summary>收寄地址与寄件人</summary>{senderReview.contact ? <p><b>实际寄件人（{senderReview.source}）</b><br/>{senderReview.contact.name} · {senderReview.contact.phone}<br/>{senderReview.contact.province}{senderReview.contact.city}{senderReview.contact.county}{senderReview.contact.address}</p> : null}<p><b>收件地址</b><br/>{order.input.recipient.province}{order.input.recipient.city}{order.input.recipient.county}{order.input.recipient.address}</p></details>
                 <details className={styles.reviewDetails}><summary>身份与备注</summary><p>提报身份：{order.intakeSource === 'anonymous_web' ? order.identityVerified ? '身份已验证' : '匿名自报，待核对' : '操作员录入'}{order.input.remark && <><br/>备注：{order.input.remark}</>}</p>{order.input.submittedBy && <p>提报销售：{order.input.submittedBy.name} · {order.input.submittedBy.phone} · {order.input.submittedBy.team || '未填写团队'}</p>}</details>

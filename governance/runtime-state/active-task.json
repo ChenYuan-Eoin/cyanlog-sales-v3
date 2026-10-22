@@ -193,8 +193,8 @@
         "status": "approved_code_only",
         "micro_fix_approval_id": "IN-20261022-021",
         "clarification_id": "IN-20261022-015",
-        "micro_fix_scope": "WP63 address parsing plus WP36 responsive workbench, stateful expansion, compact dispatch parameters and selected-order tracking freshness; exact-head main and production integration plus Vercel Production deployment; production database remains read-only",
-        "final_scope": "WP63 address parsing plus WP36 responsive workbench, stateful expansion, compact dispatch parameters and selected-order tracking freshness; exact-head main and production integration plus Vercel Production deployment; production database remains read-only",
+        "micro_fix_scope": "WP63 address parsing plus WP36 responsive workbench, stateful expansion, compact dispatch parameters, inline single-order dispatch controls and selected-order tracking freshness; exact-head main and production integration plus Vercel Production deployment; production database remains read-only",
+        "final_scope": "WP63 address parsing plus WP36 responsive workbench, stateful expansion, compact dispatch parameters, inline single-order dispatch controls and selected-order tracking freshness; exact-head main and production integration plus Vercel Production deployment; production database remains read-only",
         "final_release_approval_id": "IN-20261023-001",
         "database_write_authorized": false
       },
@@ -202,14 +202,20 @@
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
         "production_database_mode": "read_only"
       },
-      "note": "WP63本次发布地址解析与WP36寄件工作台界面；Production数据库只读，不执行迁移或配置写入。WP30工单修改仍需迁移与备份门禁。真实下单由发布后的操作员使用现有Chrome完成。",
+      "note": "WP63本次发布地址解析与WP36寄件工作台界面，包括单票卡内服务/付款/月结选择和核对状态保留；Production数据库只读，不执行迁移或配置写入。WP30工单修改仍需迁移与备份门禁。真实下单由发布后的操作员使用现有Chrome完成。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "runtime_contract_version": "f054-ui-v1"
     },
     "started_at": "2026-10-22T09:30:00Z",
     "reason": "WP62组织来源绑定已在49296217达到code_green；用户明确要求优先修复省市区与公司简称解析缺陷。",
-    "micro_fixes": []
+    "micro_fixes": [
+      {
+        "id": "IN-20261023-002",
+        "scope": "寄件工单单票展开内联服务/付款/月结选择，参数变化不得清空已核对状态，并压缩为单屏可完成的操作区",
+        "state": "active"
+      }
+    ]
   },
   "execution_queue": {
     "active": {
