@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "activeId": "WP63",
+  "commit": "a53479c5c34eb61fe97d347c8da0b1cf6238dca9",
+  "evidence": {
+    "code": {
+      "commit": "a53479c5c34eb61fe97d347c8da0b1cf6238dca9",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "command": "PRICE_V3_LOCAL_ENV_FILE=... sh product-truth/product-code/scripts/local.sh test:run lib/shipping/address.test.ts lib/shipping/batch-text.test.ts lib/shipping/import-parser.test.ts app/shipping/demo/shipping-demo.test.tsx lib/shipping/shipping.test.ts",
+          "exit_code": 0,
+          "artifact_path": "wp63-production-hotfix/target-tests.log",
+          "log_sha256": "d7525969b72a9c3325280078522b67f7eb44c329ccc8b5500e35a7cd1acc967d"
+        },
+        {
+          "name": "full_tests",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/prod-address-parser-hotfix/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh"
+          ],
+          "exit_code": 0,
+          "artifact_path": "check-logs/96b9235d6f5f0e740d12cc5a600bc69f66a69f32/check-03-test.log",
+          "log_sha256": "349802b5ccb50777696021a21b0da267bb49e220335efd877ccf6fd53635175a"
+        },
+        {
+          "name": "lint",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/prod-address-parser-hotfix/Price-v3/governance/ai-behavior-准则/checks/check-02-lint.sh"
+          ],
+          "exit_code": 0,
+          "artifact_path": "check-logs/96b9235d6f5f0e740d12cc5a600bc69f66a69f32/check-02-lint.log",
+          "log_sha256": "e74eb1455b8991b3199bdf732b8cb50c585d957292cd30b394d7aa50c171aa27"
+        },
+        {
+          "name": "typecheck",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/prod-address-parser-hotfix/Price-v3/governance/ai-behavior-准则/checks/check-01-typecheck.sh"
+          ],
+          "exit_code": 0,
+          "artifact_path": "check-logs/96b9235d6f5f0e740d12cc5a600bc69f66a69f32/check-01-typecheck.log",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+        },
+        {
+          "name": "build",
+          "command": "PRICE_V3_LOCAL_ENV_FILE=... sh product-truth/product-code/scripts/local.sh build",
+          "exit_code": 0,
+          "artifact_path": "wp63-production-hotfix/build.log",
+          "log_sha256": "665994263cef4e313aeed097fedbf36f72f59853754595a80e98b09b244abcc5"
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "ec3e74832e0be28da8aadd88353b85c339f9b2478295dae26eeb90b3b6ca0a92",
+        "entry_sha256": "4c72c7cfdca416d49d549c59940a8f7c7cffc8c4a375ced50a8bc904c79198c9"
+      }
+    }
+  },
+  "updatedAt": "2026-10-22T10:30:48.228Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-10-22T10:30:48.210Z",
+      "head": "a53479c5c34eb61fe97d347c8da0b1cf6238dca9",
+      "originMain": "45444a22d407822819dcddb683999eb46d060a88",
+      "remoteMain": "45444a22d407822819dcddb683999eb46d060a88",
+      "remoteProduction": "45444a22d407822819dcddb683999eb46d060a88",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "5404fcbf0e344f5c5c6cfeec94793fa421640e1d",
+      "remoteAttestationRefOid": "d47e7fe29b11b663eb11fa3f627cc2bf4f1d513e",
+      "remoteSnapshotCheckedAt": "2026-10-22T10:30:45.919Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "536710e32a440491c99b523c12ed124376ecf3f142faa6d02d7ed3234a8c618a",
+  "sealedAt": "2026-10-22T10:30:48.228Z",
+  "attestationDigest": "874960e604c599d70248aba2fc84cf79e27d4ff85e4535748078a1feaefdb320"
+}
