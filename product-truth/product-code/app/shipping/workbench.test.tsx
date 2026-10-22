@@ -42,7 +42,7 @@ describe('self-service shipping workbench', () => {
       fireEvent.click(await screen.findByRole('button', { name: '复制单号' }))
       expect(await screen.findByText(`${outcome === 'success' ? '已复制单号：' : '复制未成功，请选中单号后手动复制：'}${order.waybill}`)).toBeTruthy()
       if (outcome !== 'unavailable') expect(writeText).toHaveBeenCalledWith(order.waybill)
-      expect(fetcher.mock.calls.some(([, init]) => init?.method)).toBe(false)
+      expect(fetcher.mock.calls.some(([url, init]) => init?.method && !String(url).endsWith('/tracking'))).toBe(false)
     } finally {
       if (descriptor) Object.defineProperty(navigator, 'clipboard', descriptor)
       else Reflect.deleteProperty(navigator, 'clipboard')
@@ -282,7 +282,8 @@ describe('self-service shipping workbench', () => {
     let ledgerLoads = 0
     fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url.endsWith('/confirm')) { sent.push({ url, body: JSON.parse(String(init?.body)) }); return Response.json({ status: 'waybill_created', waybill: `SF${String(sent.length).padStart(12, '0')}` }) }
-      ledgerLoads += 1; return Response.json({ records: pending })
+      if (url === '/api/shipping/ledger?limit=50') ledgerLoads += 1
+      return Response.json({ records: pending })
     })
     render(<ShippingWorkbench settings={settings}/>)
     await screen.findAllByText('华东建筑设计院')
@@ -301,6 +302,7 @@ describe('self-service shipping workbench', () => {
     expect(sent.map(item => item.url)).toEqual(pending.map(order => `/api/shipping/ledger/${order.id}/confirm`))
     expect(sent.every(item => !('sender' in item.body) && !('input' in item.body))).toBe(true)
     expect(ledgerLoads).toBe(2)
+    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/tracking'))).toBe(true)
     expect(middle.queryAllByRole('checkbox')).toHaveLength(0)
   })
 
@@ -556,17 +558,16 @@ describe('self-service shipping workbench', () => {
     expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
   })
 
-  it('updates the ledger from saved pickup status and removes cancellation without another ledger request', async () => {
+  it('refreshes the selected waybill automatically, stores pickup status and removes cancellation without another ledger request', async () => {
     const order = { ...fixtureOrders[1], status: 'waybill_created' as const }
     fetcher.mockImplementation(async (url: string) => new Response(JSON.stringify(url.startsWith('/api/shipping/ledger') ? { records: [order] } : { waybill: order.waybill, queriedAt: '2026-09-27T00:00:00Z', shipmentStatus: 'in_transit', events: [{ time: '2026-09-27 08:00:00', location: '深圳市', description: '顺丰速运 已收取快件', status: 'in_transit' }] }), { status: 200 }))
     render(<ShippingWorkbench settings={settings}/>)
     await screen.findAllByText('远景能源')
-    expect(screen.getByRole('button', { name: '取消运单' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
     expect(await screen.findByText('顺丰速运 已收取快件')).toBeTruthy()
     expect(screen.getByRole('heading', { name: '运输中' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
     expect(fetcher.mock.calls.filter(([url]) => String(url).startsWith('/api/shipping/ledger'))).toHaveLength(1)
+    expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith('/tracking'))).toHaveLength(1)
   })
 
   it.each(['cancelled', 'delivered'] as const)('does not downgrade a %s order after a stale tracking response', async status => {
@@ -578,6 +579,67 @@ describe('self-service shipping workbench', () => {
     await screen.findByText('旧的待揽收事件')
     expect(screen.getByRole('heading', { name: status === 'cancelled' ? '已取消' : '已签收' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
+  })
+
+  it('switches the same expanded card from pre-dispatch service review to post-dispatch delivery information', async () => {
+    let current: ShipmentOrder = { ...fixtureOrders[0], status: 'awaiting_confirmation', waybill: null }
+    fetcher.mockImplementation(async (url: string) => {
+      if (url === '/api/shipping/ledger?limit=50') return Response.json({ records: [current] })
+      if (url.endsWith('/confirm')) {
+        current = { ...current, status: 'waybill_created', waybill: 'SF1234567890123' }
+        return Response.json({ status: 'waybill_created', waybill: current.waybill })
+      }
+      if (url.endsWith('/tracking')) {
+        return Response.json({
+          waybill: current.waybill,
+          queriedAt: '2026-10-22T02:30:00Z',
+          shipmentStatus: 'in_transit',
+          events: [{ time: '2026-10-22 10:30:00', location: '深圳市', description: '已由快递员揽收', status: 'in_transit' }],
+        })
+      }
+      return Response.json({})
+    })
+    render(<ShippingWorkbench settings={settings}/>)
+    const expand = await screen.findByRole('button', { name: `选择服务并核对 ${current.orderNo}` })
+    fireEvent.click(expand)
+    expect(expand.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('region', { name: `工单 ${current.orderNo} 收寄预览` })).toBeTruthy()
+    expect(screen.getByRole('checkbox', { name: `核对并选择工单 ${current.orderNo}` })).toHaveProperty('checked', true)
+    fireEvent.click(screen.getByRole('button', { name: '批量确认并下单（1票）' }))
+    await screen.findByText(/正式下单：成功 1 票/)
+
+    const deliveryExpand = screen.getByRole('button', { name: '查看递送信息 SF1234567890123' })
+    expect(deliveryExpand.getAttribute('aria-expanded')).toBe('true')
+    await waitFor(() => {
+      const delivery = screen.getByRole('region', { name: `工单 ${current.orderNo} 递送信息` })
+      expect(within(delivery).getByText('递送信息')).toBeTruthy()
+      expect(within(delivery).getByText('已由快递员揽收')).toBeTruthy()
+    })
+    expect(screen.queryByRole('region', { name: `工单 ${current.orderNo} 收寄预览` })).toBeNull()
+  })
+
+  it('summarizes default dispatch parameters and hides detailed controls until requested', async () => {
+    const order = { ...fixtureOrders[0], status: 'awaiting_confirmation' as const, waybill: null }
+    const connectionId = 'production-connection'
+    const services = [{ id: 2, name: '顺丰标快', preference: 'standard' as const }]
+    useLedger([order])
+    render(<ShippingWorkbench settings={{
+      ...settings,
+      connectionId,
+      defaultBillingAccountId: 'production-account',
+      carrierConnections: [{ id: connectionId, carrier: 'sf', environment: 'production', status: 'connected', orderCapability: 'verified', services }],
+      billingAccounts: [{ id: 'production-account', connectionId, environment: 'production', displayName: 'Production 月结', tail: '4321', isDefault: true, status: 'active' }],
+    }}/>)
+    fireEvent.click(await screen.findByRole('checkbox', { name: `核对并选择工单 ${order.orderNo}` }))
+    const params = within(screen.getByRole('region', { name: '正式下单参数' }))
+    const summary = within(params.getByRole('group', { name: '正式下单参数摘要' }))
+    expect(summary.getByText('顺丰 · 生产 · 已连接')).toBeTruthy()
+    expect(summary.getByText('公司月结')).toBeTruthy()
+    expect(summary.getByText('Production 月结 · 尾号 4321')).toBeTruthy()
+    const toggle = params.getByRole('button', { name: '调整参数' })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(toggle)
+    expect(params.getByRole('button', { name: '收起参数' }).getAttribute('aria-expanded')).toBe('true')
   })
 
   it('labels sandbox mock tracking without treating its delivery claim as actual shipment progress', async () => {
