@@ -15,11 +15,14 @@ const provinceStart = /北京市?|上海市?|天津市?|重庆市?|内蒙古自�
 const phoneCandidates = /(?<![\d+])(?:(?:\+|00)\d(?:[\d ()（）-]*\d)?|(?:86[ -]?)?(?:1\d{2}[ -]\d{4}[ -]\d{4}|0\d{2,3}[- ]\d{7,8}(?:[- ]\d{1,6})?|\d{7,20}))(?!\d)/g
 const mobilePhone = /^1[3-9]\d{9}$/
 const namedPhone = new RegExp(`(?:^|[\\s，,；;：:])([\\p{L}·][\\p{L}·.'-]{0,59})\\s*(?=${phoneCandidates.source})`, 'gu')
+const recordMarker = /^\s*(?:\d{1,3}[、.．)]|[-*])\s*/
 
 function clean(value: string) { return value.replace(/[，,；;。/／\t]/g, ' ').replace(/\s+/g, ' ').trim() }
 function companyValue(value: string) {
   const candidate = value
+    .replace(recordMarker, '')
     .split(/(?:收货人|收件人|联系人|联系电话|手机号码|手机号|电话|所在地区|详细地址|地址)\s*[:：]/u)[0]
+    .replace(/^[\s:：—－-]+|[\s:：—－-]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim()
   if (candidate.length < 2 || candidate.length > 120 || /\d{5,}/.test(candidate)) return ''
@@ -33,10 +36,25 @@ function extractCompanyAbbreviation(raw: string): string | undefined {
     if (value) return value
   }
 
-  const firstLine = raw.split(/\r?\n/).map(line => line.trim()).find(Boolean) || ''
+  const firstLine = raw.split(/\r?\n/).map(line => line.replace(recordMarker, '').trim()).find(Boolean) || ''
   const documentHeading = firstLine.match(/^\s*([^：:\s]{2,80}?)(?:验收文件|寄件资料|寄件文件|资料|文件|合同|样品|礼品)/u)
   if (documentHeading) {
     const value = companyValue(documentHeading[1])
+    if (value) return value
+  }
+
+  const contactHeading = firstLine.match(/^(.{2,80}?)(?:\s*(?:——|—|－|--?|[:：]))?\s*(?:联系人姓名|联系人|收件人姓名|收件人|姓名)\s*[:：]/u)
+  if (contactHeading) {
+    const value = companyValue(contactHeading[1])
+    if (value) return value
+  }
+
+  const addressHeading = firstLine.match(new RegExp(
+    `^(.{2,80}?)(?=\\s*[-—－]*\\s*(?:${provinceStart.source}))`,
+    'u',
+  ))
+  if (addressHeading) {
+    const value = companyValue(addressHeading[1])
     if (value) return value
   }
 
@@ -139,10 +157,10 @@ function parseFields(original: string, customerName = '') {
   const mobiles = phones.filter(phone => mobilePhone.test(phone))
   const onlyMobileWithLandlines = mobiles.length === 1 && phones.every(phone => DOMESTIC_SHIPPING_PHONE_PATTERN.test(phone) || /^[2-9]\d{6,7}$/.test(phone))
   const phone = onlyMobileWithLandlines ? mobiles[0] : phones.length ? phones.join(' / ') : (parts.find(part => part.field === 'phone')?.value || '')
-  let address = withoutPhones(raw.replace(labels, ' '))
+  let address = withoutPhones(raw.replace(labels, ' ')).replace(recordMarker, '')
   if (customerName) {
     const escaped = customerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    address = clean(address.replace(new RegExp(`^${escaped}(?:验收文件|寄件资料|寄件文件|资料|文件|合同|样品|礼品)?\\s*`, 'u'), ' '))
+    address = clean(address.replace(new RegExp(`^${escaped}(?:验收文件|寄件资料|寄件文件|资料|文件|合同|样品|礼品)?\\s*(?:[-—－]+\\s*)?`, 'u'), ' '))
   }
   let recipient = ''
   const named = parts.find(part => part.field === 'name')
@@ -172,6 +190,7 @@ function parseFields(original: string, customerName = '') {
   }
   // An explicitly labelled invalid phone must stay in its editable phone field.
   if (!phones.length && phone) address = clean(address.replace(phone, ' '))
+  address = address.replace(/^[\s:：,，;；—－-]+/, '')
   return { recipient, phone, address }
 }
 

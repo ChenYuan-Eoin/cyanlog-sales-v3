@@ -283,4 +283,29 @@ describe('shipping text intake', () => {
     expect(row.recipient).toBe('韩寿帅')
     expect(row.address).not.toContain('公司名称')
   })
+
+  it('extracts numbered company abbreviations from address-led and contact-led headings', () => {
+    const rows = parseShippingText([
+      '1、易点云 -北京市海淀区西小口路41号易点云大厦  石嘉华13037500116',
+      '',
+      '2、开泰——联系人姓名：郭锦宏',
+      '联系电话：15989168989',
+      '联系地址：深圳市罗湖区笋岗街道宝安北路华润置地笋岗中心07-01地块东区（T2栋）16层',
+    ].join('\n'))
+
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({
+      customerName: '易点云',
+      recipient: '石嘉华',
+      phone: '13037500116',
+    })
+    expect(rows[0].address).toMatch(/^北京市/)
+    expect(rows[1]).toMatchObject({
+      customerName: '开泰',
+      recipient: '郭锦宏',
+      phone: '15989168989',
+    })
+    expect(rows[1].address).not.toContain('开泰')
+    expect(rows[1].address).toContain('深圳市罗湖区')
+  })
 })

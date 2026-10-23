@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Box, CheckCircle2, ChevronDown, ChevronRight, Clipboard, PackageCheck, RefreshCw, Search, SlidersHorizontal, Truck, UploadCloud } from 'lucide-react'
+import { AlertTriangle, Box, CheckCircle2, ChevronRight, Clipboard, PackageCheck, RefreshCw, Search, SlidersHorizontal, Truck, UploadCloud } from 'lucide-react'
 import type { Contact, ShippingPayment, ShipmentOrder, ShipmentOrderStatus, ShippingInput, ShippingSettings, TrackingResult } from '@/lib/shipping/types'
 import { buildShippingTemplate, parseShippingFile, type BatchDraftRow } from '@/lib/shipping/import-parser'
 import { parseShippingText, prepareBatchRecipient } from '@/lib/shipping/batch-text'
@@ -148,9 +148,6 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   }
   function toggleOrderExpansion(order: ShipmentOrder) {
     chooseOrder(order)
-    if (order.status === 'awaiting_confirmation' && !orderHasDispatch(order)) {
-      setReviewIds(ids => ids.includes(order.id) || confirmationRunning.current ? ids : [...ids, order.id])
-    }
     setExpandedOrderId(current => current === order.id ? null : order.id)
   }
   const filtered = useMemo(() => orders.filter(order => {
@@ -185,7 +182,8 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     ? Boolean(selectedConnection?.status === 'connected' && (payment !== 'sender_monthly' || availableAccounts.some(account => account.id === billingAccountId)) && selectedServices.length > 0 && (!serviceId || selectedServices.some(service => String(service.id) === serviceId)) && (selectedConnection.environment !== 'production' || selectedConnection.orderCapability !== 'unavailable'))
     : settings.canSubmit
   const reviewedOrders = filtered.filter(order => reviewIds.includes(order.id) && order.status === 'awaiting_confirmation')
-  const expandedSingleReview = Boolean(expandedOrderId && reviewedOrders.length === 1 && reviewedOrders[0].id === expandedOrderId)
+  const expandedReviewOrder = expandedOrderId ? filtered.find(order => order.id === expandedOrderId) : null
+  const expandedSingleReview = Boolean(expandedReviewOrder && !orderHasDispatch(expandedReviewOrder))
   const reviewedSendersReady = reviewedOrders.every(order => senderForReview(order, settings.sender).contact !== null)
   const productionOrderUnverified = selectedConnection?.environment === 'production' && selectedConnection.orderCapability === 'not_tested'
 
@@ -641,15 +639,46 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
           {filtered.map(order => {
             const senderReview = senderForReview(order, settings.sender)
             return <article key={order.id} className={`${styles.orderCard} ${order.id === selected?.id ? styles.selectedCard : ''}`}>
-            <button type="button" className={styles.orderSelect} aria-label={`查看单据 ${order.waybill || order.orderNo}`} aria-pressed={order.id === selected?.id} onClick={() => chooseOrder(order)}>
+            <div
+              className={styles.orderSelect}
+              role="button"
+              tabIndex={0}
+              aria-label={`查看单据 ${order.waybill || order.orderNo}`}
+              aria-pressed={order.id === selected?.id}
+              onClick={() => chooseOrder(order)}
+              onKeyDown={event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  chooseOrder(order)
+                }
+              }}
+            >
             <div className={styles.cardHead}><span className={`${styles.tag} ${styles[statusTone[order.status]]}`}>{statusLabel[order.status]}</span><span>{order.input.submittedBy ? `销售-${order.input.submittedBy.name}` : order.intakeSource === 'owner_web' ? '操作员提报' : order.relation.salesRef || '待分配'}</span><b>{cityOf(order)}</b></div>
-            <div className={styles.cardCore}><div><small>客户</small><strong>{customerOf(order)}</strong></div><ChevronRight size={15}/><div><small>收件人</small><strong>{order.input.recipient.name}</strong></div></div>
+            <div className={styles.cardCore}>
+              <div><small>客户</small><strong>{customerOf(order)}</strong></div>
+              <div>
+                <small>收件人</small>
+                <div className={styles.recipientHeading}>
+                  <button
+                    type="button"
+                    className={`${styles.cardToggle} ${expandedOrderId === order.id ? styles.cardToggleExpanded : ''}`}
+                    aria-expanded={expandedOrderId === order.id}
+                    aria-label={`${expandedOrderId === order.id ? '收起' : '展开'}${orderHasDispatch(order) ? '递送信息' : '工单'} ${order.waybill || order.orderNo}`}
+                    title={`${expandedOrderId === order.id ? '收起' : '展开'}${orderHasDispatch(order) ? '递送信息' : '工单'}`}
+                    onClick={event => {
+                      event.stopPropagation()
+                      toggleOrderExpansion(order)
+                    }}
+                  >
+                    <ChevronRight size={15}/>
+                  </button>
+                  <strong>{order.input.recipient.name}</strong>
+                </div>
+              </div>
+            </div>
             {order.input.specialRequirements && <p className={styles.special}><AlertTriangle size={13}/>特殊需求：{order.input.specialRequirements}</p>}
             <div className={styles.cardMeta}><span>{order.waybill || order.orderNo}</span><time>{new Date(order.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</time></div>
-            </button>
-            <button type="button" className={styles.cardExpandButton} aria-expanded={expandedOrderId === order.id} aria-label={orderHasDispatch(order) ? `查看递送信息 ${order.waybill || order.orderNo}` : `选择服务并核对 ${order.orderNo}`} onClick={() => toggleOrderExpansion(order)}>
-              <ChevronDown size={14} className={expandedOrderId === order.id ? styles.expandedChevron : ''}/>{orderHasDispatch(order) ? '查看递送信息' : '选择服务并核对'}
-            </button>
+            </div>
             {order.status === 'awaiting_confirmation' && <>
               <div className={styles.cardActions} onClick={event => event.stopPropagation()}>
                 <label className={styles.reviewSelection}><input type="checkbox" aria-label={`核对并选择工单 ${order.orderNo}`} disabled={confirmationBusy || !!busy} checked={reviewIds.includes(order.id)} onChange={() => toggleReview(order)}/>核对工单</label>
@@ -663,7 +692,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                 {returnDraft.error && <p role="alert">{returnDraft.error}</p>}
                 <div><button type="submit" className={styles.reject} disabled={!!busy || returnDraft.reason.trim().length < 2 || returnDraft.reason.trim().length > 300}>{busy === order.id ? '退回中…' : '确认退回'}</button><button type="button" className={styles.secondaryButton} disabled={!!busy} onClick={() => setReturnDraft(null)}>取消</button></div>
               </form>}
-              {(expandedOrderId === order.id || reviewIds.includes(order.id)) && !orderHasDispatch(order) && <section ref={expandedOrderId === order.id ? expandedReviewSection : undefined} className={styles.workorderReview} aria-label={`工单 ${order.orderNo} 收寄预览`}>
+              {expandedOrderId === order.id && !orderHasDispatch(order) && <section ref={expandedReviewSection} className={styles.workorderReview} aria-label={`工单 ${order.orderNo} 收寄预览`}>
                 <div className={styles.reviewHeading}><h3>服务与时效核对</h3><span>确认前可修改</span></div>
                 <div className={styles.reviewKeyFacts}>
                   <div><small>收件人</small><strong>{order.input.recipient.name}</strong><span>{order.input.recipient.phone}</span></div>
