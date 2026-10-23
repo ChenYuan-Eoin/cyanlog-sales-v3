@@ -129,31 +129,28 @@
     "harness_mode": "advisory"
   },
   "active_task": {
-    "id": "WP71",
-    "slug": "pre-dispatch-work-order-amendment",
-    "name": "寄出前工单版本化修改",
+    "id": "WP72",
+    "slug": "external-organization-source-authority",
+    "name": "外部组织来源优先级与唯一身份匹配",
     "kind": "product",
     "status": "active",
-    "objective": "仅允许未发单的待核对或已退回工单修改收寄资料；保存时校验当前revision、保留原提交人与身份快照、写入修改前后的审计记录并重新进入待核对，不自动通知顺丰或改变运单状态。",
+    "objective": "来源1唯一决定部门层级、排序、主部门、任职与离职协调；来源2/3/4只按唯一工号、邮箱或手机补充身份资料，不创建成员、不授予角色、不覆盖组织事实；零命中转unresolved，多命中转conflict，姓名不参与自动合并。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3",
-    "activation_basis": "IN-20261023-040：权限复选框显式授权已全量验证并发布 Production；用户此前明确要求已寄出或待处理工单可在允许状态下修改。生产已应用修订迁移，现切换WP71只修复未发单工单修改。",
+    "activation_basis": "IN-20261023-050：工单修订已全量验证并发布 Production；用户明确要求外部组织1/2/3/4分级，来源1优先填充系统组织架构。现切换WP72只实现来源权威与唯一身份匹配。",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/feature-packets/F054-sf-self-service-order.md",
-      "product-truth/product-code/app/api/shipping/ledger/[id]/amend/route.ts",
-      "product-truth/product-code/app/api/shipping/ledger/[id]/amend/route.test.ts",
-      "product-truth/product-code/app/shipping/workbench.tsx",
-      "product-truth/product-code/app/shipping/workbench.test.tsx",
-      "product-truth/product-code/lib/schema-check.ts",
-      "product-truth/product-code/lib/shipping/collaboration.ts",
-      "product-truth/product-code/lib/shipping/shipping-amendment-migration.test.ts",
-      "product-truth/product-code/lib/shipping/types.ts",
-      "product-truth/product-code/lib/shipping/validation.ts",
-      "product-truth/product-code/supabase/migrations/20261021000008_shipping_order_amendment.sql",
+      "product-truth/feature-packets/F003-account-auth.md",
+      "product-truth/feature-packets/F011-org-permission-config.md",
+      "product-truth/product-code/app/api/access/feishu/sync/route.ts",
+      "product-truth/product-code/app/api/access/feishu/sync/route.test.ts",
+      "product-truth/product-code/lib/organization-source-identity.ts",
+      "product-truth/product-code/lib/organization-source-identity.test.ts",
+      "product-truth/product-code/lib/organization-sources.ts",
+      "product-truth/product-code/lib/organization-sources.test.ts",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本"
     ],
-    "feature_id": "F054",
+    "feature_id": "F003",
     "delivery_contract": {
       "target_state": "code_green",
       "allowed_states": [
@@ -173,24 +170,23 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "shipping_workspace",
-        "shipping_tracking",
-        "shipping_access"
+        "role_edit_save",
+        "role_access_enforcement",
+        "organization_source_authority"
       ],
-      "note": "WP71只发布未发单工单的版本化修改、冲突校验、审计和重新待核对。生产数据库修订迁移已存在；保存不触发顺丰写单，真实承运商动作仍由操作员单独确认。",
+      "note": "WP72只发布组织来源权威和唯一身份匹配；不调用真实飞书写接口，不修改Production人员、角色或组织数据。",
       "production_database_mode": "read_only",
-      "runtime_profile": "shipping_workspace",
-      "runtime_contract_version": "f054-recovery-v1"
+      "runtime_profile": "application"
     },
-    "started_at": "2026-10-23T14:40:00Z",
-    "reason": "权限复选框语义已生产发布；继续处理用户明确提出的寄出前工单修改。",
+    "started_at": "2026-10-23T15:10:00Z",
+    "reason": "工单修订已生产发布；继续处理用户明确要求的外部组织来源1权威和唯一身份匹配。",
     "micro_fixes": []
   },
   "execution_queue": {
     "active": {
-      "id": "WP71",
-      "slug": "pre-dispatch-work-order-amendment",
-      "name": "寄出前工单版本化修改"
+      "id": "WP72",
+      "slug": "external-organization-source-authority",
+      "name": "外部组织来源优先级与唯一身份匹配"
     },
     "next": {
       "id": "WP35",
