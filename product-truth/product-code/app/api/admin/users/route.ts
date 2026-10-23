@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
         departments:departments!primary_dept_id(name),
         status,
         created_at,
-        user_roles(
+        user_roles!user_roles_user_id_fkey(
           role:role_id(name, code)
         )
       `)
