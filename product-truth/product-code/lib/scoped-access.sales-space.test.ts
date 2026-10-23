@@ -103,7 +103,7 @@ describe('sales space exact organization scope', () => {
       active_opportunities: 1,
       pending_milestones: 2,
     }])
-    expect(membershipsQuery.select).toHaveBeenCalledWith(expect.stringContaining('sales_spaces!inner'))
+    expect(membershipsQuery.select).toHaveBeenCalledWith(expect.stringContaining('sales_spaces!sales_space_members_org_space_fk!inner'))
     expect(membershipsQuery.eq).toHaveBeenCalledWith('space.org_id', 'org-a')
   })
 

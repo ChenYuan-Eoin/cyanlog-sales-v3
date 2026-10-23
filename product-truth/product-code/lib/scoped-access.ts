@@ -489,7 +489,7 @@ async function loadAccessibleSalesSpaces(userId: string, orgId: string, currentA
     Promise.resolve(currentAssignments),
     supabaseAdmin
       .from('sales_space_members')
-      .select('space:sales_spaces!inner(id, org_id, name, description, department_id, owner_id, active_opportunities, pending_milestones)')
+      .select('space:sales_spaces!sales_space_members_org_space_fk!inner(id, org_id, name, description, department_id, owner_id, active_opportunities, pending_milestones)')
       .eq('user_id', userId)
       .eq('space.org_id', orgId),
   ])
@@ -664,7 +664,7 @@ async function listAccessibleUserIdsFromAssignments(
 
   const memberSpacesResult = await supabaseAdmin
     .from('sales_space_members')
-    .select('space:sales_spaces!inner(id, org_id)')
+    .select('space:sales_spaces!sales_space_members_org_space_fk!inner(id, org_id)')
     .eq('user_id', userId)
     .eq('space.org_id', effectiveOrgId)
 
@@ -700,7 +700,7 @@ async function listAccessibleUserIdsFromAssignments(
     if (exactOrgSpaceIds.length > 0) {
       const spaceMembersResult = await supabaseAdmin
         .from('sales_space_members')
-        .select('user_id, space:sales_spaces!inner(org_id)')
+        .select('user_id, space:sales_spaces!sales_space_members_org_space_fk!inner(org_id)')
         .eq('space.org_id', effectiveOrgId)
         .in('space_id', exactOrgSpaceIds)
 
