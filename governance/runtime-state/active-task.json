@@ -129,26 +129,31 @@
     "harness_mode": "advisory"
   },
   "active_task": {
-    "id": "WP70",
-    "slug": "explicit-permission-checkbox-semantics",
-    "name": "权限复选框显式授权语义",
+    "id": "WP71",
+    "slug": "pre-dispatch-work-order-amendment",
+    "name": "寄出前工单版本化修改",
     "kind": "product",
     "status": "active",
-    "objective": "权限复选框只表达当前角色保存的显式授权；依赖、通配符和其他权限派生出的有效访问必须单独解释，不得让单点勾选产生视觉粘连。组全选与组清除保留明确批量语义，保存和读取继续使用同一显式集合。",
+    "objective": "仅允许未发单的待核对或已退回工单修改收寄资料；保存时校验当前revision、保留原提交人与身份快照、写入修改前后的审计记录并重新进入待核对，不自动通知顺丰或改变运单状态。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3",
-    "activation_basis": "IN-20261023-031：性能候选已全量验证并发布 Production；用户最早且反复反馈“选择1后234跟着勾选”的权限复选框粘连。根因是界面把有效权限渲染成显式勾选，现切换WP70只修复显式授权、依赖解释和批量操作。",
+    "activation_basis": "IN-20261023-040：权限复选框显式授权已全量验证并发布 Production；用户此前明确要求已寄出或待处理工单可在允许状态下修改。生产已应用修订迁移，现切换WP71只修复未发单工单修改。",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/feature-packets/F003-account-auth.md",
-      "product-truth/feature-packets/F011-org-permission-config.md",
-      "product-truth/product-code/app/configs/tabs/RoleDetailPanel.tsx",
-      "product-truth/product-code/app/configs/tabs/RoleDetailPanel.test.tsx",
-      "product-truth/product-code/lib/role-permission-policy.ts",
-      "product-truth/product-code/lib/role-permission-policy.test.ts",
+      "product-truth/feature-packets/F054-sf-self-service-order.md",
+      "product-truth/product-code/app/api/shipping/ledger/[id]/amend/route.ts",
+      "product-truth/product-code/app/api/shipping/ledger/[id]/amend/route.test.ts",
+      "product-truth/product-code/app/shipping/workbench.tsx",
+      "product-truth/product-code/app/shipping/workbench.test.tsx",
+      "product-truth/product-code/lib/schema-check.ts",
+      "product-truth/product-code/lib/shipping/collaboration.ts",
+      "product-truth/product-code/lib/shipping/shipping-amendment-migration.test.ts",
+      "product-truth/product-code/lib/shipping/types.ts",
+      "product-truth/product-code/lib/shipping/validation.ts",
+      "product-truth/product-code/supabase/migrations/20261021000008_shipping_order_amendment.sql",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本"
     ],
-    "feature_id": "F003",
+    "feature_id": "F054",
     "delivery_contract": {
       "target_state": "code_green",
       "allowed_states": [
@@ -168,23 +173,24 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "role_edit_save",
-        "role_access_enforcement",
-        "organization_source_provider_management"
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
       ],
-      "note": "WP68只发布组织来源面板、提供方能力状态、绑定/解绑/换绑API和飞书同步读取持久化来源。生产数据库迁移已存在；真实飞书、企微、钉钉写入必须由后续操作员授权，代码发布不触发连接探测或组织同步。",
+      "note": "WP71只发布未发单工单的版本化修改、冲突校验、审计和重新待核对。生产数据库修订迁移已存在；保存不触发顺丰写单，真实承运商动作仍由操作员单独确认。",
       "production_database_mode": "read_only",
-      "runtime_profile": "application"
+      "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-recovery-v1"
     },
-    "started_at": "2026-10-23T14:00:00Z",
-    "reason": "性能候选已生产发布；继续处理用户反复反馈的权限复选框粘连，不改变权限执行规则。",
+    "started_at": "2026-10-23T14:40:00Z",
+    "reason": "权限复选框语义已生产发布；继续处理用户明确提出的寄出前工单修改。",
     "micro_fixes": []
   },
   "execution_queue": {
     "active": {
-      "id": "WP70",
-      "slug": "explicit-permission-checkbox-semantics",
-      "name": "权限复选框显式授权语义"
+      "id": "WP71",
+      "slug": "pre-dispatch-work-order-amendment",
+      "name": "寄出前工单版本化修改"
     },
     "next": {
       "id": "WP35",
