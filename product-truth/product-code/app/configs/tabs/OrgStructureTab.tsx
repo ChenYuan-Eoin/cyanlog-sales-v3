@@ -27,6 +27,7 @@ import { success, error, confirmAction } from '@/lib/toast'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
+import { OrganizationSourcePanel } from './OrganizationSourcePanel'
 import { getRoleMutationRestriction } from './role-assignment-policy'
 import {
   DropdownMenu,
@@ -856,6 +857,7 @@ export default function OrgStructureTab({
         </div>
 
         <div className="min-w-0 space-y-4">
+          <OrganizationSourcePanel />
           <div className="rounded-lg border bg-white p-4">
             <h3 className="font-medium text-slate-900">组织操作</h3>
             <div className="mt-4 grid gap-2">

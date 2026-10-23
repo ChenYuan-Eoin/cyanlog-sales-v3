@@ -1,6 +1,27 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const organizationSourceMocks = vi.hoisted(() => {
+  class OrganizationSourceError extends Error {
+    code: string
+    status: number
+
+    constructor(code: string, message: string, status = 409) {
+      super(message)
+      this.name = 'OrganizationSourceError'
+      this.code = code
+      this.status = status
+    }
+  }
+
+  return {
+    loadOrganizationSources: vi.fn(),
+    recordOrganizationSourceSyncResult: vi.fn(),
+    selectPrimaryOrganizationSource: vi.fn(),
+    OrganizationSourceError,
+  }
+})
+
 vi.mock('@/lib/auth', () => ({
   requireAuth: vi.fn(),
 }))
@@ -24,6 +45,8 @@ vi.mock('@/lib/supabase', () => ({
   },
 }))
 
+vi.mock('@/lib/organization-sources', () => organizationSourceMocks)
+
 import { requireAuth } from '@/lib/auth'
 import {
   canMutateOrgDepartments,
@@ -37,6 +60,11 @@ import {
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
 import { supabaseAdmin } from '@/lib/supabase'
+import {
+  loadOrganizationSources,
+  recordOrganizationSourceSyncResult,
+  selectPrimaryOrganizationSource,
+} from '@/lib/organization-sources'
 import { POST } from './route'
 
 const orgId = 'org-1'
@@ -190,6 +218,20 @@ describe('POST /api/access/feishu/sync', () => {
     ;(ensureDefaultOrganizationMembership as any).mockResolvedValue(undefined)
     ;(syncPrimaryDepartmentMembership as any).mockResolvedValue(undefined)
     ;(syncUserSalesSpaces as any).mockResolvedValue(undefined)
+    ;(loadOrganizationSources as any).mockResolvedValue([])
+    ;(selectPrimaryOrganizationSource as any).mockImplementation((sources: Array<any>) => {
+      const primary = sources.filter((source) => (
+        source.status === 'active' && source.priority === 1
+      ))
+      if (primary.length === 0) {
+        throw new organizationSourceMocks.OrganizationSourceError(
+          'SOURCE_REQUIRED',
+          '当前组织没有已启用的主组织来源。',
+          400,
+        )
+      }
+      return primary[0]
+    })
   })
 
   afterEach(() => {
@@ -245,8 +287,7 @@ describe('POST /api/access/feishu/sync', () => {
     const body = await res.json()
 
     expect(res.status).toBe(503)
-    expect(body.code).toBe('FEISHU_NOT_CONFIGURED')
-    expect(body.missing).toEqual(['FEISHU_ORG_ID'])
+    expect(body.code).toBe('FEISHU_SOURCE_REQUIRED')
     expect(fetch).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
@@ -269,12 +310,40 @@ describe('POST /api/access/feishu/sync', () => {
 
     expect(res.status).toBe(503)
     expect(body.code).toBe('FEISHU_NOT_CONFIGURED')
-    expect(body.missing).toEqual(['FEISHU_APP_ID', 'FEISHU_APP_SECRET', 'FEISHU_ORG_ID'])
-    expect(body.hint).toContain('FEISHU_ORG_ID')
+    expect(body.missing).toEqual(['FEISHU_APP_ID', 'FEISHU_APP_SECRET'])
+    expect(body.hint).toContain('配置中心')
+  })
+
+  it('持久化主来源不是飞书权威来源时 fail closed', async () => {
+    configureFeishuEnv()
+    ;(loadOrganizationSources as any).mockResolvedValue([{
+      id: 'source-1',
+      provider: 'wecom',
+      externalTenantId: orgId,
+      priority: 1,
+      status: 'active',
+      syncMode: 'authoritative',
+    }])
+
+    const res = await POST(makeRequest())
+    const body = await res.json()
+
+    expect(res.status).toBe(503)
+    expect(body.code).toBe('FEISHU_SOURCE_INVALID')
+    expect(fetch).not.toHaveBeenCalled()
   })
 
   it('飞书上游失败时保留同步域上下文', async () => {
-    configureFeishuEnv()
+    process.env.FEISHU_APP_ID = 'app-id'
+    process.env.FEISHU_APP_SECRET = 'app-secret'
+    ;(loadOrganizationSources as any).mockResolvedValue([{
+      id: 'source-1',
+      provider: 'feishu',
+      externalTenantId: orgId,
+      priority: 1,
+      status: 'active',
+      syncMode: 'authoritative',
+    }])
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     vi.mocked(fetch as any).mockResolvedValueOnce(jsonResponse({ code: 999, msg: 'invalid app' }))
 
@@ -286,6 +355,12 @@ describe('POST /api/access/feishu/sync', () => {
     expect(body.connector).toBe('feishu')
     expect(body.scope).toBe('departments_and_members')
     expect(body.error).toBe('invalid app')
+    expect(loadOrganizationSources).toHaveBeenCalledWith(orgId)
+    expect(recordOrganizationSourceSyncResult).toHaveBeenCalledWith({
+      systemOrgId: orgId,
+      sourceId: 'source-1',
+      error: 'invalid app',
+    })
     consoleError.mockRestore()
   })
 

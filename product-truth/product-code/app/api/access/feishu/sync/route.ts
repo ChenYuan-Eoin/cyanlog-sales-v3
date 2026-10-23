@@ -16,6 +16,12 @@ import {
   syncPrimaryDepartmentMembership,
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
+import {
+  loadOrganizationSources,
+  OrganizationSourceError,
+  recordOrganizationSourceSyncResult,
+  selectPrimaryOrganizationSource,
+} from '@/lib/organization-sources'
 
 type FeishuDepartment = {
   department_id?: string
@@ -70,7 +76,7 @@ type SyncWarning = {
 
 const FEISHU_CONNECTOR = 'feishu'
 const FEISHU_SYNC_SCOPE = 'departments_and_members'
-const FEISHU_CONFIG_HINT = '请在 Vercel Production/Preview 环境变量和本地 .env.local 配置 FEISHU_APP_ID、FEISHU_APP_SECRET、FEISHU_ORG_ID 后重新部署；飞书应用需要通讯录部门读取和成员读取权限。'
+const FEISHU_CONFIG_HINT = '请在配置中心组织架构页绑定来源1；FEISHU_APP_ID、FEISHU_APP_SECRET 仍由部署环境保护。FEISHU_ORG_ID 仅作为旧绑定迁移回退。飞书应用需要通讯录部门和成员读取权限。'
 
 function externalDepartmentId(department: FeishuDepartment) {
   return department.department_id || department.open_department_id || ''
@@ -599,12 +605,10 @@ export async function POST(req: NextRequest) {
 
   const appId = process.env.FEISHU_APP_ID
   const appSecret = process.env.FEISHU_APP_SECRET
-  const configuredOrgId = process.env.FEISHU_ORG_ID
-  if (!appId || !appSecret || !configuredOrgId) {
+  if (!appId || !appSecret) {
     const missing = [
       !appId ? 'FEISHU_APP_ID' : null,
       !appSecret ? 'FEISHU_APP_SECRET' : null,
-      !configuredOrgId ? 'FEISHU_ORG_ID' : null,
     ].filter(Boolean)
 
     return NextResponse.json(
@@ -620,6 +624,50 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  let primarySource
+  try {
+    primarySource = selectPrimaryOrganizationSource(await loadOrganizationSources(orgId))
+  } catch (error) {
+    if (!(error instanceof OrganizationSourceError) || error.code !== 'SOURCE_REQUIRED') {
+      return NextResponse.json(
+        {
+          code: 'FEISHU_SOURCE_UNAVAILABLE',
+          connector: FEISHU_CONNECTOR,
+          scope: FEISHU_SYNC_SCOPE,
+          error: error instanceof Error ? error.message : '飞书组织来源不可用',
+          hint: '请先在配置中心的组织架构页绑定来源1。',
+        },
+        { status: 503 },
+      )
+    }
+  }
+
+  if (primarySource && (primarySource.provider !== 'feishu' || primarySource.syncMode !== 'authoritative')) {
+    return NextResponse.json(
+      {
+        code: 'FEISHU_SOURCE_INVALID',
+        connector: FEISHU_CONNECTOR,
+        scope: FEISHU_SYNC_SCOPE,
+        error: '当前主组织来源不是可执行的飞书权威来源',
+        hint: FEISHU_CONFIG_HINT,
+      },
+      { status: 503 }
+    )
+  }
+
+  const configuredOrgId = primarySource?.externalTenantId || process.env.FEISHU_ORG_ID
+  if (!configuredOrgId) {
+    return NextResponse.json(
+      {
+        code: 'FEISHU_SOURCE_REQUIRED',
+        connector: FEISHU_CONNECTOR,
+        scope: FEISHU_SYNC_SCOPE,
+        error: '当前组织没有已启用的飞书组织来源',
+        hint: FEISHU_CONFIG_HINT,
+      },
+      { status: 503 }
+    )
+  }
   if (configuredOrgId !== orgId) {
     return NextResponse.json(
       {
@@ -642,6 +690,13 @@ export async function POST(req: NextRequest) {
     departmentResult = await fetchFeishuDepartments(token)
     departmentWrite = await syncDepartmentsToDatabase(orgId, departmentResult.departments)
   } catch (error) {
+    if (primarySource) {
+      await recordOrganizationSourceSyncResult({
+        systemOrgId: orgId,
+        sourceId: primarySource.id,
+        error: error instanceof Error ? error.message : '飞书部门同步失败',
+      })
+    }
     console.error('[FeishuSync] department phase failed:', error)
     return NextResponse.json(
       {
@@ -670,6 +725,13 @@ export async function POST(req: NextRequest) {
     const syncStatus = warnings.length > 0 ? 'partial' : 'completed'
     const departmentFailed = warnings.filter((warning) => warning.scope === 'departments').length
     const memberFailed = warnings.filter((warning) => warning.scope === 'members').length
+    if (primarySource) {
+      await recordOrganizationSourceSyncResult({
+        systemOrgId: orgId,
+        sourceId: primarySource.id,
+        error: warnings.length > 0 ? `${warnings.length} 条同步警告` : null,
+      })
+    }
 
     return NextResponse.json({
       success: syncStatus === 'completed',
@@ -711,6 +773,13 @@ export async function POST(req: NextRequest) {
     const departmentFailed = departmentResult.warnings
       .filter((warning) => warning.scope === 'departments').length
 
+    if (primarySource) {
+      await recordOrganizationSourceSyncResult({
+        systemOrgId: orgId,
+        sourceId: primarySource.id,
+        error: errorMessage,
+      })
+    }
     console.error('[FeishuSync] member phase failed after department commit:', error)
     return NextResponse.json(
       {
