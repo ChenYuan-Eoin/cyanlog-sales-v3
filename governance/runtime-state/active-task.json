@@ -129,34 +129,30 @@
     "harness_mode": "advisory"
   },
   "active_task": {
-    "id": "WP73",
-    "slug": "personnel-lifecycle-closure",
-    "name": "人员邀请调岗离职复职与成员移除闭环",
+    "id": "WP74",
+    "slug": "permission-registry-crud",
+    "name": "权限点目录增删改查与版本生命周期",
     "kind": "product",
     "status": "active",
-    "objective": "完成邀请、激活、调岗、角色调整、直属上级、账户状态、离职、复职和移出当前组织的原子人员生命周期；保留审计、禁止最后管理员丢失、禁止跨租户操作，并让目录同步永不授予角色或寄件权限。",
+    "objective": "提供平台权限点的创建、读取、修改、提交审核、发布、停用、软删除和恢复；权限 key、说明、类别、资源动作和执行consumer统一版本化，所有变更写入审计，普通租户不得管理平台全局目录。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3",
-    "activation_basis": "IN-20261023-060：来源1权威已全量验证并发布 Production；用户要求人员管理修复好，现有生产仍缺少邀请/离职/复职/成员移除完整闭环。生产人员生命周期和成员移除迁移均已应用，现切换WP73。",
+    "activation_basis": "IN-20261023-070：人员生命周期已发布；用户明确要求权限点增删改查。Production仅有一个组织，因此将唯一组织设为平台权限目录管理员，现有权限生命周期迁移已应用，切换WP74。",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
       "product-truth/feature-packets/F003-account-auth.md",
       "product-truth/feature-packets/F011-org-permission-config.md",
-      "product-truth/product-code/app/accept-invitation",
-      "product-truth/product-code/app/api/admin/users",
-      "product-truth/product-code/app/api/auth/invitations",
-      "product-truth/product-code/app/configs/tabs/OrgStructureTab.tsx",
-      "product-truth/product-code/app/configs/tabs/components/RoleAssignmentDialog.tsx",
-      "product-truth/product-code/app/configs/tabs/components/RoleAssignmentDialog.test.tsx",
-      "product-truth/product-code/app/configs/types.ts",
-      "product-truth/product-code/lib/admin/org-membership.ts",
-      "product-truth/product-code/lib/personnel-lifecycle-migration.test.ts",
+      "product-truth/product-code/app/api/admin/permissions",
+      "product-truth/product-code/app/configs/tabs/PermissionRegistryPanel.tsx",
+      "product-truth/product-code/app/configs/tabs/PermissionRegistryPanel.test.tsx",
+      "product-truth/product-code/app/configs/tabs/RoleAccessTab.tsx",
+      "product-truth/product-code/lib/permission-catalog.ts",
+      "product-truth/product-code/lib/permission-catalog.test.ts",
+      "product-truth/product-code/lib/permission-registry.ts",
+      "product-truth/product-code/lib/permission-registry.test.ts",
+      "product-truth/product-code/lib/permission-registry-migration.test.ts",
       "product-truth/product-code/lib/schema-check.ts",
-      "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/middleware.test.ts",
-      "product-truth/product-code/supabase/migrations/20261021000006_personnel_lifecycle_commands.sql",
-      "product-truth/product-code/supabase/migrations/20261022000002_remove_tenant_membership.sql",
-      "product-truth/product-code/supabase/migrations/20261022000003_org_admin_membership_status.sql",
+      "product-truth/product-code/supabase/migrations/20261021000005_permission_registry_lifecycle.sql",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本"
     ],
     "feature_id": "F003",
@@ -181,21 +177,21 @@
       "required_runtime_evidence": [
         "role_edit_save",
         "role_access_enforcement",
-        "personnel_lifecycle"
+        "permission_registry_crud"
       ],
-      "note": "WP73只发布人员生命周期命令、邀请接受、离职复职和成员移除；生产人员数据写入仍由现有Chrome中的管理员操作，不由验证脚本代替。",
+      "note": "WP74只发布平台权限目录CRUD与生命周期；唯一组织作为平台目录管理员，不修改现有角色授权、人员或业务数据。",
       "production_database_mode": "read_only",
       "runtime_profile": "application"
     },
-    "started_at": "2026-10-23T16:00:00Z",
-    "reason": "来源权威已生产发布；继续处理人员邀请、调岗、离职、复职和成员移除闭环。",
+    "started_at": "2026-10-23T17:00:00Z",
+    "reason": "人员生命周期已生产发布；继续补齐用户明确要求的权限点增删改查。",
     "micro_fixes": []
   },
   "execution_queue": {
     "active": {
-      "id": "WP73",
-      "slug": "personnel-lifecycle-closure",
-      "name": "人员邀请调岗离职复职与成员移除闭环"
+      "id": "WP74",
+      "slug": "permission-registry-crud",
+      "name": "权限点目录增删改查与版本生命周期"
     },
     "next": {
       "id": "WP35",
