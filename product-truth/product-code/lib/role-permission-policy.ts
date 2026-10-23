@@ -24,7 +24,6 @@ function resourceLeaves(key: string): string[] {
   return PERMISSION_KEYS.filter(candidate => candidate.startsWith(resource) && !candidate.endsWith('*'))
 }
 
-// Existing business authorization treats these broader capabilities as grants.
 const IMPLIED_PERMISSION_SOURCES: Record<string, string[]> = {
   'config:read': ['config:write', 'config:publish'],
   'admin:access': ['org:write', 'user:view', 'user:write'],
@@ -47,8 +46,80 @@ export function isRolePermissionEnabled(permissions: string[], key: string): boo
   return leaves.length > 0 && leaves.every(leaf => isRolePermissionEnabled(permissions, leaf))
 }
 
-/** Remove every wildcard that would silently re-grant a deselected capability. */
-export function toggleRolePermission(
+/** A checkbox represents this exact stored grant, never a derived effective state. */
+export function isRolePermissionExplicitlyGranted(permissions: string[], key: string): boolean {
+  return permissions.includes(key)
+}
+
+export interface PermissionGrantSource {
+  grant: string
+  via: 'direct' | 'bundle' | 'dependency'
+  label: string
+}
+
+/**
+ * Explain why a checkbox is effective. Exact grants are direct, resource
+ * wildcards are bundles, and broader legacy capabilities are dependencies.
+ */
+export function getPermissionGrantSource(
+  permissions: string[],
+  key: string,
+  impliedBy?: string[],
+): PermissionGrantSource | null {
+  const exact = permissions.find((permission) => permission === key)
+  if (exact) {
+    return { grant: exact, via: 'direct', label: exact }
+  }
+
+  const wildcard = permissions.find((permission) => {
+    if (!permission.endsWith(':*')) return false
+    return permission.slice(0, -1) === key.split(':')[0] + ':'
+  })
+  if (wildcard) {
+    return { grant: wildcard, via: 'bundle', label: wildcard }
+  }
+  if (permissions.includes('*')) {
+    return { grant: '*', via: 'bundle', label: '*' }
+  }
+
+  for (const implied of impliedBy ?? IMPLIED_PERMISSION_SOURCES[key] ?? []) {
+    if (permissions.some((permission) => hasPermission([permission], implied))) {
+      return {
+        grant: implied,
+        via: 'dependency',
+        label: implied,
+      }
+    }
+  }
+  return null
+}
+
+/** Add or remove one explicit grant without rewriting any broader source. */
+export function toggleExplicitRolePermission(
+  permissions: string[],
+  key: string,
+  protectedPermissions: string[] = [],
+): string[] {
+  if (protectedPermissions.includes(key)) return permissions
+  if (permissions.includes(key)) return permissions.filter((permission) => permission !== key)
+  return Array.from(new Set([...permissions, key]))
+}
+
+/** Bulk select is an explicit action: persist every selected atomic grant. */
+export function grantExplicitRolePermissions(
+  permissions: string[],
+  keys: string[],
+  protectedPermissions: string[] = [],
+): string[] {
+  const next = new Set(permissions)
+  for (const key of keys) {
+    if (!protectedPermissions.includes(key)) next.add(key)
+  }
+  return Array.from(next)
+}
+
+/** Revoke one effective capability and every wildcard that would silently re-grant it. */
+function revokeEffectiveRolePermission(
   permissions: string[],
   key: string,
   protectedPermissions: string[] = [],
@@ -81,4 +152,16 @@ export function toggleRolePermission(
     }
   }
   return Array.from(new Set([...next, ...protectedPermissions]))
+}
+
+/** Group clear is deliberately separate from a checkbox; it revokes derived access too. */
+export function revokeRolePermissions(
+  permissions: string[],
+  keys: string[],
+  protectedPermissions: string[] = [],
+): string[] {
+  return Array.from(new Set(keys)).reduce((next, key) => {
+    if (protectedPermissions.includes(key) || !isRolePermissionEnabled(next, key)) return next
+    return revokeEffectiveRolePermission(next, key, protectedPermissions)
+  }, permissions)
 }

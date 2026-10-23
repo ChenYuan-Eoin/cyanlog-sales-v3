@@ -21,6 +21,8 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   UserPlusIcon,
+  CheckCheckIcon,
+  EraserIcon,
 } from 'lucide-react'
 import {
   Dialog,
@@ -31,7 +33,16 @@ import {
 } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import Fuse from 'fuse.js'
-import { PERMISSION_KEYS, SUPER_ADMIN_CORE_PERMISSIONS, isRolePermissionEnabled, toggleRolePermission } from '@/lib/role-permission-policy'
+import {
+  PERMISSION_KEYS,
+  SUPER_ADMIN_CORE_PERMISSIONS,
+  getPermissionGrantSource,
+  grantExplicitRolePermissions,
+  isRolePermissionEnabled,
+  isRolePermissionExplicitlyGranted,
+  revokeRolePermissions,
+  toggleExplicitRolePermission,
+} from '@/lib/role-permission-policy'
 import { success, error, confirmAction } from '@/lib/toast'
 import type {
   OrgSummaryUser,
@@ -131,6 +142,11 @@ const EXTRA_PERMISSION_GROUP: PermissionCatalogGroup = {
   ],
 }
 
+const PERMISSION_LABELS = new Map(
+  [...PERMISSION_CATALOG, EXTRA_PERMISSION_GROUP]
+    .flatMap((group) => group.items.map((item) => [item.key, item.label] as const)),
+)
+
 // ============ Props 类型 ============
 
 interface RoleDetailPanelProps {
@@ -195,7 +211,15 @@ export function RoleDetailPanel({
 
   function togglePermission(key: string) {
     if (!permissionsEditable || saving) return
-    setPerms(cur => toggleRolePermission(cur, key, isSuperAdmin ? SUPER_ADMIN_CORE_PERMISSIONS : []))
+    setPerms(cur => toggleExplicitRolePermission(cur, key, isSuperAdmin ? SUPER_ADMIN_CORE_PERMISSIONS : []))
+  }
+
+  function setPermissionGroup(keys: string[], enabled: boolean) {
+    if (!permissionsEditable || saving) return
+    const protectedPermissions = isSuperAdmin ? SUPER_ADMIN_CORE_PERMISSIONS : []
+    setPerms(current => enabled
+      ? grantExplicitRolePermissions(current, keys, protectedPermissions)
+      : revokeRolePermissions(current, keys, protectedPermissions))
   }
 
   return (
@@ -281,6 +305,7 @@ export function RoleDetailPanel({
             readOnly={!permissionsEditable || saving}
             blockReason={permissionsEditBlockReason}
             onToggle={togglePermission}
+            onSetGroup={setPermissionGroup}
           />
         </TabsContent>
       </Tabs>
@@ -743,9 +768,10 @@ interface PermissionSettingTabProps {
   readOnly: boolean
   blockReason?: string | null
   onToggle: (key: string) => void
+  onSetGroup: (keys: string[], enabled: boolean) => void
 }
 
-function PermissionSettingTab({ perms, isSuperAdmin, readOnly, blockReason, onToggle }: PermissionSettingTabProps) {
+function PermissionSettingTab({ perms, isSuperAdmin, readOnly, blockReason, onToggle, onSetGroup }: PermissionSettingTabProps) {
   const unknownPermissions = perms.filter(key => !PERMISSION_KEYS.includes(key))
   const groups: PermissionCatalogGroup[] = [...PERMISSION_CATALOG, EXTRA_PERMISSION_GROUP, ...(unknownPermissions.length ? [{
     id: 'existing-extra', label: '其他已保存权限', description: '保留现有权限项，可按需要调整。',
@@ -785,21 +811,18 @@ function PermissionSettingTab({ perms, isSuperAdmin, readOnly, blockReason, onTo
       {groups.map(group => {
         const isExpanded = expandedGroups.has(group.id)
         const groupPermissions = group.items.map(item => item.key)
-        const hasAllInGroup = groupPermissions.every(p =>
-          isRolePermissionEnabled(perms, p)
-        )
-        const hasSomeInGroup = groupPermissions.some(p =>
-          isRolePermissionEnabled(perms, p)
-        )
+        const hasAllExplicit = groupPermissions.every(key => isRolePermissionExplicitlyGranted(perms, key))
+        const hasSomeEffective = groupPermissions.some(key => isRolePermissionEnabled(perms, key))
 
         return (
           <div key={group.id} className="rounded-xl border border-slate-200">
-            {/* 分组标题 - 可点击折叠 */}
-            <button
-              onClick={() => toggleGroup(group.id)}
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"
-            >
-              <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-4 py-3">
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.id)}
+                className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                aria-expanded={isExpanded}
+              >
                 {isExpanded ? (
                   <ChevronDownIcon size={18} className="text-slate-400" />
                 ) : (
@@ -809,18 +832,46 @@ function PermissionSettingTab({ perms, isSuperAdmin, readOnly, blockReason, onTo
                   <div className="font-medium text-slate-900">{group.label}</div>
                   <div className="text-xs text-slate-500">{group.description}</div>
                 </div>
-              </div>
-              <Badge variant={hasAllInGroup ? 'default' : hasSomeInGroup ? 'secondary' : 'outline'}>
-                {hasAllInGroup ? '全部' : hasSomeInGroup ? '部分' : '未启用'}
+              </button>
+              <Badge variant={hasAllExplicit ? 'default' : hasSomeEffective ? 'secondary' : 'outline'}>
+                {hasAllExplicit ? '全部显式' : hasSomeEffective ? '部分生效' : '未生效'}
               </Badge>
-            </button>
+              {!readOnly && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onSetGroup(groupPermissions, true)}
+                    disabled={hasAllExplicit}
+                    aria-label={`选择${group.label}全部权限`}
+                    title={`选择${group.label}全部权限`}
+                  >
+                    <CheckCheckIcon className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onSetGroup(groupPermissions, false)}
+                    disabled={!hasSomeEffective}
+                    aria-label={`清除${group.label}全部权限`}
+                    title={`清除${group.label}全部权限`}
+                  >
+                    <EraserIcon className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
 
             {/* 权限列表 */}
             {isExpanded && (
               <div className="border-t px-4 py-4 bg-slate-50/50">
                 <div className="grid gap-3 md:grid-cols-2">
                   {group.items.map(item => {
-                    const checked = isRolePermissionEnabled(perms, item.key)
+                    const checked = isRolePermissionExplicitlyGranted(perms, item.key)
+                    const effective = isRolePermissionEnabled(perms, item.key)
+                    const grantSource = effective ? getPermissionGrantSource(perms, item.key) : null
                     const isCore = isSuperAdmin && SUPER_ADMIN_CORE_PERMISSIONS.includes(item.key)
                     const disabled = readOnly || isCore
                     return (
@@ -834,14 +885,30 @@ function PermissionSettingTab({ perms, isSuperAdmin, readOnly, blockReason, onTo
                       >
                         <input
                           type="checkbox"
+                          aria-label={item.label}
                           checked={checked}
                           disabled={disabled}
                           onChange={() => onToggle(item.key)}
                           className="mt-0.5 rounded"
                         />
                         <div className="flex-1">
-                          <div className={`text-sm font-medium ${disabled ? 'text-slate-500' : 'text-slate-900'}`}>
-                            {item.label}{isCore ? <span className="ml-2 text-xs text-amber-700">核心权限</span> : null}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`text-sm font-medium ${disabled ? 'text-slate-500' : 'text-slate-900'}`}>
+                              {item.label}
+                            </span>
+                            {isCore && <Badge className="border-amber-200 bg-amber-100 text-amber-800">核心权限</Badge>}
+                            {checked && <Badge variant="outline">显式授权</Badge>}
+                            {effective && !checked && <Badge variant="secondary">当前有效</Badge>}
+                            {grantSource?.via === 'bundle' && (
+                              <Badge variant="secondary">
+                                由 {PERMISSION_LABELS.get(grantSource.grant) || grantSource.label} 汇总
+                              </Badge>
+                            )}
+                            {grantSource?.via === 'dependency' && (
+                              <Badge variant="secondary">
+                                由 {PERMISSION_LABELS.get(grantSource.grant) || grantSource.label} 依赖生效
+                              </Badge>
+                            )}
                           </div>
                           <div className="text-xs text-slate-500 mt-0.5">{item.description}</div>
                         </div>
