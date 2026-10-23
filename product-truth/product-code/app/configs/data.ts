@@ -67,7 +67,7 @@ export const fetchRoles = unstable_cache(
     return withTiming(async () => {
       const result = await supabaseAdmin
         .from('roles')
-        .select('*')
+        .select('id, code, name, description, permissions, sort_order, created_at')
         .eq('org_id', orgId)
       return { data: result.data || [], error: result.error }
     })

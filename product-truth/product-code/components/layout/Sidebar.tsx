@@ -31,6 +31,37 @@ const navItems = [
   { name: '配置中心', href: '/configs', icon: SettingsIcon },
 ]
 
+const shippingNavigationCache = new Map<string, { allowed: boolean; expiresAt: number }>()
+const shippingNavigationInflight = new Map<string, Promise<boolean>>()
+
+function loadShippingNavigation(token: string): Promise<boolean> {
+  const cached = shippingNavigationCache.get(token)
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.allowed)
+  const inflight = shippingNavigationInflight.get(token)
+  if (inflight) return inflight
+  const request = fetch('/api/shipping/settings', {
+    cache: 'no-store',
+    headers: token === 'anonymous' ? {} : { Authorization: `Bearer ${token}` },
+  })
+    .then((response) => {
+      const allowed = response.ok
+      shippingNavigationCache.set(token, {
+        allowed,
+        expiresAt: Date.now() + (allowed ? 60_000 : 15_000),
+      })
+      return allowed
+    })
+    .catch(() => {
+      shippingNavigationCache.set(token, { allowed: false, expiresAt: Date.now() + 15_000 })
+      return false
+    })
+    .finally(() => {
+      if (shippingNavigationInflight.get(token) === request) shippingNavigationInflight.delete(token)
+    })
+  shippingNavigationInflight.set(token, request)
+  return request
+}
+
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
@@ -39,9 +70,12 @@ export function Sidebar() {
   const [shippingAllowed, setShippingAllowed] = useState(false)
   useEffect(() => {
     let live = true
-    fetch('/api/shipping/settings', { cache: 'no-store' }).then(r => { if (live) setShippingAllowed(r.ok) }).catch(() => { if (live) setShippingAllowed(false) })
+    const token = localStorage.getItem('token') || 'anonymous'
+    void loadShippingNavigation(token).then((allowed) => {
+      if (live) setShippingAllowed(allowed)
+    })
     return () => { live = false }
-  }, [pathname])
+  }, [])
   const visibleNavItems = shippingAllowed ? [...navItems.slice(0, 2), { name: '自助收寄', href: '/shipping', icon: Package }, ...navItems.slice(2)] : navItems
 
   const isActive = (href: string) => {
@@ -152,6 +186,9 @@ export function Sidebar() {
           <button
             type="button"
             onClick={async () => {
+              const token = localStorage.getItem('token') || 'anonymous'
+              shippingNavigationCache.delete(token)
+              shippingNavigationInflight.delete(token)
               await logoutClientSession()
               setMobileOpen(false)
               router.replace('/login')

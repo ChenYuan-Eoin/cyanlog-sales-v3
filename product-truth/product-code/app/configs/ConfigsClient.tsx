@@ -512,14 +512,19 @@ export default function ConfigsClient({
   useEffect(() => { loadedTabsRef.current = loadedTabs }, [loadedTabs])
 
   // 按需加载指定 tab 的数据
-  const loadTabData = useCallback(async (tab: ConfigTabId, options?: { force?: boolean }) => {
+  const loadTabData = useCallback(async (
+    tab: ConfigTabId,
+    options?: { force?: boolean; background?: boolean },
+  ) => {
     // 防重复请求：如果已经在加载该 tab，则跳过
     if (loadingTabRef.current === tab && !options?.force) return
     // 如果已经加载过，则跳过
     if (loadedTabsRef.current.has(tab) && !options?.force) return
 
     loadingTabRef.current = tab
-    setError('')
+    if (!options?.background) {
+      setError('')
+    }
     try {
       const token = localStorage.getItem('token')
       const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
@@ -574,9 +579,13 @@ export default function ConfigsClient({
             break
         }
         setLoadedTabs(prev => new Set(prev).add(tab))
-        setLoading(false)
+        if (!options?.background) {
+          setLoading(false)
+        }
       } else {
-        setLoading(true)
+        if (!options?.background) {
+          setLoading(true)
+        }
       }
 
       const shouldSkipBackgroundRefresh = (
@@ -775,9 +784,13 @@ export default function ConfigsClient({
         setLoadedTabs(prev => new Set(prev).add(tab))
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载失败，请重试')
+      if (!options?.background) {
+        setError(err instanceof Error ? err.message : '加载失败，请重试')
+      }
     } finally {
-      setLoading(false)
+      if (!options?.background) {
+        setLoading(false)
+      }
       // 释放锁
       if (loadingTabRef.current === tab) {
         loadingTabRef.current = null
@@ -1783,6 +1796,8 @@ export default function ConfigsClient({
                       key={tabId}
                       type="button"
                       onClick={() => setActiveTab(tabId)}
+                      onMouseEnter={() => { void loadTabData(tabId, { background: true }) }}
+                      onFocus={() => { void loadTabData(tabId, { background: true }) }}
                       className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 focus-visible:ring-offset-2 ${
                         isActive
                           ? 'border-slate-900 bg-slate-900 text-white'

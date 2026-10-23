@@ -7,7 +7,10 @@ import type { ContractPolicyRule } from '@/types/rules'
 import type { AIPlatformAssetKind } from '@/lib/configs/types'
 
 import { TableSkeleton, StatsSkeleton, CardSkeleton } from '@/components/ui/skeleton'
-import ShippingConfigDrawer from '@/app/shipping/config-drawer'
+
+const ShippingConfigDrawer = dynamic(() => import('@/app/shipping/config-drawer'), {
+  loading: () => <CardSkeleton />,
+})
 
 const PriceListTab = dynamic(() => import('./PriceListTab'), {
   loading: () => <CardSkeleton />,
@@ -140,6 +143,7 @@ export default function TabsContent({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   useEffect(() => {
+    if (activeTab !== 'org-structure' && activeTab !== 'role-access') return
     const controller = new AbortController()
     const token = localStorage.getItem('token')
 
@@ -163,7 +167,7 @@ export default function TabsContent({
       })
 
     return () => controller.abort()
-  }, [])
+  }, [activeTab])
 
   if (loading) {
     // 骨架屏根据 tab 类型显示不同形态

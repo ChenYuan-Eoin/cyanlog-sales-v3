@@ -1,5 +1,7 @@
 import { hasPermission } from '@/lib/permissions'
 
+export { resolveRolePermissions } from '@/lib/role-permission-resolution'
+
 /** Explicitly supported capabilities. Wildcards are only expanded when editing. */
 export const PERMISSION_KEYS: string[] = [
   '*', 'admin:access', 'config:*', 'config:read', 'config:write', 'config:publish',
@@ -16,48 +18,6 @@ export const PERMISSION_KEYS: string[] = [
 export const SUPER_ADMIN_CORE_PERMISSIONS: string[] = [
   'admin:access', 'config:read', 'config:write', 'role:manage',
 ]
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function normalizePermissions(value: unknown): string[] {
-  return Array.isArray(value)
-    ? Array.from(new Set(value.filter((key): key is string => typeof key === 'string' && key.length > 0)))
-    : []
-}
-
-function templatePermissions(role: { code: string; permissions: unknown }): string[] {
-  // Preserve capabilities that existing authorization granted by role code before the first edit.
-  const legacyCapabilities: Record<string, string[]> = {
-    SUPER_ADMIN: ['*'],
-    ADMIN: ['admin:access', 'user:write', 'dept:write', 'contract:write', 'shipping:manage_connections'],
-    SALES_OPS: ['admin:access'],
-    LEGAL: ['contract:review'],
-  }
-  return Array.from(new Set([...normalizePermissions(role.permissions), ...(legacyCapabilities[role.code] ?? [])]))
-}
-
-/** Empty overrides revoke everything; malformed overrides must never restore templates. */
-export function resolveRolePermissions(
-  settings: unknown,
-  role: { id: string; code: string; permissions: unknown },
-): { permissions: string[]; overridden: boolean } {
-  if (settings != null && !isRecord(settings)) return { permissions: [], overridden: true }
-  if (!isRecord(settings) || !Object.prototype.hasOwnProperty.call(settings, 'role_permission_overrides')) {
-    return { permissions: templatePermissions(role), overridden: false }
-  }
-  const overrides = settings.role_permission_overrides
-  if (!isRecord(overrides)) return { permissions: [], overridden: true }
-  if (!Object.prototype.hasOwnProperty.call(overrides, role.id)) {
-    return { permissions: templatePermissions(role), overridden: false }
-  }
-  const permissions = overrides[role.id]
-  if (!Array.isArray(permissions) || permissions.some(key => typeof key !== 'string' || !key)) {
-    return { permissions: [], overridden: true }
-  }
-  return { permissions: Array.from(new Set(permissions)), overridden: true }
-}
 
 function resourceLeaves(key: string): string[] {
   const resource = key.slice(0, -1)

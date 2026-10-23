@@ -1,4 +1,3 @@
-import { assertDatabaseEnvironment } from '@/lib/database-environment'
 // 认证与权限中间件 — Next.js Edge Runtime
 // REQ: F003 自主可控 + RBAC
 //
@@ -31,10 +30,10 @@ import { assertDatabaseEnvironment } from '@/lib/database-environment'
 
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { getRequestAuthToken } from '@/lib/auth-token'
+import { createMiddlewareRestClient } from '@/lib/middleware-rest-client'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
-import { resolveRolePermissions } from '@/lib/role-permission-policy'
+import { resolveRolePermissions } from '@/lib/role-permission-resolution'
 
 const PUBLIC_PATHS = ['/login', '/register', '/sales-portal']
 const PRIMARY_HOST = 'sales.cyanlog.icu'
@@ -116,27 +115,6 @@ function buildRedirectUrl(request: NextRequest, pathname: string, search = ''): 
   return url
 }
 
-function createMiddlewareSupabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl) {
-    throw new Error('NEXT_PUBLIC_SUPABASE_URL is required for auth middleware')
-  }
-
-  if (!serviceRoleKey) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for auth middleware')
-  }
-
-  assertDatabaseEnvironment({ databaseUrl: supabaseUrl, vercel: process.env.VERCEL, vercelEnv: process.env.VERCEL_ENV })
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  })
-}
-
 function roleRecordOf(value: unknown): { id: string; code: string; permissions: string[] | null } | null {
   if (Array.isArray(value)) {
     return roleRecordOf(value[0])
@@ -146,24 +124,34 @@ function roleRecordOf(value: unknown): { id: string; code: string; permissions: 
 }
 
 async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthContext | null> {
-  const supabase = createMiddlewareSupabaseClient()
-
-  const { data: tokenRecord } = await supabase
-    .from('auth_tokens')
-    .select('user_id, expires_at')
-    .eq('token', token)
-    .single()
+  const rest = createMiddlewareRestClient()
+  const tokenRows = await rest.selectRows<{ user_id: string; expires_at: string | null }>(
+    'auth_tokens',
+    { token },
+    'user_id,expires_at',
+  )
+  const tokenRecord = tokenRows[0]
 
   if (!tokenRecord || (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date())) {
     return null
   }
 
   const userId = tokenRecord.user_id
-  const { data: userRow } = await supabase
-    .from('users')
-    .select('id, org_id, must_change_password, status, login_enabled')
-    .eq('id', userId)
-    .maybeSingle()
+  const [userRows, membershipRows] = await Promise.all([
+    rest.selectRows<{
+      id: string
+      org_id: string | null
+      must_change_password: boolean | null
+      status: string
+      login_enabled: boolean | null
+    }>('users', { id: userId }, 'id,org_id,must_change_password,status,login_enabled'),
+    rest.selectRows<{ org_id: string }>('user_organizations', {
+      user_id: userId,
+      status: 'active',
+      is_default: 'true',
+    }, 'org_id'),
+  ])
+  const userRow = userRows[0]
 
   if (
     !userRow
@@ -171,29 +159,20 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
     || userRow.login_enabled !== true
   ) return null
 
-  const { data: defaultMembership, error: defaultMembershipError } = await supabase
-    .from('user_organizations')
-    .select('org_id')
-    .eq('user_id', userId)
-    .eq('is_default', true)
-    .maybeSingle()
-
-  if (defaultMembershipError) return null
-
-  const orgId = defaultMembership?.org_id || userRow.org_id
+  const orgId = membershipRows[0]?.org_id
   if (!orgId) return null
 
-  const { data: userRolesData, error: userRolesError } = await supabase
-    .from('user_roles')
-    .select('scope_type, scope_id, roles:roles(id, code, permissions)')
-    .eq('user_id', userId)
-    .eq('scope_type', 'org')
-    .eq('scope_id', orgId)
-
-  if (userRolesError) throw userRolesError
-  const { data: organization, error: organizationError } = await supabase
-    .from('organizations').select('settings').eq('id', orgId).maybeSingle()
-  if (organizationError || !organization) throw organizationError || new Error('Organization permissions unavailable')
+  const [userRolesData, organizationRows] = await Promise.all([
+    rest.selectRows<{ scope_type: string; scope_id: string | null; roles: unknown }>(
+      'user_roles',
+      { user_id: userId, scope_type: 'org', scope_id: orgId },
+      'scope_type,scope_id,roles:roles(id,code,permissions)',
+      100,
+    ),
+    rest.selectRows<{ settings: unknown }>('organizations', { id: orgId }, 'settings'),
+  ])
+  const organization = organizationRows[0]
+  if (!organization) throw new Error('auth middleware organization permissions unavailable')
 
   const allPermissions: string[] = []
   const roleCodes: string[] = []

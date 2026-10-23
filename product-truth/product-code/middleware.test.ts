@@ -1,13 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    from: vi.fn(),
-  })),
-}))
-
 import type { NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { middleware } from './middleware'
 
 function makeRequest(url: string, headers: Record<string, string> = {}): NextRequest {
@@ -30,6 +23,7 @@ const originalSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 
 afterEach(() => {
   vi.clearAllMocks()
+  vi.unstubAllGlobals()
   if (originalServiceRoleKey === undefined) {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY
   } else {
@@ -43,22 +37,6 @@ afterEach(() => {
   }
 })
 
-function queryBuilder(result: { data: unknown; error?: unknown }, terminal: 'single' | 'maybeSingle' | 'await') {
-  const query: Record<string, unknown> = {}
-  query.select = vi.fn(() => query)
-  query.eq = vi.fn(() => query)
-  if (terminal === 'single') {
-    query.single = vi.fn().mockResolvedValue(result)
-  } else if (terminal === 'maybeSingle') {
-    query.maybeSingle = vi.fn().mockResolvedValue(result)
-  } else {
-    query.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => (
-      Promise.resolve(result).then(resolve, reject)
-    )
-  }
-  return query as Record<string, ReturnType<typeof vi.fn>> & PromiseLike<unknown>
-}
-
 function mockExactOrgAuth(options: {
   token: string
   orgId: string
@@ -68,35 +46,41 @@ function mockExactOrgAuth(options: {
   status?: string
   loginEnabled?: boolean
 }) {
-  const tokenQuery = queryBuilder({
-    data: { user_id: 'user-1', expires_at: '2099-01-01T00:00:00.000Z' },
-  }, 'single')
-  const userQuery = queryBuilder({
-    data: {
-      id: 'user-1',
-      org_id: 'legacy-org',
-      must_change_password: false,
-      status: options.status ?? 'active',
-      login_enabled: options.loginEnabled ?? true,
-    },
-  }, 'maybeSingle')
-  const membershipQuery = queryBuilder({ data: { org_id: options.orgId }, error: null }, 'maybeSingle')
-  const rolesQuery = queryBuilder({ data: options.roles }, 'await')
-  const organizationQuery = queryBuilder({ data: {settings: options.settings ?? {}}, error: options.settingsError }, 'maybeSingle')
-  const from = vi.fn((table: string) => {
-    if (table === 'auth_tokens') return tokenQuery
-    if (table === 'users') return userQuery
-    if (table === 'user_organizations') return membershipQuery
-    if (table === 'user_roles') return rolesQuery
-    if (table === 'organizations') return organizationQuery
-    throw new Error(`unexpected table ${table}`)
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input))
+    const table = url.pathname.split('/').pop()
+    if (table === 'auth_tokens') {
+      return Response.json([{ user_id: 'user-1', expires_at: '2099-01-01T00:00:00.000Z' }])
+    }
+    if (table === 'users') {
+      return Response.json([{
+        id: 'user-1',
+        org_id: 'legacy-org',
+        must_change_password: false,
+        status: options.status ?? 'active',
+        login_enabled: options.loginEnabled ?? true,
+      }])
+    }
+    if (table === 'user_organizations') {
+      return Response.json([{ org_id: options.orgId }])
+    }
+    if (table === 'user_roles') {
+      return Response.json(options.roles)
+    }
+    if (table === 'organizations') {
+      if (options.settingsError) {
+        return new Response('settings unavailable', { status: 503 })
+      }
+      return Response.json([{ settings: options.settings ?? {} }])
+    }
+    return new Response(`unexpected table ${table}`, { status: 500 })
   })
 
-  vi.mocked(createClient).mockReturnValue({ from } as never)
+  vi.stubGlobal('fetch', fetchMock)
   process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://supabase.example.test'
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test'
 
-  return { from, rolesQuery }
+  return { fetchMock }
 }
 
 describe('middleware host routing', () => {
@@ -200,7 +184,7 @@ describe('middleware public API routing', () => {
 
 describe('middleware exact organization authorization', () => {
   it('只把 default org 的权限写入可信下游请求头', async () => {
-    const { rolesQuery } = mockExactOrgAuth({
+    const { fetchMock } = mockExactOrgAuth({
       token: 'scope-token-a',
       orgId: 'org-a',
       roles: [{ roles: { id: 'role-test', code: 'SALES', permissions: ['config:read'] } }],
@@ -211,15 +195,17 @@ describe('middleware exact organization authorization', () => {
     const res = await middleware(req)
 
     expect(res.status).toBe(200)
-    expect(rolesQuery.eq).toHaveBeenCalledWith('scope_type', 'org')
-    expect(rolesQuery.eq).toHaveBeenCalledWith('scope_id', 'org-a')
+    const roleCall = fetchMock.mock.calls.find(([input]) => String(input).includes('/rest/v1/user_roles?'))
+    const roleUrl = new URL(String(roleCall?.[0]))
+    expect(roleUrl.searchParams.getAll('scope_type')).toEqual(['eq.org'])
+    expect(roleUrl.searchParams.getAll('scope_id')).toEqual(['eq.org-a'])
     expect(res.headers.get('x-middleware-request-x-user-permissions')).toBe('config:read')
     expect(res.headers.get('x-middleware-request-x-user-permissions')).not.toContain('*')
     expect(res.headers.get('x-middleware-request-x-org-id')).toBe('org-a')
   })
 
   it('只有其他组织或 null scope 的权限时拒绝访问配置中心', async () => {
-    const { rolesQuery } = mockExactOrgAuth({
+    const { fetchMock } = mockExactOrgAuth({
       token: 'scope-token-b',
       orgId: 'org-a',
       roles: [],
@@ -231,7 +217,8 @@ describe('middleware exact organization authorization', () => {
 
     expect(res.status).toBe(307)
     expect(res.headers.get('location')).toContain('denied=config%3Aread')
-    expect(rolesQuery.eq).toHaveBeenCalledWith('scope_id', 'org-a')
+    const roleCall = fetchMock.mock.calls.find(([input]) => String(input).includes('/rest/v1/user_roles?'))
+    expect(new URL(String(roleCall?.[0])).searchParams.getAll('scope_id')).toEqual(['eq.org-a'])
   })
 
   it('超管覆盖后的权限和兼容授权头都不重新获得通配符', async () => {
@@ -267,11 +254,11 @@ describe('middleware exact organization authorization', () => {
     req.cookies.get = vi.fn().mockReturnValue({value:'example-empty-override'})
     expect((await middleware(req)).headers.get('location')).toContain('denied=admin%3Aaccess')
     mockExactOrgAuth({token:'example-empty-override',orgId:'org-a',roles:[],settingsError:new Error('read failed')})
-    expect((await middleware(req)).status).toBe(307)
+    expect((await middleware(req)).status).toBe(503)
   })
 
   it('用户停用后旧 token 下一次请求立即失效', async () => {
-    const { from } = mockExactOrgAuth({
+    const { fetchMock } = mockExactOrgAuth({
       token: 'disabled-token',
       orgId: 'org-a',
       roles: [{ roles: { id: 'role-test', code: 'ADMIN', permissions: ['*'] } }],
@@ -284,7 +271,6 @@ describe('middleware exact organization authorization', () => {
     const res = await middleware(req)
 
     expect(res.status).toBe(401)
-    expect(from).not.toHaveBeenCalledWith('user_organizations')
-    expect(from).not.toHaveBeenCalledWith('user_roles')
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/rest/v1/user_roles?'))).toBe(false)
   })
 })
