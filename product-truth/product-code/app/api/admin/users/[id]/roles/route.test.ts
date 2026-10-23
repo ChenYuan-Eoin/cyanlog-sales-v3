@@ -14,11 +14,8 @@ vi.mock('@/lib/scoped-access', () => ({
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     from: vi.fn(),
+    rpc: vi.fn(),
   },
-}))
-
-vi.mock('@/lib/admin/org-membership', () => ({
-  replaceOrgRoleIds: vi.fn(),
 }))
 
 vi.mock('@/lib/admin/org-role-authority', () => ({
@@ -33,7 +30,6 @@ import {
   getUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
-import { replaceOrgRoleIds } from '@/lib/admin/org-membership'
 import {
   userHasOrgRoleCode,
   validateOrgRoleAssignment,
@@ -70,6 +66,17 @@ function makeUserLookupQuery(result: { data: unknown; error: unknown }) {
   return query
 }
 
+function makeRoleListQuery(result: { data: unknown; error: unknown }) {
+  const query: any = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => (
+      Promise.resolve(result).then(resolve, reject)
+    ),
+  }
+  return query
+}
+
 describe('POST /api/admin/users/[id]/roles validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -79,7 +86,7 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     ;(canMutateOrgUsers as any).mockReturnValue(true)
     ;(userHasOrgRoleCode as any).mockResolvedValue(false)
     ;(validateOrgRoleAssignment as any).mockResolvedValue({ ok: true, roleIds: [roleId] })
-    ;(replaceOrgRoleIds as any).mockResolvedValue([{ role_id: roleId }])
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
   })
 
   it('无效 JSON 返回参数错误且不访问数据库', async () => {
@@ -98,7 +105,7 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     expect(res.status).toBe(400)
     expect(body.code).toBe('VALIDATION_ERROR')
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
-    expect(replaceOrgRoleIds).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
   it('无组织管理权限时返回 403 且不访问数据库', async () => {
@@ -114,7 +121,7 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
       'org-1'
     )
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
-    expect(replaceOrgRoleIds).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
   it('目标用户不存在时返回 404 且不替换角色', async () => {
@@ -127,18 +134,21 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     expect(supabaseAdmin.from).toHaveBeenCalledWith('users')
     expect(query.eq).toHaveBeenCalledWith('id', '00000000-0000-0000-0000-000000000001')
     expect(query.eq).toHaveBeenCalledWith('org_id', 'org-1')
-    expect(replaceOrgRoleIds).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
   it('成功替换用户组织角色并返回写入结果', async () => {
-    const query = makeUserLookupQuery({
+    const userQuery = makeUserLookupQuery({
       data: { id: '00000000-0000-0000-0000-000000000001', display_name: '测试用户' },
       error: null,
     })
-    ;(supabaseAdmin.from as any).mockReturnValue(query)
-    ;(replaceOrgRoleIds as any).mockResolvedValue([
-      { role_id: roleId, scope_type: 'org', scope_id: 'org-1' },
-    ])
+    const roleQuery = makeRoleListQuery({
+      data: [{ role_id: roleId, scope_type: 'org', scope_id: 'org-1' }],
+      error: null,
+    })
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(userQuery)
+      .mockReturnValueOnce(roleQuery)
 
     const res = await POST(jsonRequest({ role_ids: [roleId, roleId] }), routeContext)
     const body = await res.json()
@@ -146,11 +156,14 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     expect(res.status).toBe(200)
     expect(body.success).toBe(true)
     expect(body.data).toEqual([{ role_id: roleId, scope_type: 'org', scope_id: 'org-1' }])
-    expect(replaceOrgRoleIds).toHaveBeenCalledWith(
-      '00000000-0000-0000-0000-000000000001',
-      'org-1',
-      [roleId],
-      'admin-user'
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      'admin_replace_org_roles_v1',
+      expect.objectContaining({
+        p_actor_id: 'admin-user',
+        p_org_id: 'org-1',
+        p_user_id: '00000000-0000-0000-0000-000000000001',
+        p_role_ids: [roleId],
+      }),
     )
   })
 
@@ -163,7 +176,7 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     expect(res.status).toBe(403)
     expect(body.code).toBe('SELF_ROLE_MUTATION_FORBIDDEN')
     expect(validateOrgRoleAssignment).not.toHaveBeenCalled()
-    expect(replaceOrgRoleIds).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
   it('禁止分配超过操作者权限上限的角色', async () => {
@@ -182,7 +195,7 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
 
     expect(res.status).toBe(403)
     expect(body.code).toBe('ROLE_ESCALATION_FORBIDDEN')
-    expect(replaceOrgRoleIds).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
   it('禁止组织接口变更现有平台根管理员', async () => {
@@ -199,7 +212,7 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     expect(res.status).toBe(403)
     expect(body.code).toBe('PROTECTED_ROLE_MUTATION_FORBIDDEN')
     expect(validateOrgRoleAssignment).not.toHaveBeenCalled()
-    expect(replaceOrgRoleIds).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
   it('角色不存在时返回 400', async () => {

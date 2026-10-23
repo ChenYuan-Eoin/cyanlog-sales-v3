@@ -2,6 +2,7 @@
 // PURPOSE: 用户的增删改查
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createHash, randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
@@ -17,7 +18,6 @@ import {
   createAdminTempPassword,
   ensureDefaultOrganizationMembership,
   hashAdminPassword,
-  replaceOrgRoleIds,
   syncPrimaryDepartmentMembership,
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { email, display_name, title, primary_dept_id, role_ids, status } = parseResult.data
+    const { email, display_name, title, primary_dept_id, role_ids } = parseResult.data
 
     if (primary_dept_id && !canMutateOrgDepartments(actorAssignments, orgId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_DEPARTMENT_PERMISSION' }, { status: 403 })
@@ -149,8 +149,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '该邮箱已被使用' }, { status: 409 })
     }
 
-    const tempPassword = createAdminTempPassword()
-    const passwordHash = await hashAdminPassword(tempPassword)
+    const activationCode = randomBytes(24).toString('base64url')
+    const activationTokenHash = createHash('sha256').update(activationCode).digest('hex')
+    const activationExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    // The account cannot authenticate until invitation acceptance replaces this
+    // placeholder with the user's chosen password.
+    const passwordHash = await hashAdminPassword(createAdminTempPassword())
 
     // 创建用户
     const { data: user, error: userError } = await supabaseAdmin
@@ -162,8 +166,9 @@ export async function POST(req: NextRequest) {
         title: title || null,
         primary_dept_id: primary_dept_id || null,
         password_hash: passwordHash,
-        must_change_password: true,
-        status,
+        must_change_password: false,
+        status: 'inactive',
+        login_enabled: false,
       })
       .select('id, email, display_name, title, primary_dept_id, status')
       .single()
@@ -175,11 +180,29 @@ export async function POST(req: NextRequest) {
 
     try {
       await ensureDefaultOrganizationMembership(user.id, orgId)
+      const { error: invitedMembershipError } = await supabaseAdmin
+        .from('user_organizations')
+        .update({ status: 'invited', employment_status: 'active' })
+        .eq('user_id', user.id)
+        .eq('org_id', orgId)
+      if (invitedMembershipError) throw invitedMembershipError
       if (primary_dept_id) {
         await syncPrimaryDepartmentMembership(user.id, primary_dept_id, orgId)
         await syncUserSalesSpaces(user.id, orgId, primary_dept_id)
       }
-      await replaceOrgRoleIds(user.id, orgId, roleValidation.roleIds, currentUser.id)
+      const { error: invitationError } = await supabaseAdmin
+        .from('personnel_invitations')
+        .insert({
+          org_id: orgId,
+          user_id: user.id,
+          token_hash: activationTokenHash,
+          role_ids: roleValidation.roleIds,
+          status: 'pending',
+          delivery_method: 'manual_handoff',
+          expires_at: activationExpiresAt,
+          created_by: currentUser.id,
+        })
+      if (invitationError) throw invitationError
     } catch (syncError) {
       console.error('Create user consistency error:', syncError)
       await supabaseAdmin.from('users').delete().eq('id', user.id).eq('org_id', orgId)
@@ -190,9 +213,11 @@ export async function POST(req: NextRequest) {
       success: true,
       data: {
         ...user,
-        tempPassword,
+        activationCode,
+        activationExpiresAt,
+        deliveryMethod: 'manual_handoff',
       },
-      message: '用户创建成功',
+      message: '成员邀请已创建，需由管理员安全交付激活码',
     }, { status: 201 })
   } catch (err) {
     console.error('POST user error:', err)

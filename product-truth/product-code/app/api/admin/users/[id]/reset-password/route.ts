@@ -71,11 +71,13 @@ export async function POST(
 
     // 密码更新和旧会话撤销必须同一个数据库事务成功。
     const { data: resetApplied, error: resetError } = await supabaseAdmin.rpc(
-      'reset_org_user_password_and_revoke_sessions_v1',
+      'admin_reset_password_v1',
       {
-        p_target_user_id: id,
+        p_actor_id: currentUser.id,
         p_org_id: orgId,
+        p_user_id: id,
         p_password_hash: passwordHash,
+        p_request_id: req.headers.get('x-request-id'),
       }
     )
 

@@ -70,12 +70,15 @@ export async function PATCH(
 
     // 任何登录状态变更都撤销旧会话，避免重新启用后历史 token 复活。
     const { data: stateUpdated, error: updateError } = await supabaseAdmin.rpc(
-      'set_org_user_account_state_and_revoke_sessions_v1',
+      'admin_set_account_state_v1',
       {
-        p_target_user_id: id,
+        p_actor_id: currentUser.id,
         p_org_id: orgId,
+        p_user_id: id,
         p_status: null,
         p_login_enabled: login_enabled,
+        p_reason: 'tenant administrator login state update',
+        p_request_id: req.headers.get('x-request-id'),
       }
     )
 

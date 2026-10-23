@@ -72,44 +72,30 @@ export async function PATCH(
       )
     }
 
-    // 如果指定了汇报对象，验证其存在性
-    if (report_to_user_id) {
-      const { data: reportToUser, error: reportToError } = await supabaseAdmin
-        .from('users')
-        .select('id')
-        .eq('id', report_to_user_id)
-        .eq('org_id', orgId)
-        .maybeSingle()
-
-      if (reportToError || !reportToUser) {
-        return NextResponse.json({ error: '汇报对象不存在' }, { status: 400 })
-      }
-
-      // 检查循环汇报：简单一层（不能汇报给直接下级）
-      const { data: subordinates } = await supabaseAdmin
-        .from('users')
-        .select('id')
-        .eq('report_to_user_id', id)
-        .eq('org_id', orgId)
-
-      if (subordinates?.some(s => s.id === report_to_user_id)) {
-        return NextResponse.json({ error: '不能将汇报对象设为自己的直接下级' }, { status: 400 })
-      }
-    }
-
-    // 更新汇报对象
-    const { error: updateError } = await supabaseAdmin
-      .from('users')
-      .update({
-        report_to_user_id: report_to_user_id || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('org_id', orgId)
+    const { data: updated, error: updateError } = await supabaseAdmin.rpc(
+      'admin_set_reporting_manager_v1',
+      {
+        p_actor_id: currentUser.id,
+        p_org_id: orgId,
+        p_user_id: id,
+        p_manager_user_id: report_to_user_id,
+        p_reason: 'tenant reporting manager update',
+        p_request_id: req.headers.get('x-request-id'),
+      },
+    )
 
     if (updateError) {
+      if (String(updateError.code || '') === '23514') {
+        return NextResponse.json({
+          error: '汇报对象不存在、未激活或会形成循环',
+          code: 'INVALID_REPORT_TO_USER',
+        }, { status: 400 })
+      }
       console.error('Update report_to_user_id error:', updateError)
       return NextResponse.json({ error: '更新汇报对象失败' }, { status: 500 })
+    }
+    if (updated !== true) {
+      return NextResponse.json({ error: '用户不存在或已离职' }, { status: 404 })
     }
 
     return NextResponse.json({

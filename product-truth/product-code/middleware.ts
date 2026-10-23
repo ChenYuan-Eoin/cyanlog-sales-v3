@@ -35,7 +35,7 @@ import { createMiddlewareRestClient } from '@/lib/middleware-rest-client'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
 import { resolveRolePermissions } from '@/lib/role-permission-resolution'
 
-const PUBLIC_PATHS = ['/login', '/register', '/sales-portal']
+const PUBLIC_PATHS = ['/login', '/register', '/accept-invitation', '/sales-portal']
 const PRIMARY_HOST = 'sales.cyanlog.icu'
 const HOST_REDIRECTS: Record<string, { rootPath: string; preservePath: boolean }> = {
   'quote.cyanlog.icu': { rootPath: '/quotes', preservePath: true },
@@ -48,6 +48,7 @@ const PUBLIC_API_PATHS = new Set([
   '/api/auth/login',
   '/api/auth/prewarm',
   '/api/auth/register',
+  '/api/auth/invitations/accept',
   '/api/client-errors',
   '/api/contracts/process',
   '/api/health',

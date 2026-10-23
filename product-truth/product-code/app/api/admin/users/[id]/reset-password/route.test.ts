@@ -173,11 +173,13 @@ describe('POST /api/admin/users/[id]/reset-password', () => {
     expect(createAdminTempPassword).toHaveBeenCalledOnce()
     expect(hashAdminPassword).toHaveBeenCalledWith(tempPassword)
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
-      'reset_org_user_password_and_revoke_sessions_v1',
+      'admin_reset_password_v1',
       {
-        p_target_user_id: targetId,
+        p_actor_id: actorId,
         p_org_id: orgId,
+        p_user_id: targetId,
         p_password_hash: 'bcrypt-hash',
+        p_request_id: null,
       }
     )
   })

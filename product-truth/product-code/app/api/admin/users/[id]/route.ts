@@ -12,8 +12,6 @@ import {
 } from '@/lib/scoped-access'
 import {
   assertDepartmentInOrg,
-  syncPrimaryDepartmentMembership,
-  syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
 import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
 
@@ -81,7 +79,7 @@ export async function PATCH(
 
     const { data: existing, error: checkError } = await supabaseAdmin
       .from('users')
-      .select('id, email, display_name, status, login_enabled')
+      .select('id, email, display_name, title, primary_dept_id, status, login_enabled, report_to_user_id')
       .eq('id', id)
       .eq('org_id', orgId)
       .maybeSingle()
@@ -103,12 +101,15 @@ export async function PATCH(
 
     if (hasAccountStateMutation) {
       const { data: stateUpdated, error: stateError } = await supabaseAdmin.rpc(
-        'set_org_user_account_state_and_revoke_sessions_v1',
+        'admin_set_account_state_v1',
         {
-          p_target_user_id: id,
+          p_actor_id: currentUser.id,
           p_org_id: orgId,
+          p_user_id: id,
           p_status: status ?? null,
           p_login_enabled: login_enabled ?? null,
+          p_reason: 'tenant administrator account state update',
+          p_request_id: req.headers.get('x-request-id'),
         }
       )
 
@@ -159,30 +160,42 @@ export async function PATCH(
     const updateData: Record<string, unknown> = {}
     if (display_name !== undefined) updateData.display_name = display_name
     if (title !== undefined) updateData.title = title
-    if (primary_dept_id !== undefined) updateData.primary_dept_id = primary_dept_id
     if (report_to_user_id !== undefined) updateData.report_to_user_id = report_to_user_id || null
 
-    const { data, error } = await supabaseAdmin
-      .from('users')
-      .update(updateData)
-      .eq('id', id)
-      .eq('org_id', orgId)
-      .select('id, email, display_name, title, primary_dept_id, status, login_enabled, report_to_user_id')
-      .single()
+    let data: Record<string, unknown> = { ...existing }
+    if (Object.keys(updateData).length > 0) {
+      const { data: updated, error } = await supabaseAdmin
+        .from('users')
+        .update(updateData)
+        .eq('id', id)
+        .eq('org_id', orgId)
+        .select('id, email, display_name, title, primary_dept_id, status, login_enabled, report_to_user_id')
+        .single()
 
-    if (error) {
-      console.error('Update user error:', error)
-      return NextResponse.json({ error: '更新用户失败' }, { status: 500 })
+      if (error) {
+        console.error('Update user error:', error)
+        return NextResponse.json({ error: '更新用户失败' }, { status: 500 })
+      }
+      data = updated
     }
 
     if (primary_dept_id !== undefined) {
-      try {
-        await syncPrimaryDepartmentMembership(id, primary_dept_id || null)
-        await syncUserSalesSpaces(id, orgId, primary_dept_id || null)
-      } catch (syncError) {
-        console.error('Update user department sync error:', syncError)
+      const { data: transferred, error: transferError } = await supabaseAdmin.rpc(
+        'admin_transfer_primary_department_v1',
+        {
+          p_actor_id: currentUser.id,
+          p_org_id: orgId,
+          p_user_id: id,
+          p_department_id: primary_dept_id,
+          p_reason: 'profile update',
+          p_request_id: req.headers.get('x-request-id'),
+        },
+      )
+      if (transferError || transferred !== true) {
+        console.error('Update user department transaction error:', transferError || 'target_not_updated')
         return NextResponse.json({ error: '更新成员部门关联失败' }, { status: 500 })
       }
+      data = { ...data, primary_dept_id }
     }
 
     return NextResponse.json({
@@ -242,25 +255,32 @@ export async function DELETE(
       )
     }
 
-    // 软删除与禁止登录、撤销会话在同一数据库事务内完成。
-    const { data: deleted, error } = await supabaseAdmin.rpc(
-      'set_org_user_account_state_and_revoke_sessions_v1',
+    const body = await req.json().catch(() => ({})) as { reason?: unknown }
+    const reason = typeof body.reason === 'string' && body.reason.trim()
+      ? body.reason.trim().slice(0, 500)
+      : 'tenant administrator offboarding'
+
+    // Offboarding ends membership/employment, revokes authority and sessions,
+    // writes role/department/space snapshots, and protects the last admin in one transaction.
+    const { data: offboarded, error } = await supabaseAdmin.rpc(
+      'admin_offboard_member_v1',
       {
-        p_target_user_id: id,
+        p_actor_id: currentUser.id,
         p_org_id: orgId,
-        p_status: 'inactive',
-        p_login_enabled: false,
-      }
+        p_user_id: id,
+        p_reason: reason,
+        p_request_id: req.headers.get('x-request-id'),
+      },
     )
 
-    if (error || deleted !== true) {
-      console.error('Delete user error:', error)
-      return NextResponse.json({ error: '删除用户失败' }, { status: 500 })
+    if (error || offboarded !== true) {
+      console.error('Offboard user error:', error)
+      return NextResponse.json({ error: '办理离职失败' }, { status: 500 })
     }
 
     return NextResponse.json({
       success: true,
-      message: `用户 "${existing.display_name}" 已删除`,
+      message: `用户 "${existing.display_name}" 已离职，历史记录和审计已保留`,
     })
   } catch (err) {
     console.error('DELETE user error:', err)

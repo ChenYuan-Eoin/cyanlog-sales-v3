@@ -10,7 +10,6 @@ import {
   getDefaultOrgId,
   getUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
-import { replaceOrgRoleIds } from '@/lib/admin/org-membership'
 import {
   userHasOrgRoleCode,
   validateOrgRoleAssignment,
@@ -87,15 +86,37 @@ export async function POST(
       )
     }
 
-    let data
-    try {
-      data = await replaceOrgRoleIds(userId, orgId, roleValidation.roleIds, currentUser.id)
-    } catch (error) {
-      if (error instanceof Error && error.message === 'ROLE_NOT_FOUND') {
-        return NextResponse.json({ error: '部分角色不存在' }, { status: 400 })
-      }
-      console.error('Assign roles error:', error)
+    const { data: replaced, error: replaceError } = await supabaseAdmin.rpc(
+      'admin_replace_org_roles_v1',
+      {
+        p_actor_id: currentUser.id,
+        p_org_id: orgId,
+        p_user_id: userId,
+        p_role_ids: roleValidation.roleIds,
+        p_reason: 'tenant role assignment',
+        p_request_id: req.headers.get('x-request-id'),
+      },
+    )
+    if (replaceError || replaced !== true) {
+      console.error('Assign roles error:', replaceError || 'target_not_updated')
       return NextResponse.json({ error: '分配角色失败' }, { status: 500 })
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('user_roles')
+      .select(`
+        role_id,
+        role:role_id(id, name, code),
+        scope_type,
+        scope_id
+      `)
+      .eq('user_id', userId)
+      .eq('org_id', orgId)
+      .eq('scope_type', 'org')
+      .eq('scope_id', orgId)
+    if (error) {
+      console.error('Load assigned roles error:', error)
+      return NextResponse.json({ error: '角色已保存，但读取最新授权失败' }, { status: 500 })
     }
 
     return NextResponse.json({

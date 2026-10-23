@@ -32,6 +32,7 @@ import {
   getDefaultOrgId,
   getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
+import { assertDepartmentInOrg } from '@/lib/admin/org-membership'
 import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
 import { supabaseAdmin } from '@/lib/supabase'
 import { DELETE, PATCH } from './route'
@@ -62,6 +63,11 @@ function malformedJsonRequest(): any {
 function deleteRequest(): any {
   return new Request(`https://example.test/api/admin/users/${targetId}`, {
     method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-request-id': 'request-offboard-1',
+    },
+    body: JSON.stringify({ reason: 'resignation accepted' }),
   })
 }
 
@@ -83,8 +89,11 @@ function targetUser(overrides: Record<string, unknown> = {}) {
     id: targetId,
     email: 'user@example.test',
     display_name: '普通用户',
+    title: null,
+    primary_dept_id: null,
     status: 'active',
     login_enabled: true,
+    report_to_user_id: null,
     ...overrides,
   }
 }
@@ -99,6 +108,7 @@ describe('/api/admin/users/[id] account lifecycle', () => {
     ])
     ;(canMutateOrgUsers as any).mockReturnValue(true)
     ;(userHasOrgRoleCode as any).mockResolvedValue(false)
+    ;(assertDepartmentInOrg as any).mockResolvedValue({ id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' })
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
   })
 
@@ -208,12 +218,15 @@ describe('/api/admin/users/[id] account lifecycle', () => {
     expect(body.data.status).toBe('suspended')
     expect(lookup.update).not.toHaveBeenCalled()
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
-      'set_org_user_account_state_and_revoke_sessions_v1',
+      'admin_set_account_state_v1',
       {
-        p_target_user_id: targetId,
+        p_actor_id: actorId,
         p_org_id: orgId,
+        p_user_id: targetId,
         p_status: 'suspended',
         p_login_enabled: null,
+        p_reason: 'tenant administrator account state update',
+        p_request_id: null,
       }
     )
   })
@@ -227,12 +240,15 @@ describe('/api/admin/users/[id] account lifecycle', () => {
     expect(response.status).toBe(200)
     expect(lookup.update).not.toHaveBeenCalled()
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
-      'set_org_user_account_state_and_revoke_sessions_v1',
+      'admin_set_account_state_v1',
       {
-        p_target_user_id: targetId,
+        p_actor_id: actorId,
         p_org_id: orgId,
+        p_user_id: targetId,
         p_status: 'active',
         p_login_enabled: null,
+        p_reason: 'tenant administrator account state update',
+        p_request_id: null,
       }
     )
   })
@@ -271,7 +287,7 @@ describe('/api/admin/users/[id] account lifecycle', () => {
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
-  it('无用户写权限时不能软删除用户', async () => {
+  it('无用户写权限时不能办理离职', async () => {
     ;(canMutateOrgUsers as any).mockReturnValue(false)
 
     const response = await DELETE(deleteRequest(), routeContext)
@@ -281,7 +297,7 @@ describe('/api/admin/users/[id] account lifecycle', () => {
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
-  it('不允许软删除当前组织的 SUPER_ADMIN', async () => {
+  it('不允许为当前组织的 SUPER_ADMIN 办理离职', async () => {
     const lookup = makeQuery({ data: targetUser(), error: null })
     ;(supabaseAdmin.from as any).mockReturnValue(lookup)
     ;(userHasOrgRoleCode as any).mockResolvedValue(true)
@@ -295,7 +311,7 @@ describe('/api/admin/users/[id] account lifecycle', () => {
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
-  it('软删除通过原子 RPC 同时停用、禁止登录并撤销会话', async () => {
+  it('离职通过原子 RPC 结束成员关系、撤销授权和会话并记录原因', async () => {
     const lookup = makeQuery({ data: targetUser(), error: null })
     ;(supabaseAdmin.from as any).mockReturnValue(lookup)
 
@@ -304,17 +320,18 @@ describe('/api/admin/users/[id] account lifecycle', () => {
     expect(response.status).toBe(200)
     expect(lookup.update).not.toHaveBeenCalled()
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
-      'set_org_user_account_state_and_revoke_sessions_v1',
+      'admin_offboard_member_v1',
       {
-        p_target_user_id: targetId,
+        p_actor_id: actorId,
         p_org_id: orgId,
-        p_status: 'inactive',
-        p_login_enabled: false,
+        p_user_id: targetId,
+        p_reason: 'resignation accepted',
+        p_request_id: 'request-offboard-1',
       }
     )
   })
 
-  it('软删除 RPC 失败时返回 500 且不执行非原子 update', async () => {
+  it('离职 RPC 失败时返回 500 且不执行非原子 update', async () => {
     const lookup = makeQuery({ data: targetUser(), error: null })
     ;(supabaseAdmin.from as any).mockReturnValue(lookup)
     ;(supabaseAdmin.rpc as any).mockResolvedValue({
@@ -327,5 +344,25 @@ describe('/api/admin/users/[id] account lifecycle', () => {
     expect(response.status).toBe(500)
     expect(lookup.update).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+  })
+
+  it('主部门调岗通过专用原子命令而不是先更新用户后补关系', async () => {
+    const departmentId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+    const lookup = makeQuery({ data: targetUser(), error: null })
+    ;(supabaseAdmin.from as any).mockReturnValue(lookup)
+
+    const response = await PATCH(patchRequest({ primary_dept_id: departmentId }), routeContext)
+
+    expect(response.status).toBe(200)
+    expect(lookup.update).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      'admin_transfer_primary_department_v1',
+      expect.objectContaining({
+        p_actor_id: actorId,
+        p_org_id: orgId,
+        p_user_id: targetId,
+        p_department_id: departmentId,
+      }),
+    )
   })
 })

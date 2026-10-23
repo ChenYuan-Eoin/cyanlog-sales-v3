@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, KeyRoundIcon, PowerOffIcon, PowerIcon, LockIcon, UnlockIcon, RefreshCwIcon } from 'lucide-react'
+import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, KeyRoundIcon, PowerOffIcon, PowerIcon, LockIcon, UnlockIcon, RefreshCwIcon, MailIcon, BanIcon } from 'lucide-react'
 import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment, FeishuSyncFeedback } from '../types'
 import Fuse from 'fuse.js'
 import { success, error, confirmAction } from '@/lib/toast'
@@ -407,10 +407,20 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onRefresh
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <span className={`inline-block h-2 w-2 rounded-full ${
-            row.original.status === 'active' ? 'bg-emerald-400' : 'bg-amber-400'
+            row.original.membership_status === 'invited'
+              ? 'bg-blue-400'
+              : row.original.status === 'active'
+                ? 'bg-emerald-400'
+                : 'bg-amber-400'
           }`} />
           <span className="text-sm text-slate-600">
-            {row.original.status === 'active' ? '在职' : row.original.status === 'suspended' ? '已停用' : '未激活'}
+            {row.original.membership_status === 'invited'
+              ? '待激活'
+              : row.original.status === 'active'
+                ? '在职'
+                : row.original.status === 'suspended'
+                  ? '已停用'
+                  : '已离职'}
           </span>
         </div>
       ),
@@ -423,6 +433,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onRefresh
         const user = row.original
         const isDisabled = user.status !== 'active'
         const isLoginDisabled = user.login_enabled === false
+        const isInvited = user.membership_status === 'invited'
         const roleMutationRestriction = getRoleMutationRestriction(user, currentUserId)
 
         return (
@@ -441,9 +452,9 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onRefresh
 
               {/* P0: 分配角色 */}
               <DropdownMenuItem
-                disabled={Boolean(roleMutationRestriction)}
+                disabled={Boolean(roleMutationRestriction) || isInvited}
                 onSelect={() => {
-                  if (!roleMutationRestriction) onAssignRole(user)
+                  if (!roleMutationRestriction && !isInvited) onAssignRole(user)
                 }}
                 title={roleMutationRestriction?.reason}
               >
@@ -466,6 +477,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onRefresh
 
               {/* P0: 重置密码 */}
               <DropdownMenuItem
+                disabled={isInvited}
                 onSelect={async () => {
                   if (!await confirmAction(`确定要重置用户 "${user.display_name}" 的密码吗？\n将生成临时密码，用户首次登录需改密。`, { confirmText: '重置密码' })) return
                   try {
@@ -489,16 +501,77 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onRefresh
                 重置密码
               </DropdownMenuItem>
 
+              <DropdownMenuItem
+                disabled={!isInvited}
+                onSelect={async () => {
+                  if (!await confirmAction(`重新生成 "${user.display_name}" 的待激活邀请码吗？旧激活码将立即失效。`, { confirmText: '重发邀请' })) return
+                  try {
+                    const res = await fetch(`/api/admin/users/${user.id}/invitations`, {
+                      method: 'POST',
+                      headers: buildAuthHeaders(),
+                    })
+                    const result = await res.json()
+                    if (!res.ok) {
+                      error(result.error || '重发邀请失败')
+                      return
+                    }
+                    success(`新激活码：${result.data?.activationCode}（7 天内有效）`)
+                    await onRefresh?.()
+                  } catch (_err) {
+                    error('重发邀请请求失败')
+                  }
+                }}
+              >
+                <MailIcon className="h-4 w-4 mr-2" />
+                重发待激活邀请
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                disabled={!isInvited}
+                onSelect={async () => {
+                  if (!await confirmAction(`撤销 "${user.display_name}" 当前待激活邀请吗？`, { confirmText: '撤销邀请', danger: true })) return
+                  try {
+                    const res = await fetch(`/api/admin/users/${user.id}/invitations`, {
+                      method: 'DELETE',
+                      headers: buildAuthHeaders(),
+                    })
+                    const result = await res.json()
+                    if (!res.ok) {
+                      error(result.error || '撤销邀请失败')
+                      return
+                    }
+                    success('待激活邀请已撤销')
+                    await onRefresh?.()
+                  } catch (_err) {
+                    error('撤销邀请请求失败')
+                  }
+                }}
+              >
+                <BanIcon className="h-4 w-4 mr-2" />
+                撤销待激活邀请
+              </DropdownMenuItem>
+
               {/* P1: 停用/启用 */}
               <DropdownMenuItem
+                disabled={isInvited}
                 onSelect={async () => {
-                  const action = isDisabled ? '启用' : '停用'
-                  if (!await confirmAction(`确定要${action}用户 "${user.display_name}" 吗？`, { confirmText: action, danger: !isDisabled })) return
+                  const isRehire = user.status === 'inactive'
+                  const action = isRehire ? '恢复在职' : isDisabled ? '启用' : '停用'
+                  if (!await confirmAction(
+                    isRehire
+                      ? `确定将 "${user.display_name}" 恢复为在职吗？部门和角色需要重新配置，登录保持关闭。`
+                      : `确定要${action}用户 "${user.display_name}" 吗？`,
+                    { confirmText: action, danger: !isDisabled },
+                  )) return
                   try {
-                    const res = await fetch(`/api/admin/users/${user.id}`, {
-                      method: 'PATCH',
+                    const res = await fetch(
+                      isRehire
+                        ? `/api/admin/users/${user.id}/restore`
+                        : `/api/admin/users/${user.id}`,
+                      {
+                      method: isRehire ? 'POST' : 'PATCH',
                       headers: buildAuthHeaders(true),
-                      body: JSON.stringify({ status: isDisabled ? 'active' : 'suspended' }),
+                      body: JSON.stringify(isRehire ? {} : { status: isDisabled ? 'active' : 'suspended' }),
                     })
                     const result = await res.json()
                     if (!res.ok) {
@@ -527,6 +600,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onRefresh
 
               {/* P1: 允许/禁止登录 */}
               <DropdownMenuItem
+                disabled={isInvited}
                 onSelect={async () => {
                   const action = isLoginDisabled ? '允许' : '禁止'
                   if (!await confirmAction(`确定要${action}用户 "${user.display_name}" 登录吗？`, { confirmText: action, danger: !isLoginDisabled })) return
@@ -563,31 +637,66 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onRefresh
 
               <DropdownMenuSeparator />
 
-              {/* P0: 删除（破坏性操作放在最后） */}
-              <DropdownMenuItem
-                className="text-red-600"
-                onSelect={async () => {
-                  if (!await confirmAction(`确定要删除用户 "${user.display_name}" 吗？\n此操作不可恢复。`, { confirmText: '删除', danger: true })) return
-                  try {
-                    const res = await fetch(`/api/admin/users/${user.id}`, {
-                      method: 'DELETE',
-                      headers: buildAuthHeaders(),
-                    })
-                    const result = await res.json()
-                    if (!res.ok) {
-                      error(result.error || '删除失败')
-                      return
+              {!isInvited && (
+                <DropdownMenuItem
+                  className="text-red-600"
+                  disabled={Boolean(roleMutationRestriction)}
+                  onSelect={async () => {
+                    if (!await confirmAction(`确定要为 "${user.display_name}" 办理离职吗？\n成员关系、角色和部门授权会结束，历史审计保留，可在之后明确复职。`, { confirmText: '办理离职', danger: true })) return
+                    try {
+                      const res = await fetch(`/api/admin/users/${user.id}`, {
+                        method: 'DELETE',
+                        headers: buildAuthHeaders(true),
+                        body: JSON.stringify({ reason: 'tenant administrator offboarding' }),
+                      })
+                      const result = await res.json()
+                      if (!res.ok) {
+                        error(result.error || '办理离职失败')
+                        return
+                      }
+                      success('成员已离职，历史记录已保留')
+                      await onRefresh?.()
+                    } catch (_err) {
+                      error('离职请求失败')
                     }
-                    success('用户已删除')
-                    await onRefresh?.()
-                  } catch (_err) {
-                    error('删除请求失败')
-                  }
-                }}
-              >
-                <TrashIcon className="h-4 w-4 mr-2" />
-                删除
-              </DropdownMenuItem>
+                  }}
+                >
+                  <TrashIcon className="h-4 w-4 mr-2" />
+                  办理离职
+                </DropdownMenuItem>
+              )}
+
+              {!isInvited && (
+                <DropdownMenuItem
+                  className="text-red-600"
+                  disabled={Boolean(roleMutationRestriction)}
+                  onSelect={async () => {
+                    if (!await confirmAction(
+                      `确定要将 "${user.display_name}" 移出当前组织吗？\n只结束当前租户的成员关系、角色、部门和空间授权，人员账户与历史审计保留。`,
+                      { confirmText: '移出当前组织', danger: true },
+                    )) return
+                    try {
+                      const res = await fetch(`/api/admin/users/${user.id}/membership`, {
+                        method: 'DELETE',
+                        headers: buildAuthHeaders(true),
+                        body: JSON.stringify({ reason: 'tenant administrator removed membership' }),
+                      })
+                      const result = await res.json()
+                      if (!res.ok) {
+                        error(result.error || '移出当前组织失败')
+                        return
+                      }
+                      success('成员已移出当前组织，账户与历史记录已保留')
+                      await onRefresh?.()
+                    } catch (_err) {
+                      error('移出当前组织请求失败')
+                    }
+                  }}
+                >
+                  <TrashIcon className="h-4 w-4 mr-2" />
+                  移出当前组织
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )
@@ -897,15 +1006,17 @@ export default function OrgStructureTab({
               const res = await fetch('/api/admin/users', {
                 method: 'POST',
                 headers: buildAuthHeaders(true),
-                body: JSON.stringify({ ...values, status: 'active' }),
+                body: JSON.stringify(values),
               })
               const result = await res.json()
               if (!res.ok) {
                 error(result.error || '创建用户失败')
                 throw new Error(result.error)
               }
-              const tempPassword = result.data?.tempPassword
-              success(tempPassword ? `用户创建成功，临时密码：${tempPassword}` : '用户创建成功')
+              const activationCode = result.data?.activationCode
+              success(activationCode
+                ? `成员邀请已创建，激活码：${activationCode}（7 天内有效）`
+                : '成员邀请已创建')
               await onRefresh?.()
             }}
             trigger={
@@ -980,6 +1091,8 @@ export default function OrgStructureTab({
           userName={assigningUser.display_name}
           currentRoles={assigningUser.role_ids || []}
           departments={departments}
+          spaces={orgSummary?.spaces ?? []}
+          scopedRoles={assigningUser.scoped_roles}
           open={true}
           onOpenChange={(open) => !open && setAssigningUser(null)}
           onSubmit={async (roleIds) => {
@@ -994,6 +1107,44 @@ export default function OrgStructureTab({
               throw new Error(result.error)
             }
             success('角色分配成功')
+            await onRefresh?.()
+          }}
+          onSubmitScoped={async (roleId, scopeType, scopeId) => {
+            const res = await fetch(`/api/admin/users/${assigningUser.id}/role-scopes`, {
+              method: 'POST',
+              headers: buildAuthHeaders(true),
+              body: JSON.stringify({
+                role_id: roleId,
+                scope_type: scopeType,
+                scope_id: scopeId,
+                reason: `${scopeType} role assignment`,
+              }),
+            })
+            const result = await res.json()
+            if (!res.ok) {
+              error(result.error || '分配作用域角色失败')
+              throw new Error(result.error)
+            }
+            success('作用域角色分配成功')
+            await onRefresh?.()
+          }}
+          onRevokeScoped={async (roleId, scopeType, scopeId) => {
+            const res = await fetch(`/api/admin/users/${assigningUser.id}/role-scopes`, {
+              method: 'DELETE',
+              headers: buildAuthHeaders(true),
+              body: JSON.stringify({
+                role_id: roleId,
+                scope_type: scopeType,
+                scope_id: scopeId,
+                reason: `${scopeType} role assignment revoked`,
+              }),
+            })
+            const result = await res.json()
+            if (!res.ok) {
+              error(result.error || '撤销作用域角色失败')
+              throw new Error(result.error)
+            }
+            success('作用域角色已撤销')
             await onRefresh?.()
           }}
         />

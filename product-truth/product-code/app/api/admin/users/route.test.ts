@@ -17,7 +17,6 @@ vi.mock('@/lib/admin/org-membership', () => ({
   createAdminTempPassword: vi.fn(),
   ensureDefaultOrganizationMembership: vi.fn(),
   hashAdminPassword: vi.fn(),
-  replaceOrgRoleIds: vi.fn(),
   syncPrimaryDepartmentMembership: vi.fn(),
   syncUserSalesSpaces: vi.fn(),
 }))
@@ -44,7 +43,6 @@ import {
   createAdminTempPassword,
   ensureDefaultOrganizationMembership,
   hashAdminPassword,
-  replaceOrgRoleIds,
   syncPrimaryDepartmentMembership,
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
@@ -79,7 +77,7 @@ function malformedJsonRequest(): any {
 
 function makeQuery(result: { data?: unknown; error?: unknown }) {
   const query: any = {}
-  ;['select', 'insert', 'delete', 'eq'].forEach((method) => {
+  ;['select', 'insert', 'update', 'delete', 'eq'].forEach((method) => {
     query[method] = vi.fn().mockReturnValue(query)
   })
   query.maybeSingle = vi.fn().mockResolvedValue(result)
@@ -99,14 +97,19 @@ function mockSuccessfulUserInsert() {
       display_name: 'New User',
       title: null,
       primary_dept_id: null,
-      status: 'active',
+      status: 'inactive',
+      login_enabled: false,
     },
     error: null,
   })
+  const membershipUpdate = makeQuery({ data: null, error: null })
+  const invitationInsert = makeQuery({ data: null, error: null })
   ;(supabaseAdmin.from as any)
     .mockReturnValueOnce(duplicateLookup)
     .mockReturnValueOnce(userInsert)
-  return { duplicateLookup, userInsert }
+    .mockReturnValueOnce(membershipUpdate)
+    .mockReturnValueOnce(invitationInsert)
+  return { duplicateLookup, userInsert, membershipUpdate, invitationInsert }
 }
 
 describe('POST /api/admin/users', () => {
@@ -124,7 +127,6 @@ describe('POST /api/admin/users', () => {
     ;(ensureDefaultOrganizationMembership as any).mockResolvedValue(undefined)
     ;(syncPrimaryDepartmentMembership as any).mockResolvedValue(undefined)
     ;(syncUserSalesSpaces as any).mockResolvedValue(undefined)
-    ;(replaceOrgRoleIds as any).mockResolvedValue([])
   })
 
   it('无效 JSON 返回参数错误且不访问数据库', async () => {
@@ -167,7 +169,7 @@ describe('POST /api/admin/users', () => {
   })
 
   it('没有主部门时只要求用户写权限且不调用部门关系 helper', async () => {
-    mockSuccessfulUserInsert()
+    const { membershipUpdate, invitationInsert } = mockSuccessfulUserInsert()
 
     const res = await POST(makeRequest())
 
@@ -177,7 +179,18 @@ describe('POST /api/admin/users', () => {
     expect(syncPrimaryDepartmentMembership).not.toHaveBeenCalled()
     expect(syncUserSalesSpaces).not.toHaveBeenCalled()
     expect(ensureDefaultOrganizationMembership).toHaveBeenCalledWith(userId, orgId)
-    expect(replaceOrgRoleIds).toHaveBeenCalledWith(userId, orgId, [], 'admin-user')
+    expect(membershipUpdate.update).toHaveBeenCalledWith({
+      status: 'invited',
+      employment_status: 'active',
+    })
+    expect(invitationInsert.insert).toHaveBeenCalledWith(expect.objectContaining({
+      org_id: orgId,
+      user_id: userId,
+      role_ids: [],
+      status: 'pending',
+      delivery_method: 'manual_handoff',
+      created_by: 'admin-user',
+    }))
   })
 
   it('有主部门时使用同一组织双权限并把 orgId 传给关系 helper', async () => {
@@ -189,7 +202,8 @@ describe('POST /api/admin/users', () => {
         display_name: 'New User',
         title: null,
         primary_dept_id: primaryDepartmentId,
-        status: 'active',
+        status: 'inactive',
+        login_enabled: false,
       },
       error: null,
     })
@@ -203,10 +217,10 @@ describe('POST /api/admin/users', () => {
   })
 
   it('关联写失败时补偿删除同时限定用户和组织', async () => {
-    mockSuccessfulUserInsert()
+    const { invitationInsert } = mockSuccessfulUserInsert()
     const cleanup = makeQuery({ data: null, error: null })
+    invitationInsert.insert.mockResolvedValueOnce({ data: null, error: new Error('INVITATION_FAILED') })
     ;(supabaseAdmin.from as any).mockReturnValueOnce(cleanup)
-    ;(replaceOrgRoleIds as any).mockRejectedValue(new Error('ROLE_ASSIGN_FAILED'))
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
     const res = await POST(makeRequest())

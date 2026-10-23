@@ -16,6 +16,7 @@ vi.mock('@/lib/admin/org-role-authority', () => ({
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     from: vi.fn(),
+    rpc: vi.fn(),
   },
 }))
 
@@ -68,6 +69,7 @@ describe('/api/admin/users/[id]/report-to', () => {
     ])
     ;(canMutateOrgUsers as any).mockReturnValue(true)
     ;(userHasOrgRoleCode as any).mockResolvedValue(false)
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
   })
 
   it('拒绝非法直属上级 ID 且不读写目标用户', async () => {
@@ -129,47 +131,47 @@ describe('/api/admin/users/[id]/report-to', () => {
       data: { id: targetId, display_name: '普通用户', org_id: orgId },
       error: null,
     })
-    const managerLookup = makeQuery({ data: null, error: null })
-    ;(supabaseAdmin.from as any)
-      .mockReturnValueOnce(targetLookup)
-      .mockReturnValueOnce(managerLookup)
+    ;(supabaseAdmin.from as any).mockReturnValueOnce(targetLookup)
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({
+      data: null,
+      error: { code: '23514', message: 'invalid reporting manager' },
+    })
 
     const response = await PATCH(makeRequest(managerId), routeContext)
 
     expect(response.status).toBe(400)
-    expect(managerLookup.eq).toHaveBeenCalledWith('id', managerId)
-    expect(managerLookup.eq).toHaveBeenCalledWith('org_id', orgId)
-    expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
-    expect(targetLookup.update).not.toHaveBeenCalled()
-    expect(managerLookup.update).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      'admin_set_reporting_manager_v1',
+      expect.objectContaining({
+        p_actor_id: actorId,
+        p_org_id: orgId,
+        p_user_id: targetId,
+        p_manager_user_id: managerId,
+      }),
+    )
   })
 
-  it('以当前组织同时限定用户、汇报对象、下属检查和最终写入', async () => {
+  it('以单一事务命令校验层级并写入审计事件', async () => {
     const targetLookup = makeQuery({
       data: { id: targetId, display_name: '普通用户', org_id: orgId },
       error: null,
     })
-    const managerLookup = makeQuery({ data: { id: managerId }, error: null })
-    const subordinateLookup = makeQuery({ data: [], error: null })
-    const update = makeQuery({ data: null, error: null })
-    ;(supabaseAdmin.from as any)
-      .mockReturnValueOnce(targetLookup)
-      .mockReturnValueOnce(managerLookup)
-      .mockReturnValueOnce(subordinateLookup)
-      .mockReturnValueOnce(update)
+    ;(supabaseAdmin.from as any).mockReturnValueOnce(targetLookup)
 
     const response = await PATCH(makeRequest(managerId), routeContext)
     const body = await response.json()
 
     expect(response.status).toBe(200)
     expect(body.data).toEqual({ id: targetId, report_to_user_id: managerId })
-    expect(managerLookup.eq).toHaveBeenCalledWith('org_id', orgId)
-    expect(subordinateLookup.eq).toHaveBeenCalledWith('org_id', orgId)
-    expect(update.update).toHaveBeenCalledWith({
-      report_to_user_id: managerId,
-      updated_at: expect.any(String),
-    })
-    expect(update.eq).toHaveBeenCalledWith('id', targetId)
-    expect(update.eq).toHaveBeenCalledWith('org_id', orgId)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      'admin_set_reporting_manager_v1',
+      expect.objectContaining({
+        p_actor_id: actorId,
+        p_org_id: orgId,
+        p_user_id: targetId,
+        p_manager_user_id: managerId,
+      }),
+    )
   })
 })

@@ -145,6 +145,25 @@ describe('middleware public API routing', () => {
     expect(brandNeighbor.headers.get('location')).toBe('https://sales.cyanlog.icu/login')
   })
 
+  it('allows invitation activation without opening the rest of member administration', async () => {
+    const page = await middleware(makeRequest(
+      'https://sales.cyanlog.icu/accept-invitation?token=one-time',
+      { host: 'sales.cyanlog.icu' },
+    ))
+    const api = await middleware(makeRequest(
+      'https://sales.cyanlog.icu/api/auth/invitations/accept',
+      { host: 'sales.cyanlog.icu' },
+    ))
+    const adminNeighbor = await middleware(makeRequest(
+      'https://sales.cyanlog.icu/api/admin/users',
+      { host: 'sales.cyanlog.icu' },
+    ))
+
+    expect(page.status).toBe(200)
+    expect(api.status).toBe(200)
+    expect(adminNeighbor.status).toBe(401)
+  })
+
   it('allows both registration entrypoints without opening every auth API route', async () => {
     const legacyRegister = await middleware(
       makeRequest('https://sales.cyanlog.icu/api/auth', { host: 'sales.cyanlog.icu' }),

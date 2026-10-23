@@ -149,12 +149,15 @@ describe('/api/admin/users/[id]/login-enabled', () => {
     expect(body.data.login_enabled).toBe(false)
     expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
-      'set_org_user_account_state_and_revoke_sessions_v1',
+      'admin_set_account_state_v1',
       {
-        p_target_user_id: targetId,
+        p_actor_id: actorId,
         p_org_id: orgId,
+        p_user_id: targetId,
         p_status: null,
         p_login_enabled: false,
+        p_reason: 'tenant administrator login state update',
+        p_request_id: null,
       }
     )
   })
@@ -171,12 +174,15 @@ describe('/api/admin/users/[id]/login-enabled', () => {
     expect(response.status).toBe(200)
     expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
-      'set_org_user_account_state_and_revoke_sessions_v1',
+      'admin_set_account_state_v1',
       {
-        p_target_user_id: targetId,
+        p_actor_id: actorId,
         p_org_id: orgId,
+        p_user_id: targetId,
         p_status: null,
         p_login_enabled: true,
+        p_reason: 'tenant administrator login state update',
+        p_request_id: null,
       }
     )
   })

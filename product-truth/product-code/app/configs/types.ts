@@ -579,6 +579,8 @@ export interface OrgSummaryUser {
   role_codes?: string[]
   scoped_roles?: ScopedRoleAssignment[]
   status: string
+  membership_status?: 'invited' | 'active' | 'suspended' | 'ended'
+  employment_status?: 'active' | 'suspended' | 'ended'
   must_change_password: boolean
   login_enabled?: boolean
   report_to_user_id?: string | null
