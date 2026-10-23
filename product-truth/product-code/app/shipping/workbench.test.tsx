@@ -21,6 +21,44 @@ beforeEach(() => { fetcher.mockReset(); useLedger([]); vi.stubGlobal('React', Re
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('self-service shipping workbench', () => {
+  it('saves a pre-dispatch work order as a new review revision without dispatching', async () => {
+    const order: ShipmentOrder = {
+      ...fixtureOrders[0],
+      status: 'awaiting_confirmation',
+      waybill: null,
+      revision: 1,
+      input: { ...fixtureOrders[0].input, sender: settings.sender },
+    }
+    fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/amend')) {
+        const body = JSON.parse(String(init?.body))
+        return Response.json({
+          ...order,
+          revision: 2,
+          status: 'awaiting_confirmation',
+          input: body.input,
+          amendedAt: '2026-10-22T00:00:00.000Z',
+        })
+      }
+      return Response.json({ records: [order] })
+    })
+    render(<ShippingWorkbench settings={settings}/>)
+    fireEvent.click(await screen.findByRole('button', { name: '修改工单' }))
+    fireEvent.change(screen.getByLabelText('修改物品'), { target: { value: '合同原件' } })
+    fireEvent.change(screen.getByLabelText('修改原因'), { target: { value: '客户补充包装要求' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存为新版本' }))
+
+    await screen.findByText('工单已保存为新版本并回到待核对；尚未向承运商发单。')
+    const amendmentCall = fetcher.mock.calls.find(([url]) => String(url).endsWith('/amend'))
+    expect(amendmentCall).toBeTruthy()
+    expect(JSON.parse(String(amendmentCall![1].body))).toMatchObject({
+      expected_revision: 1,
+      reason: '客户补充包装要求',
+      input: expect.objectContaining({ cargo: '合同原件' }),
+    })
+    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/confirm'))).toBe(false)
+  })
+
   it('reports a failed template download and lets the operator retry', async () => {
     const build = vi.spyOn(importParser, 'buildShippingTemplate').mockRejectedValue(new Error('模板生成失败'))
     try {

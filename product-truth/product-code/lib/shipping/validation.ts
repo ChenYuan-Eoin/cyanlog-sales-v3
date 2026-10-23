@@ -7,7 +7,7 @@ const shippingSubmitterSchema = z.object({ name: text(60), phone: text(30).regex
 export const shippingInputSchema = z.object({ sender: contactSchema, recipient: contactSchema, cargo: text(60), weight: z.number().finite().positive().max(20), serviceId: z.number().int().positive().optional(), servicePreference: z.enum(['standard', 'urgent']).optional(), remark: z.string().trim().max(100), source: z.literal('manual'), payment: z.enum(['sender_cash', 'recipient', 'sender_monthly']).optional(), customerName: z.string().trim().max(120).optional(), submittedBy: shippingSubmitterSchema.optional(), specialRequirements: z.string().trim().max(500).optional(), pickupWindow: z.string().trim().max(80).optional() }).strict()
 const ownerShippingInputSchema = shippingInputSchema.extend({ serviceId: z.number().int().positive() })
 export const createSchema = z.object({ key: z.string().uuid(), input: ownerShippingInputSchema, confirmed: z.literal(true) }).strict()
-const operatorIntakeInputSchema = shippingInputSchema.extend({
+export const operatorIntakeInputSchema = shippingInputSchema.extend({
   submittedBy: shippingSubmitterSchema.extend({ team: z.string().trim().max(80).default('') }).optional(),
   sender: contactSchema.optional(),
   weight: z.number().finite().positive().max(20).default(1),
@@ -48,6 +48,11 @@ export const shipmentLedgerQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 }).strict()
 export const returnShipmentSchema = z.object({ reason: z.string().trim().min(2, '请填写退回原因').max(300) }).strict()
+export const amendShipmentSchema = z.object({
+  expected_revision: z.number().int().min(1),
+  input: operatorIntakeInputSchema.extend({ sender: contactSchema }),
+  reason: z.string().trim().min(2, '请填写修改原因').max(300),
+}).strict()
 export const assignShipmentSchema = z.object({ salesRef: z.string().trim().min(1, '请填写销售标识').max(120), customerRef: z.string().trim().max(120).optional() }).strict()
 export const trackingSchema = z.object({ waybill: z.string().trim().toUpperCase().regex(/^(?:SF)?\d{10,15}$/, '请输入一个有效顺丰运单号'), phoneSuffix: z.string().regex(/^\d{4}$/, '请输入收寄任一方手机号后四位').optional() }).strict()
 

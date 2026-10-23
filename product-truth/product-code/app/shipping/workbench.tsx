@@ -72,6 +72,20 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   const senderTextInput = useRef<HTMLTextAreaElement>(null)
   const expandedReviewSection = useRef<HTMLElement | null>(null)
   const [returnDraft, setReturnDraft] = useState<{ orderId: string; reason: string; error: string } | null>(null)
+  const [amendmentDraft, setAmendmentDraft] = useState<{
+    orderId: string
+    recipientName: string
+    recipientPhone: string
+    province: string
+    city: string
+    county: string
+    address: string
+    cargo: string
+    weight: string
+    remark: string
+    reason: string
+    error: string
+  } | null>(null)
   const returnRunning = useRef(false)
   const batchSender = senderOverride || settings.sender
   const senderValidation = contactSchema.safeParse(batchSender)
@@ -405,6 +419,73 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
       setReturnDraft(current => current && { ...current, error: errorMessage }); setMessage(errorMessage)
     } finally { returnRunning.current = false; setBusy('') }
   }
+  function beginAmendment(order: ShipmentOrder) {
+    if (!['awaiting_confirmation', 'returned'].includes(order.status) || order.waybill) return
+    setAmendmentDraft({
+      orderId: order.id,
+      recipientName: order.input.recipient.name,
+      recipientPhone: order.input.recipient.phone,
+      province: order.input.recipient.province,
+      city: order.input.recipient.city,
+      county: order.input.recipient.county,
+      address: order.input.recipient.address,
+      cargo: order.input.cargo,
+      weight: String(order.input.weight),
+      remark: order.input.remark,
+      reason: '',
+      error: '',
+    })
+  }
+  async function amendOrder(order: ShipmentOrder) {
+    if (!amendmentDraft || amendmentDraft.orderId !== order.id || busy) return
+    const weight = Number(amendmentDraft.weight)
+    const nextInput: ShippingInput = {
+      ...order.input,
+      recipient: {
+        name: amendmentDraft.recipientName.trim(),
+        phone: amendmentDraft.recipientPhone.trim(),
+        province: amendmentDraft.province.trim(),
+        city: amendmentDraft.city.trim(),
+        county: amendmentDraft.county.trim(),
+        address: amendmentDraft.address.trim(),
+      },
+      cargo: amendmentDraft.cargo.trim(),
+      weight,
+      remark: amendmentDraft.remark.trim(),
+    }
+    if (!contactSchema.safeParse(nextInput.recipient).success) {
+      setAmendmentDraft(current => current && { ...current, error: '请补齐收件人姓名、有效电话、省市区和详细地址。' })
+      return
+    }
+    if (!Number.isFinite(weight) || weight <= 0 || weight > 20) {
+      setAmendmentDraft(current => current && { ...current, error: '重量必须大于 0 且不超过 20kg。' })
+      return
+    }
+    if (amendmentDraft.reason.trim().length < 2) {
+      setAmendmentDraft(current => current && { ...current, error: '请填写至少2个字符的修改原因。' })
+      return
+    }
+    setBusy(order.id); setMessage('')
+    try {
+      const updated = await request<ShipmentOrder>(`/api/shipping/ledger/${encodeURIComponent(order.id)}/amend`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expected_revision: order.revision || 1,
+          input: nextInput,
+          reason: amendmentDraft.reason.trim(),
+        }),
+      })
+      setOrders(rows => rows.map(item => item.id === order.id ? updated : item))
+      setSelectedId(order.id)
+      setReviewIds(ids => ids.filter(id => id !== order.id))
+      setAmendmentDraft(null)
+      setMessage('工单已保存为新版本并回到待核对；尚未向承运商发单。')
+    } catch (error) {
+      const errorMessage = `工单修改未完成：${(error as Error).message}`
+      setAmendmentDraft(current => current && { ...current, error: errorMessage })
+      setMessage(errorMessage)
+    } finally { setBusy('') }
+  }
   async function refreshTracking(number = manualWaybill || selected?.waybill || '') {
     number = number.trim().toUpperCase()
     if (!number) return
@@ -572,6 +653,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
             {order.status === 'awaiting_confirmation' && <>
               <div className={styles.cardActions} onClick={event => event.stopPropagation()}>
                 <label className={styles.reviewSelection}><input type="checkbox" aria-label={`核对并选择工单 ${order.orderNo}`} disabled={confirmationBusy || !!busy} checked={reviewIds.includes(order.id)} onChange={() => toggleReview(order)}/>核对工单</label>
+                <button className={styles.secondaryButton} disabled={confirmationBusy || !!busy} onClick={() => beginAmendment(order)}>修改工单</button>
                 <button className={styles.reject} disabled={confirmationBusy || !!busy} onClick={() => beginReturn(order)}>退回工单</button>
               </div>
               {returnDraft?.orderId === order.id && <form className={styles.returnForm} aria-label={`退回工单 ${order.orderNo}`} onClick={event => event.stopPropagation()} onSubmit={event => { event.preventDefault(); void returnOrder(order) }}>
@@ -616,6 +698,38 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                 {tracking?.waybill === order.waybill && trackingEvents.length > 0 ? <ol className={styles.compactTimeline}>{trackingEvents.slice(0, 3).map((event, index) => <li key={`${event.time}-${index}`}><time>{event.time}</time><span>{event.description}</span><small>{event.location}</small></li>)}</ol> : <p className={styles.intakeHint}>{order.waybill ? '正在读取或尚未取得最新轨迹；失败时保留本地状态并提示原因。' : '尚未生成运单，不能展示递送轨迹。'}</p>}
                 {order.waybill && <button type="button" className={styles.secondaryButton} disabled={trackingBusy} onClick={() => void refreshTracking(order.waybill || '')}>{trackingBusy ? '刷新中…' : '刷新递送信息'}</button>}
               </section>
+            )}
+            {order.status === 'returned' && (
+              <div className={styles.cardActions} onClick={event => event.stopPropagation()}>
+                <button className={styles.secondaryButton} disabled={!!busy} onClick={() => beginAmendment(order)}>修改工单</button>
+              </div>
+            )}
+            {['awaiting_confirmation', 'returned'].includes(order.status) && amendmentDraft?.orderId === order.id && (
+              <form
+                className={styles.returnForm}
+                aria-label={`修改工单 ${order.orderNo}`}
+                onClick={event => event.stopPropagation()}
+                onSubmit={event => { event.preventDefault(); void amendOrder(order) }}
+              >
+                <div className={styles.batchFields}>
+                  <label>收件人<input aria-label="修改收件人" value={amendmentDraft.recipientName} maxLength={60} required onChange={event => setAmendmentDraft(current => current && { ...current, recipientName: event.target.value, error: '' })}/></label>
+                  <label>联系电话<input aria-label="修改收件电话" type="tel" value={amendmentDraft.recipientPhone} maxLength={30} required onChange={event => setAmendmentDraft(current => current && { ...current, recipientPhone: event.target.value, error: '' })}/></label>
+                  <label>省份<input aria-label="修改省份" value={amendmentDraft.province} maxLength={30} required onChange={event => setAmendmentDraft(current => current && { ...current, province: event.target.value, error: '' })}/></label>
+                  <label>城市<input aria-label="修改城市" value={amendmentDraft.city} maxLength={30} required onChange={event => setAmendmentDraft(current => current && { ...current, city: event.target.value, error: '' })}/></label>
+                  <label>区县<input aria-label="修改区县" value={amendmentDraft.county} maxLength={30} required onChange={event => setAmendmentDraft(current => current && { ...current, county: event.target.value, error: '' })}/></label>
+                  <label>详细地址<input aria-label="修改详细地址" value={amendmentDraft.address} maxLength={200} required onChange={event => setAmendmentDraft(current => current && { ...current, address: event.target.value, error: '' })}/></label>
+                  <label>物品<input aria-label="修改物品" value={amendmentDraft.cargo} maxLength={60} required onChange={event => setAmendmentDraft(current => current && { ...current, cargo: event.target.value, error: '' })}/></label>
+                  <label>重量 kg<input aria-label="修改重量" type="number" min="0.01" max="20" step="0.01" value={amendmentDraft.weight} required onChange={event => setAmendmentDraft(current => current && { ...current, weight: event.target.value, error: '' })}/></label>
+                </div>
+                <label>备注<textarea aria-label="修改备注" value={amendmentDraft.remark} maxLength={100} onChange={event => setAmendmentDraft(current => current && { ...current, remark: event.target.value, error: '' })}/></label>
+                <label>修改原因<textarea aria-label="修改原因" value={amendmentDraft.reason} minLength={2} maxLength={300} required onChange={event => setAmendmentDraft(current => current && { ...current, reason: event.target.value, error: '' })}/></label>
+                <small>保存后版本加一、保留原提交人和身份快照，并重新进入待核对；不会自动通知顺丰。</small>
+                {amendmentDraft.error && <p role="alert">{amendmentDraft.error}</p>}
+                <div>
+                  <button type="submit" className={styles.primary} disabled={!!busy}>{busy === order.id ? '保存中…' : '保存为新版本'}</button>
+                  <button type="button" className={styles.secondaryButton} disabled={!!busy} onClick={() => setAmendmentDraft(null)}>取消</button>
+                </div>
+              </form>
             )}
           </article>})}
         </div>

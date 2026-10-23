@@ -5,7 +5,7 @@ import { resolveBusinessContext, verifyShipmentContext } from './context'
 import { listShippingOperatorRecipients } from './operator-access'
 import type { Contact, ShipmentOrder, ShipmentOrderStatus, ShipmentReceipt, ShippingInput } from './types'
 
-const select = 'id,employee_profile_id,order_no,intake_source,confirmation_policy,status,sales_ref,customer_ref,assignment_status,shipment_payload,payload_hash,next_review_at,created_at,org_id,carrier_connection_id,billing_account_id,sender_profile_id,connection_environment,billing_account_tail,shipping_config_snapshot,shipping_waybills(waybill_no)'
+const select = 'id,employee_profile_id,order_no,intake_source,confirmation_policy,status,sales_ref,customer_ref,assignment_status,shipment_payload,payload_hash,revision,amended_at,next_review_at,created_at,org_id,carrier_connection_id,billing_account_id,sender_profile_id,connection_environment,billing_account_tail,shipping_config_snapshot,shipping_waybills(waybill_no)'
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 type ShipmentRow = {
   id: string
@@ -18,6 +18,8 @@ type ShipmentRow = {
   assignment_status: 'assigned' | 'unassigned'
   shipment_payload: ShippingInput
   payload_hash: string
+  revision?: number | null
+  amended_at?: string | null
   next_review_at: string | null
   created_at: string
   employee_profile_id?: string | null
@@ -52,7 +54,7 @@ function orderNo(now = new Date()) {
 function map(row: ShipmentRow): ShipmentOrder {
   const waybillRows = Array.isArray(row.shipping_waybills) ? row.shipping_waybills : row.shipping_waybills ? [row.shipping_waybills] : []
   const failure = row.shipping_config_snapshot?.orderFailure as { message?: unknown; at?: unknown } | undefined
-  return { ...(failure && typeof failure.message === 'string' && typeof failure.at === 'string' ? { failure: { message: failure.message.slice(0, 500), at: failure.at } } : {}), id: row.id, identityVerified: Boolean(row.employee_profile_id), orderNo: row.order_no, intakeSource: row.intake_source, confirmationPolicy: row.confirmation_policy, status: row.status, relation: { salesRef: row.sales_ref, customerRef: row.customer_ref, assignmentStatus: row.assignment_status }, input: row.shipment_payload, waybill: waybillRows[0]?.waybill_no || null, nextReviewAt: row.next_review_at, createdAt: row.created_at }
+  return { ...(failure && typeof failure.message === 'string' && typeof failure.at === 'string' ? { failure: { message: failure.message.slice(0, 500), at: failure.at } } : {}), id: row.id, identityVerified: Boolean(row.employee_profile_id), orderNo: row.order_no, intakeSource: row.intake_source, confirmationPolicy: row.confirmation_policy, status: row.status, relation: { salesRef: row.sales_ref, customerRef: row.customer_ref, assignmentStatus: row.assignment_status }, input: row.shipment_payload, waybill: waybillRows[0]?.waybill_no || null, revision: row.revision ?? 1, amendedAt: row.amended_at ?? null, nextReviewAt: row.next_review_at, createdAt: row.created_at }
 }
 
 export function publicShipmentReceipt(order: ShipmentOrder): ShipmentReceipt {
@@ -107,6 +109,45 @@ export async function createOwnerShipment(args: { orgId: string; userId: string;
   if (result.error || !result.data) throw new ShippingError(503, '本人寄件单暂未保存，请稍后重试。')
   if ((result.data as ShipmentRow).payload_hash !== payloadHash) throw new ShippingError(409, '同一寄件请求的内容发生变化，请打开原寄件单确认。')
   return map(result.data as ShipmentRow)
+}
+
+export async function amendShipmentOrder(args: {
+  orgId: string
+  userId: string
+  orderId: string
+  expectedRevision: number
+  input: ShippingInput
+  reason: string
+}) {
+  requireOrganization(args.orgId)
+  const payloadHash = hash(JSON.stringify(args.input))
+  const { data: amended, error } = await supabaseAdmin.rpc('amend_shipping_order_v1', {
+    p_actor_id: args.userId,
+    p_org_id: args.orgId,
+    p_order_id: args.orderId,
+    p_expected_revision: args.expectedRevision,
+    p_shipment_payload: args.input,
+    p_payload_hash: payloadHash,
+    p_reason: args.reason,
+  })
+  if (error) {
+    if (String(error.code || '') === '40001') {
+      throw new ShippingError(409, '工单已被其他操作员修改，请刷新后重试。')
+    }
+    if (String(error.code || '') === '23514') {
+      throw new ShippingError(409, '工单已发送、已出号或当前状态不允许修改。')
+    }
+    throw new ShippingError(503, '工单修改暂未保存，请稍后重试。')
+  }
+  if (amended !== true) throw new ShippingError(404, '寄件工单不存在。')
+
+  const { data, error: readError } = await supabaseAdmin.from('shipping_orders')
+    .select(select)
+    .eq('id', args.orderId)
+    .eq('org_id', args.orgId)
+    .single()
+  if (readError || !data) throw new ShippingError(503, '工单已修改，但最新版本读取失败，请刷新核对。')
+  return map(data as ShipmentRow)
 }
 
 export async function getShipmentByReceipt(token: string, owner?: { orgId: string; employeeId: string }) {

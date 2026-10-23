@@ -24,6 +24,8 @@ export type ShipmentOrder = {
   relation: ShipmentRelation
   input: ShippingInput
   waybill: string | null
+  revision?: number
+  amendedAt?: string | null
   nextReviewAt: string | null
   createdAt: string
   direction?: 'outbound' | 'inbound'
