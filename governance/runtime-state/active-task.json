@@ -129,33 +129,26 @@
     "harness_mode": "advisory"
   },
   "active_task": {
-    "id": "WP74",
-    "slug": "permission-registry-crud",
-    "name": "权限点目录增删改查与版本生命周期",
+    "id": "WP75",
+    "slug": "shipping-card-disclosure-and-company-parser",
+    "name": "寄件卡片单向展开与公司简称解析修复",
     "kind": "product",
     "status": "active",
-    "objective": "提供平台权限点的创建、读取、修改、提交审核、发布、停用、软删除和恢复；权限 key、说明、类别、资源动作和执行consumer统一版本化，所有变更写入审计，普通租户不得管理平台全局目录。",
+    "objective": "寄件台账默认保持紧凑收起；仅保留名字前的方向按钮控制展开/收起，展开不得自动勾选核对；再次点击必须可靠收起。文本解析必须从编号标题、公司简称加地址/联系人等上下文提取公司名，不得要求固定“验收文件”后缀。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3",
-    "activation_basis": "IN-20261023-070：人员生命周期已发布；用户明确要求权限点增删改查。Production仅有一个组织，因此将唯一组织设为平台权限目录管理员，现有权限生命周期迁移已应用，切换WP74。",
+    "activation_basis": "IN-20261023-080：权限目录CRUD已发布；用户提供三张生产截图指出卡片双按钮、展开自动勾选无法保持收起，以及易点云/开泰等公司简称未解析。按明确反馈切换WP75。",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/feature-packets/F003-account-auth.md",
-      "product-truth/feature-packets/F011-org-permission-config.md",
-      "product-truth/product-code/app/api/admin/permissions",
-      "product-truth/product-code/app/configs/tabs/PermissionRegistryPanel.tsx",
-      "product-truth/product-code/app/configs/tabs/PermissionRegistryPanel.test.tsx",
-      "product-truth/product-code/app/configs/tabs/RoleAccessTab.tsx",
-      "product-truth/product-code/lib/permission-catalog.ts",
-      "product-truth/product-code/lib/permission-catalog.test.ts",
-      "product-truth/product-code/lib/permission-registry.ts",
-      "product-truth/product-code/lib/permission-registry.test.ts",
-      "product-truth/product-code/lib/permission-registry-migration.test.ts",
-      "product-truth/product-code/lib/schema-check.ts",
-      "product-truth/product-code/supabase/migrations/20261021000005_permission_registry_lifecycle.sql",
+      "product-truth/feature-packets/F054-sf-self-service-order.md",
+      "product-truth/product-code/app/shipping/workbench.tsx",
+      "product-truth/product-code/app/shipping/workbench.test.tsx",
+      "product-truth/product-code/app/shipping/workbench.module.css",
+      "product-truth/product-code/lib/shipping/batch-text.ts",
+      "product-truth/product-code/lib/shipping/batch-text.test.ts",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本"
     ],
-    "feature_id": "F003",
+    "feature_id": "F054",
     "delivery_contract": {
       "target_state": "code_green",
       "allowed_states": [
@@ -175,23 +168,24 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "role_edit_save",
-        "role_access_enforcement",
-        "permission_registry_crud"
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
       ],
-      "note": "WP74只发布平台权限目录CRUD与生命周期；唯一组织作为平台目录管理员，不修改现有角色授权、人员或业务数据。",
+      "note": "WP75只发布寄件台账卡片展开/收起、核对选择和公司简称解析；不触发真实顺丰写单，不修改Production业务数据。",
       "production_database_mode": "read_only",
-      "runtime_profile": "application"
+      "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-recovery-v1"
     },
-    "started_at": "2026-10-23T17:00:00Z",
-    "reason": "人员生命周期已生产发布；继续补齐用户明确要求的权限点增删改查。",
+    "started_at": "2026-10-23T18:10:00Z",
+    "reason": "权限目录CRUD已生产发布；继续处理用户最新寄件卡片和公司简称解析反馈。",
     "micro_fixes": []
   },
   "execution_queue": {
     "active": {
-      "id": "WP74",
-      "slug": "permission-registry-crud",
-      "name": "权限点目录增删改查与版本生命周期"
+      "id": "WP75",
+      "slug": "shipping-card-disclosure-and-company-parser",
+      "name": "寄件卡片单向展开与公司简称解析修复"
     },
     "next": {
       "id": "WP35",
