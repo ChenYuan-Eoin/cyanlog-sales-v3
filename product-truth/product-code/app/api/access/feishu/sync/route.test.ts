@@ -15,9 +15,11 @@ const organizationSourceMocks = vi.hoisted(() => {
   }
 
   return {
+    ensureOrganizationSource: vi.fn(),
     loadOrganizationSources: vi.fn(),
     recordOrganizationSourceSyncResult: vi.fn(),
     selectPrimaryOrganizationSource: vi.fn(),
+    upsertExternalIdentity: vi.fn(),
     OrganizationSourceError,
   }
 })
@@ -42,6 +44,7 @@ vi.mock('@/lib/admin/org-membership', () => ({
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     from: vi.fn(),
+    rpc: vi.fn(),
   },
 }))
 
@@ -61,9 +64,11 @@ import {
 } from '@/lib/admin/org-membership'
 import { supabaseAdmin } from '@/lib/supabase'
 import {
+  ensureOrganizationSource,
   loadOrganizationSources,
   recordOrganizationSourceSyncResult,
   selectPrimaryOrganizationSource,
+  upsertExternalIdentity,
 } from '@/lib/organization-sources'
 import { POST } from './route'
 
@@ -75,6 +80,7 @@ const existingUserId = 'user-db-1'
 const originalFeishuAppId = process.env.FEISHU_APP_ID
 const originalFeishuAppSecret = process.env.FEISHU_APP_SECRET
 const originalFeishuOrgId = process.env.FEISHU_ORG_ID
+const originalFeishuSourcePriority = process.env.FEISHU_SOURCE_PRIORITY
 
 function makeRequest(): any {
   return new Request('https://example.test/api/access/feishu/sync', { method: 'POST' })
@@ -127,7 +133,14 @@ function restoreEnv(name: string, value: string | undefined) {
   }
 }
 
-function feishuUser() {
+function feishuUser(): {
+  user_id: string
+  name: string
+  email: string
+  department_ids: string[]
+  mobile?: string
+  job_title?: string
+} {
   return {
     user_id: 'employee-1',
     name: 'Feishu User',
@@ -209,6 +222,7 @@ describe('POST /api/access/feishu/sync', () => {
     delete process.env.FEISHU_APP_ID
     delete process.env.FEISHU_APP_SECRET
     delete process.env.FEISHU_ORG_ID
+    delete process.env.FEISHU_SOURCE_PRIORITY
     vi.stubGlobal('fetch', vi.fn())
     ;(requireAuth as any).mockResolvedValue({ id: 'u-1' })
     ;(getFreshDefaultOrgId as any).mockResolvedValue(orgId)
@@ -219,6 +233,21 @@ describe('POST /api/access/feishu/sync', () => {
     ;(syncPrimaryDepartmentMembership as any).mockResolvedValue(undefined)
     ;(syncUserSalesSpaces as any).mockResolvedValue(undefined)
     ;(loadOrganizationSources as any).mockResolvedValue([])
+    ;(ensureOrganizationSource as any).mockResolvedValue({
+      id: 'source-1',
+      systemOrgId: orgId,
+      provider: 'feishu',
+      externalTenantId: orgId,
+      priority: 1,
+      status: 'active',
+      authorityScope: {},
+      syncMode: 'authoritative',
+      lastSuccessfulSyncAt: null,
+      lastError: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+    ;(upsertExternalIdentity as any).mockResolvedValue(undefined)
     ;(selectPrimaryOrganizationSource as any).mockImplementation((sources: Array<any>) => {
       const primary = sources.filter((source) => (
         source.status === 'active' && source.priority === 1
@@ -239,6 +268,7 @@ describe('POST /api/access/feishu/sync', () => {
     restoreEnv('FEISHU_APP_ID', originalFeishuAppId)
     restoreEnv('FEISHU_APP_SECRET', originalFeishuAppSecret)
     restoreEnv('FEISHU_ORG_ID', originalFeishuOrgId)
+    restoreEnv('FEISHU_SOURCE_PRIORITY', originalFeishuSourcePriority)
   })
 
   it('未登录时零副作用返回标准鉴权错误', async () => {
@@ -526,6 +556,196 @@ describe('POST /api/access/feishu/sync', () => {
       'new-user-db-1',
       databaseDepartmentId,
       orgId
+    )
+    expect(upsertExternalIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      sourceId: 'source-1',
+      systemOrgId: orgId,
+      externalUserId: 'employee-1',
+      canonicalUserId: 'new-user-db-1',
+      matchStatus: 'matched',
+      matchMethod: 'none',
+    }))
+  })
+
+  it('补充来源只填充缺失资料，不写部门层级、主部门、任职或角色', async () => {
+    configureFeishuEnv()
+    process.env.FEISHU_SOURCE_PRIORITY = '2'
+    ;(canMutateOrgDepartments as any).mockReturnValue(false)
+    mockDirectoryFetch({
+      ...feishuUser(),
+      mobile: '138 0000 0001',
+      job_title: '销售经理',
+    })
+    const userUpdate = makeQuery({ data: null, error: null })
+    mockTableQueues({
+      users: [
+        makeQuery({
+          data: [{
+            id: existingUserId,
+            employee_id: 'authoritative-employee-1',
+            email: 'feishu.user@example.test',
+            phone: null,
+            display_name: 'Authoritative Name',
+            title: null,
+            avatar_url: null,
+            status: 'active',
+          }],
+          error: null,
+        }),
+        userUpdate,
+      ],
+      user_roles: [makeQuery({ data: [], error: null })],
+    })
+
+    const res = await POST(makeRequest())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toMatchObject({
+      source_authority: 'enrichment',
+      organization_structure_written: false,
+      members: { imported: 0, updated: 1, skipped: 0 },
+    })
+    expect(userUpdate.update).toHaveBeenCalledWith({
+      phone: '13800000001',
+      title: '销售经理',
+      updated_at: expect.any(String),
+    })
+    expect(userUpdate.eq).toHaveBeenCalledWith('org_id', orgId)
+    expect((supabaseAdmin.from as any).mock.calls.some(([table]: [string]) => table === 'departments'))
+      .toBe(false)
+    expect(ensureDefaultOrganizationMembership).not.toHaveBeenCalled()
+    expect(syncPrimaryDepartmentMembership).not.toHaveBeenCalled()
+    expect(syncUserSalesSpaces).not.toHaveBeenCalled()
+    expect(upsertExternalIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      sourceId: 'source-1',
+      externalUserId: 'employee-1',
+      canonicalUserId: existingUserId,
+      matchStatus: 'matched',
+      matchMethod: 'email',
+    }))
+  })
+
+  it('补充来源同一标识命中多个账号时保留冲突且不合并成员', async () => {
+    configureFeishuEnv()
+    process.env.FEISHU_SOURCE_PRIORITY = '2'
+    mockDirectoryFetch()
+    mockTableQueues({
+      users: [makeQuery({
+        data: [
+          {
+            id: 'user-a',
+            employee_id: 'employee-a',
+            email: 'feishu.user@example.test',
+            phone: null,
+            display_name: '同名成员A',
+            title: null,
+            avatar_url: null,
+            status: 'active',
+          },
+          {
+            id: 'user-b',
+            employee_id: 'employee-b',
+            email: 'feishu.user@example.test',
+            phone: null,
+            display_name: '同名成员B',
+            title: null,
+            avatar_url: null,
+            status: 'active',
+          },
+        ],
+        error: null,
+      })],
+      user_roles: [makeQuery({ data: [], error: null })],
+    })
+
+    const res = await POST(makeRequest())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.sync_status).toBe('partial')
+    expect(body.members).toMatchObject({ imported: 0, updated: 0, skipped: 1, failed: 1 })
+    expect(upsertExternalIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      sourceId: 'source-1',
+      externalUserId: 'employee-1',
+      canonicalUserId: null,
+      matchStatus: 'conflict',
+      matchMethod: 'none',
+      profileSnapshot: expect.objectContaining({
+        candidateUserIds: ['user-a', 'user-b'],
+      }),
+    }))
+    expect(ensureDefaultOrganizationMembership).not.toHaveBeenCalled()
+    expect(syncPrimaryDepartmentMembership).not.toHaveBeenCalled()
+  })
+
+  it('补充来源未命中既有成员时不创建账号或成员关系', async () => {
+    configureFeishuEnv()
+    process.env.FEISHU_SOURCE_PRIORITY = '2'
+    mockDirectoryFetch()
+    const usersLookup = makeQuery({ data: [], error: null })
+    mockTableQueues({
+      users: [usersLookup],
+      user_roles: [makeQuery({ data: [], error: null })],
+    })
+
+    const res = await POST(makeRequest())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.sync_status).toBe('partial')
+    expect(body.members).toMatchObject({ imported: 0, updated: 0, skipped: 1, failed: 1 })
+    expect(usersLookup.insert).not.toHaveBeenCalled()
+    expect(usersLookup.update).not.toHaveBeenCalled()
+    expect(ensureDefaultOrganizationMembership).not.toHaveBeenCalled()
+    expect(upsertExternalIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      externalUserId: 'employee-1',
+      canonicalUserId: null,
+      matchStatus: 'unresolved',
+      matchMethod: 'none',
+    }))
+  })
+
+  it('authoritative source offboards identities absent from a complete snapshot but protects root admins', async () => {
+    configureFeishuEnv()
+    mockDirectoryFetch()
+    mockTableQueues({
+      departments: departmentQueries(),
+      users: [makeQuery({ data: [], error: null }), makeQuery({ data: { id: 'new-user-db-1' }, error: null })],
+      user_roles: [
+        makeQuery({ data: [], error: null }),
+        makeQuery({ data: [{ user_id: 'protected-root', role: { code: 'SUPER_ADMIN' } }], error: null }),
+      ],
+      external_identities: [
+        makeQuery({
+          data: [
+            { external_user_id: 'departed-employee', canonical_user_id: 'departed-user' },
+            { external_user_id: 'protected-root', canonical_user_id: 'protected-root' },
+          ],
+          error: null,
+        }),
+        makeQuery({ data: null, error: null }),
+      ],
+    })
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
+
+    const res = await POST(makeRequest())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.members.offboarded_from_source).toBe(1)
+    expect(body.members.departure_failed).toBe(0)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      'admin_offboard_member_v1',
+      expect.objectContaining({
+        p_org_id: orgId,
+        p_user_id: 'departed-user',
+        p_reason: 'authoritative organization source departure',
+      }),
+    )
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalledWith(
+      'admin_offboard_member_v1',
+      expect.objectContaining({ p_user_id: 'protected-root' }),
     )
   })
 

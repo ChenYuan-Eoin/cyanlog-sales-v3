@@ -17,11 +17,22 @@ import {
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
 import {
+  ensureOrganizationSource,
   loadOrganizationSources,
   OrganizationSourceError,
   recordOrganizationSourceSyncResult,
   selectPrimaryOrganizationSource,
+  upsertExternalIdentity,
 } from '@/lib/organization-sources'
+import {
+  addIdentityCandidate,
+  buildIdentityIndex,
+  normalizeIdentityEmail,
+  normalizeIdentityPhone,
+  resolveIdentityMatch,
+  secondaryEnrichmentPatch,
+  type IdentityCandidate,
+} from '@/lib/organization-source-identity'
 
 type FeishuDepartment = {
   department_id?: string
@@ -41,6 +52,7 @@ type FeishuUser = {
   user_id?: string
   open_id?: string
   union_id?: string
+  employee_no?: string
   name?: string
   en_name?: string
   email?: string
@@ -95,13 +107,11 @@ function userDisplayName(user: FeishuUser) {
 }
 
 function normalizeEmail(email: string | undefined) {
-  const trimmed = email?.trim().toLowerCase()
-  return trimmed || null
+  return normalizeIdentityEmail(email)
 }
 
 function normalizePhone(phone: string | undefined) {
-  const trimmed = phone?.replace(/\s+/g, '').trim()
-  return trimmed || null
+  return normalizeIdentityPhone(phone)
 }
 
 function roleCodeOf(value: unknown): string | null {
@@ -420,28 +430,41 @@ async function syncDepartmentsToDatabase(orgId: string, departments: FeishuDepar
   return { imported, updated, synced }
 }
 
+type ExistingUserRow = IdentityCandidate & {
+  id: string
+  status?: string | null
+}
+
 async function loadExistingUsers(orgId: string) {
   const { data, error } = await supabaseAdmin
     .from('users')
-    .select('id, email, phone, employee_id')
+    .select('id, email, phone, employee_id, display_name, title, avatar_url, status')
     .eq('org_id', orgId)
 
   if (error) {
     throw new Error('读取已有成员失败')
   }
 
-  const byEmployeeId = new Map<string, { id: string }>()
-  const byEmail = new Map<string, { id: string }>()
-  const byPhone = new Map<string, { id: string }>()
+  const profiles = new Map<string, ExistingUserRow>()
+  const candidates = (data || []).map((row) => {
+    const candidate: ExistingUserRow = {
+      id: String(row.id),
+      employeeId: row.employee_id ? String(row.employee_id) : null,
+      email: row.email ? String(row.email) : null,
+      phone: row.phone ? String(row.phone) : null,
+      displayName: row.display_name ? String(row.display_name) : null,
+      title: row.title ? String(row.title) : null,
+      avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
+      status: row.status ? String(row.status) : null,
+    }
+    profiles.set(candidate.id, candidate)
+    return candidate
+  })
 
-  for (const row of data || []) {
-    const user = { id: row.id as string }
-    if (row.employee_id) byEmployeeId.set(String(row.employee_id), user)
-    if (row.email) byEmail.set(String(row.email).toLowerCase(), user)
-    if (row.phone) byPhone.set(String(row.phone).replace(/\s+/g, ''), user)
+  return {
+    index: buildIdentityIndex(candidates),
+    profiles,
   }
-
-  return { byEmployeeId, byEmail, byPhone }
 }
 
 async function loadProtectedSuperAdminUserIds(orgId: string) {
@@ -461,8 +484,85 @@ async function loadProtectedSuperAdminUserIds(orgId: string) {
     .filter(Boolean))
 }
 
+async function reconcileAuthoritativeDepartures(input: {
+  orgId: string
+  sourceId: string
+  actorId: string
+  incomingExternalIds: Set<string>
+}) {
+  const { data, error } = await supabaseAdmin
+    .from('external_identities')
+    .select('external_user_id, canonical_user_id')
+    .eq('source_id', input.sourceId)
+    .eq('system_org_id', input.orgId)
+    .eq('match_status', 'matched')
+
+  if (error) {
+    return {
+      offboarded: 0,
+      failed: 1,
+      warnings: [{
+        scope: 'members' as const,
+        sourceId: 'departure_reconciliation',
+        message: '无法读取权威来源身份台账，未执行离职协调',
+      }],
+    }
+  }
+
+  const protectedUserIds = await loadProtectedSuperAdminUserIds(input.orgId)
+  const missing = (data || []).filter((row) => (
+    typeof row.external_user_id === 'string'
+    && typeof row.canonical_user_id === 'string'
+    && !input.incomingExternalIds.has(row.external_user_id)
+    && !protectedUserIds.has(row.canonical_user_id)
+    && row.canonical_user_id !== input.actorId
+  ))
+  let offboarded = 0
+  let failed = 0
+  const warnings: SyncWarning[] = []
+
+  for (const row of missing) {
+    const userId = row.canonical_user_id as string
+    const { data: applied, error: offboardError } = await supabaseAdmin.rpc(
+      'admin_offboard_member_v1',
+      {
+        p_actor_id: input.actorId,
+        p_org_id: input.orgId,
+        p_user_id: userId,
+        p_reason: 'authoritative organization source departure',
+        p_request_id: `feishu-source-reconcile:${row.external_user_id}`,
+      },
+    )
+    if (offboardError || applied !== true) {
+      failed += 1
+      warnings.push({
+        scope: 'members',
+        sourceId: String(row.external_user_id),
+        message: offboardError?.message || '来源成员离职处理失败',
+      })
+      continue
+    }
+    offboarded += 1
+    await supabaseAdmin
+      .from('external_identities')
+      .update({
+        match_status: 'ignored',
+        profile_snapshot: {
+          departure_observed_at: new Date().toISOString(),
+          departure_reason: 'authoritative organization source departure',
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('source_id', input.sourceId)
+      .eq('external_user_id', row.external_user_id)
+  }
+
+  return { offboarded, failed, warnings }
+}
+
 async function syncUsersToDatabase(
   orgId: string,
+  sourceId: string,
   users: FeishuUserWithSource[],
   syncedDepartments: Map<string, SyncedDepartment>
 ) {
@@ -471,9 +571,11 @@ async function syncUsersToDatabase(
   let imported = 0
   let updated = 0
   let skipped = 0
+  const warnings: SyncWarning[] = []
 
   for (const feishuUser of users) {
     const externalId = externalUserId(feishuUser)
+    const employeeId = feishuUser.employee_no?.trim() || externalId
     const email = normalizeEmail(feishuUser.email)
     const phone = normalizePhone(feishuUser.mobile)
     const departmentExternalIds = Array.from(new Set([
@@ -490,12 +592,41 @@ async function syncUsersToDatabase(
       continue
     }
 
-    const matched = existing.byEmployeeId.get(externalId)
-      || (email ? existing.byEmail.get(email) : null)
-      || (phone ? existing.byPhone.get(phone) : null)
-      || null
+    const resolution = resolveIdentityMatch(existing.index, {
+      employeeId,
+      email,
+      phone,
+    })
+    if (resolution.kind === 'conflict') {
+      skipped += 1
+      warnings.push({
+        scope: 'members',
+        sourceId: externalId,
+        message: `权威来源身份命中多个成员，已保留冲突：${resolution.candidateIds.join(',')}`,
+      })
+      await upsertExternalIdentity({
+        sourceId,
+        systemOrgId: orgId,
+        externalUserId: externalId,
+        externalUnionId: feishuUser.union_id || null,
+        externalOpenId: feishuUser.open_id || null,
+        canonicalUserId: null,
+        matchStatus: 'conflict',
+        matchMethod: 'none',
+        matchConfidence: 0,
+        profileSnapshot: {
+          name: userDisplayName(feishuUser),
+          email,
+          mobile: phone,
+          candidateUserIds: resolution.candidateIds,
+        },
+      })
+      continue
+    }
 
-    if (matched && protectedSuperAdminUserIds.has(matched.id)) {
+    const matchedId = resolution.kind === 'unique' ? resolution.userId : null
+    const matchMethod = resolution.kind === 'unique' ? resolution.method : 'none'
+    if (matchedId && protectedSuperAdminUserIds.has(matchedId)) {
       skipped += 1
       continue
     }
@@ -504,7 +635,7 @@ async function syncUsersToDatabase(
     const avatarUrl = feishuUser.avatar?.avatar_72 || feishuUser.avatar?.avatar_url || null
     const profilePayload = {
       org_id: orgId,
-      employee_id: externalId,
+      employee_id: employeeId,
       display_name: userDisplayName(feishuUser),
       primary_dept_id: primaryDeptId,
       updated_at: new Date().toISOString(),
@@ -514,7 +645,7 @@ async function syncUsersToDatabase(
       ...(feishuUser.job_title ? { title: feishuUser.job_title } : {}),
     }
 
-    let userId = matched?.id
+    let userId = matchedId
     if (userId) {
       const { error } = await supabaseAdmin
         .from('users')
@@ -566,12 +697,193 @@ async function syncUsersToDatabase(
       }
     }
 
-    existing.byEmployeeId.set(externalId, { id: syncedUserId })
-    if (email) existing.byEmail.set(email, { id: syncedUserId })
-    if (phone) existing.byPhone.set(phone, { id: syncedUserId })
+    addIdentityCandidate(existing.index, {
+      id: syncedUserId,
+      employeeId,
+      email,
+      phone,
+      displayName: userDisplayName(feishuUser),
+      title: feishuUser.job_title || null,
+      avatarUrl,
+    })
+
+    await upsertExternalIdentity({
+      sourceId,
+      systemOrgId: orgId,
+      externalUserId: externalId,
+      externalUnionId: feishuUser.union_id || null,
+      externalOpenId: feishuUser.open_id || null,
+      canonicalUserId: syncedUserId,
+      matchStatus: 'matched',
+      matchMethod,
+      matchConfidence: matchMethod === 'none' ? 0.5 : 1,
+      profileSnapshot: {
+        name: userDisplayName(feishuUser),
+        email,
+        mobile: phone,
+        jobTitle: feishuUser.job_title || null,
+        departmentExternalIds,
+        avatarUrl,
+      },
+    })
   }
 
-  return { imported, updated, skipped, total: users.length }
+  return { imported, updated, skipped, total: users.length, warnings }
+}
+
+async function syncEnrichmentUsersToDatabase(
+  orgId: string,
+  sourceId: string,
+  users: FeishuUserWithSource[],
+) {
+  const existing = await loadExistingUsers(orgId)
+  const protectedSuperAdminUserIds = await loadProtectedSuperAdminUserIds(orgId)
+  const warnings: SyncWarning[] = []
+  let updated = 0
+  let skipped = 0
+
+  for (const feishuUser of users) {
+    const externalId = externalUserId(feishuUser)
+    const email = normalizeEmail(feishuUser.email)
+    const phone = normalizePhone(feishuUser.mobile)
+    const employeeId = feishuUser.employee_no?.trim() || null
+    if (!externalId || (!employeeId && !email && !phone)) {
+      skipped += 1
+      continue
+    }
+
+    const resolution = resolveIdentityMatch(existing.index, {
+      employeeId,
+      email,
+      phone,
+    })
+    const profileSnapshot = {
+      name: userDisplayName(feishuUser),
+      email,
+      mobile: phone,
+      employeeNo: employeeId,
+      jobTitle: feishuUser.job_title || null,
+      departmentExternalIds: Array.from(new Set([
+        ...(feishuUser.department_ids || []),
+        ...(feishuUser.departments || []),
+        feishuUser.sourceDepartmentId,
+      ].filter(Boolean))),
+    }
+
+    if (resolution.kind === 'none') {
+      skipped += 1
+      warnings.push({
+        scope: 'members',
+        sourceId: externalId,
+        message: '补充来源成员未命中唯一既有成员，已保留为未解析身份',
+      })
+      await upsertExternalIdentity({
+        sourceId,
+        systemOrgId: orgId,
+        externalUserId: externalId,
+        externalUnionId: feishuUser.union_id || null,
+        externalOpenId: feishuUser.open_id || null,
+        canonicalUserId: null,
+        matchStatus: 'unresolved',
+        matchMethod: 'none',
+        matchConfidence: 0,
+        profileSnapshot,
+      })
+      continue
+    }
+
+    if (resolution.kind === 'conflict') {
+      skipped += 1
+      warnings.push({
+        scope: 'members',
+        sourceId: externalId,
+        message: `补充来源身份命中多个成员，已保留冲突：${resolution.candidateIds.join(',')}`,
+      })
+      await upsertExternalIdentity({
+        sourceId,
+        systemOrgId: orgId,
+        externalUserId: externalId,
+        externalUnionId: feishuUser.union_id || null,
+        externalOpenId: feishuUser.open_id || null,
+        canonicalUserId: null,
+        matchStatus: 'conflict',
+        matchMethod: 'none',
+        matchConfidence: 0,
+        profileSnapshot: {
+          ...profileSnapshot,
+          candidateUserIds: resolution.candidateIds,
+        },
+      })
+      continue
+    }
+
+    if (protectedSuperAdminUserIds.has(resolution.userId)) {
+      skipped += 1
+      continue
+    }
+
+    const profile = existing.profiles.get(resolution.userId)
+    if (!profile) {
+      skipped += 1
+      warnings.push({
+        scope: 'members',
+        sourceId: externalId,
+        message: '补充来源命中成员但成员资料不可用，未执行写入',
+      })
+      continue
+    }
+
+    const patch = secondaryEnrichmentPatch(profile, {
+      email,
+      phone,
+      title: feishuUser.job_title || null,
+      avatarUrl: feishuUser.avatar?.avatar_72 || feishuUser.avatar?.avatar_url || null,
+    })
+    if (Object.keys(patch).length > 0) {
+      const { error } = await supabaseAdmin
+        .from('users')
+        .update({
+          ...patch,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', resolution.userId)
+        .eq('org_id', orgId)
+      if (error) {
+        throw new Error(`补充飞书成员资料失败：${userDisplayName(feishuUser)}`)
+      }
+      updated += 1
+    } else {
+      skipped += 1
+    }
+
+    addIdentityCandidate(existing.index, {
+      ...profile,
+      email: patch.email || profile.email,
+      phone: patch.phone || profile.phone,
+      title: patch.title || profile.title,
+      avatarUrl: patch.avatar_url || profile.avatarUrl,
+    })
+    await upsertExternalIdentity({
+      sourceId,
+      systemOrgId: orgId,
+      externalUserId: externalId,
+      externalUnionId: feishuUser.union_id || null,
+      externalOpenId: feishuUser.open_id || null,
+      canonicalUserId: resolution.userId,
+      matchStatus: 'matched',
+      matchMethod: resolution.method,
+      matchConfidence: resolution.method === 'employee_id' ? 1 : 0.95,
+      profileSnapshot,
+    })
+  }
+
+  return {
+    imported: 0,
+    updated,
+    skipped,
+    total: users.length,
+    warnings,
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -595,13 +907,6 @@ export async function POST(req: NextRequest) {
   const assignments = await getFreshUserScopedRoleAssignments(user.id)
   const canWriteUsers = canMutateOrgUsers(assignments, orgId)
   const canWriteDepartments = canMutateOrgDepartments(assignments, orgId)
-
-  if (!canWriteUsers || !canWriteDepartments) {
-    return NextResponse.json(
-      { code: 'FORBIDDEN', error: '需要当前组织的用户写和部门写权限' },
-      { status: 403 }
-    )
-  }
 
   const appId = process.env.FEISHU_APP_ID
   const appSecret = process.env.FEISHU_APP_SECRET
@@ -668,7 +973,20 @@ export async function POST(req: NextRequest) {
       { status: 503 }
     )
   }
-  if (configuredOrgId !== orgId) {
+  const sourcePriorityText = primarySource?.priority ?? process.env.FEISHU_SOURCE_PRIORITY ?? '1'
+  const sourcePriority = Number(sourcePriorityText)
+  if (!Number.isInteger(sourcePriority) || sourcePriority < 1 || sourcePriority > 100) {
+    return NextResponse.json(
+      {
+        code: 'FEISHU_SOURCE_PRIORITY_INVALID',
+        connector: FEISHU_CONNECTOR,
+        error: '组织来源优先级必须是1-100的整数',
+      },
+      { status: 503 },
+    )
+  }
+
+  if (!primarySource && configuredOrgId !== orgId) {
     return NextResponse.json(
       {
         code: 'FEISHU_ORG_MISMATCH',
@@ -681,14 +999,69 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  if (!canWriteUsers || (sourcePriority === 1 && !canWriteDepartments)) {
+    return NextResponse.json(
+      {
+        code: 'FORBIDDEN',
+        error: sourcePriority === 1
+          ? '需要当前组织的用户写和部门写权限'
+          : '补充组织来源需要当前组织的用户写权限；不会写入部门层级',
+      },
+      { status: 403 }
+    )
+  }
+
+  let sourceId: string
+  try {
+    const source = primarySource?.priority === sourcePriority
+      ? primarySource
+      : await ensureOrganizationSource({
+          systemOrgId: orgId,
+          provider: 'feishu',
+          externalTenantId: configuredOrgId,
+          priority: sourcePriority,
+          status: 'active',
+          authorityScope: sourcePriority === 1
+            ? {
+                departments: 'authoritative',
+                department_order: 'authoritative',
+                primary_department: 'authoritative',
+                employment_state: 'authoritative',
+                identity: 'evidence',
+              }
+            : {
+                departments: 'enrichment',
+                identity: 'evidence',
+              },
+          syncMode: sourcePriority === 1 ? 'authoritative' : 'enrichment',
+          actorId: user.id,
+        })
+    sourceId = source.id
+  } catch (error) {
+    return NextResponse.json(
+      {
+        code: 'FEISHU_SOURCE_UNAVAILABLE',
+        connector: FEISHU_CONNECTOR,
+        error: error instanceof Error ? error.message : '飞书组织来源不可用',
+      },
+      { status: 503 },
+    )
+  }
+
   let token: string
   let departmentResult: Awaited<ReturnType<typeof fetchFeishuDepartments>>
-  let departmentWrite: Awaited<ReturnType<typeof syncDepartmentsToDatabase>>
+  let departmentWrite: Awaited<ReturnType<typeof syncDepartmentsToDatabase>> = {
+    imported: 0,
+    updated: 0,
+    synced: new Map(),
+  }
 
   try {
     token = await getTenantAccessToken(appId, appSecret)
     departmentResult = await fetchFeishuDepartments(token)
-    departmentWrite = await syncDepartmentsToDatabase(orgId, departmentResult.departments)
+    if (sourcePriority === 1) {
+      departmentWrite = await syncDepartmentsToDatabase(orgId, departmentResult.departments)
+    }
   } catch (error) {
     if (primarySource) {
       await recordOrganizationSourceSyncResult({
@@ -713,8 +1086,41 @@ export async function POST(req: NextRequest) {
   let userResult: Awaited<ReturnType<typeof fetchFeishuUsers>> | null = null
   try {
     userResult = await fetchFeishuUsers(token, departmentResult.departments)
-    const userWrite = await syncUsersToDatabase(orgId, userResult.users, departmentWrite.synced)
-    const warnings = [...departmentResult.warnings, ...userResult.warnings]
+    const userWrite = sourcePriority === 1
+      ? await syncUsersToDatabase(
+          orgId,
+          sourceId,
+          userResult.users,
+          departmentWrite.synced,
+        )
+      : await syncEnrichmentUsersToDatabase(
+          orgId,
+          sourceId,
+          userResult.users,
+        )
+    const warnings = [
+      ...departmentResult.warnings,
+      ...userResult.warnings,
+      ...userWrite.warnings,
+    ]
+    const canReconcileDepartures = sourcePriority === 1
+      && departmentResult.warnings.length === 0
+      && userResult.warnings.length === 0
+      && userWrite.skipped === 0
+      && departmentResult.departments.length > 0
+    const departureReconciliation = canReconcileDepartures
+      ? await reconcileAuthoritativeDepartures({
+          orgId,
+          sourceId,
+          actorId: user.id,
+          incomingExternalIds: new Set(
+            userResult.users
+              .map((member) => externalUserId(member))
+              .filter(Boolean),
+          ),
+        })
+      : { offboarded: 0, failed: 0, warnings: [] }
+    warnings.push(...departureReconciliation.warnings)
     if (departmentResult.departments.length === 0) {
       warnings.push({
         scope: 'departments',
@@ -738,6 +1144,8 @@ export async function POST(req: NextRequest) {
       connector: FEISHU_CONNECTOR,
       scope: FEISHU_SYNC_SCOPE,
       sync_status: syncStatus,
+      source_authority: sourcePriority === 1 ? 'authoritative' : 'enrichment',
+      organization_structure_written: sourcePriority === 1,
       departments: {
         imported: departmentWrite.imported,
         updated: departmentWrite.updated,
@@ -750,13 +1158,19 @@ export async function POST(req: NextRequest) {
         skipped: userWrite.skipped,
         failed: memberFailed,
         total: userWrite.total,
+        offboarded_from_source: departureReconciliation.offboarded,
+        departure_failed: departureReconciliation.failed,
       },
       warnings,
       message: departmentResult.departments.length === 0
         ? '飞书返回 0 个可访问部门'
         : syncStatus === 'partial'
-          ? '飞书组织架构部分同步完成'
-          : '飞书组织架构同步完成',
+          ? sourcePriority === 1
+            ? '飞书组织架构部分同步完成'
+            : '飞书补充身份资料部分同步完成'
+          : sourcePriority === 1
+            ? '飞书组织架构同步完成'
+            : '飞书补充身份资料同步完成',
     })
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : '成员数据库写入失败'
@@ -780,7 +1194,7 @@ export async function POST(req: NextRequest) {
         error: errorMessage,
       })
     }
-    console.error('[FeishuSync] member phase failed after department commit:', error)
+    console.error('[FeishuSync] member phase failed after department phase:', error)
     return NextResponse.json(
       {
         success: false,
@@ -788,6 +1202,8 @@ export async function POST(req: NextRequest) {
         connector: FEISHU_CONNECTOR,
         scope: FEISHU_SYNC_SCOPE,
         sync_status: 'partial',
+        source_authority: sourcePriority === 1 ? 'authoritative' : 'enrichment',
+        organization_structure_written: sourcePriority === 1,
         departments: {
           imported: departmentWrite.imported,
           updated: departmentWrite.updated,
@@ -800,10 +1216,14 @@ export async function POST(req: NextRequest) {
           candidate_count: userResult?.users.length ?? 0,
           failed: 1,
           failed_at: failedAt,
+          offboarded_from_source: 0,
+          departure_failed: 0,
         },
         warnings,
         error: errorMessage,
-        message: '飞书部门已提交，成员同步未完成',
+        message: sourcePriority === 1
+          ? '飞书部门已提交，成员同步未完成'
+          : '飞书补充来源成员同步未完成；组织层级未写入',
       },
       { status: 200 }
     )
