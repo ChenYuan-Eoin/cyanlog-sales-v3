@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { SearchIcon, UsersIcon, ShieldIcon, ChevronRightIcon } from 'lucide-react'
 import { RoleDetailPanel } from './RoleDetailPanel'
+import { PermissionRegistryPanel } from './PermissionRegistryPanel'
 import type { OrgSummaryPayload } from '../types'
 
 interface RoleAccessTabProps {
@@ -110,6 +111,10 @@ export default function RoleAccessTab({
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_300px]">
+      <div className="col-span-full">
+        <PermissionRegistryPanel />
+      </div>
+
       {/* 左侧角色列表 */}
       <div className="min-w-0">
         <div className="rounded-lg border bg-white">
