@@ -17,7 +17,7 @@ export type OrganizationSource = {
 }
 
 export type OrganizationSourceProvider = {
-  key: 'feishu' | 'wecom' | 'dingtalk'
+  key: 'feishu' | 'wecom' | 'dingtalk' | 'fxiaoke'
   label: string
   syncAvailable: boolean
   unavailableReason: string | null
@@ -80,6 +80,12 @@ export function listOrganizationSourceProviders(
 ): OrganizationSourceProvider[] {
   const feishuConfigured = Boolean(env.FEISHU_APP_ID && env.FEISHU_APP_SECRET)
   return [
+    {
+      key: 'fxiaoke',
+      label: '纷享销客',
+      syncAvailable: false,
+      unavailableReason: '可配置自建应用并预览通讯录；确认同步与主来源切换尚未启用。',
+    },
     {
       key: 'feishu',
       label: '飞书',

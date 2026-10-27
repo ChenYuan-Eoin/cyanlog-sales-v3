@@ -24,6 +24,10 @@ goal_governance:
     - "WP 完成不等于 G 完成；G 只有在相关 WP 和自身验收证据均有效时才能关闭。"
     - "完成证据必须绑定 namespace_version、WP、Git SHA、部署/数据库环境及浏览器或真实文件产物。"
   work_package_crosswalk:
+    WP91: {name: 纷享应用配置与通讯录预览, primary_goals: [G5, G7, G10], state: executing}
+    WP92: {name: 纷享组织同步与主来源切换, primary_goals: [G5, G7, G10], state: queued}
+    WP93: {name: 统一成员身份与寄件许可, primary_goals: [G5, G7, G10], state: queued}
+    WP94: {name: 纷享销售登录与真实提报, primary_goals: [G5, G7, G10], state: queued}
     WP00: {name: 目标基线整合, primary_goals: [G1, G10, G11], state: completed_goal_baseline_commit_18dad230}
     WP01: {name: 平台模型接入与应用底座, primary_goals: [G4], supporting_goals: [G3, G7], state: completed_commit_4269840f}
     WP02: {name: AI 运行真实性与路由证据, primary_goals: [G3], supporting_goals: [G7, G10], state: completed_commit_c25ec17a}

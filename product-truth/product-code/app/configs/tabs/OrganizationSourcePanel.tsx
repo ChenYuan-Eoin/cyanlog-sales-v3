@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { confirmAction, error, success } from '@/lib/toast'
+import { FxiaokeSourceForm } from './FxiaokeSourceForm'
 
 type SourceStatus = 'draft' | 'active' | 'disabled'
 type SyncMode = 'read_only' | 'authoritative' | 'enrichment'
@@ -200,7 +201,7 @@ export function OrganizationSourcePanel() {
           <div key={item.key} className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
             <div className="text-xs font-medium text-slate-800">{item.label}</div>
             <div className={`mt-0.5 text-[11px] ${item.syncAvailable ? 'text-emerald-700' : 'text-amber-700'}`}>
-              {item.syncAvailable ? '已接入' : '未接入'}
+              {item.key === 'fxiaoke' ? '可配置与预览' : item.syncAvailable ? '已接入' : '未接入'}
             </div>
           </div>
         ))}
@@ -218,6 +219,7 @@ export function OrganizationSourcePanel() {
               {providers.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
             </select>
           </label>
+          {provider === 'fxiaoke' ? <FxiaokeSourceForm /> : <>
           {selectedProvider && !selectedProvider.syncAvailable && (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               {selectedProvider.unavailableReason}
@@ -263,6 +265,7 @@ export function OrganizationSourcePanel() {
               {saving ? '保存中...' : '保存绑定'}
             </Button>
           </div>
+          </>}
         </div>
       )}
 

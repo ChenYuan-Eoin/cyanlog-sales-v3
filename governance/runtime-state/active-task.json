@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-27T02:16:27.830593+00:00",
+  "updated_at": "2026-10-27T10:51:32.619555+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -151,6 +151,26 @@
       "G7",
       "G8",
       "G10"
+    ],
+    "WP91": [
+      "G5",
+      "G7",
+      "G10"
+    ],
+    "WP92": [
+      "G5",
+      "G7",
+      "G10"
+    ],
+    "WP93": [
+      "G5",
+      "G7",
+      "G10"
+    ],
+    "WP94": [
+      "G5",
+      "G7",
+      "G10"
     ]
   },
   "scheduling_policy": {
@@ -177,26 +197,35 @@
     "harness_mode": "advisory"
   },
   "active_task": {
-    "id": "WP76",
-    "slug": "wecom-private-shipping-intake",
-    "name": "单聊寄件提报与本人回执",
+    "id": "WP91",
+    "slug": "fxiaoke-connection-preview",
+    "name": "纷享应用配置与通讯录预览",
     "kind": "product",
     "status": "active",
-    "objective": "接通API长连接单聊到待确认工单及本人查询；默认寄件资料与标快，配置显示阻断，操作员确认后沿用既有顺丰下单路径。",
+    "objective": "管理员配置纷享自建应用并只读预览真实部门与员工；加密保存凭据并回读真实状态，不切换主来源或写入组织骨架。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3",
-    "activation_basis": "IN-20261027-003：用户明确要求解决全流程；生产无入站无工单事故优先，WP83保留。",
+    "activation_basis": "IN-20261027-007：用户在已说明顺序后明确要求建立目标并开始开发。第一阶段拆为配置预览、确认同步两个独立用户任务。",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/product-code/services/wecom-bot",
-      "product-truth/product-code/lib/shipping",
-      "product-truth/product-code/app/api/shipping/public/wecom/bot",
-      "product-truth/product-code/app/api/shipping/wecom/bot",
-      "product-truth/product-code/app/shipping/wecom-bot-configuration.tsx",
-      "product-truth/product-code/app/shipping/wecom-bot-configuration.test.tsx",
+      "product-truth/REQ_REGISTRY.yml",
+      "product-truth/feature-packets/F003-account-auth.md",
+      "product-truth/feature-packets/F054-shipping.md",
+      "product-truth/feature-packets/F099-current-goal-ledger.md",
+      "product-truth/product-code/lib/organization-sources.ts",
+      "product-truth/product-code/lib/organization-sources.test.ts",
+      "product-truth/product-code/lib/organization-sources-migration.test.ts",
+      "product-truth/product-code/lib/fxiaoke",
+      "product-truth/product-code/app/api/admin/organization-sources",
+      "product-truth/product-code/app/configs/tabs/OrganizationSourcePanel.tsx",
+      "product-truth/product-code/app/configs/tabs/FxiaokeSourceForm.tsx",
+      "product-truth/product-code/app/configs/tabs/FxiaokeSourceForm.test.tsx",
+      "product-truth/product-code/supabase/migrations",
       "product-truth/delivery-prototypes"
     ],
-    "feature_id": "F054",
+    "feature_id": "F003",
+    "started_at": "2026-10-27T10:51:32.619555+00:00",
+    "micro_fixes": [],
     "delivery_contract": {
       "target_state": "code_green",
       "allowed_states": [
@@ -216,27 +245,40 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "shipping_workspace",
-        "shipping_tracking",
-        "shipping_access"
+        "role_edit_save",
+        "role_access_enforcement"
       ],
       "production_database_mode": "read_only",
-      "note": "代码候选不等于交付；不新增数据库，发布及真实顺丰交易另行明确批准。",
-      "runtime_profile": "shipping_workspace",
-      "runtime_contract_version": "f054-recovery-v1"
-    },
-    "started_at": "2026-10-27T02:16:27.830593+00:00",
-    "micro_fixes": [],
-    "reason": "复用旧WP76代码，所有旧工作区保留。"
+      "note": "WP91只配置预览；生产部署和迁移需具体候选审批；仅cyanlog-sales-v3，不新增付费资源。",
+      "runtime_profile": "application"
+    }
   },
   "execution_queue": {
     "active": {
-      "id": "WP76",
-      "slug": "wecom-private-shipping-intake",
-      "name": "单聊寄件提报与本人回执"
+      "id": "WP91",
+      "slug": "fxiaoke-connection-preview",
+      "name": "纷享应用配置与通讯录预览"
     },
-    "next": null,
+    "next": {
+      "id": "WP92",
+      "slug": "fxiaoke-primary-source-sync",
+      "name": "纷享组织同步与主来源切换"
+    },
     "ready": [
+      {
+        "id": "WP93",
+        "slug": "unified-shipping-authorization",
+        "name": "统一成员身份与寄件许可",
+        "entry_gate": "前序批次生产验收通过",
+        "entry_gate_status": "waiting_active_completion"
+      },
+      {
+        "id": "WP94",
+        "slug": "fxiaoke-sales-intake",
+        "name": "纷享销售登录与真实提报",
+        "entry_gate": "前序批次生产验收通过",
+        "entry_gate_status": "waiting_active_completion"
+      },
       {
         "id": "WP32",
         "slug": "sf-push-progress",
@@ -477,6 +519,12 @@
         "slug": "atomic-permission-consistency",
         "reason": "权限code_green候选保留；接续用户要求的机器人真实链路。",
         "execution_workspace": "/Users/nsss/.codex/worktrees/wp83-permission-candidate/Price-v3"
+      },
+      {
+        "id": "WP76",
+        "slug": "wecom-private-shipping-intake",
+        "name": "单聊寄件提报与本人回执",
+        "reason": "用户批准建立统一组织接入目标并启动；已发布候选和真实单聊证据保留，正式顺丰验收仍未完成。"
       }
     ],
     "completed": [
@@ -3079,5 +3127,58 @@
     "started_at": "2026-10-26T03:01:08.379768+00:00",
     "reason": "真实读取证据推翻性能已充分优化的假设；用户IN013/014批准唯一项目本地验证，回到原性能范围继续修复。",
     "micro_fixes": []
+  },
+  "suspended_wp76_20261027_for_fxiaoke": {
+    "id": "WP76",
+    "slug": "wecom-private-shipping-intake",
+    "name": "单聊寄件提报与本人回执",
+    "kind": "product",
+    "status": "active",
+    "objective": "接通API长连接单聊到待确认工单及本人查询；默认寄件资料与标快，配置显示阻断，操作员确认后沿用既有顺丰下单路径。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3",
+    "activation_basis": "IN-20261027-003：用户明确要求解决全流程；生产无入站无工单事故优先，WP83保留。",
+    "allowed_paths": [
+      "governance/runtime-state/active-task.json",
+      "governance/runtime-state/demand-inbox.jsonl",
+      "product-truth/product-code/services/wecom-bot",
+      "product-truth/product-code/lib/shipping",
+      "product-truth/product-code/app/api/shipping/public/wecom/bot",
+      "product-truth/product-code/app/api/shipping/wecom/bot",
+      "product-truth/product-code/app/shipping/wecom-bot-configuration.tsx",
+      "product-truth/product-code/app/shipping/wecom-bot-configuration.test.tsx",
+      "product-truth/delivery-prototypes"
+    ],
+    "feature_id": "F054",
+    "delivery_contract": {
+      "target_state": "code_green",
+      "allowed_states": [
+        "executing",
+        "code_green"
+      ],
+      "integration_branch": "main",
+      "production_branch": "production",
+      "production_release_separate": true,
+      "same_release_commit_required": true,
+      "attestation_ref": "refs/notes/price-v3-delivery",
+      "required_code_checks": [
+        "target_tests",
+        "full_tests",
+        "lint",
+        "typecheck",
+        "build"
+      ],
+      "required_runtime_evidence": [
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
+      ],
+      "production_database_mode": "read_only",
+      "note": "代码候选不等于交付；不新增数据库，发布及真实顺丰交易另行明确批准。",
+      "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-recovery-v1"
+    },
+    "started_at": "2026-10-27T02:16:27.830593+00:00",
+    "micro_fixes": [],
+    "reason": "复用旧WP76代码，所有旧工作区保留。"
   }
 }
