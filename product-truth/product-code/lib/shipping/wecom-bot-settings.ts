@@ -4,6 +4,7 @@ import { encryptShippingSecret, decryptShippingSecret } from './connections'
 import { ShippingError } from './config'
 import { readWecomSettings } from './wecom-settings'
 import { newWecomCallbackKeys, validateWecomCallbackKeys, type WecomCallbackKeys } from './wecom-callback-crypto'
+import { issueWecomRuntimeEnrollment, verifyWecomRuntimeEnrollment } from './wecom-runtime-enrollment'
 export type WecomBot = { transport?:'long_connection'|'url_callback'; id:string;corp_id:string;bot_id:string;name:string;status:'draft'|'active'|'disabled';verified_at:string|null;last_message_at:string|null;updated_at:string }
 export type WecomBotRow = WecomBot & { org_id:string;credentials_ciphertext:string }
 const longConnectionPrefix='long-connection:v1:'
@@ -49,8 +50,50 @@ export async function readWecomBotForCallback(id:string):Promise<WecomBotRow> {
  if(!data||data.credentials_ciphertext.startsWith(longConnectionPrefix))throw new ShippingError(404,'机器人回调入口不存在或已停用。')
  return data as WecomBotRow
 }
+export async function readWecomBotForProcessing(id:string):Promise<WecomBotRow> {
+ if(!z.uuid().safeParse(id).success)throw new ShippingError(404,'机器人入口不存在。')
+ const {data,error}=await supabaseAdmin.from('shipping_wecom_bots').select(`org_id,credentials_ciphertext,${publicColumns}`).eq('id',id).in('status',['draft','active']).maybeSingle()
+ if(error)throw new ShippingError(503,'机器人入口暂不可用。')
+ if(!data)throw new ShippingError(404,'机器人入口不存在或已停用。')
+ return data as WecomBotRow
+}
+export async function readWecomBotForLongConnection(id:string):Promise<WecomBotRow> {
+ const bot=await readWecomBotForProcessing(id)
+ if(!bot.credentials_ciphertext.startsWith(longConnectionPrefix))throw new ShippingError(404,'长连接机器人入口不存在。')
+ const config=await readWecomSettings(bot.org_id)
+ if(!config||config.corp_id!==bot.corp_id)throw new ShippingError(403,'机器人所属企业已变更，请管理员核对绑定。')
+ return bot
+}
 export function wecomBotKeys(row:WecomBotRow):WecomCallbackKeys {
  try {const keys=JSON.parse(decryptShippingSecret(row.credentials_ciphertext));validateWecomCallbackKeys(keys);return keys} catch {throw new ShippingError(503,'机器人安全配置暂不可用。')}
+}
+export function wecomLongConnectionSecret(row:WecomBotRow):string {
+ if(!row.credentials_ciphertext.startsWith(longConnectionPrefix))throw new ShippingError(404,'长连接机器人入口不存在。')
+ try {
+  const value=z.object({transport:z.literal('long_connection'),secret:z.string().min(1).max(512).regex(/^\S+$/)}).parse(JSON.parse(decryptShippingSecret(row.credentials_ciphertext.slice(longConnectionPrefix.length))))
+  return value.secret
+ }catch{throw new ShippingError(503,'机器人长连接安全配置暂不可用。')}
+}
+export async function markWecomLongConnectionOnline(row:WecomBotRow) {
+ const now=new Date().toISOString()
+ const {data,error}=await supabaseAdmin.from('shipping_wecom_bots').update({status:'active',verified_at:now}).eq('id',row.id).eq('credentials_ciphertext',row.credentials_ciphertext).in('status',['draft','active']).select('id').maybeSingle()
+ if(error||!data)throw new ShippingError(409,'机器人状态已变化，请重新连接。')
+}
+export async function markWecomLongConnectionMessage(row:WecomBotRow) {
+ const now=new Date().toISOString()
+ const {error}=await supabaseAdmin.from('shipping_wecom_bots').update({last_message_at:now,verified_at:row.verified_at||now}).eq('id',row.id).eq('credentials_ciphertext',row.credentials_ciphertext).eq('status','active')
+ if(error)throw new ShippingError(503,'机器人消息状态暂未记录。')
+}
+export async function issueLongConnectionEnrollment(orgId:string,id:unknown) {
+ const botId=z.uuid().parse(id),bot=await readWecomBotForLongConnection(botId)
+ if(bot.org_id!==orgId)throw new ShippingError(404,'当前企业的长连接配置不存在。')
+ return {botId:bot.id,remoteBotId:bot.bot_id,...issueWecomRuntimeEnrollment(bot.id,bot.updated_at)}
+}
+export async function redeemLongConnectionEnrollment(id:string,token:unknown) {
+ const bot=await readWecomBotForLongConnection(id)
+ verifyWecomRuntimeEnrollment(z.string().min(1).max(512).parse(token),bot.id,bot.updated_at)
+ const secret=wecomLongConnectionSecret(bot)
+ return {botId:bot.id,remoteBotId:bot.bot_id,secret}
 }
 export async function revealWecomBotSetup(orgId:string,id:unknown) {
  const botId=z.uuid().parse(id),config=await readWecomSettings(orgId)

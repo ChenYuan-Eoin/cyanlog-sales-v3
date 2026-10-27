@@ -54,6 +54,15 @@ test('authentication rejection stops retries and exposes only the numeric error 
   assert.equal(c.snapshot().error_code, 40014);
   assert.equal(JSON.stringify(reports).includes(config.secret), false);
 });
+test('authenticated listener reports business readiness only when a handler is installed', async () => {
+  const c = createConnection({ Client: FakeClient, config, onMessage: async () => {} });
+  const ready = c.start();
+  client.emit('authenticated');
+  await ready;
+  assert.equal(c.snapshot().authenticated, true);
+  assert.equal(c.snapshot().business_ready, true);
+  c.stop();
+});
 
 test('classifies provider signature rejection without printing provider text or secrets', async () => {
   const reports = [];

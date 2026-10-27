@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-22T09:30:00Z",
+  "updated_at": "2026-10-27T02:16:27.830593+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -103,6 +103,54 @@
       "G9",
       "G10",
       "G11"
+    ],
+    "WP83": [
+      "G5",
+      "G7",
+      "G8",
+      "G10"
+    ],
+    "WP84": [
+      "G4",
+      "G7",
+      "G8",
+      "G10"
+    ],
+    "WP85": [
+      "G4",
+      "G7",
+      "G8",
+      "G10"
+    ],
+    "WP86": [
+      "G4",
+      "G7",
+      "G8",
+      "G10"
+    ],
+    "WP87": [
+      "G4",
+      "G7",
+      "G8",
+      "G10"
+    ],
+    "WP88": [
+      "G4",
+      "G7",
+      "G8",
+      "G10"
+    ],
+    "WP89": [
+      "G4",
+      "G7",
+      "G8",
+      "G10"
+    ],
+    "WP90": [
+      "G4",
+      "G7",
+      "G8",
+      "G10"
     ]
   },
   "scheduling_policy": {
@@ -129,24 +177,24 @@
     "harness_mode": "advisory"
   },
   "active_task": {
-    "id": "WP75",
-    "slug": "shipping-card-disclosure-and-company-parser",
-    "name": "寄件卡片单向展开与公司简称解析修复",
+    "id": "WP76",
+    "slug": "wecom-private-shipping-intake",
+    "name": "单聊寄件提报与本人回执",
     "kind": "product",
     "status": "active",
-    "objective": "寄件台账默认保持紧凑收起；仅保留名字前的方向按钮控制展开/收起，展开不得自动勾选核对；再次点击必须可靠收起。文本解析必须从编号标题、公司简称加地址/联系人等上下文提取公司名，不得要求固定“验收文件”后缀。",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3",
-    "activation_basis": "IN-20261023-080：权限目录CRUD已发布；用户提供三张生产截图指出卡片双按钮、展开自动勾选无法保持收起，以及易点云/开泰等公司简称未解析。按明确反馈切换WP75。",
+    "objective": "接通API长连接单聊到待确认工单及本人查询；默认寄件资料与标快，配置显示阻断，操作员确认后沿用既有顺丰下单路径。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3",
+    "activation_basis": "IN-20261027-003：用户明确要求解决全流程；生产无入站无工单事故优先，WP83保留。",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/feature-packets/F054-sf-self-service-order.md",
-      "product-truth/product-code/app/shipping/workbench.tsx",
-      "product-truth/product-code/app/shipping/workbench.test.tsx",
-      "product-truth/product-code/app/shipping/workbench.module.css",
-      "product-truth/product-code/lib/shipping/batch-text.ts",
-      "product-truth/product-code/lib/shipping/batch-text.test.ts",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本"
+      "product-truth/product-code/services/wecom-bot",
+      "product-truth/product-code/lib/shipping",
+      "product-truth/product-code/app/api/shipping/public/wecom/bot",
+      "product-truth/product-code/app/api/shipping/wecom/bot",
+      "product-truth/product-code/app/shipping/wecom-bot-configuration.tsx",
+      "product-truth/product-code/app/shipping/wecom-bot-configuration.test.tsx",
+      "product-truth/delivery-prototypes"
     ],
     "feature_id": "F054",
     "delivery_contract": {
@@ -172,28 +220,22 @@
         "shipping_tracking",
         "shipping_access"
       ],
-      "note": "WP75只发布寄件台账卡片展开/收起、核对选择和公司简称解析；不触发真实顺丰写单，不修改Production业务数据。",
       "production_database_mode": "read_only",
+      "note": "代码候选不等于交付；不新增数据库，发布及真实顺丰交易另行明确批准。",
       "runtime_profile": "shipping_workspace",
       "runtime_contract_version": "f054-recovery-v1"
     },
-    "started_at": "2026-10-23T18:10:00Z",
-    "reason": "权限目录CRUD已生产发布；继续处理用户最新寄件卡片和公司简称解析反馈。",
-    "micro_fixes": []
+    "started_at": "2026-10-27T02:16:27.830593+00:00",
+    "micro_fixes": [],
+    "reason": "复用旧WP76代码，所有旧工作区保留。"
   },
   "execution_queue": {
     "active": {
-      "id": "WP75",
-      "slug": "shipping-card-disclosure-and-company-parser",
-      "name": "寄件卡片单向展开与公司简称解析修复"
+      "id": "WP76",
+      "slug": "wecom-private-shipping-intake",
+      "name": "单聊寄件提报与本人回执"
     },
-    "next": {
-      "id": "WP35",
-      "slug": "sales-intake-experience",
-      "name": "销售寄件提报体验",
-      "entry_gate": "WP63 strict shipping text parsing",
-      "entry_gate_status": "waiting_active_completion"
-    },
+    "next": null,
     "ready": [
       {
         "id": "WP32",
@@ -328,6 +370,113 @@
         "name": "企微智能机器人长连接接入",
         "reason": "用户批准切换至F003权限模型；长连接候选保留，未宣称完成",
         "execution_workspace": "/Users/nsss/.codex/worktrees/wp39-harness-repair/Price-v3"
+      },
+      {
+        "id": "WP84",
+        "slug": "parameter-draft-release-isolation",
+        "name": "参数草稿与生效版本隔离",
+        "status": "approved_pending_execution",
+        "feature_id": "F042",
+        "approval": "IN-20261026-030",
+        "depends_on": [],
+        "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。",
+        "entry_gate": "已发布参数编辑风险及引用关系复现",
+        "contract": "product-truth/delivery-prototypes/config-permission-plan-review.md"
+      },
+      {
+        "id": "WP85",
+        "slug": "business-parameter-catalog",
+        "name": "业务参数中文目录与数据治理",
+        "status": "approved_pending_execution",
+        "feature_id": "F042",
+        "approval": "IN-20261026-030",
+        "depends_on": [],
+        "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。",
+        "entry_gate": "数据来源、引用清单及列表原型明确",
+        "contract": "product-truth/delivery-prototypes/config-permission-plan-review.md"
+      },
+      {
+        "id": "WP86",
+        "slug": "maintenance-rate-schema-form",
+        "name": "维保费率Schema表单",
+        "status": "approved_pending_execution",
+        "feature_id": "F042",
+        "approval": "IN-20261026-030",
+        "depends_on": [
+          "WP84",
+          "WP85"
+        ],
+        "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。",
+        "entry_gate": "百分比存储与消费口径核实",
+        "contract": "product-truth/delivery-prototypes/config-permission-plan-review.md"
+      },
+      {
+        "id": "WP87",
+        "slug": "discount-tier-schema-form",
+        "name": "折扣档位Schema表单",
+        "status": "approved_pending_execution",
+        "feature_id": "F042",
+        "approval": "IN-20261026-030",
+        "depends_on": [
+          "WP86"
+        ],
+        "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。",
+        "entry_gate": "折扣减免与支付比例语义明确",
+        "contract": "product-truth/delivery-prototypes/config-permission-plan-review.md"
+      },
+      {
+        "id": "WP88",
+        "slug": "price-template-validation-preview",
+        "name": "中文价盘模板与校验预览",
+        "status": "approved_pending_execution",
+        "feature_id": "F038",
+        "approval": "IN-20261026-030",
+        "depends_on": [],
+        "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。",
+        "entry_gate": "模板版本、业务字段单位及规则明确",
+        "contract": "product-truth/delivery-prototypes/config-permission-plan-review.md"
+      },
+      {
+        "id": "WP89",
+        "slug": "price-import-confirmed-draft",
+        "name": "预览确认与幂等草稿导入",
+        "status": "approved_pending_execution",
+        "feature_id": "F038",
+        "approval": "IN-20261026-030",
+        "depends_on": [
+          "WP88"
+        ],
+        "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。",
+        "entry_gate": "预览绑定摘要、组织、版本与确认人",
+        "contract": "product-truth/delivery-prototypes/config-permission-plan-review.md"
+      },
+      {
+        "id": "WP90",
+        "slug": "price-release-quote-verification",
+        "name": "价盘发布与报价消费验收",
+        "status": "approved_pending_execution",
+        "feature_id": "F038",
+        "approval": "IN-20261026-030",
+        "depends_on": [
+          "WP84",
+          "WP89"
+        ],
+        "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。",
+        "entry_gate": "价盘适用性确认：若WP84共享机制不足，激活前拆分，不混成大批次",
+        "contract": "product-truth/delivery-prototypes/config-permission-plan-review.md"
+      },
+      {
+        "id": "WP77",
+        "slug": "navigation-performance",
+        "name": "导航性能真实读取复验",
+        "reason": "按用户对WP83–WP90方案的执行指令暂缓；全部已有修改保留，生产性能未验收，不标完成。"
+      },
+      {
+        "id": "WP83",
+        "name": "原子权限勾选与实际访问一致",
+        "slug": "atomic-permission-consistency",
+        "reason": "权限code_green候选保留；接续用户要求的机器人真实链路。",
+        "execution_workspace": "/Users/nsss/.codex/worktrees/wp83-permission-candidate/Price-v3"
       }
     ],
     "completed": [
@@ -2197,6 +2346,65 @@
         "requested_target": "production_released",
         "constraint": "code-only release; production data read-only"
       }
+    },
+    "WP83": {
+      "id": "WP83",
+      "slug": "atomic-permission-consistency",
+      "name": "原子权限勾选与实际访问一致",
+      "kind": "product",
+      "status": "active",
+      "objective": "先复现角色授权显示与实际权限矛盾；统一服务端可授权原子目录、来源说明及保存校验，按批准方案A修复并验证组织隔离。",
+      "execution_workspace": "/Users/nsss/.codex/worktrees/wp83-permission-candidate/Price-v3",
+      "activation_basis": "IN-20261027-001：用户在批准方案并登记目标后明确要求执行；已说明新计划提前会顺延性能及机器人任务。",
+      "allowed_paths": [
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "product-truth/delivery-prototypes",
+        "product-truth/product-code/lib/role-permission-policy.ts",
+        "product-truth/product-code/lib/role-permission-policy.test.ts",
+        "product-truth/product-code/lib/org-role-permissions.ts",
+        "product-truth/product-code/lib/org-role-permissions.test.ts",
+        "product-truth/product-code/lib/permission-catalog.ts",
+        "product-truth/product-code/lib/permission-catalog.test.ts",
+        "product-truth/product-code/app/api/roles",
+        "product-truth/product-code/app/configs/tabs/RoleDetailPanel.tsx",
+        "product-truth/product-code/app/configs/tabs/RoleDetailPanel.test.tsx",
+        "product-truth/product-code/app/configs/tabs/RoleAccessTab.tsx",
+        "product-truth/product-code/app/configs/tabs/RoleAccessTab.test.tsx",
+        "product-truth/product-code/app/configs/types.ts",
+        "product-truth/product-code/app/configs/ConfigsClient.tsx",
+        "product-truth/product-code/app/configs/tabs/TabsContent.tsx"
+      ],
+      "feature_id": "F003",
+      "delivery_contract": {
+        "target_state": "code_green",
+        "allowed_states": [
+          "executing",
+          "code_green"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "role_edit_save",
+          "role_access_enforcement"
+        ],
+        "production_database_mode": "read_only",
+        "note": "代码候选不等于生产验收；上线与生产权限写入单独审批，不复用寄件运行证据。",
+        "runtime_profile": "application"
+      },
+      "started_at": "2026-10-27T01:25:09.714990+00:00",
+      "micro_fixes": [],
+      "reason": "WP83基于已核实的production提交隔离；原工作区WP77–WP82及未提交文档保留，不混入发布候选。"
     }
   },
   "parked_tasks": {
@@ -2471,5 +2679,405 @@
         "constraint": "code-only release; no schema or new production shipment"
       }
     }
+  },
+  "suspended_wp77": {
+    "id": "WP77",
+    "slug": "shipping-config-navigation-performance",
+    "name": "自助收寄与配置中心性能修复",
+    "kind": "product",
+    "status": "active",
+    "objective": "消除自助收寄到配置中心的阻塞加载；测量并优化路由、组件与服务端配置读取，页签切换与有用首屏分别以500ms为验收阈值；不得以骨架出现冒充数据可用。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3",
+    "activation_basis": "IN-20261026-007：用户查看WP76顺延影响后明确批准按建议切换。",
+    "allowed_paths": [
+      "governance/runtime-state/active-task.json",
+      "governance/runtime-state/demand-inbox.jsonl",
+      "product-truth/feature-packets/F054-sf-self-service-order.md",
+      "product-truth/product-code/app/configs",
+      "product-truth/product-code/app/shipping",
+      "product-truth/product-code/app/api/shipping/settings",
+      "product-truth/product-code/app/api/shipping/access",
+      "product-truth/product-code/components/layout",
+      "product-truth/product-code/lib/shipping",
+      "product-truth/product-code/lib/core-page-warmup.ts",
+      "product-truth/product-code/lib/core-page-warmup.test.ts",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本",
+      "product-truth/product-code/middleware.ts",
+      "product-truth/product-code/middleware.test.ts",
+      "product-truth/product-code/lib/middleware-rest-client.ts",
+      "product-truth/product-code/lib/middleware-rest-client.test.ts",
+      "product-truth/product-code/node_modules"
+    ],
+    "feature_id": "F054",
+    "delivery_contract": {
+      "target_state": "code_green",
+      "allowed_states": [
+        "executing",
+        "code_green"
+      ],
+      "integration_branch": "main",
+      "production_branch": "production",
+      "production_release_separate": true,
+      "same_release_commit_required": true,
+      "attestation_ref": "refs/notes/price-v3-delivery",
+      "required_code_checks": [
+        "target_tests",
+        "full_tests",
+        "lint",
+        "typecheck",
+        "build"
+      ],
+      "required_runtime_evidence": [
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
+      ],
+      "note": "WP78员工本人退回工单闭环；SQL迁移仅候选，不自动执行Production迁移。",
+      "production_database_mode": "read_only",
+      "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-recovery-v1"
+    },
+    "started_at": "2026-10-26T03:01:08.379768+00:00",
+    "reason": "本次P0性能先行，WP76原工作区及其未提交修改保留。",
+    "micro_fixes": []
+  },
+  "suspended_wp78": {
+    "id": "WP78",
+    "slug": "employee-workorder-recovery",
+    "name": "员工工单查询与退回恢复闭环",
+    "kind": "product",
+    "status": "active",
+    "objective": "默认最近5条本人工单、展开收起、红色加粗运单号；显示真实退回原因；本人退回工单修改重提与取消，经原子状态和版本检查，重提仍需操作员确认。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3",
+    "activation_basis": "IN-20261026-007：用户查看WP76顺延影响后明确批准按建议切换。",
+    "allowed_paths": [
+      "governance/runtime-state/active-task.json",
+      "governance/runtime-state/demand-inbox.jsonl",
+      "product-truth/product-code/app/sales-portal",
+      "product-truth/product-code/app/api/shipping/public/orders",
+      "product-truth/product-code/lib/shipping",
+      "product-truth/product-code/supabase/migrations",
+      "product-truth/feature-packets/F054-sf-self-service-order.md"
+    ],
+    "feature_id": "F054",
+    "delivery_contract": {
+      "target_state": "code_green",
+      "allowed_states": [
+        "executing",
+        "code_green"
+      ],
+      "integration_branch": "main",
+      "production_branch": "production",
+      "production_release_separate": true,
+      "same_release_commit_required": true,
+      "attestation_ref": "refs/notes/price-v3-delivery",
+      "required_code_checks": [
+        "target_tests",
+        "full_tests",
+        "lint",
+        "typecheck",
+        "build"
+      ],
+      "required_runtime_evidence": [
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
+      ],
+      "note": "WP78员工本人退回工单闭环；SQL迁移仅候选，不自动执行Production迁移。",
+      "production_database_mode": "read_only",
+      "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-recovery-v1"
+    },
+    "started_at": "2026-10-26T03:01:08.379768+00:00",
+    "reason": "WP77代码候选已提交；运行验收及门禁证据阻断单独保留，按用户批准顺序推进下一代码批次。",
+    "micro_fixes": []
+  },
+  "suspended_wp79_20261026": {
+    "id": "WP79",
+    "slug": "wecom-bot-idempotency",
+    "name": "企微机器人去重与停用",
+    "kind": "product",
+    "status": "active",
+    "objective": "阻止同组织同企业同Bot ID同接入方式的并发重复保存；提供停用和恢复入口；保留最新草稿，停用无引用冗余草稿。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3",
+    "activation_basis": "IN-20261026-007：用户查看WP76顺延影响后明确批准按建议切换。",
+    "allowed_paths": [
+      "governance/runtime-state/active-task.json",
+      "governance/runtime-state/demand-inbox.jsonl",
+      "product-truth/product-code/lib/shipping",
+      "product-truth/product-code/app/shipping/wecom-bot-configuration.tsx",
+      "product-truth/product-code/app/shipping/wecom-bot-configuration.test.tsx",
+      "product-truth/product-code/app/api/shipping/wecom/bot",
+      "product-truth/product-code/supabase/migrations"
+    ],
+    "feature_id": "F054",
+    "delivery_contract": {
+      "target_state": "code_green",
+      "allowed_states": [
+        "executing",
+        "code_green"
+      ],
+      "integration_branch": "main",
+      "production_branch": "production",
+      "production_release_separate": true,
+      "same_release_commit_required": true,
+      "attestation_ref": "refs/notes/price-v3-delivery",
+      "required_code_checks": [
+        "target_tests",
+        "full_tests",
+        "lint",
+        "typecheck",
+        "build"
+      ],
+      "required_runtime_evidence": [
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
+      ],
+      "note": "当前生效连接与企业名称显示；不写Production配置。",
+      "production_database_mode": "read_only",
+      "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-recovery-v1"
+    },
+    "started_at": "2026-10-26T03:01:08.379768+00:00",
+    "reason": "按IN-20261026-007批准顺序执行；WP78代码候选已验证，迁移和线上复验待发布。",
+    "micro_fixes": []
+  },
+  "suspended_wp80_20261026": {
+    "id": "WP80",
+    "slug": "shipping-effective-company",
+    "name": "顺丰当前生效连接与企业主体",
+    "kind": "product",
+    "status": "active",
+    "objective": "显示真实运行时选用的顺丰连接及绑定企业名称，区分连接验证、生产下单能力与企业名称来源。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3",
+    "activation_basis": "IN-20261026-007：用户查看WP76顺延影响后明确批准按建议切换。",
+    "allowed_paths": [
+      "governance/runtime-state/active-task.json",
+      "governance/runtime-state/demand-inbox.jsonl",
+      "product-truth/product-code/lib/shipping",
+      "product-truth/product-code/app/shipping/config-drawer.tsx",
+      "product-truth/product-code/app/shipping/config-drawer.test.tsx",
+      "product-truth/product-code/app/shipping/config-drawer.module.css"
+    ],
+    "feature_id": "F054",
+    "delivery_contract": {
+      "target_state": "code_green",
+      "allowed_states": [
+        "executing",
+        "code_green"
+      ],
+      "integration_branch": "main",
+      "production_branch": "production",
+      "production_release_separate": true,
+      "same_release_commit_required": true,
+      "attestation_ref": "refs/notes/price-v3-delivery",
+      "required_code_checks": [
+        "target_tests",
+        "full_tests",
+        "lint",
+        "typecheck",
+        "build"
+      ],
+      "required_runtime_evidence": [
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
+      ],
+      "note": "产品原型与逻辑说明，不执行组织换绑或人员数据迁移。",
+      "production_database_mode": "read_only",
+      "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-recovery-v1"
+    },
+    "started_at": "2026-10-26T03:01:08.379768+00:00",
+    "reason": "按用户批准顺序继续；WP79代码候选已提交，唯一约束与界面待发布。",
+    "micro_fixes": []
+  },
+  "suspended_wp81_20261026": {
+    "id": "WP81",
+    "slug": "organization-rebind-design",
+    "name": "组织换绑规则与原型",
+    "kind": "product",
+    "status": "active",
+    "objective": "提供可审阅组织换绑字段、数据保留流程和防误操作原型；真实连接器缺失明确标注。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3",
+    "activation_basis": "IN-20261026-007：用户查看WP76顺延影响后明确批准按建议切换。",
+    "allowed_paths": [
+      "governance/runtime-state/active-task.json",
+      "governance/runtime-state/demand-inbox.jsonl",
+      "product-truth/delivery-prototypes"
+    ],
+    "feature_id": "F054",
+    "delivery_contract": {
+      "target_state": "code_green",
+      "allowed_states": [
+        "executing",
+        "code_green"
+      ],
+      "integration_branch": "main",
+      "production_branch": "production",
+      "production_release_separate": true,
+      "same_release_commit_required": true,
+      "attestation_ref": "refs/notes/price-v3-delivery",
+      "required_code_checks": [
+        "target_tests",
+        "full_tests",
+        "lint",
+        "typecheck",
+        "build"
+      ],
+      "required_runtime_evidence": [
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
+      ],
+      "note": "默认拒绝路由/菜单与权限说明；不修改生产角色授权。",
+      "production_database_mode": "read_only",
+      "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-recovery-v1"
+    },
+    "started_at": "2026-10-26T03:01:08.379768+00:00",
+    "reason": "按用户批准顺序；WP80候选通过67目标测试与typecheck、build，未发布。",
+    "micro_fixes": []
+  },
+  "suspended_wp82_20261026": {
+    "id": "WP82",
+    "slug": "permission-default-deny",
+    "name": "权限路由与菜单默认拒绝",
+    "kind": "product",
+    "status": "active",
+    "objective": "新增模块入口默认不可见；页面和API服务端拒绝无权限访问，已注册模块根据实时权限映射菜单；交付权限原型与扩展说明。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3",
+    "activation_basis": "IN-20261026-007：用户查看WP76顺延影响后明确批准按建议切换。",
+    "allowed_paths": [
+      "governance/runtime-state/active-task.json",
+      "governance/runtime-state/demand-inbox.jsonl",
+      "product-truth/delivery-prototypes",
+      "product-truth/product-code/middleware.ts",
+      "product-truth/product-code/middleware.test.ts",
+      "product-truth/product-code/lib/module-access.ts",
+      "product-truth/product-code/lib/module-access.test.ts",
+      "product-truth/product-code/lib/permission-catalog.ts",
+      "product-truth/product-code/lib/permission-catalog.test.ts",
+      "product-truth/product-code/components/layout/Sidebar.tsx",
+      "product-truth/product-code/components/layout/Sidebar.test.tsx",
+      "product-truth/product-code/app/api/navigation",
+      "product-truth/product-code/supabase/migrations",
+      "product-truth/product-code/lib/module-access-migration.test.ts",
+      "product-truth/product-code/scripts/local.mjs",
+      "product-truth/product-code/scripts/local.sh",
+      "product-truth/product-code/lib/database-environment.ts",
+      "product-truth/product-code/lib/database-environment.test.ts",
+      "product-truth/product-code/lib/supabase.ts",
+      "product-truth/product-code/lib/middleware-rest-client.ts"
+    ],
+    "feature_id": "F003",
+    "delivery_contract": {
+      "target_state": "code_green",
+      "allowed_states": [
+        "executing",
+        "code_green"
+      ],
+      "integration_branch": "main",
+      "production_branch": "production",
+      "production_release_separate": true,
+      "same_release_commit_required": true,
+      "attestation_ref": "refs/notes/price-v3-delivery",
+      "required_code_checks": [
+        "target_tests",
+        "full_tests",
+        "lint",
+        "typecheck",
+        "build"
+      ],
+      "required_runtime_evidence": [
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
+      ],
+      "note": "默认拒绝路由/菜单与权限说明；不修改生产角色授权。",
+      "production_database_mode": "read_only",
+      "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-recovery-v1"
+    },
+    "started_at": "2026-10-26T03:01:08.379768+00:00",
+    "reason": "按用户批准顺序；WP81换绑原型已提交，实际连接器未实现，未改变生产组织。",
+    "micro_fixes": [
+      {
+        "id": "WP82-local-validation",
+        "objective": "按IN-20261026-013启动本地候选连接唯一现有项目，默认只读，支持页面与访问校验；不自动执行迁移或顺丰业务写入。"
+      }
+    ]
+  },
+  "approved_goal_registration": {
+    "source": "IN-20261026-030",
+    "status": "registered_pending_execution",
+    "scope": "目标登记，不切换Active，不开放产品代码或生产写入",
+    "paths": [
+      "product-truth/REQ_REGISTRY.yml",
+      "product-truth/feature-packets/F099-current-goal-ledger.md",
+      "product-truth/feature-packets/F003-account-auth.md",
+      "product-truth/feature-packets/F042-business-params.md",
+      "product-truth/feature-packets/F038-price-matrix.md"
+    ]
+  },
+  "suspended_wp77_20261027": {
+    "id": "WP77",
+    "slug": "navigation-performance",
+    "name": "导航性能真实读取复验",
+    "kind": "product",
+    "status": "active",
+    "objective": "根据唯一数据库真实读取证据消除同请求重复授权与全局主题阻塞；复验配置导航延迟。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3",
+    "activation_basis": "IN-20261026-007：用户查看WP76顺延影响后明确批准按建议切换。",
+    "allowed_paths": [
+      "governance/runtime-state/active-task.json",
+      "governance/runtime-state/demand-inbox.jsonl",
+      "product-truth/delivery-prototypes",
+      "product-truth/product-code/middleware.ts",
+      "product-truth/product-code/middleware.test.ts",
+      "product-truth/product-code/lib/middleware-rest-client.ts",
+      "product-truth/product-code/lib/middleware-rest-client.test.ts",
+      "product-truth/product-code/lib/request-authorization.ts",
+      "product-truth/product-code/lib/request-authorization.test.ts",
+      "product-truth/product-code/lib/ui-theme.ts",
+      "product-truth/product-code/lib/ui-theme.test.ts",
+      "product-truth/product-code/app/layout.tsx",
+      "product-truth/product-code/app/api/navigation",
+      "product-truth/product-code/app/api/shipping/access",
+      "product-truth/product-code/app/api/shipping/settings"
+    ],
+    "feature_id": "F054",
+    "delivery_contract": {
+      "target_state": "code_green",
+      "allowed_states": [
+        "executing",
+        "code_green"
+      ],
+      "integration_branch": "main",
+      "production_branch": "production",
+      "production_release_separate": true,
+      "same_release_commit_required": true,
+      "attestation_ref": "refs/notes/price-v3-delivery",
+      "required_code_checks": [
+        "target_tests",
+        "full_tests",
+        "lint",
+        "typecheck",
+        "build"
+      ],
+      "required_runtime_evidence": [
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
+      ],
+      "note": "默认拒绝路由/菜单与权限说明；不修改生产角色授权。",
+      "production_database_mode": "read_only",
+      "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-recovery-v1"
+    },
+    "started_at": "2026-10-26T03:01:08.379768+00:00",
+    "reason": "真实读取证据推翻性能已充分优化的假设；用户IN013/014批准唯一项目本地验证，回到原性能范围继续修复。",
+    "micro_fixes": []
   }
 }

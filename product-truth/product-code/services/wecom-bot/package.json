@@ -4,6 +4,6 @@
   "version": "0.1.0",
   "type": "module",
   "engines": { "node": ">=22" },
-  "scripts": { "test": "node --test connection.test.mjs sdk.test.mjs", "probe": "node main.mjs --probe", "start": "node main.mjs --listen" },
+  "scripts": { "test": "node --test connection.test.mjs bridge.test.mjs enroll.test.mjs sdk.test.mjs", "enroll": "node enroll.mjs", "probe": "node main.mjs --probe", "start": "node main.mjs --listen" },
   "dependencies": { "@wecom/aibot-node-sdk": "1.0.7" }
 }

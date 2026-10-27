@@ -61,3 +61,16 @@ it('lists legacy and long-connection transports without any ciphertext or plaint
  expect(JSON.stringify(bots)).not.toContain('cipher')
  expect(mocks.decrypt).not.toHaveBeenCalled()
 })
+
+it('refuses a long connection after its enterprise binding changed',async()=>{
+ const {readWecomBotForLongConnection}=await import('./wecom-bot-settings')
+ mocks.from.mockImplementation(()=>{const q={select:()=>q,eq:()=>q,in:()=>q,maybeSingle:async()=>({data:{...row,org_id:'org',corp_id:'old-corp',credentials_ciphertext:'long-connection:v1:cipher'},error:null})};return q})
+ await expect(readWecomBotForLongConnection(id)).rejects.toMatchObject({status:403})
+})
+it('renews a business heartbeat without changing the configuration version',async()=>{
+ const {markWecomLongConnectionOnline}=await import('./wecom-bot-settings')
+ let value:Record<string,unknown>={}
+ mocks.from.mockImplementation(()=>{const q={update:(v:Record<string,unknown>)=>{value=v;return q},eq:()=>q,in:()=>q,select:()=>q,maybeSingle:async()=>({data:{id},error:null})};return q})
+ await markWecomLongConnectionOnline({...row,status:'active',verified_at:'2026-01-01'} as never)
+ expect(value.status).toBe('active');expect(value.verified_at).not.toBe('2026-01-01');expect(value).not.toHaveProperty('updated_at')
+})

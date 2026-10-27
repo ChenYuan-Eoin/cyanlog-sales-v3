@@ -60,3 +60,27 @@ it('reloads a saved long connection without returning the Secret or showing old 
   expect(screen.getByLabelText('机器人 Secret')).toHaveProperty('value','')
   expect(screen.getByRole('button',{name:'保存长连接配置'})).toHaveProperty('disabled',false)
 })
+
+it('issues a short-lived enrollment token for an existing cloud runtime without exposing the bot Secret', async () => {
+  const saved = { ...bot, transport: 'long_connection' as const }
+  fetcher.mockImplementation(async (_url: string, init?: RequestInit) => Response.json(init?.method === 'POST'
+    ? { bots: [saved], enrollment: { botId: saved.id, remoteBotId: saved.bot_id, token: 'example-token', expiresAt: '2026-10-25T12:00:00.000Z' } }
+    : { bots: [saved] }))
+  render(<WecomBotConfiguration corpId="corp-1" ready />)
+  fireEvent.click(await screen.findByRole('button', { name: '生成云桌面接入令牌' }))
+  const enrollment = await screen.findByRole('region', { name: '云桌面接入令牌' })
+  expect(within(enrollment).getByLabelText('Bot ID')).toHaveProperty('value', 'robot-7')
+  expect(within(enrollment).getByLabelText('接入令牌')).toHaveProperty('value', 'example-token')
+  expect(within(enrollment).getByLabelText('接入令牌')).toHaveProperty('type', 'password')
+  expect(screen.queryByLabelText('机器人 Secret')).toHaveProperty('value', '')
+  expect(JSON.parse(fetcher.mock.calls.find(([, init]) => init?.method === 'POST')![1].body).action).toBe('runtime_enrollment')
+})
+
+it('shows expired heartbeats and prevents enrollment for a disabled connection',async()=>{
+ fetcher.mockResolvedValue(Response.json({bots:[{...bot,transport:'long_connection',status:'disabled',verified_at:'2026-01-01'}],checks:[{key:'members',label:'销售身份与提报范围',ready:false,action:'请管理员同步成员'}]}))
+ render(<WecomBotConfiguration corpId="corp-1" ready />)
+ await screen.findByText('已停用')
+ expect(screen.getByRole('button',{name:'生成云桌面接入令牌'})).toHaveProperty('disabled',true)
+ expect(screen.getByText(/销售身份与提报范围：需处理/)).toBeTruthy()
+ expect(screen.getByRole('button',{name:'刷新接入状态'})).toBeTruthy()
+})

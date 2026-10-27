@@ -31,17 +31,17 @@ export function createConnection({ Client, config, onMessage, report = () => {},
   client.on('authenticated', () => {
     if (stopped) return;
     clearTimeout(deadline);
-    change('connected', { authenticated: true, error_code: null, authentication_reason: null });
+    change('connected', { authenticated: true, business_ready: Boolean(onMessage), error_code: null, authentication_reason: null });
     resolveAuth();
   });
-  client.on('disconnected', () => { session += 1; change('disconnected', { authenticated: false }); });
+  client.on('disconnected', () => { session += 1; change('disconnected', { authenticated: false, business_ready: false }); });
   client.on('reconnecting', attempt => change('reconnecting', { authenticated: false, reconnect_attempts: Number.isSafeInteger(attempt) ? attempt : state.reconnect_attempts + 1 }));
   // Do not print SDK error bodies: they can contain URLs, messages, or credentials.
   client.on('error', error => {
     const message = error instanceof Error ? error.message : '';
     const authRejected = message.startsWith('Authentication failed:');
     const code = authRejected ? message.match(/\(code: (-?\d+)\)$/)?.[1] : null;
-    change(authRejected ? 'authentication_rejected' : 'connection_error', { authenticated: false, error_code: code ? Number(code) : null, authentication_reason: authRejected ? authenticationReason(message) : null });
+    change(authRejected ? 'authentication_rejected' : 'connection_error', { authenticated: false, business_ready: false, error_code: code ? Number(code) : null, authentication_reason: authRejected ? authenticationReason(message) : null });
     if (authRejected) {
       rejectAuth(new Error('Robot authentication rejected'));
       queueMicrotask(() => api.stop());
