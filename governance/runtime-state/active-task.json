@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-27T10:51:32.619555+00:00",
+  "updated_at": "2026-10-28T03:59:06.551978+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -256,6 +256,19 @@
       "note": "WP91先以只读预览验收配置界面；正式发布及凭据保存按已批准范围和精确候选另行绑定，组织骨架与寄件权限不得更改；仅cyanlog-sales-v3。",
       "runtime_profile": "application",
       "runtime_contract_version": "f003-fxiaoke-connection-v1"
+    },
+    "coordination_contract": {
+      "source": "IN-20261028-003",
+      "feature": "F003",
+      "path": "product-truth/feature-packets/F003-account-auth.md",
+      "sequence": [
+        "WP91",
+        "WP92",
+        "WP93",
+        "WP94"
+      ],
+      "shared_configuration": "纷享组织接入与SSO复用企业应用连接；ea后台获取，员工本人登录另经OAuth身份核验。",
+      "completion_rule": "只保存配置不算接通；正式站真实A/B登录、授权提报、本人查询和跨企业拒绝后才可关闭整条目标。"
     }
   },
   "execution_queue": {
@@ -267,22 +280,39 @@
     "next": {
       "id": "WP92",
       "slug": "fxiaoke-primary-source-sync",
-      "name": "纷享组织同步与主来源切换"
+      "name": "纷享组织同步与主来源切换",
+      "depends_on": [
+        "WP91"
+      ],
+      "entry_gate": "WP91正式站应用配置、保存回读及真实通讯录预览验收通过"
     },
     "ready": [
       {
         "id": "WP93",
         "slug": "unified-shipping-authorization",
         "name": "统一成员身份与寄件许可",
-        "entry_gate": "前序批次生产验收通过",
-        "entry_gate_status": "waiting_active_completion"
+        "entry_gate": "WP92正式站稳定身份映射、主来源切换和数据保护验收通过",
+        "entry_gate_status": "waiting_active_completion",
+        "depends_on": [
+          "WP92"
+        ]
       },
       {
         "id": "WP94",
         "slug": "fxiaoke-sales-intake",
         "name": "纷享销售登录与真实提报",
-        "entry_gate": "前序批次生产验收通过",
-        "entry_gate_status": "waiting_active_completion"
+        "entry_gate": "纷享企业连接可用、稳定成员身份映射及统一寄件许可已在正式站验收",
+        "entry_gate_status": "waiting_active_completion",
+        "depends_on": [
+          "WP91",
+          "WP92",
+          "WP93"
+        ],
+        "related_inputs": [
+          "IN-20261028-002",
+          "IN-20261028-003"
+        ],
+        "scope_note": "复用企业应用连接，实现真实SSO入口、授权回调和销售本人提报；解决禁用占位按钮及不存在的管理员开通开关。"
       },
       {
         "id": "WP32",
