@@ -28,6 +28,16 @@ test('connection write approval cannot authorize migrations, member sync or perm
   assert.deepEqual(v.productionReleaseScopeBlockers(pending), []);
   assert.notEqual(v.productionReleaseScopeBlockers({ ...pending, production_release_authorization: { ...pending.production_release_authorization, database_write_authorized: true } }).length, 0);
 });
+test('separate egress approval permits only the scoped host and checksum-bound two-table migration', () => {
+  const approval = { type: 'final_production_release_authorization', source: 'user_explicit', state: 'approved', preview_order_exception: true, preview_status: 'not_passed', approved_candidate: 'a'.repeat(40), approved_product_tree: 'b'.repeat(40), rollback_commit: 'c'.repeat(40), production_write_scope: ['organization_fxiaoke_connections', 'organization_fxiaoke_egress', 'organization_fxiaoke_egress_jobs'], production_migrations_authorized: true, organization_sync_authorized: false, sales_permissions_authorized: false, egress_worker_authorized: true, egress_runtime_host: 'existing_cloud', egress_allowed_ip: '192.0.2.1', authorized_egress_migration: { path: 'product-truth/product-code/supabase/migrations/20261028083005_fxiaoke_egress_jobs.sql', sha256: 'd'.repeat(64) } };
+  const input = { approval, activeId: 'WP91', contractVersion: v.CONTRACT, productTree: approval.approved_product_tree, candidateIsAncestor: true, changedPaths: ['governance/runtime-state/active-task.json'], egressMigrationSha256: 'd'.repeat(64) };
+  assert.deepEqual(v.productionFirstExceptionBlockers(input), []);
+  for (const patch of [{ egress_worker_authorized: false }, { production_migrations_authorized: false }, { egress_runtime_host: 'another_host' }, { egress_allowed_ip: '0.0.0.0' }, { production_write_scope: [...approval.production_write_scope, 'users'] }, { authorized_egress_migration: { ...approval.authorized_egress_migration, path: 'unapproved.sql' } }, { organization_sync_authorized: true }, { sales_permissions_authorized: true }]) assert.ok(v.productionFirstExceptionBlockers({ ...input, approval: { ...approval, ...patch } }).length);
+  assert.ok(v.productionFirstExceptionBlockers({ ...input, egressMigrationSha256: 'e'.repeat(64) }).length);
+  assert.ok(v.productionFirstExceptionBlockers({ ...input, egressMigrationSha256: undefined }).length);
+  assert.ok(v.productionFirstExceptionBlockers({ ...input, productTree: 'e'.repeat(40) }).length);
+  assert.ok(v.productionOperatorBlockers({ ...operator, preview_status: 502 }, expected).length);
+});
 test('requires real production save, readback, provider preview and existing Chrome', () => {
   assert.deepEqual(v.productionOperatorBlockers(operator, expected), []);
   for (const patch of [{ preview_status: 502 }, { readback_verified: false }, { provider_connected: false }, { employee_count: 0 }, { department_count: 0 }, { sync_applied: true }, { new_tabs: 1 }, { commit: 'other' }, { actions: v.PREVIEW_ACTIONS }]) assert.notEqual(v.productionOperatorBlockers({ ...operator, ...patch }, expected).length, 0);

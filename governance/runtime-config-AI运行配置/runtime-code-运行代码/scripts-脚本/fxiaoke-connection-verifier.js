@@ -4,13 +4,15 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { isIP } = require('node:net');
 const CONTRACT = 'f003-fxiaoke-connection-v1';
+const EGRESS_MIGRATION_PATH = 'product-truth/product-code/supabase/migrations/20261028083005_fxiaoke_egress_jobs.sql';
 const ORIGIN = 'https://sales.cyanlog.icu';
 const PREVIEW_ACTIONS = Object.freeze(['open_fxiaoke_configuration', 'inspect_required_fields', 'verify_internal_account_hidden']);
 const PRODUCTION_ACTIONS = Object.freeze(['open_fxiaoke_configuration', 'save_application_configuration', 'reload_configuration', 'preview_directory']);
 // This exception changes prerequisite order, never the Production acceptance.
 function productionFirstExceptionBlockers(input) {
-  const { approval, activeId, contractVersion, productTree, changedPaths, candidateIsAncestor } = input || {};
+  const { approval, activeId, contractVersion, productTree, changedPaths, candidateIsAncestor, egressMigrationSha256 } = input || {};
   const errors = [];
   if (activeId !== 'WP91' || contractVersion !== CONTRACT) errors.push('Production-first exception is limited to WP91 Fxiaoke connection acceptance');
   if (approval?.type !== 'final_production_release_authorization' || approval?.source !== 'user_explicit' || approval?.state !== 'approved' || approval?.preview_order_exception !== true) errors.push('Preview ordering exception requires an explicit user release decision');
@@ -21,14 +23,20 @@ function productionFirstExceptionBlockers(input) {
   if (!Array.isArray(changedPaths) || changedPaths.some(file => !allowed.has(file))) errors.push('Ordering exception only allows its scoped delivery-rule records');
   if (!/^[a-f0-9]{40}$/.test(approval?.rollback_commit || '')) errors.push('Ordering exception requires a concrete rollback commit');
   errors.push(...productionWriteBoundaryBlockers(approval));
+  if (approval?.egress_worker_authorized === true && egressMigrationSha256 !== approval.authorized_egress_migration?.sha256) errors.push('Egress migration must match the explicitly approved file checksum');
   return errors;
 }
-// The user journey writes only connection configuration and preview metadata.
-// It never grants migration, organization-sync or shipping-permission authority.
+// The default grant remains connection-only. The separate user-approved egress
+// grant permits exactly its two transport tables and checksum-bound migration.
 function productionWriteBoundaryBlockers(value) {
   const errors = [];
-  if (JSON.stringify(value?.production_write_scope) !== JSON.stringify(['organization_fxiaoke_connections'])) errors.push('Fxiaoke Production writes must be limited to the connection table');
-  for (const flag of ['production_migrations_authorized', 'organization_sync_authorized', 'sales_permissions_authorized']) {
+  const egress = value?.egress_worker_authorized === true;
+  const scope = ['organization_fxiaoke_connections', ...(egress ? ['organization_fxiaoke_egress', 'organization_fxiaoke_egress_jobs'] : [])];
+  if (JSON.stringify(value?.production_write_scope) !== JSON.stringify(scope)) errors.push('Fxiaoke Production writes exceed the explicitly approved connection/egress boundary');
+  if (value?.production_migrations_authorized !== egress) errors.push('Fxiaoke migration authority requires the separate egress grant');
+  if (egress && (value.egress_runtime_host !== 'existing_cloud' || isIP(value.egress_allowed_ip || '') !== 4 || value.egress_allowed_ip === '0.0.0.0'
+    || value.authorized_egress_migration?.path !== EGRESS_MIGRATION_PATH || !/^[a-f0-9]{64}$/.test(value.authorized_egress_migration?.sha256 || ''))) errors.push('Egress grant requires the existing cloud host, an explicit IP and the exact approved migration');
+  for (const flag of ['organization_sync_authorized', 'sales_permissions_authorized']) {
     if (value?.[flag] !== false) errors.push(`Fxiaoke connection acceptance must explicitly exclude ${flag}`);
   }
   return errors;

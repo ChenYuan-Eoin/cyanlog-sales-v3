@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-28T06:02:28.818782+00:00",
+  "updated_at": "2026-10-28T09:23:45.750810+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -236,7 +236,7 @@
       {
         "id": "fxiaoke-egress",
         "input": "IN-20261028-005",
-        "scope": "Resolve WP91 production IP whitelist blocker using the existing runtime host; local candidate only until a new release, migration and worker-enablement approval.",
+        "scope": "User-approved release and scoped egress enablement under IN-20261028-007; product tree bound to 28094984.",
         "capsule": "codex-runtime/wp91-network-diagnosis/fxiaoke-egress-capsule.json"
       }
     ],
@@ -266,28 +266,37 @@
         "fxiaoke_connection"
       ],
       "production_database_mode": "controlled_write_approved",
-      "note": "用户批准本次WP91跳过未通过的Preview操作验收，保留其未通过事实；code_green后进入受控Production验证。产品代码须与fa173690一致，必要差异仅交付规则。只保存纷享连接配置及预览元数据；不迁移、不同步部门成员、不改权限、不下顺丰单；失败回退a243ca86。",
+      "note": "用户批准28094984及其相同产品树的发布、两张网络接入表迁移、现有云电脑专用程序和指定出口白名单；Preview仍未通过，按受控Production顺序完成真实保存、回读、通讯录预览。不同步组织或改权限；失败停止新增程序并回退a243ca86。",
       "runtime_profile": "application",
       "runtime_contract_version": "f003-fxiaoke-connection-v1",
       "required_production_runtime_evidence": [
         "connection_preview",
         "verifier"
       ],
-      "preview_order_exception_approval_id": "IN-20261028-004",
+      "preview_order_exception_approval_id": "IN-20261028-007",
       "production_release_authorization": {
         "status": "approved_for_final_release",
-        "micro_fix_approval_id": "IN-20261028-004",
-        "clarification_id": "IN-20261028-004",
-        "final_release_approval_id": "IN-20261028-004",
-        "micro_fix_scope": "Only record and enforce this approved ordering exception; product code unchanged",
-        "final_scope": "WP91 fa173690 controlled Production validation with identical approved product code; connection configuration save/readback/directory preview only",
+        "micro_fix_approval_id": "IN-20261028-007",
+        "clarification_id": "IN-20261028-007",
+        "final_release_approval_id": "IN-20261028-007",
+        "micro_fix_scope": "Record the explicit 28094984 release decision without changing approved product code",
+        "final_scope": "WP91 28094984 release and existing-cloud Fxiaoke egress enablement; only approved two-table migration, scoped worker, confirmed cloud IP allowlist, connection save/readback and real directory preview",
         "database_write_authorized": true,
         "production_write_scope": [
-          "organization_fxiaoke_connections"
+          "organization_fxiaoke_connections",
+          "organization_fxiaoke_egress",
+          "organization_fxiaoke_egress_jobs"
         ],
-        "production_migrations_authorized": false,
+        "production_migrations_authorized": true,
         "organization_sync_authorized": false,
-        "sales_permissions_authorized": false
+        "sales_permissions_authorized": false,
+        "egress_runtime_host": "existing_cloud",
+        "egress_allowed_ip": "42.192.213.170",
+        "egress_worker_authorized": true,
+        "authorized_egress_migration": {
+          "path": "product-truth/product-code/supabase/migrations/20261028083005_fxiaoke_egress_jobs.sql",
+          "sha256": "6580ee59c5804bd9189ee36847ce3602013010ab27d5763abed21afc82b2c809"
+        }
       },
       "final_acceptance": {
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",

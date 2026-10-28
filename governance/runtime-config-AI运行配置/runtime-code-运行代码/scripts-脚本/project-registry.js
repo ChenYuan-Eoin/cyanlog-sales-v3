@@ -455,7 +455,9 @@ function getPreviewOrderException(state, repoRoot, inboxRecords) {
     approval, activeId: state.active_task?.id, contractVersion: runtimeContractVersionOf(state),
     productTree: runGit(repoRoot, ['rev-parse', 'HEAD:product-truth/product-code'], { allowFailure: true }),
     candidateIsAncestor: Boolean(base && runGit(repoRoot, ['merge-base', '--is-ancestor', base, 'HEAD'], { allowFailure: true }) !== null),
-    changedPaths: changed === null ? null : changed.split('\0').filter(Boolean)
+    changedPaths: changed === null ? null : changed.split('\0').filter(Boolean),
+    egressMigrationSha256: approval?.egress_worker_authorized === true
+      ? fileSha256(path.join(repoRoot, 'product-truth/product-code/supabase/migrations/20261028083005_fxiaoke_egress_jobs.sql')) : undefined
   });
   return { approved: blockers.length === 0, approval_id: approvalId, preview_status: 'not_passed', blockers };
 }
@@ -654,7 +656,12 @@ function validateSchedulerSnapshot(options, candidate) {
       if (releaseAuthorization.status === 'approved_code_only') {
         if (finalRecord?.code_release_authorized !== true || finalRecord?.production_database_write_authorized !== false) errors.push('Code-only Production authorization must explicitly preserve the database write boundary');
       } else if (finalRecord?.production_write_authorized !== true) errors.push('final Production authorization inbox record does not allow controlled writes');
-      if (fxiaokeRelease) errors.push(...require('./fxiaoke-connection-verifier').productionWriteBoundaryBlockers(finalRecord));
+      if (fxiaokeRelease) {
+        errors.push(...require('./fxiaoke-connection-verifier').productionWriteBoundaryBlockers(finalRecord));
+        for (const field of ['production_write_scope', 'production_migrations_authorized', 'organization_sync_authorized', 'sales_permissions_authorized', 'egress_worker_authorized', 'egress_runtime_host', 'egress_allowed_ip', 'authorized_egress_migration']) {
+          if (JSON.stringify(releaseAuthorization[field]) !== JSON.stringify(finalRecord?.[field])) errors.push(`Fxiaoke release grant differs from user approval: ${field}`);
+        }
+      }
       if (finalRecord?.authorized_commit_binding !== 'delivery_attestation_current_head') errors.push('final Production authorization inbox record has no exact-HEAD attestation binding');
     }
   }
