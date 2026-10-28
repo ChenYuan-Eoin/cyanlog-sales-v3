@@ -451,6 +451,20 @@ function runApplicationPermissionSelftest(repoRoot) {
     const invalid = structuredClone(scheduler); change(invalid); writeJson(schedulerPath, invalid);
     assert.strictEqual(validateSchedulerState({ repoRoot }).ok, false);
   }
+  // WP91 has its own connection journey; role-permission evidence cannot satisfy it.
+  const fx = structuredClone(scheduler);
+  fx.active_task.delivery_contract.target_state = 'clean_preview_green';
+  fx.active_task.delivery_contract.allowed_states = ['executing', 'code_green', 'clean_preview_green'];
+  fx.active_task.delivery_contract.runtime_contract_version = 'f003-fxiaoke-connection-v1';
+  fx.active_task.delivery_contract.required_runtime_evidence = ['fxiaoke_connection'];
+  writeJson(schedulerPath, fx);
+  assert.deepStrictEqual(validateSchedulerState({ repoRoot }).errors, []);
+  assert.deepStrictEqual(requiredReplayActions(fx), require('./fxiaoke-connection-verifier').PREVIEW_ACTIONS);
+  assert.deepStrictEqual(requiredReplayActions(fx, 'production'), require('./fxiaoke-connection-verifier').PRODUCTION_ACTIONS);
+  const wrongFx = structuredClone(fx);
+  wrongFx.active_task.delivery_contract.required_runtime_evidence = ['role_edit_save', 'role_access_enforcement'];
+  writeJson(schedulerPath, wrongFx);
+  assert.strictEqual(validateSchedulerState({ repoRoot }).ok, false);
   // The new profile must not change the existing AI default or evidence gates.
   const ai = structuredClone(scheduler);
   delete ai.active_task.delivery_contract.runtime_profile;

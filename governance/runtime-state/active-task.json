@@ -221,16 +221,21 @@
       "product-truth/product-code/app/configs/tabs/FxiaokeSourceForm.tsx",
       "product-truth/product-code/app/configs/tabs/FxiaokeSourceForm.test.tsx",
       "product-truth/product-code/supabase/migrations",
-      "product-truth/delivery-prototypes"
+      "product-truth/delivery-prototypes",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-connection-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-connection-verifier.test.js"
     ],
     "feature_id": "F003",
     "started_at": "2026-10-27T10:51:32.619555+00:00",
     "micro_fixes": [],
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "clean_preview_green",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -245,12 +250,12 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "role_edit_save",
-        "role_access_enforcement"
+        "fxiaoke_connection"
       ],
       "production_database_mode": "read_only",
-      "note": "WP91只配置预览；生产部署和迁移需具体候选审批；仅cyanlog-sales-v3，不新增付费资源。",
-      "runtime_profile": "application"
+      "note": "WP91先以只读预览验收配置界面；正式发布及凭据保存按已批准范围和精确候选另行绑定，组织骨架与寄件权限不得更改；仅cyanlog-sales-v3。",
+      "runtime_profile": "application",
+      "runtime_contract_version": "f003-fxiaoke-connection-v1"
     }
   },
   "execution_queue": {
