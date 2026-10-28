@@ -39,3 +39,11 @@ it('retrieves the enterprise account and clears it if application credentials ch
   fireEvent.change(screen.getByLabelText('AppID'), { target: { value: 'another' } })
   expect((screen.getByLabelText('企业账号（ea）') as HTMLInputElement).value).toBe('')
 })
+it('explains where to find required values and why enterprise discovery is disabled', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(Response.json({ data: { connection: null } })))
+  render(<FxiaokeSourceForm />)
+  await waitFor(() => expect((screen.getByRole('button', { name: '保存应用配置' }) as HTMLButtonElement).disabled).toBe(false))
+  expect(screen.getByText(/请先填写 AppID、APPSecret 和永久授权码/)).toBeTruthy()
+  expect(screen.getByText(/员工ID.*查看/)).toBeTruthy()
+  expect(screen.getByText(/APPSecret 下方、token 上方/)).toBeTruthy()
+})
