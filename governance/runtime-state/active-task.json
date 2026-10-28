@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-28T03:59:06.551978+00:00",
+  "updated_at": "2026-10-28T06:02:28.818782+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -225,17 +225,21 @@
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-connection-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-connection-verifier.test.js"
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-connection-verifier.test.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.test.js"
     ],
     "feature_id": "F003",
     "started_at": "2026-10-27T10:51:32.619555+00:00",
     "micro_fixes": [],
     "delivery_contract": {
-      "target_state": "clean_preview_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
         "code_green",
-        "clean_preview_green"
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -252,10 +256,34 @@
       "required_runtime_evidence": [
         "fxiaoke_connection"
       ],
-      "production_database_mode": "read_only",
-      "note": "WP91先以只读预览验收配置界面；正式发布及凭据保存按已批准范围和精确候选另行绑定，组织骨架与寄件权限不得更改；仅cyanlog-sales-v3。",
+      "production_database_mode": "controlled_write_approved",
+      "note": "用户批准本次WP91跳过未通过的Preview操作验收，保留其未通过事实；code_green后进入受控Production验证。产品代码须与fa173690一致，必要差异仅交付规则。只保存纷享连接配置及预览元数据；不迁移、不同步部门成员、不改权限、不下顺丰单；失败回退a243ca86。",
       "runtime_profile": "application",
-      "runtime_contract_version": "f003-fxiaoke-connection-v1"
+      "runtime_contract_version": "f003-fxiaoke-connection-v1",
+      "required_production_runtime_evidence": [
+        "connection_preview",
+        "verifier"
+      ],
+      "preview_order_exception_approval_id": "IN-20261028-004",
+      "production_release_authorization": {
+        "status": "approved_for_final_release",
+        "micro_fix_approval_id": "IN-20261028-004",
+        "clarification_id": "IN-20261028-004",
+        "final_release_approval_id": "IN-20261028-004",
+        "micro_fix_scope": "Only record and enforce this approved ordering exception; product code unchanged",
+        "final_scope": "WP91 fa173690 controlled Production validation with identical approved product code; connection configuration save/readback/directory preview only",
+        "database_write_authorized": true,
+        "production_write_scope": [
+          "organization_fxiaoke_connections"
+        ],
+        "production_migrations_authorized": false,
+        "organization_sync_authorized": false,
+        "sales_permissions_authorized": false
+      },
+      "final_acceptance": {
+        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+        "production_database_mode": "controlled_write_approved"
+      }
     },
     "coordination_contract": {
       "source": "IN-20261028-003",

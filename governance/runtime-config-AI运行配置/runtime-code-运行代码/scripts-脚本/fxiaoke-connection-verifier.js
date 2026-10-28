@@ -8,6 +8,21 @@ const CONTRACT = 'f003-fxiaoke-connection-v1';
 const ORIGIN = 'https://sales.cyanlog.icu';
 const PREVIEW_ACTIONS = Object.freeze(['open_fxiaoke_configuration', 'inspect_required_fields', 'verify_internal_account_hidden']);
 const PRODUCTION_ACTIONS = Object.freeze(['open_fxiaoke_configuration', 'save_application_configuration', 'reload_configuration', 'preview_directory']);
+// This exception changes prerequisite order, never the Production acceptance.
+function productionFirstExceptionBlockers(input) {
+  const { approval, activeId, contractVersion, productTree, changedPaths, candidateIsAncestor } = input || {};
+  const errors = [];
+  if (activeId !== 'WP91' || contractVersion !== CONTRACT) errors.push('Production-first exception is limited to WP91 Fxiaoke connection acceptance');
+  if (approval?.type !== 'final_production_release_authorization' || approval?.source !== 'user_explicit' || approval?.state !== 'approved' || approval?.preview_order_exception !== true) errors.push('Preview ordering exception requires an explicit user release decision');
+  if (approval?.preview_status !== 'not_passed') errors.push('Ordering exception must preserve Preview as not passed');
+  if (!/^[a-f0-9]{40}$/.test(approval?.approved_candidate || '') || candidateIsAncestor !== true) errors.push('Ordering exception must retain the approved candidate ancestry');
+  if (!/^[a-f0-9]{40}$/.test(approval?.approved_product_tree || '') || productTree !== approval?.approved_product_tree) errors.push('Ordering exception cannot change approved product code');
+  const allowed = new Set(['governance/runtime-state/active-task.json', 'governance/runtime-state/demand-inbox.jsonl', ...['project-registry.js', 'fxiaoke-connection-verifier.js', 'fxiaoke-connection-verifier.test.js', 'harness-workspace.test.js'].map(name => `governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/${name}`)]);
+  if (!Array.isArray(changedPaths) || changedPaths.some(file => !allowed.has(file))) errors.push('Ordering exception only allows its scoped delivery-rule records');
+  if (!/^[a-f0-9]{40}$/.test(approval?.rollback_commit || '')) errors.push('Ordering exception requires a concrete rollback commit');
+  errors.push(...productionWriteBoundaryBlockers(approval));
+  return errors;
+}
 // The user journey writes only connection configuration and preview metadata.
 // It never grants migration, organization-sync or shipping-permission authority.
 function productionWriteBoundaryBlockers(value) {
@@ -146,4 +161,4 @@ async function verify({ runtime, operator, commit, deploymentId, request = fetch
   if (blockers.length) throw Error(blockers.join('; '));
   return section;
 }
-module.exports = { CONTRACT, ORIGIN, PREVIEW_ACTIONS, PRODUCTION_ACTIONS, productionWriteBoundaryBlockers, productionReleaseScopeBlockers, previewBlockers, productionOperatorBlockers, productionBlockers, verify };
+module.exports = { CONTRACT, ORIGIN, PREVIEW_ACTIONS, PRODUCTION_ACTIONS, productionFirstExceptionBlockers, productionWriteBoundaryBlockers, productionReleaseScopeBlockers, previewBlockers, productionOperatorBlockers, productionBlockers, verify };

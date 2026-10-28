@@ -445,6 +445,21 @@ function shippingRuntimeEvidenceBlockers(section, environment) {
   return blockers;
 }
 
+function getPreviewOrderException(state, repoRoot, inboxRecords) {
+  const approvalId = state.active_task?.delivery_contract?.preview_order_exception_approval_id;
+  if (!approvalId) return null;
+  const approval = inboxRecords.find(record => record?.id === approvalId);
+  const base = /^[a-f0-9]{40}$/.test(approval?.approved_candidate || '') ? approval.approved_candidate : null;
+  const changed = base ? runGit(repoRoot, ['diff', '--name-only', '-z', base, 'HEAD'], { allowFailure: true }) : null;
+  const blockers = require('./fxiaoke-connection-verifier').productionFirstExceptionBlockers({
+    approval, activeId: state.active_task?.id, contractVersion: runtimeContractVersionOf(state),
+    productTree: runGit(repoRoot, ['rev-parse', 'HEAD:product-truth/product-code'], { allowFailure: true }),
+    candidateIsAncestor: Boolean(base && runGit(repoRoot, ['merge-base', '--is-ancestor', base, 'HEAD'], { allowFailure: true }) !== null),
+    changedPaths: changed === null ? null : changed.split('\0').filter(Boolean)
+  });
+  return { approved: blockers.length === 0, approval_id: approvalId, preview_status: 'not_passed', blockers };
+}
+
 function validateSchedulerState(options = {}) {
   // Normal hooks always inspect disk; candidate data is accepted only by the
   // separately named read-only preflight API below.
@@ -613,6 +628,8 @@ function validateSchedulerSnapshot(options, candidate) {
   }
 
   errors.push(...inboxParseErrors);
+  const previewException = getPreviewOrderException(state, repoRoot, inboxRecords);
+  if (previewException) errors.push(...previewException.blockers);
   const inboxIds = inboxRecords.map((record) => record && record.id).filter(Boolean);
   const duplicateInboxIds = [...new Set(inboxIds.filter((id, index) => inboxIds.indexOf(id) !== index))];
   if (duplicateInboxIds.length) {
@@ -1738,12 +1755,14 @@ function getDeliveryStatus(options = {}) {
   const releaseControl = attestation.releaseControl || {};
   const finalReleaseApprovalId = state.active_task?.delivery_contract?.production_release_authorization?.final_release_approval_id;
   const productionReleaseAuthorizationRecord = inboxRecords.find((record) => record?.id === finalReleaseApprovalId) || null;
+  const previewOrderException = getPreviewOrderException(state, repoRoot, inboxRecords);
   let completionState = attestation.completionState || 'executing';
   if (deliveryStateAtLeast(completionState, 'code_green') && evidence.code?.commit !== head) {
     completionState = 'executing';
   } else if (
     deliveryStateAtLeast(completionState, 'clean_preview_green')
     && evidence.preview?.commit !== head
+    && previewOrderException?.approved !== true
   ) {
     completionState = 'code_green';
   }
@@ -1763,6 +1782,7 @@ function getDeliveryStatus(options = {}) {
     requiredProductionRuntimeEvidence: state.active_task?.delivery_contract?.required_production_runtime_evidence || [],
     productionReleaseAuthorization: state.active_task?.delivery_contract?.production_release_authorization || null,
     productionReleaseAuthorizationRecord,
+    previewOrderException,
     productionDatabaseMode: state.active_task?.delivery_contract?.final_acceptance?.production_database_mode || null,
     sameReleaseCommitRequired: state.active_task?.delivery_contract?.same_release_commit_required === true,
     completionState,
@@ -1829,6 +1849,8 @@ function checkDeliveryStage(stage, options = {}) {
   const blockers = [];
   const evidence = status.evidence;
   const productionTerminal = stage === 'production_released';
+  const productionFirst = status.previewOrderException?.approved === true;
+  if (productionFirst && stage === 'clean_preview_green') blockers.push('User-approved Production-first exception preserves Preview as not passed');
 
   if (status.git.worktreeIsolation && !status.git.worktreeIsolation.ok) {
     blockers.push(...status.git.worktreeIsolation.blockers);
@@ -1885,7 +1907,7 @@ function checkDeliveryStage(stage, options = {}) {
       }
     }
   }
-  if (deliveryStateAtLeast(stage, 'clean_preview_green')) {
+  if (deliveryStateAtLeast(stage, 'clean_preview_green') && !productionFirst) {
     const applicationPermissions = status.runtimeProfile === 'application' && [APPLICATION_PERMISSION_CONTRACT, FXIAOKE_CONNECTION_CONTRACT].includes(status.runtimeContractVersion);
     if (evidence.preview?.commit !== status.git.head) blockers.push('Preview commit does not equal HEAD');
     if (evidence.preview?.provider_source_commit !== status.git.head) blockers.push('Preview provider source commit does not equal HEAD');
@@ -2262,7 +2284,8 @@ function transitionDeliveryState(stage, options = {}) {
       blockers: [`delivery transition cannot move backwards: ${status.completionState} -> ${stage}`]
     };
   }
-  if (nextIndex > currentIndex + 1) {
+  const approvedPreviewSkip = status.previewOrderException?.approved === true && status.completionState === 'code_green' && stage === 'integration_ready';
+  if (nextIndex > currentIndex + 1 && !approvedPreviewSkip) {
     return {
       ok: false,
       stage,

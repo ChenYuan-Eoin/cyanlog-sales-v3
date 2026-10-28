@@ -36,6 +36,16 @@ function prepare(directory) {
   state.active_task.id = 'WP39';
   state.execution_queue.active.id = 'WP39';
   state.active_task.execution_workspace = directory;
+  // Workspace-binding tests must not inherit a real release approval, candidate
+  // SHA or product verifier from whichever work package is currently active.
+  state.active_task.delivery_contract = {
+    target_state: 'code_green', allowed_states: ['executing', 'code_green'],
+    integration_branch: 'main', production_branch: 'production',
+    production_release_separate: true, same_release_commit_required: true,
+    attestation_ref: 'refs/notes/price-v3-delivery',
+    required_code_checks: ['target_tests', 'full_tests', 'lint', 'typecheck', 'build'],
+    runtime_profile: 'ai', required_runtime_evidence: ['provider_probe', 'review_run', 'model_invocations', 'tokens']
+  };
   write(schedulerPath, state);
   core.startGoal(directory, 'Bounded repository implementation', { workPackageId: 'WP39', level: 'A3', scopes: 'app,governance/runtime-state', success: 'checks pass' });
   core.recordEvidence(directory, { status: 'pass', summary: 'fixture research', satisfies: ['research-check:repo-pattern-scan','research-check:reuse-or-library-scan','research-check:best-practice-check','research-check:user-intent-boundary-check'] });
