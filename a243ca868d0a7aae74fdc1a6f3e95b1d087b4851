@@ -50,9 +50,62 @@
         }
       ],
       "notes": "Production replay and provider credentials pending; formal behavior and release contracts not yet verified."
+    },
+    "preview": {
+      "commit": "a243ca868d0a7aae74fdc1a6f3e95b1d087b4851",
+      "deployment_id": "dpl_2zcy1F1JzobMjba4axb3CJwFBrpJ",
+      "url": "https://cyanlog-sales-v3-9nucz6405-eoins-projects-94b17ece.vercel.app",
+      "status": "READY",
+      "source_clean": true,
+      "anonymous_probe": {
+        "path": "/api/admin/organization-sources/fxiaoke",
+        "status": 401,
+        "body": {
+          "error": "Unauthorized"
+        }
+      },
+      "browser_observation": "existing Chrome preview navigation timed out",
+      "notes": "No authenticated Preview journey; no claim of clean_preview_green."
+    },
+    "production": {
+      "commit": "a243ca868d0a7aae74fdc1a6f3e95b1d087b4851",
+      "deployment_id": "dpl_GrwKamSxU5d6AUpZnHbmerDuoeHm",
+      "deployment_status": "READY",
+      "url": "https://sales.cyanlog.icu",
+      "source_branch": "production",
+      "remote_main_contains_candidate": true,
+      "operator_observation": {
+        "source": "existing_chrome_operator",
+        "tab_id": "1110516531",
+        "url": "https://sales.cyanlog.icu/configs?tab=org-structure",
+        "actions": [
+          "reload production",
+          "open bind source",
+          "select Fxiaoke",
+          "expand ea help",
+          "inspect visible form and read dimensions"
+        ],
+        "result": {
+          "five_fields_visible": true,
+          "single_column": true,
+          "inputs_border_px": 1,
+          "input_width_px": 212,
+          "card_width_px": 244,
+          "horizontal_overflow": false,
+          "ea_help_expanded": true,
+          "discover_button_visible": true
+        },
+        "not_verified": [
+          "real credential discovery",
+          "successful credential save and readback",
+          "provider directory preview"
+        ]
+      },
+      "business_acceptance": "pending_real_credentials",
+      "formal_delivery_gate": "not_passed"
     }
   },
-  "updatedAt": "2026-10-28T02:28:10.299Z",
+  "updatedAt": "2026-10-28T02:39:05.606Z",
   "releaseControl": {
     "wp91_ux_release_authorization": {
       "status": "approved",
@@ -64,18 +117,18 @@
   "gateSnapshots": {
     "executing": {
       "stage": "executing",
-      "checkedAt": "2026-10-28T02:28:10.279Z",
+      "checkedAt": "2026-10-28T02:39:05.573Z",
       "head": "a243ca868d0a7aae74fdc1a6f3e95b1d087b4851",
       "originMain": "ed3664e7dc774383cd26063ba886e90eafd08b32",
-      "remoteMain": "ed3664e7dc774383cd26063ba886e90eafd08b32",
-      "remoteProduction": "ed3664e7dc774383cd26063ba886e90eafd08b32",
+      "remoteMain": "a243ca868d0a7aae74fdc1a6f3e95b1d087b4851",
+      "remoteProduction": "a243ca868d0a7aae74fdc1a6f3e95b1d087b4851",
       "defaultBranch": "main",
-      "originMainFresh": true,
-      "originMainIsAncestor": true,
-      "mainIntegrated": false,
-      "localAttestationRefOid": "fc988f51b719c2abc25bff31740d999d1eb6339a",
-      "remoteAttestationRefOid": "fc988f51b719c2abc25bff31740d999d1eb6339a",
-      "remoteSnapshotCheckedAt": "2026-10-28T02:28:05.349Z",
+      "originMainFresh": false,
+      "originMainIsAncestor": false,
+      "mainIntegrated": true,
+      "localAttestationRefOid": "3a6e1601312301c9f32d5d0b3f3bf14b23d42f0b",
+      "remoteAttestationRefOid": "3a6e1601312301c9f32d5d0b3f3bf14b23d42f0b",
+      "remoteSnapshotCheckedAt": "2026-10-28T02:39:02.048Z",
       "vercelProduction": null,
       "verifier": {
         "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
@@ -85,10 +138,103 @@
       }
     }
   },
-  "previousAttestationDigest": null,
-  "previousAttestation": null,
-  "revision": 1,
-  "contentDigest": "94b929aab7f786479acbcae04b3d0486adf49b2d7d794f135af879dfc85219a8",
-  "sealedAt": "2026-10-28T02:28:10.299Z",
-  "attestationDigest": "7017fffbd18435a516b3eb0adf1fd0c65f40059edca27416ea2450af449ef1ed"
+  "previousAttestationDigest": "7017fffbd18435a516b3eb0adf1fd0c65f40059edca27416ea2450af449ef1ed",
+  "previousAttestation": {
+    "version": 1,
+    "activeId": "WP91",
+    "commit": "a243ca868d0a7aae74fdc1a6f3e95b1d087b4851",
+    "evidence": {
+      "code": {
+        "commit": "a243ca868d0a7aae74fdc1a6f3e95b1d087b4851",
+        "checks": {
+          "target_tests": true,
+          "full_tests": true,
+          "lint": true,
+          "typecheck": true,
+          "build": true
+        },
+        "commands": [
+          {
+            "name": "target_tests",
+            "command": "npx vitest run (focused)",
+            "exit_code": 0,
+            "artifact_path": "wp91-ux-target-tests.log",
+            "log_sha256": "51edf6322208c9bb438803d2e51d44cd52f34ba744762ae5d0e5e3cfdc523f06"
+          },
+          {
+            "name": "full_tests",
+            "command": "npm run test:run",
+            "exit_code": 0,
+            "artifact_path": "wp91-ux-full-tests.log",
+            "log_sha256": "ec7bc941ab0789f1a919197d6d01af008b7b47fa1e0d0b060ca815d75514e1da"
+          },
+          {
+            "name": "lint",
+            "command": "npm run lint",
+            "exit_code": 0,
+            "artifact_path": "wp91-ux-lint.log",
+            "log_sha256": "66ecdc3dbd9375b3662c7634922af6bb23a57f49d2172a2cb76a2e253c4f2138"
+          },
+          {
+            "name": "typecheck",
+            "command": "npx tsc --noEmit --incremental false",
+            "exit_code": 0,
+            "artifact_path": "wp91-ux-typecheck.log",
+            "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "name": "build",
+            "command": "npm run build",
+            "exit_code": 0,
+            "artifact_path": "wp91-ux-build-final.log",
+            "log_sha256": "143756faba8eb2c69e9066d81ab8ee194c7c38e9bbabd19cbae2d5d8b2666ff0"
+          }
+        ],
+        "notes": "Production replay and provider credentials pending; formal behavior and release contracts not yet verified."
+      }
+    },
+    "updatedAt": "2026-10-28T02:28:10.299Z",
+    "releaseControl": {
+      "wp91_ux_release_authorization": {
+        "status": "approved",
+        "candidate": "a243ca868d0a7aae74fdc1a6f3e95b1d087b4851",
+        "scope": "push and production deployment; no migration",
+        "source": "user reply call_06d74ae1b65d42bfa67a354033231170"
+      }
+    },
+    "gateSnapshots": {
+      "executing": {
+        "stage": "executing",
+        "checkedAt": "2026-10-28T02:28:10.279Z",
+        "head": "a243ca868d0a7aae74fdc1a6f3e95b1d087b4851",
+        "originMain": "ed3664e7dc774383cd26063ba886e90eafd08b32",
+        "remoteMain": "ed3664e7dc774383cd26063ba886e90eafd08b32",
+        "remoteProduction": "ed3664e7dc774383cd26063ba886e90eafd08b32",
+        "defaultBranch": "main",
+        "originMainFresh": true,
+        "originMainIsAncestor": true,
+        "mainIntegrated": false,
+        "localAttestationRefOid": "fc988f51b719c2abc25bff31740d999d1eb6339a",
+        "remoteAttestationRefOid": "fc988f51b719c2abc25bff31740d999d1eb6339a",
+        "remoteSnapshotCheckedAt": "2026-10-28T02:28:05.349Z",
+        "vercelProduction": null,
+        "verifier": {
+          "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+          "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+          "worktree": "git status --porcelain=v1 --untracked-files=all",
+          "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+        }
+      }
+    },
+    "previousAttestationDigest": null,
+    "previousAttestation": null,
+    "revision": 1,
+    "contentDigest": "94b929aab7f786479acbcae04b3d0486adf49b2d7d794f135af879dfc85219a8",
+    "sealedAt": "2026-10-28T02:28:10.299Z",
+    "attestationDigest": "7017fffbd18435a516b3eb0adf1fd0c65f40059edca27416ea2450af449ef1ed"
+  },
+  "revision": 2,
+  "contentDigest": "51957792a6e735d501bc4e831bed7e1ebe9fb11f10faa455a3c8ebbe4e3f55fd",
+  "sealedAt": "2026-10-28T02:39:05.606Z",
+  "attestationDigest": "5dd4e98faf39457db0cb7a2b634dfebcac223b6daab35669aae57640c44c39b4"
 }
