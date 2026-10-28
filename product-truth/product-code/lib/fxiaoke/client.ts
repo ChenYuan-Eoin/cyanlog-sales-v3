@@ -95,3 +95,28 @@ export async function previewDirectory(credentials: Credentials, request: typeof
   if (employees.some(item => item.departmentIds.some(departmentId => !departmentIds.has(departmentId)))) warnings.push('部分员工的主属部门不在可读取范围内，需补齐权限后再同步。')
   return { ea: credentials.expectedEa, corpId: token.openUserId, checkedAt: new Date().toISOString(), departments, employees, warnings, visibility: 'authorized_scope', applied: false }
 }
+
+// Only returns the provider's enterprise account; tokens and corp identifiers remain server-side.
+export async function discoverEnterprise(credentials: Pick<Credentials, 'appId' | 'appSecret' | 'permanentCode'>, request: typeof fetch = fetch): Promise<{ ea: string }> {
+  let response: Response
+  try {
+    response = await request(`${ORIGIN}/oauth2.0/token?thirdTraceId=${randomUUID()}`, {
+      method: 'POST', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(15_000),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appId: credentials.appId, appSecret: credentials.appSecret, permanentCode: credentials.permanentCode, grantType: 'app_secret' }),
+    })
+  } catch {
+    throw new FxiaokeError('PROVIDER_UNREACHABLE', '连接纷享失败或超时，请检查网络、应用 IP 白名单后重试。', 502)
+  }
+  if (!response.ok) throw new FxiaokeError('PROVIDER_HTTP_ERROR', `纷享接口返回 HTTP ${response.status}，未能获取企业账号。`, 502)
+  let data: Row
+  try { data = object(await response.json()) } catch { throw new FxiaokeError('INVALID_RESPONSE', '纷享接口没有返回有效数据。', 502) }
+  if (data.errorCode !== 0) {
+    const code = Number.isSafeInteger(data.errorCode) ? String(data.errorCode) : '未知'
+    throw new FxiaokeError('PROVIDER_REJECTED', `纷享拒绝请求（错误码 ${code}）。请核对应用凭据、IP 白名单和 OpenAPI 权益。`, 502)
+  }
+  if (data.appId !== credentials.appId || typeof data.ea !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(data.ea) || typeof data.accessToken !== 'string' || !data.accessToken || typeof data.openUserId !== 'string' || !data.openUserId.startsWith('FSCID_')) {
+    throw new FxiaokeError('INVALID_TOKEN_RESPONSE', '纷享未返回有效的企业授权信息，请检查应用配置。', 502)
+  }
+  return { ea: data.ea }
+}

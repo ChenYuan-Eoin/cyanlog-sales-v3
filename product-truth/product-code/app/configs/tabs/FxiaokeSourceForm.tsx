@@ -13,6 +13,13 @@ function headers(): HeadersInit {
 function stateLabel(value: string) {
   return value === '0' ? '正常' : value === '1' ? '停用' : '待核对'
 }
+function FieldHelp({ text }: { text: string }) {
+  return <details className="text-xs text-slate-600">
+    <summary title={text} className="cursor-pointer text-blue-700 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600">如何填写？</summary>
+    <p className="mt-1 break-words leading-relaxed">{text}</p>
+  </details>
+}
+const inputClass = 'mt-1 h-10 w-full min-w-0 border border-slate-400 bg-white text-slate-900 shadow-sm placeholder:text-slate-500 focus-visible:border-blue-600 focus-visible:ring-blue-500/30'
 export function FxiaokeSourceForm() {
   const [connection, setConnection] = useState<ConnectionSummary | null>(null)
   const [fields, setFields] = useState({ appId: '', expectedEa: '', apiUserId: '', appSecret: '', permanentCode: '' })
@@ -45,20 +52,26 @@ export function FxiaokeSourceForm() {
   }, [])
 
   function edit(key: keyof typeof fields, value: string) {
-    setFields(current => ({ ...current, [key]: value })); setDirty(true); setPreview(null); setMessage('')
+    setFields(current => ({ ...current, [key]: value, ...(['appId', 'appSecret', 'permanentCode'].includes(key) && value !== current[key] ? { expectedEa: '' } : {}) })); setDirty(true); setPreview(null); setMessage('')
   }
-  async function action(kind: 'save' | 'preview') {
+  async function action(kind: 'save' | 'preview' | 'discover') {
     if (inFlight.current || loading) return
     inFlight.current = true; setBusy(true); setFailure(''); setMessage(''); setPreview(null)
     try {
-      const response = await fetch(ENDPOINT, { method: 'POST', headers: headers(), body: JSON.stringify(kind === 'save'
+      const response = await fetch(ENDPOINT, { method: 'POST', headers: headers(), body: JSON.stringify(kind === 'discover'
+        ? { action: kind, credentials: { appId: fields.appId, appSecret: fields.appSecret, permanentCode: fields.permanentCode } }
+        : kind === 'save'
         ? { action: kind, connection: { appId: fields.appId, expectedEa: fields.expectedEa, apiUserId: fields.apiUserId,
           ...(fields.appSecret.trim() ? { appSecret: fields.appSecret } : {}),
           ...(fields.permanentCode.trim() ? { permanentCode: fields.permanentCode } : {}), revision: connection?.revision || null } }
         : { action: kind, revision: connection?.revision }) })
       const body = await response.json()
       if (!response.ok) throw new Error(body.error || '操作失败，请重试。')
-      if (kind === 'save') {
+      if (kind === 'discover') {
+        if (typeof body.data?.enterprise?.ea !== 'string' || !body.data.enterprise.ea) throw new Error('纷享没有返回企业账号。')
+        setFields(current => ({ ...current, expectedEa: body.data.enterprise.ea }))
+        setDirty(true); setMessage('已从纷享获取企业账号，请核对是否为目标企业，再保存配置。')
+      } else if (kind === 'save') {
         setConnection(body.data.connection); setFields(current => ({ ...current, appSecret: '', permanentCode: '' }))
         setDirty(false); setMessage('配置已保存。请预览通讯录，核对企业及读取范围。')
       } else {
@@ -76,14 +89,15 @@ export function FxiaokeSourceForm() {
       <h4 className="font-medium text-slate-900">纷享销客自建应用</h4>
       <p className="mt-1 text-sm text-slate-600">在纷享后台的自建应用中开启开发模式，配置部门和员工读取权限。</p>
       <p className="mt-1 text-xs text-slate-500">服务地址：https://open.fxiaoke.com。其他云部署暂不支持，请勿填入该云的凭据。</p>
+      <p className="mt-1 text-xs text-slate-600">首次配置以下字段均为必填；已保存的密钥可留空保留。</p>
     </div>
     {loading && <p role="status">正在读取已保存配置…</p>}
-    <fieldset disabled={loading || busy} className="grid gap-3 sm:grid-cols-2">
-      <label className="text-sm">应用 ID（AppID）<Input autoComplete="off" value={fields.appId} onChange={event => edit('appId', event.target.value)} /></label>
-      <label className="text-sm">企业标识（ea）<Input autoComplete="off" value={fields.expectedEa} onChange={event => edit('expectedEa', event.target.value)} /><span className="text-xs text-slate-500">纷享企业专属标识，用于核对授权是否属于目标企业。</span></label>
-      <label className="text-sm">应用密钥（AppSecret）<Input type="password" autoComplete="new-password" value={fields.appSecret} placeholder={connection ? '留空保留已保存密钥' : '填写应用密钥'} onChange={event => edit('appSecret', event.target.value)} /></label>
-      <label className="text-sm">永久授权码（PermanentCode）<Input type="password" autoComplete="new-password" value={fields.permanentCode} placeholder={connection ? '留空保留已保存授权码' : '填写永久授权码'} onChange={event => edit('permanentCode', event.target.value)} /></label>
-      <label className="text-sm sm:col-span-2">同步执行员工 ID<Input autoComplete="off" value={fields.apiUserId} onChange={event => edit('apiUserId', event.target.value)} /><span className="text-xs text-slate-500">在纷享 CRM「人员 → 系统名 → 账号信息」中查看员工 ID。后台按此账号的权限读取通讯录，不代表其他销售登录身份。</span></label>
+    <fieldset disabled={loading || busy} className="grid min-w-0 grid-cols-1 gap-4">
+      <div className="min-w-0 space-y-1"><label className="block text-sm font-medium">AppID<Input className={inputClass} placeholder="填写纷享的 AppID" autoComplete="off" value={fields.appId} onChange={event => edit('appId', event.target.value)} /></label><FieldHelp text="在纷享销客管理后台，打开对应自建应用，在开发模式中复制 AppID。" /></div>
+      <div className="min-w-0 space-y-1"><label className="block text-sm font-medium">APPSecret<Input className={inputClass} type="password" autoComplete="new-password" value={fields.appSecret} placeholder={connection ? '留空保留已保存密钥' : '填写纷享的 APPSecret'} onChange={event => edit('appSecret', event.target.value)} /></label><FieldHelp text="在同一个自建应用的开发模式中复制 APPSecret；它是密钥，请勿发送到聊天。修改应用或获取企业账号时需要重新填写。" /></div>
+      <div className="min-w-0 space-y-1"><label className="block text-sm font-medium">永久授权码<Input className={inputClass} type="password" autoComplete="new-password" value={fields.permanentCode} placeholder={connection ? '留空保留已保存授权码' : '填写纷享的永久授权码'} onChange={event => edit('permanentCode', event.target.value)} /></label><FieldHelp text="在同一个自建应用的开发模式中复制「永久授权码」。它不是 token、EncodingAESKey，也不是企微机器人的 API key。" /></div>
+      <div className="min-w-0 space-y-2"><label className="block text-sm font-medium">企业账号（ea）<Input className={inputClass} autoComplete="off" placeholder="先通过应用凭据获取" value={fields.expectedEa} onChange={event => edit('expectedEa', event.target.value)} /></label><FieldHelp text="ea 是纷享企业账号，不是 AppID。填写上面三项后点击获取，系统会从纷享授权响应读取；请核对是否为目标企业。也可填写已核实的企业账号。" /><Button type="button" variant="outline" className="h-auto min-h-10 max-w-full whitespace-normal border-slate-400 text-left" disabled={loading || busy || !fields.appId.trim() || !fields.appSecret.trim() || !fields.permanentCode.trim()} onClick={() => void action('discover')}>从纷享获取企业账号</Button></div>
+      <div className="min-w-0 space-y-1"><label className="block text-sm font-medium">同步执行员工 ID<Input className={inputClass} autoComplete="off" placeholder="填写有通讯录读取权限的员工 ID" value={fields.apiUserId} onChange={event => edit('apiUserId', event.target.value)} /></label><FieldHelp text="填写纷享员工的 userId（接口操作人），不是姓名、员工编号、AppID 或人员记录 _id。请由纷享管理员提供并确认该人员的读取权限；当前版本不能自动获取此 ID。" /></div>
     </fieldset>
     {connection && <p className="text-sm text-slate-600">{dirty ? '编辑尚未保存' : connection.lastCheckStatus === 'preview_ready' ? '上次通讯录预览成功 · 尚未同步或启用主来源' : connection.lastCheckStatus === 'failed' ? '上次预览失败，请检查配置后重试' : '凭据已保存 · 尚未验证'}{connection.lastCheckedAt ? ` · ${new Date(connection.lastCheckedAt).toLocaleString('zh-CN')}` : ''}</p>}
     {failure && <p role="alert" className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{failure}</p>}

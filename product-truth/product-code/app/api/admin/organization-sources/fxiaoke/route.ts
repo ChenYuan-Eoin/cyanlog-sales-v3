@@ -2,7 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { canManageOrg, getFreshDefaultOrgId, getFreshUserScopedRoleAssignments } from '@/lib/scoped-access'
-import { FxiaokeError } from '@/lib/fxiaoke/contracts'
+import { discoveryInput, FxiaokeError } from '@/lib/fxiaoke/contracts'
+import { discoverEnterprise } from '@/lib/fxiaoke/client'
 import { loadConnection, previewSavedConnection, saveConnection } from '@/lib/fxiaoke/settings'
 
 export const runtime = 'nodejs'
@@ -36,6 +37,11 @@ export async function POST(req: NextRequest) {
       body = parsed as Record<string, unknown>
     } catch { throw new FxiaokeError('INVALID_INPUT', '请求格式无效。') }
     if (body.action === 'save') return { connection: await saveConnection(orgId, actorId, body.connection) }
+    if (body.action === 'discover') {
+      const parsed = discoveryInput.safeParse(body.credentials)
+      if (!parsed.success) throw new FxiaokeError('INVALID_CONFIGURATION', '请先填写 AppID、APPSecret 和永久授权码。')
+      return { enterprise: await discoverEnterprise(parsed.data) }
+    }
     if (body.action === 'preview' && typeof body.revision === 'string' && /^[0-9a-f-]{36}$/i.test(body.revision)) {
       return { preview: await previewSavedConnection(orgId, body.revision) }
     }

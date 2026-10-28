@@ -2,6 +2,11 @@
 import { z } from 'zod'
 
 const identifier = z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/)
+export const discoveryInput = z.object({
+  appId: identifier,
+  appSecret: z.string().trim().min(1).max(512),
+  permanentCode: z.string().trim().min(1).max(512),
+}).strict()
 export const connectionInput = z.object({
   appId: identifier,
   appSecret: z.string().trim().min(1).max(512).optional(),

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
-import { previewDirectory } from './client'
+import { discoverEnterprise, previewDirectory } from './client'
 const credentials = { appId: 'FSAID_test', appSecret: 'test-only-secret', permanentCode: 'test-only-code', expectedEa: 'example', apiUserId: '123' }
 const token = { errorCode: 0, appId: credentials.appId, ea: 'example', openUserId: 'FSCID_test', accessToken: 'test-token' }
 const department = { _id: '100', name: '销售部', parent_id: [], status: 0 }
@@ -9,6 +9,18 @@ const page = (rows: unknown[], total = rows.length) => ({ errorCode: 0, data: { 
 function fixture(...values: unknown[]) { return vi.fn<typeof fetch>().mockImplementation(async () => Response.json(values.shift())) }
 
 describe('Fxiaoke direct directory preview', () => {
+  it('discovers only the enterprise account, without returning the access token or company ID', async () => {
+    const request = fixture(token)
+    const result = await discoverEnterprise(credentials, request)
+    expect(result).toEqual({ ea: 'example' })
+    expect(JSON.stringify(result)).not.toContain('test-token')
+    expect(JSON.stringify(result)).not.toContain('FSCID_')
+    expect(JSON.parse(String(request.mock.calls[0][1]?.body))).toEqual({ appId: credentials.appId, appSecret: credentials.appSecret, permanentCode: credentials.permanentCode, grantType: 'app_secret' })
+  })
+  it('rejects a discovery response for a different app or with an invalid enterprise account', async () => {
+    await expect(discoverEnterprise(credentials, fixture({ ...token, appId: 'other' }))).rejects.toMatchObject({ code: 'INVALID_TOKEN_RESPONSE' })
+    await expect(discoverEnterprise(credentials, fixture({ ...token, ea: '' }))).rejects.toMatchObject({ code: 'INVALID_TOKEN_RESPONSE' })
+  })
   it('uses self-built app token and scoped OpenAPI headers, without MCP or writes', async () => {
     const request = fixture(token, page([department]), page([employee]))
     const result = await previewDirectory(credentials, request)
