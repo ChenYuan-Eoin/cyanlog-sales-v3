@@ -90,7 +90,7 @@ export async function previewDirectory(credentials: Credentials, request: typeof
   const employees = employeeRows.map(row => ({ id: id(row.user_id), name: name(row.name), departmentIds: ids(row.main_department), status: status(row.status), loginDisabled: typeof row.is_pause_login === 'boolean' ? row.is_pause_login : null }))
   if (new Set(employees.map(item => item.id)).size !== employees.length) throw new FxiaokeError('DUPLICATE_IDENTITY', '多个人员记录对应同一员工 ID，需先处理纷享人员数据。', 409)
   const departmentIds = new Set(departments.map(item => item.id))
-  const warnings = ['仅显示同步执行账号有权读取的通讯录；分页读取完成不代表拥有全公司读取权限。', '本次为只读预览，尚未同步成员、授予寄件权限或切换主来源。']
+  const warnings = ['仅显示该员工有权读取的通讯录；分页读取完成不代表拥有全公司读取权限。', '本次为只读预览，尚未同步成员、授予寄件权限或切换主来源。']
   if (!departments.length || !employees.length) warnings.push('部门或员工结果为空，请先核对读取范围，不可据此停用系统成员。')
   if (employees.some(item => item.departmentIds.some(departmentId => !departmentIds.has(departmentId)))) warnings.push('部分员工的主属部门不在可读取范围内，需补齐权限后再同步。')
   return { ea: credentials.expectedEa, corpId: token.openUserId, checkedAt: new Date().toISOString(), departments, employees, warnings, visibility: 'authorized_scope', applied: false }

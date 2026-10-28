@@ -11,7 +11,7 @@ it('saves masked credentials, previews saved revision, and invalidates preview a
   vi.stubGlobal('fetch', fetchMock)
   render(<FxiaokeSourceForm />)
   await waitFor(() => expect((screen.getByRole('button', { name: '保存应用配置' }) as HTMLButtonElement).disabled).toBe(false))
-  for (const [label, value] of [['AppID', 'FSAID_test'], ['APPSecret', 'test-secret'], ['永久授权码', 'test-code'], ['企业账号（ea）', 'example'], ['同步执行员工 ID', '123']]) {
+  for (const [label, value] of [['AppID', 'FSAID_test'], ['APPSecret', 'test-secret'], ['永久授权码', 'test-code'], ['企业账号（ea）', 'example'], ['员工 ID', '123']]) {
     fireEvent.change(screen.getByLabelText(label, { exact: false }), { target: { value } })
   }
   fireEvent.click(screen.getByRole('button', { name: '保存应用配置' }))

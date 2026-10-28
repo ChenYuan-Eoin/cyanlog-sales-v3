@@ -20,7 +20,7 @@ async function secretRow(orgId: string) {
 }
 export async function saveConnection(orgId: string, actorId: string, raw: unknown) {
   const parsed = connectionInput.safeParse(raw)
-  if (!parsed.success) throw new FxiaokeError('INVALID_CONFIGURATION', '请完整填写 AppID、企业标识和同步执行员工 ID；密钥不可填写空白。')
+  if (!parsed.success) throw new FxiaokeError('INVALID_CONFIGURATION', '请完整填写 AppID、企业账号和员工 ID；密钥不可填写空白。')
   const input = parsed.data; const existing = await secretRow(orgId)
   if ((existing?.revision || null) !== input.revision) throw new FxiaokeError('CONFIG_CHANGED', '配置已被其他管理员更新，请重新读取后再保存。', 409)
   let previous: Partial<Credentials> = {}
