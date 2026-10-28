@@ -837,6 +837,14 @@ function makeTestVercelApiResponses(productionCommit) {
       projectId: VERCEL_PRODUCTION_CONTRACT.projectId,
       verified: true
     },
+    alias: {
+      alias: VERCEL_PRODUCTION_CONTRACT.domain,
+      projectId: VERCEL_PRODUCTION_CONTRACT.projectId,
+      deploymentId: SELFTEST_PRODUCTION_DEPLOYMENT_ID,
+      deployment: { id: SELFTEST_PRODUCTION_DEPLOYMENT_ID },
+      redirect: null,
+      deletedAt: null
+    },
     deployment: {
       id: SELFTEST_PRODUCTION_DEPLOYMENT_ID,
       name: VERCEL_PRODUCTION_CONTRACT.projectName,
@@ -851,7 +859,8 @@ function makeTestVercelApiResponses(productionCommit) {
       status: 'READY',
       gitSource: { type: 'github', ref: 'production', sha: productionCommit },
       meta: { githubCommitSha: productionCommit },
-      alias: [VERCEL_PRODUCTION_CONTRACT.domain]
+      // The real API omits the assigned custom domain from this list.
+      alias: ['selftest-deployment.vercel.app']
     }
   };
 }
@@ -1037,6 +1046,30 @@ function runDeliverySelftest(repoRoot) {
     });
     assert.strictEqual(conflictingShaGate.ok, false);
     assert.ok(conflictingShaGate.blockers.some((blocker) => blocker.includes('conflicting source SHAs')));
+
+    // Domain ownership and deployment metadata alone are insufficient: the
+    // product hostname must currently point at this exact production build.
+    for (const patch of [
+      { alias: 'other.example.invalid' },
+      { projectId: 'prj_other' },
+      { deploymentId: 'dpl_OldProduction' },
+      { deployment: { id: 'dpl_ConflictingProduction' } },
+      { redirect: 'https://other.example.invalid' },
+      { deletedAt: Date.now() }
+    ]) {
+      const responses = makeTestVercelApiResponses(productionHead);
+      Object.assign(responses.alias, patch);
+      // Even a stale deployment list claiming the hostname must not pass.
+      responses.deployment.alias = [VERCEL_PRODUCTION_CONTRACT.domain];
+      const gate = transitionDeliveryState('integration_ready', { repoRoot, testOnlyVercelApiResponses: responses });
+      assert.strictEqual(gate.ok, false);
+      assert.ok(gate.blockers.some((blocker) => blocker.includes('alias')));
+    }
+    const missingAliasResponses = makeTestVercelApiResponses(productionHead);
+    delete missingAliasResponses.alias;
+    const missingAliasGate = transitionDeliveryState('integration_ready', { repoRoot, testOnlyVercelApiResponses: missingAliasResponses });
+    assert.strictEqual(missingAliasGate.ok, false);
+    assert.ok(missingAliasGate.blockers.some((blocker) => blocker.includes('alias')));
 
     const vercelGateOptions = {
       repoRoot,

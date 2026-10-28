@@ -203,7 +203,7 @@
     "kind": "product",
     "status": "active",
     "objective": "管理员配置纷享自建应用并只读预览真实部门与员工；加密保存凭据并回读真实状态，不切换主来源或写入组织骨架。",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
     "activation_basis": "IN-20261027-007：用户在已说明顺序后明确要求建立目标并开始开发。第一阶段拆为配置预览、确认同步两个独立用户任务。",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
@@ -238,6 +238,12 @@
         "input": "IN-20261028-005",
         "scope": "User-approved release and scoped egress enablement under IN-20261028-007; product tree bound to 28094984.",
         "capsule": "codex-runtime/wp91-network-diagnosis/fxiaoke-egress-capsule.json"
+      },
+      {
+        "id": "production-domain-binding-proof",
+        "input": "IN-20261028-011",
+        "scope": "核验权威自定义域名绑定，修正deployment.alias缺项造成的误拒；仅验收工具与回归测试，产品树保持已批准28094984一致",
+        "capsule": "codex-runtime/wp91-domain-verifier/reproduction.json"
       }
     ],
     "delivery_contract": {
@@ -324,13 +330,10 @@
       "name": "纷享应用配置与通讯录预览"
     },
     "next": {
-      "id": "WP92",
-      "slug": "fxiaoke-primary-source-sync",
-      "name": "纷享组织同步与主来源切换",
-      "depends_on": [
-        "WP91"
-      ],
-      "entry_gate": "WP91正式站应用配置、保存回读及真实通讯录预览验收通过"
+      "id": "WP95",
+      "slug": "shipping-address-location-validation",
+      "name": "寄件信息正确解析与无门牌地址提交",
+      "entry_gate": "WP91已批准范围证据收口后按F099 v2026-10-28.2推进；该目标正文在原工作树保留"
     },
     "ready": [
       {

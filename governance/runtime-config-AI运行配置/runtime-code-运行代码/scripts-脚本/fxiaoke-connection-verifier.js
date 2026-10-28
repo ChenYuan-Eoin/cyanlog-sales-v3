@@ -19,7 +19,7 @@ function productionFirstExceptionBlockers(input) {
   if (approval?.preview_status !== 'not_passed') errors.push('Ordering exception must preserve Preview as not passed');
   if (!/^[a-f0-9]{40}$/.test(approval?.approved_candidate || '') || candidateIsAncestor !== true) errors.push('Ordering exception must retain the approved candidate ancestry');
   if (!/^[a-f0-9]{40}$/.test(approval?.approved_product_tree || '') || productTree !== approval?.approved_product_tree) errors.push('Ordering exception cannot change approved product code');
-  const allowed = new Set(['governance/runtime-state/active-task.json', 'governance/runtime-state/demand-inbox.jsonl', ...['project-registry.js', 'fxiaoke-connection-verifier.js', 'fxiaoke-connection-verifier.test.js', 'harness-workspace.test.js'].map(name => `governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/${name}`)]);
+  const allowed = new Set(['governance/runtime-state/active-task.json', 'governance/runtime-state/demand-inbox.jsonl', ...['project-registry.js', 'fxiaoke-connection-verifier.js', 'fxiaoke-connection-verifier.test.js', 'harness-workspace.test.js', 'harness-selftest.js'].map(name => `governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/${name}`)]);
   if (!Array.isArray(changedPaths) || changedPaths.some(file => !allowed.has(file))) errors.push('Ordering exception only allows its scoped delivery-rule records');
   if (!/^[a-f0-9]{40}$/.test(approval?.rollback_commit || '')) errors.push('Ordering exception requires a concrete rollback commit');
   errors.push(...productionWriteBoundaryBlockers(approval));

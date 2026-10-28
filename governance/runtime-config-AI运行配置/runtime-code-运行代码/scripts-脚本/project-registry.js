@@ -995,11 +995,13 @@ function verifyVercelProductionState(repoRoot, remoteProduction, options = {}) {
   const endpoints = {
     project: `/v9/projects/${VERCEL_PRODUCTION_CONTRACT.projectId}?${query}`,
     domain: `/v9/projects/${VERCEL_PRODUCTION_CONTRACT.projectId}/domains/${VERCEL_PRODUCTION_CONTRACT.domain}?${query}`,
+    alias: `/v4/aliases/${encodeURIComponent(VERCEL_PRODUCTION_CONTRACT.domain)}?${query}`,
     deployment: null
   };
   const blockers = [];
   let projectResponse;
   let domainResponse;
+  let aliasResponse;
   let deploymentResponse;
   let source = 'live-vercel-api';
 
@@ -1012,10 +1014,12 @@ function verifyVercelProductionState(repoRoot, remoteProduction, options = {}) {
       source = 'selftest-injected';
       projectResponse = { raw: `${JSON.stringify(injected.project)}\n`, parsed: injected.project };
       domainResponse = { raw: `${JSON.stringify(injected.domain)}\n`, parsed: injected.domain };
+      aliasResponse = { raw: `${JSON.stringify(injected.alias ?? null)}\n`, parsed: injected.alias };
       deploymentResponse = { raw: `${JSON.stringify(injected.deployment)}\n`, parsed: injected.deployment };
     } else {
       projectResponse = runVercelApi(repoRoot, endpoints.project);
       domainResponse = runVercelApi(repoRoot, endpoints.domain);
+      aliasResponse = runVercelApi(repoRoot, endpoints.alias);
       const liveDeploymentId = projectResponse.parsed?.targets?.production?.id;
       if (!/^dpl_[A-Za-z0-9]+$/.test(String(liveDeploymentId || ''))) {
         throw new Error('Vercel project has no valid targets.production deployment ID');
@@ -1040,6 +1044,7 @@ function verifyVercelProductionState(repoRoot, remoteProduction, options = {}) {
 
   const project = projectResponse.parsed;
   const domain = domainResponse.parsed;
+  const alias = aliasResponse.parsed;
   const deployment = deploymentResponse.parsed;
   const deploymentCommit = resolveVercelDeploymentCommit(deployment);
   const liveDeploymentId = project?.targets?.production?.id;
@@ -1047,6 +1052,7 @@ function verifyVercelProductionState(repoRoot, remoteProduction, options = {}) {
   const raw = {
     project: writePrivateRuntimeJson(repoRoot, `${artifactPrefix}-project.json`, projectResponse.raw),
     domain: writePrivateRuntimeJson(repoRoot, `${artifactPrefix}-domain.json`, domainResponse.raw),
+    alias: writePrivateRuntimeJson(repoRoot, `${artifactPrefix}-alias.json`, aliasResponse.raw),
     deployment: writePrivateRuntimeJson(repoRoot, `${artifactPrefix}-deployment.json`, deploymentResponse.raw)
   };
   const snapshot = {
@@ -1067,6 +1073,14 @@ function verifyVercelProductionState(repoRoot, remoteProduction, options = {}) {
       name: domain?.name || null,
       projectId: domain?.projectId || null,
       verified: domain?.verified === true
+    },
+    alias: {
+      name: alias?.alias || null,
+      projectId: alias?.projectId || null,
+      deploymentId: alias?.deploymentId || null,
+      deploymentReferenceId: alias?.deployment?.id || null,
+      redirect: alias?.redirect ?? null,
+      deletedAt: alias?.deletedAt ?? null
     },
     deployment: {
       id: deployment?.id || null,
@@ -1101,7 +1115,13 @@ function verifyVercelProductionState(repoRoot, remoteProduction, options = {}) {
   if (deployment?.target !== 'production') blockers.push('live Vercel deployment target is not production');
   if (deployment?.readyState !== 'READY' || deployment?.status !== 'READY') blockers.push('live Vercel Production deployment is not READY');
   if (deployment?.readySubstate !== 'PROMOTED') blockers.push('live Vercel Production deployment is not PROMOTED');
-  if (!Array.isArray(deployment?.alias) || !deployment.alias.includes(VERCEL_PRODUCTION_CONTRACT.domain)) blockers.push('live Vercel Production deployment does not own the product domain alias');
+  // The deployment alias list can omit an explicitly assigned custom domain.
+  // Verify the domain's current binding instead; never accept a stale list as
+  // proof that the product URL serves this exact deployment.
+  if (alias?.alias !== VERCEL_PRODUCTION_CONTRACT.domain) blockers.push('live Vercel alias hostname mismatch');
+  if (alias?.projectId !== VERCEL_PRODUCTION_CONTRACT.projectId) blockers.push('live Vercel alias project ID mismatch');
+  if (alias?.deploymentId !== liveDeploymentId || alias?.deployment?.id !== liveDeploymentId) blockers.push('live Vercel alias does not point to the current Production deployment');
+  if (alias?.redirect != null || alias?.deletedAt != null) blockers.push('live Vercel product alias is redirected or deleted');
   if (!/^[0-9a-f]{40,64}$/i.test(String(remoteProduction || ''))) blockers.push('remote production OID is missing or invalid');
   if (!deploymentCommit.candidates.length) blockers.push('live Vercel Production source SHA is missing');
   if (deploymentCommit.conflict) blockers.push('live Vercel Production exposes conflicting source SHAs');
@@ -2158,6 +2178,10 @@ function checkDeliveryStage(stage, options = {}) {
         || snapshot.vercelProduction?.deployment?.id !== evidence.production?.deployment_id
         || snapshot.vercelProduction?.deployment?.gitCommitSha !== status.git.head
         || snapshot.vercelProduction?.domain?.name !== VERCEL_PRODUCTION_CONTRACT.domain
+        || snapshot.vercelProduction?.alias?.name !== VERCEL_PRODUCTION_CONTRACT.domain
+        || snapshot.vercelProduction?.alias?.projectId !== VERCEL_PRODUCTION_CONTRACT.projectId
+        || snapshot.vercelProduction?.alias?.deploymentId !== evidence.production?.deployment_id
+        || snapshot.vercelProduction?.alias?.deploymentReferenceId !== evidence.production?.deployment_id
       ) {
         blockers.push('Production-released machine snapshot is incomplete or not bound to the released SHA/domain');
       }
@@ -2165,6 +2189,7 @@ function checkDeliveryStage(stage, options = {}) {
         !snapshot?.vercelProduction
         || !isSha256(snapshot.vercelProduction.raw?.project?.sha256)
         || !isSha256(snapshot.vercelProduction.raw?.domain?.sha256)
+        || !isSha256(snapshot.vercelProduction.raw?.alias?.sha256)
         || !isSha256(snapshot.vercelProduction.raw?.deployment?.sha256)
       ) {
         blockers.push('Production-released machine snapshot has no hashed live Vercel evidence');
