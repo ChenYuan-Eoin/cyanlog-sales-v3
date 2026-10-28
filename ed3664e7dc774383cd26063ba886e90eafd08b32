@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "activeId": "WP91",
+  "commit": "ed3664e7dc774383cd26063ba886e90eafd08b32",
+  "evidence": {
+    "code": {
+      "commit": "ed3664e7dc774383cd26063ba886e90eafd08b32",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh"
+          ],
+          "exit_code": 0,
+          "artifact_path": "check-logs/abfe5a18d44b01c4ffb9ab9bd8970509d3bb63be/check-03-test.log",
+          "log_sha256": "97b45d248957392723d2681b3c8818500e59fe9509b14ed85306a4282a86fa74"
+        },
+        {
+          "name": "full_tests",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh"
+          ],
+          "exit_code": 0,
+          "artifact_path": "check-logs/abfe5a18d44b01c4ffb9ab9bd8970509d3bb63be/check-03-test.log",
+          "log_sha256": "97b45d248957392723d2681b3c8818500e59fe9509b14ed85306a4282a86fa74"
+        },
+        {
+          "name": "lint",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3/governance/ai-behavior-准则/checks/check-02-lint.sh"
+          ],
+          "exit_code": 0,
+          "artifact_path": "check-logs/abfe5a18d44b01c4ffb9ab9bd8970509d3bb63be/check-02-lint.log",
+          "log_sha256": "d067bde448e2bde73e6ea639d1543efa013a947b2ab9d30c6621a734d14d3570"
+        },
+        {
+          "name": "typecheck",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3/governance/ai-behavior-准则/checks/check-01-typecheck.sh"
+          ],
+          "exit_code": 0,
+          "artifact_path": "check-logs/abfe5a18d44b01c4ffb9ab9bd8970509d3bb63be/check-01-typecheck.log",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+        },
+        {
+          "name": "build",
+          "command": [
+            "npm",
+            "run",
+            "build"
+          ],
+          "exit_code": 0,
+          "artifact_path": "wp91-build.log",
+          "log_sha256": "51ecb14af25fce757564cfe35be8d96c361c76c888184f3dfe9dfa543569fa86"
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "6723baf1220805540f7b51cf8cb65faa5c9c0076db121661fcf6d97cc580f856",
+        "entry_sha256": "126cf5c236e63f502e45cc8a06b0140fbe96b33d78a9b1a98b64eb381544ef15"
+      },
+      "notes": "36 focused checks passed; full suite 2902 passed, 5 skipped. Provider and Production acceptance pending; no production mutation."
+    }
+  },
+  "updatedAt": "2026-10-28T01:33:16.257Z",
+  "completionState": "code_green",
+  "releaseControl": {
+    "wp91_release_authorization": {
+      "status": "approved",
+      "candidate": "ed3664e7dc774383cd26063ba886e90eafd08b32",
+      "source": "user reply call_ca272a38249042269275ac1d155c80b7",
+      "scope": [
+        "push",
+        "production deployment",
+        "add organization_fxiaoke_connections table"
+      ],
+      "project": "cyanlog-sales-v3",
+      "business_mutations": false
+    },
+    "wp91_migration": {
+      "applied": true,
+      "table": "organization_fxiaoke_connections",
+      "rls_enabled": true,
+      "anon_select": false,
+      "authenticated_select": false,
+      "service_role_access": true,
+      "organizations_count": 1,
+      "users_count": 43,
+      "connection_count": 0
+    }
+  },
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-10-28T01:33:16.239Z",
+      "head": "ed3664e7dc774383cd26063ba886e90eafd08b32",
+      "originMain": "dcf8bc8f243f2d72796bc977858272c8ae4a100e",
+      "remoteMain": "dcf8bc8f243f2d72796bc977858272c8ae4a100e",
+      "remoteProduction": "ae4808fa72c6a39693366dfda694fcd71bc23da9",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "b79626a177c12d4014be208b2b3afe4694a03bc0",
+      "remoteAttestationRefOid": "b79626a177c12d4014be208b2b3afe4694a03bc0",
+      "remoteSnapshotCheckedAt": "2026-10-28T01:33:13.818Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "f87c9d6730c19785d4de73b4ad8ceb328e565302dd45272e0598d6e20ee60021",
+  "sealedAt": "2026-10-28T01:33:16.257Z",
+  "attestationDigest": "9547e5dffedba4a6652b9ef3626c7e71b233558fbb814f8f63085e8082aa1529"
+}
