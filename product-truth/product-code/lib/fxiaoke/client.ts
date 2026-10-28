@@ -28,6 +28,19 @@ function name(value: unknown): string {
 }
 function status(value: unknown) { return typeof value === 'string' || typeof value === 'number' ? String(value) : 'unknown' }
 
+// Classify known transport failures without returning upstream error text, URLs or credentials.
+function connectionFailure(error: unknown): FxiaokeError {
+  const err = error instanceof Error ? error : null
+  const cause = err?.cause && typeof err.cause === 'object' ? err.cause as { code?: unknown; errors?: unknown } : null
+  const causes = [err, cause, ...(Array.isArray(cause?.errors) ? cause.errors : [])]
+  const codes = causes.flatMap(item => item && typeof item === 'object' && 'code' in item && typeof item.code === 'string' ? [item.code] : [])
+  if (codes.some(code => ['ENOTFOUND', 'EAI_AGAIN'].includes(code))) return new FxiaokeError('PROVIDER_DNS', '系统无法解析纷享服务地址（DNS），请联系系统管理员排查。', 502)
+  if (err?.name === 'TimeoutError' || err?.name === 'AbortError' || codes.some(code => ['ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT'].includes(code))) return new FxiaokeError('PROVIDER_TIMEOUT', '系统连接纷享超时，请联系系统管理员检查网络连通性。', 502)
+  if (codes.some(code => ['CERT_HAS_EXPIRED', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN'].includes(code))) return new FxiaokeError('PROVIDER_TLS', '系统无法验证纷享的 HTTPS 证书，请联系系统管理员排查。', 502)
+  if (codes.some(code => ['ECONNRESET', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'UND_ERR_SOCKET'].includes(code))) return new FxiaokeError('PROVIDER_CONNECTION', '系统连接纷享时被拒绝或中断，请联系系统管理员排查网络。', 502)
+  return new FxiaokeError('PROVIDER_UNREACHABLE', '系统未能连接纷享，请联系系统管理员检查网络连接。', 502)
+}
+
 export async function previewDirectory(credentials: Credentials, request: typeof fetch = fetch): Promise<DirectoryPreview> {
   const signal = AbortSignal.timeout(45_000)
   async function post(path: string, body: unknown, headers: Record<string, string> = {}) {
@@ -37,8 +50,8 @@ export async function previewDirectory(credentials: Credentials, request: typeof
         method: 'POST', redirect: 'error', cache: 'no-store', signal,
         headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body),
       })
-    } catch {
-      throw new FxiaokeError('PROVIDER_UNREACHABLE', '连接纷享失败或超时，请检查网络、应用 IP 白名单后重试。', 502)
+    } catch (error) {
+      throw connectionFailure(error)
     }
     if (!response.ok) throw new FxiaokeError('PROVIDER_HTTP_ERROR', `纷享接口返回 HTTP ${response.status}，本次预览未完成。`, 502)
     let data: Row
@@ -105,10 +118,10 @@ export async function discoverEnterprise(credentials: Pick<Credentials, 'appId' 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ appId: credentials.appId, appSecret: credentials.appSecret, permanentCode: credentials.permanentCode, grantType: 'app_secret' }),
     })
-  } catch {
-    throw new FxiaokeError('PROVIDER_UNREACHABLE', '连接纷享失败或超时，请检查网络、应用 IP 白名单后重试。', 502)
+  } catch (error) {
+    throw connectionFailure(error)
   }
-  if (!response.ok) throw new FxiaokeError('PROVIDER_HTTP_ERROR', `纷享接口返回 HTTP ${response.status}，未能获取企业账号。`, 502)
+  if (!response.ok) throw new FxiaokeError('PROVIDER_HTTP_ERROR', `纷享接口返回 HTTP ${response.status}，应用连接验证未完成。`, 502)
   let data: Row
   try { data = object(await response.json()) } catch { throw new FxiaokeError('INVALID_RESPONSE', '纷享接口没有返回有效数据。', 502) }
   if (data.errorCode !== 0) {

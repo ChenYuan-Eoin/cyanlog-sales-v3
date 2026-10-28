@@ -11,7 +11,7 @@ export const connectionInput = z.object({
   appId: identifier,
   appSecret: z.string().trim().min(1).max(512).optional(),
   permanentCode: z.string().trim().min(1).max(512).optional(),
-  expectedEa: identifier,
+  expectedEa: identifier.optional(),
   apiUserId: identifier,
   revision: z.string().uuid().nullable(),
 }).strict()

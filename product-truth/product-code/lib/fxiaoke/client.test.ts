@@ -21,6 +21,12 @@ describe('Fxiaoke direct directory preview', () => {
     await expect(discoverEnterprise(credentials, fixture({ ...token, appId: 'other' }))).rejects.toMatchObject({ code: 'INVALID_TOKEN_RESPONSE' })
     await expect(discoverEnterprise(credentials, fixture({ ...token, ea: '' }))).rejects.toMatchObject({ code: 'INVALID_TOKEN_RESPONSE' })
   })
+  it('reports safe network categories without exposing upstream errors', async () => {
+    const networkError = new Error('sensitive upstream data', { cause: { code: 'ENOTFOUND' } })
+    await expect(discoverEnterprise(credentials, vi.fn().mockRejectedValue(networkError))).rejects.toMatchObject({ code: 'PROVIDER_DNS' })
+    await expect(discoverEnterprise(credentials, vi.fn().mockRejectedValue(networkError))).rejects.not.toThrow('sensitive upstream data')
+    await expect(discoverEnterprise(credentials, vi.fn().mockRejectedValue(Object.assign(new Error('secret'), { name: 'TimeoutError' })))).rejects.toMatchObject({ code: 'PROVIDER_TIMEOUT' })
+  })
   it('uses self-built app token and scoped OpenAPI headers, without MCP or writes', async () => {
     const request = fixture(token, page([department]), page([employee]))
     const result = await previewDirectory(credentials, request)

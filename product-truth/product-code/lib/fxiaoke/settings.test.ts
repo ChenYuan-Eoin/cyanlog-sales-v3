@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const db = vi.hoisted(() => ({ rows: [] as Record<string, unknown>[], projections: [] as string[] }))
-const upstream = vi.hoisted(() => ({ preview: vi.fn() }))
-vi.mock('./client', () => ({ previewDirectory: upstream.preview }))
+const upstream = vi.hoisted(() => ({ preview: vi.fn(), discover: vi.fn() }))
+vi.mock('./client', () => ({ previewDirectory: upstream.preview, discoverEnterprise: upstream.discover }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: (table: string) => {
   if (table !== 'organization_fxiaoke_connections') throw new Error('Unexpected table write')
   let operation = 'read'; let payload: Record<string, unknown> = {}; let columns = '*'
@@ -28,7 +28,7 @@ vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: (table: string) => {
 import { loadConnection, previewSavedConnection, saveConnection } from './settings'
 import { decryptCredentials } from './crypto'
 const input = { appId: 'FSAID_test', expectedEa: 'example', apiUserId: '123', appSecret: 'test-secret', permanentCode: 'test-code', revision: null }
-beforeEach(() => { db.rows.length = 0; db.projections.length = 0; upstream.preview.mockReset(); vi.stubEnv('ORGANIZATION_CREDENTIALS_ENCRYPTION_KEY', 'ab'.repeat(32)) })
+beforeEach(() => { db.rows.length = 0; db.projections.length = 0; upstream.preview.mockReset(); upstream.discover.mockReset().mockResolvedValue({ ea: "example" }); vi.stubEnv('ORGANIZATION_CREDENTIALS_ENCRYPTION_KEY', 'ab'.repeat(32)) })
 afterEach(() => vi.unstubAllEnvs())
 it('encrypts on save, reads public metadata back, and never returns secrets', async () => {
   const result = await saveConnection('org-a', 'admin', input)
@@ -69,4 +69,20 @@ it('does not record success for credentials changed during preview', async () =>
   })
   await expect(previewSavedConnection('org-a', saved!.revision)).rejects.toMatchObject({ code: 'CONFIG_CHANGED' })
   expect(db.rows[0].last_check_status).toBe('not_checked')
+})
+
+it('discovers the enterprise on the server and does not persist on provider failure', async () => {
+  const { expectedEa: _legacy, ...automatic } = input
+  await saveConnection('org-a', 'admin', automatic)
+  expect(upstream.discover).toHaveBeenCalledWith({ appId: input.appId, appSecret: input.appSecret, permanentCode: input.permanentCode })
+  expect(db.rows[0].expected_ea).toBe('example')
+  upstream.discover.mockRejectedValueOnce(new Error('connection failed'))
+  await expect(saveConnection('org-b', 'admin', automatic)).rejects.toThrow('connection failed')
+  expect(db.rows).toHaveLength(1)
+})
+it('refuses a provider enterprise mismatch without changing saved credentials', async () => {
+  const saved = await saveConnection('org-a', 'admin', input)
+  upstream.discover.mockResolvedValueOnce({ ea: 'another' })
+  await expect(saveConnection('org-a', 'admin', { ...input, expectedEa: undefined, revision: saved!.revision })).rejects.toMatchObject({ code: 'ENTERPRISE_MISMATCH' })
+  expect(db.rows[0].revision).toBe(saved!.revision)
 })

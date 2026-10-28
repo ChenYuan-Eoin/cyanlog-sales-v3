@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { connectionInput, FxiaokeError, type ConnectionSummary, type Credentials } from './contracts'
 import { decryptCredentials, encryptCredentials } from './crypto'
-import { previewDirectory } from './client'
+import { discoverEnterprise, previewDirectory } from './client'
 
 const PUBLIC_COLUMNS = 'app_id,expected_ea,api_user_id,revision,last_checked_at,last_check_status,last_error'
 function failure() { return new FxiaokeError('CONFIG_STORAGE_UNAVAILABLE', '纷享配置存储暂不可用，请确认数据库迁移已部署。', 503) }
@@ -20,21 +20,28 @@ async function secretRow(orgId: string) {
 }
 export async function saveConnection(orgId: string, actorId: string, raw: unknown) {
   const parsed = connectionInput.safeParse(raw)
-  if (!parsed.success) throw new FxiaokeError('INVALID_CONFIGURATION', '请完整填写 AppID、企业账号和员工 ID；密钥不可填写空白。')
+  if (!parsed.success) throw new FxiaokeError('INVALID_CONFIGURATION', '请填写有效的 AppID 和员工 ID；密钥不可填写空白。')
   const input = parsed.data; const existing = await secretRow(orgId)
   if ((existing?.revision || null) !== input.revision) throw new FxiaokeError('CONFIG_CHANGED', '配置已被其他管理员更新，请重新读取后再保存。', 409)
   let previous: Partial<Credentials> = {}
-  if (existing && input.appId === existing.app_id && input.expectedEa === existing.expected_ea) {
+  if (existing && input.appId === existing.app_id) {
     try { previous = JSON.parse(decryptCredentials(orgId, existing.credentials_ciphertext)) as Credentials } catch (err) {
       if (!input.appSecret || !input.permanentCode) throw err
     }
   }
-  const credentials: Credentials = {
-    appId: input.appId, expectedEa: input.expectedEa, apiUserId: input.apiUserId,
-    appSecret: input.appSecret || previous.appSecret || '', permanentCode: input.permanentCode || previous.permanentCode || '',
+  const appSecret = input.appSecret || previous.appSecret || ''
+  const permanentCode = input.permanentCode || previous.permanentCode || ''
+  if (!appSecret || !permanentCode) throw new FxiaokeError('CREDENTIALS_REQUIRED', '首次配置或更换应用时，请填写 APPSecret 和永久授权码。')
+  // Never trust a browser-supplied enterprise identifier; obtain it from the provider.
+  const shouldDiscover = !existing || input.appId !== existing.app_id || !!input.appSecret || !!input.permanentCode
+  const expectedEa = shouldDiscover
+    ? (await discoverEnterprise({ appId: input.appId, appSecret, permanentCode })).ea
+    : existing.expected_ea
+  if ((input.expectedEa && input.expectedEa !== expectedEa) || (existing && existing.expected_ea !== expectedEa)) {
+    throw new FxiaokeError('ENTERPRISE_MISMATCH', '应用所属企业与现有配置不一致，请核对应用凭据。', 409)
   }
-  if (!credentials.appSecret || !credentials.permanentCode) throw new FxiaokeError('CREDENTIALS_REQUIRED', '首次配置或更换企业、应用时，请填写 AppSecret 和永久授权码。')
-  const row = { system_org_id: orgId, app_id: input.appId, expected_ea: input.expectedEa, api_user_id: input.apiUserId,
+  const credentials: Credentials = { appId: input.appId, expectedEa, apiUserId: input.apiUserId, appSecret, permanentCode }
+  const row = { system_org_id: orgId, app_id: input.appId, expected_ea: expectedEa, api_user_id: input.apiUserId,
     revision: randomUUID(), credentials_ciphertext: encryptCredentials(orgId, JSON.stringify(credentials)), updated_by: actorId,
     updated_at: new Date().toISOString(), last_checked_at: null, last_check_status: 'not_checked', last_error: null }
   const query = existing
