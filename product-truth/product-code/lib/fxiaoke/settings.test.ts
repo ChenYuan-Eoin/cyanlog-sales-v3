@@ -74,7 +74,7 @@ it('does not record success for credentials changed during preview', async () =>
 it('discovers the enterprise on the server and does not persist on provider failure', async () => {
   const { expectedEa: _legacy, ...automatic } = input
   await saveConnection('org-a', 'admin', automatic)
-  expect(upstream.discover).toHaveBeenCalledWith({ appId: input.appId, appSecret: input.appSecret, permanentCode: input.permanentCode })
+  expect(upstream.discover).toHaveBeenCalledWith({ appId: input.appId, appSecret: input.appSecret, permanentCode: input.permanentCode }, undefined)
   expect(db.rows[0].expected_ea).toBe('example')
   upstream.discover.mockRejectedValueOnce(new Error('connection failed'))
   await expect(saveConnection('org-b', 'admin', automatic)).rejects.toThrow('connection failed')

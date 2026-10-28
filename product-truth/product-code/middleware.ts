@@ -54,6 +54,8 @@ const PUBLIC_API_PATHS = new Set([
   '/api/health',
   '/api/health/flight-ready',
   '/api/cron',
+  // Scoped machine credential is checked in the handler; no interactive user session.
+  '/api/admin/organization-sources/fxiaoke/egress',
 ])
 const PASSWORD_CHANGE_ALLOWED_PATHS = [
   '/change-password',

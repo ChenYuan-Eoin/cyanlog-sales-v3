@@ -5,6 +5,7 @@ import { canManageOrg, getFreshDefaultOrgId, getFreshUserScopedRoleAssignments }
 import { discoveryInput, FxiaokeError } from '@/lib/fxiaoke/contracts'
 import { discoverEnterprise } from '@/lib/fxiaoke/client'
 import { loadConnection, previewSavedConnection, saveConnection } from '@/lib/fxiaoke/settings'
+import { transportForOrganization } from '@/lib/fxiaoke/egress/server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
     if (body.action === 'discover') {
       const parsed = discoveryInput.safeParse(body.credentials)
       if (!parsed.success) throw new FxiaokeError('INVALID_CONFIGURATION', '请先填写 AppID、APPSecret 和永久授权码。')
-      return { enterprise: await discoverEnterprise(parsed.data) }
+      return { enterprise: await discoverEnterprise(parsed.data, transportForOrganization(orgId)) }
     }
     if (body.action === 'preview' && typeof body.revision === 'string' && /^[0-9a-f-]{36}$/i.test(body.revision)) {
       return { preview: await previewSavedConnection(orgId, body.revision) }

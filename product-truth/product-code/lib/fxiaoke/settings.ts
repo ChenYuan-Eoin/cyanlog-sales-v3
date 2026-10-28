@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { connectionInput, FxiaokeError, type ConnectionSummary, type Credentials } from './contracts'
 import { decryptCredentials, encryptCredentials } from './crypto'
 import { discoverEnterprise, previewDirectory } from './client'
+import { transportForOrganization } from './egress/server'
 
 const PUBLIC_COLUMNS = 'app_id,expected_ea,api_user_id,revision,last_checked_at,last_check_status,last_error'
 function failure() { return new FxiaokeError('CONFIG_STORAGE_UNAVAILABLE', '纷享配置存储暂不可用，请确认数据库迁移已部署。', 503) }
@@ -35,7 +36,7 @@ export async function saveConnection(orgId: string, actorId: string, raw: unknow
   // Never trust a browser-supplied enterprise identifier; obtain it from the provider.
   const shouldDiscover = !existing || input.appId !== existing.app_id || !!input.appSecret || !!input.permanentCode
   const expectedEa = shouldDiscover
-    ? (await discoverEnterprise({ appId: input.appId, appSecret, permanentCode })).ea
+    ? (await discoverEnterprise({ appId: input.appId, appSecret, permanentCode }, transportForOrganization(orgId))).ea
     : existing.expected_ea
   if ((input.expectedEa && input.expectedEa !== expectedEa) || (existing && existing.expected_ea !== expectedEa)) {
     throw new FxiaokeError('ENTERPRISE_MISMATCH', '应用所属企业与现有配置不一致，请核对应用凭据。', 409)
@@ -70,7 +71,7 @@ export async function previewSavedConnection(orgId: string, revision: string) {
     const decoded = JSON.parse(decryptCredentials(orgId, row.credentials_ciphertext)) as Credentials
     const parsed = connectionInput.safeParse({ ...decoded, revision })
     if (!parsed.success || !decoded.appSecret || !decoded.permanentCode || decoded.appId !== row.app_id || decoded.expectedEa !== row.expected_ea || decoded.apiUserId !== row.api_user_id) throw new FxiaokeError('CREDENTIALS_UNREADABLE', '已保存凭据与配置不一致，请重新配置。', 503)
-    preview = await previewDirectory(decoded)
+    preview = await previewDirectory(decoded, transportForOrganization(orgId))
   } catch (err) {
     const safe = err instanceof FxiaokeError ? err : new FxiaokeError('PREVIEW_FAILED', '通讯录预览失败，请重新检查配置。', 502)
     await supabaseAdmin.from('organization_fxiaoke_connections').update({ last_checked_at: new Date().toISOString(), last_check_status: 'failed', last_error: safe.message }).eq('system_org_id', orgId).eq('revision', revision)

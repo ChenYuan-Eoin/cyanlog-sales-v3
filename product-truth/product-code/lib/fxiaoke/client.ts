@@ -30,6 +30,7 @@ function status(value: unknown) { return typeof value === 'string' || typeof val
 
 // Classify known transport failures without returning upstream error text, URLs or credentials.
 function connectionFailure(error: unknown): FxiaokeError {
+  if (error instanceof FxiaokeError) return error
   const err = error instanceof Error ? error : null
   const cause = err?.cause && typeof err.cause === 'object' ? err.cause as { code?: unknown; errors?: unknown } : null
   const causes = [err, cause, ...(Array.isArray(cause?.errors) ? cause.errors : [])]

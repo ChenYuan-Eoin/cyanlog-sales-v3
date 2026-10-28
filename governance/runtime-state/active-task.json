@@ -226,11 +226,20 @@
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-connection-verifier.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-connection-verifier.test.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.test.js"
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.test.js",
+      "product-truth/product-code/middleware.ts",
+      "product-truth/product-code/lib/fxiaoke/egress-middleware.test.ts"
     ],
     "feature_id": "F003",
     "started_at": "2026-10-27T10:51:32.619555+00:00",
-    "micro_fixes": [],
+    "micro_fixes": [
+      {
+        "id": "fxiaoke-egress",
+        "input": "IN-20261028-005",
+        "scope": "Resolve WP91 production IP whitelist blocker using the existing runtime host; local candidate only until a new release, migration and worker-enablement approval.",
+        "capsule": "codex-runtime/wp91-network-diagnosis/fxiaoke-egress-capsule.json"
+      }
+    ],
     "delivery_contract": {
       "target_state": "production_released",
       "allowed_states": [
