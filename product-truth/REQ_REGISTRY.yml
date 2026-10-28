@@ -9,8 +9,8 @@
 #   - 代码位置由 AI 在开发时回填
 #   - 代码中的 REQ 标记必须与之一致
 
-version: "2026-09-23.1"
-last_updated: "2026-09-23T16:53:50+08:00"
+version: "2026-10-28.2"
+last_updated: "2026-10-28T10:49:15.101216+00:00"
 
 goal_governance:
   status: active
@@ -31,25 +31,41 @@ goal_governance:
     contract: product-truth/feature-packets/F003-account-auth.md
     shared_configuration: "目录读取与员工SSO复用企业应用连接；ea后台获取；目录读取员工ID不代替登录身份。"
     final_acceptance: "sales.cyanlog.icu真实A/B员工登录、获授权提报、本人查询、撤权即时拒绝和跨企业隔离；仅配置保存不算接通。"
+  delivery_outcome_contract:
+    version: "2026-10-28.2"
+    source: IN-20261028-010
+    objective: "销售一次填写真实收件信息，形成归属正确的待确认工单；授权人员确认后顺丰只下单一次，单号回到原销售与原CRM记录。共享组织权限，数据隔离，原单可恢复。"
+    ledger: product-truth/feature-packets/F099-current-goal-ledger.md
+    active: WP95
+    next: WP82
+    execution_policy: "目标已建立，按F099顺序保持单一Active，每批一个可演示用户任务；生产实证才可交付，不继承上一WP的发布或数据写入批准。"
+    data_boundary: "仅cyanlog-sales-v3；销售填写本票地址；村庄无门牌合法；客户档案已有地址不得覆盖；正式顺丰下单由用户确认。"
+    intake_chain: [WP95, WP92, WP93, WP96, WP97, WP23, WP98]
+    sales_login_chain: [WP91, WP92, WP93, WP94]
+    note: "依赖链不等于全部排期；全队列顺序与每项验收以F099为准。"
   work_package_crosswalk:
-    WP91: {name: 纷享应用配置与通讯录预览, primary_goals: [G5, G7, G10], state: executing}
+    WP98: {name: 真实运单结果回填原CRM记录, primary_goals: [], state: queued_goal_registered}
+    WP97: {name: CRM审批生成唯一待确认工单, primary_goals: [], state: queued_goal_registered}
+    WP96: {name: CRM审批寄件字段映射预览, primary_goals: [], state: queued_goal_registered}
+    WP95: {name: 寄件信息正确解析与无门牌地址提交, primary_goals: [], state: executing}
+    WP91: {name: 纷享应用配置与通讯录预览, primary_goals: [G5, G7, G10], state: production_released}
     WP92: {name: 纷享组织同步与主来源切换, primary_goals: [G5, G7, G10], state: queued}
     WP93: {name: 统一成员身份与寄件许可, primary_goals: [G5, G7, G10], state: queued}
     WP94: {name: 纷享销售登录与真实提报, primary_goals: [G5, G7, G10], state: queued}
     WP00: {name: 目标基线整合, primary_goals: [G1, G10, G11], state: completed_goal_baseline_commit_18dad230}
-    WP01: {name: 平台模型接入与应用底座, primary_goals: [G4], supporting_goals: [G3, G7], state: completed_commit_4269840f}
-    WP02: {name: AI 运行真实性与路由证据, primary_goals: [G3], supporting_goals: [G7, G10], state: completed_commit_c25ec17a}
-    WP03: {name: 合同规则集合产品化, primary_goals: [G3, G4], supporting_goals: [G7, G10], state: completed_commit_ebdb3c59}
-    WP04: {name: 合同中心入口与任务身份, primary_goals: [G6], supporting_goals: [G8], state: completed_commit_a987f85d_preview_dpl_2P11eFtwxutsQXMUoU8R46XdDGUx}
-    WP05: {name: Word/PDF 风险处理与循环复审, primary_goals: [G2], supporting_goals: [G3, G6, G8, G10], state: interaction_completed_commit_12b977fa_accuracy_cycle_pending}
-    WP06: {name: 文档对比, primary_goals: [G6], supporting_goals: [G7, G8, G10], state: completed_preview_candidate_not_production}
+    WP01: {name: 平台模型接入与应用底座, primary_goals: [G4], supporting_goals: [G3, G7], state: production_acceptance_pending}
+    WP02: {name: AI 运行真实性与路由证据, primary_goals: [G3], supporting_goals: [G7, G10], state: production_acceptance_pending}
+    WP03: {name: 合同规则集合产品化, primary_goals: [G3, G4], supporting_goals: [G7, G10], state: production_acceptance_pending}
+    WP04: {name: 合同中心入口与任务身份, primary_goals: [G6], supporting_goals: [G8], state: production_acceptance_pending}
+    WP05: {name: Word/PDF 风险处理与循环复审, primary_goals: [G2], supporting_goals: [G3, G6, G8, G10], state: production_acceptance_pending}
+    WP06: {name: 文档对比, primary_goals: [G6], supporting_goals: [G7, G8, G10], state: production_acceptance_pending}
     WP07: {name: 合同起草, primary_goals: [G6], supporting_goals: [G2, G8, G10], state: queued}
     WP08: {name: 横切体验伞, primary_goals: [G5, G8], state: must_split_before_activation}
     WP09: {name: 工程与发布验收, primary_goals: [G7, G8, G9, G10, G11], state: parked_waiting_shipping_sequence}
     WP11: {name: 寄件协同底座, primary_goals: [], state: parked_reuse_baseline, note: "匿名提报、安全回执、关系台账、顺丰沙盒及安全存储作为后续工作包复用基线"}
     WP12: {name: 自助收寄三栏协同台, primary_goals: [], state: code_green_commit_7fb4f2d4, note: "单一导航入口、操作员三栏同屏与销售精简提报端"}
     WP13: {name: 批量寄件导入纠错与执行, primary_goals: [], state: code_green_commit_b7194f85, note: "真实Excel/CSV导入、批次纠错、幂等下单与部分失败恢复"}
-    WP14: {name: 顺丰能力收口, primary_goals: [], state: active, note: "取消、轨迹字段和收件来源按实际接口权限收口"}
+    WP14: {name: 顺丰能力收口, primary_goals: [], state: production_acceptance_pending, note: "取消、轨迹字段和收件来源按实际接口权限收口"}
   legacy_aliases:
     - "2026-07-10 至 2026-07-18 的执行账本旧 G1-G9，依次解释为 WP01-WP09。"
     - "F027 0.0.1 的批次卡旧 G0-G7，依次解释为 DG0-DG7。"

@@ -34,7 +34,9 @@ function prepare(directory) {
   const schedulerPath = path.join(directory, 'governance/runtime-state/active-task.json');
   const state = JSON.parse(fs.readFileSync(schedulerPath, 'utf8'));
   state.active_task.id = 'WP39';
-  state.execution_queue.active.id = 'WP39';
+  // A real backlog may already contain WP39. The fixture owns its queue, just
+  // as it owns its release contract, so production scheduling cannot duplicate it.
+  state.execution_queue = { active: { id: 'WP39' }, next: { id: 'WP40' }, ready: [], parked: [], completed: [] };
   state.active_task.execution_workspace = directory;
   // Workspace-binding tests must not inherit a real release approval, candidate
   // SHA or product verifier from whichever work package is currently active.

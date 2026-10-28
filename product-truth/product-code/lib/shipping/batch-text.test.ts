@@ -231,7 +231,7 @@ describe('shipping text intake', () => {
     const [row] = parseShippingText('13800000001 广东省科苑路8号')
     expect(prepareBatchRecipient(row).errors).toEqual(expect.arrayContaining(['缺少收件人', '地址需包含完整省市区，请补充后重新确认']))
     const [noDoor] = parseShippingText('林示例 13800000001 广东省深圳市南山区科技大道附近')
-    expect(prepareBatchRecipient(noDoor).errors).toContain('请补充街道和门牌号')
+    expect(prepareBatchRecipient(noDoor).errors).toContain('请补充具体投递地点，如村庄、园区、楼宇或门牌号')
   })
 
   it('uses the structured name and phone without reinterpreting a name containing 收件人', () => {

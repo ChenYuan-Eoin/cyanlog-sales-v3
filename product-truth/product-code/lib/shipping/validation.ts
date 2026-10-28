@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { DEFAULT_INTAKE_RULES, intakeFieldSchema, type IntakeRules } from './intake-rules'
 import { DOMESTIC_SHIPPING_PHONE_PATTERN } from './phone'
+import { ADDRESS_DETAIL_REQUIRED, addressDetailError } from './address-detail'
 const text = (max: number) => z.string().trim().min(1, '请填写完整信息').max(max)
-export const contactSchema = z.object({ name: text(60), phone: text(30).regex(DOMESTIC_SHIPPING_PHONE_PATTERN, '请填写国内手机号或带区号的座机'), province: text(30), city: text(30), county: text(30), address: text(200).min(5, '请补充街道和门牌号') }).strict()
+export const contactSchema = z.object({ name: text(60), phone: text(30).regex(DOMESTIC_SHIPPING_PHONE_PATTERN, '请填写国内手机号或带区号的座机'), province: text(30), city: text(30), county: text(30), address: text(200).refine(value => !addressDetailError(value), ADDRESS_DETAIL_REQUIRED) }).strict()
 const shippingSubmitterSchema = z.object({ name: text(60), phone: text(30).regex(DOMESTIC_SHIPPING_PHONE_PATTERN, '请填写国内手机号或带区号的座机'), team: text(80) }).strict()
 export const shippingInputSchema = z.object({ sender: contactSchema, recipient: contactSchema, cargo: text(60), weight: z.number().finite().positive().max(20), serviceId: z.number().int().positive().optional(), servicePreference: z.enum(['standard', 'urgent']).optional(), remark: z.string().trim().max(100), source: z.literal('manual'), payment: z.enum(['sender_cash', 'recipient', 'sender_monthly']).optional(), customerName: z.string().trim().max(120).optional(), submittedBy: shippingSubmitterSchema.optional(), specialRequirements: z.string().trim().max(500).optional(), pickupWindow: z.string().trim().max(80).optional() }).strict()
 const ownerShippingInputSchema = shippingInputSchema.extend({ serviceId: z.number().int().positive() })

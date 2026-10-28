@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-28T09:23:45.750810+00:00",
+  "updated_at": "2026-10-28T11:40:41.722541+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -197,64 +197,46 @@
     "harness_mode": "advisory"
   },
   "active_task": {
-    "id": "WP91",
-    "slug": "fxiaoke-connection-preview",
-    "name": "纷享应用配置与通讯录预览",
+    "id": "WP95",
+    "slug": "shipping-address-location-validation",
+    "name": "寄件信息正确解析与无门牌地址提交",
     "kind": "product",
     "status": "active",
-    "objective": "管理员配置纷享自建应用并只读预览真实部门与员工；加密保存凭据并回读真实状态，不切换主来源或写入组织骨架。",
+    "objective": "销售粘贴两条原文后得到单位、姓名、电话、地址分离正确的寄件行；无锡军东新村不因无门牌号被拒，真实缺项和行政区歧义仍逐字段提示。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
-    "activation_basis": "IN-20261027-007：用户在已说明顺序后明确要求建立目标并开始开发。第一阶段拆为配置预览、确认同步两个独立用户任务。",
+    "activation_basis": "IN-20261028-010已批准统一顺序；目标已登记于e99835b7，WP91已按批准范围完成正式站验收和production_released门禁，按Next推进WP95。",
+    "started_at": "2026-10-28T11:40:41.722541+00:00",
+    "feature_id": "F054",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
       "product-truth/REQ_REGISTRY.yml",
       "product-truth/feature-packets/F003-account-auth.md",
-      "product-truth/feature-packets/F054-shipping.md",
+      "product-truth/feature-packets/F054-sf-self-service-order.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "product-truth/product-code/lib/organization-sources.ts",
-      "product-truth/product-code/lib/organization-sources.test.ts",
-      "product-truth/product-code/lib/organization-sources-migration.test.ts",
-      "product-truth/product-code/lib/fxiaoke",
-      "product-truth/product-code/app/api/admin/organization-sources",
-      "product-truth/product-code/app/configs/tabs/OrganizationSourcePanel.tsx",
-      "product-truth/product-code/app/configs/tabs/FxiaokeSourceForm.tsx",
-      "product-truth/product-code/app/configs/tabs/FxiaokeSourceForm.test.tsx",
-      "product-truth/product-code/supabase/migrations",
-      "product-truth/delivery-prototypes",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-connection-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-connection-verifier.test.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.test.js",
-      "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/lib/fxiaoke/egress-middleware.test.ts"
+      "product-truth/product-code/lib/shipping/batch-text.ts",
+      "product-truth/product-code/lib/shipping/batch-text.test.ts",
+      "product-truth/product-code/lib/shipping/address.ts",
+      "product-truth/product-code/lib/shipping/address.test.ts",
+      "product-truth/product-code/lib/shipping/address-detail.ts",
+      "product-truth/product-code/lib/shipping/address-detail.test.ts",
+      "product-truth/product-code/lib/shipping/batch-text-locations.test.ts",
+      "product-truth/product-code/lib/shipping/validation.ts",
+      "product-truth/product-code/lib/shipping/validation.test.ts",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.test.js"
     ],
-    "feature_id": "F003",
-    "started_at": "2026-10-27T10:51:32.619555+00:00",
-    "micro_fixes": [
-      {
-        "id": "fxiaoke-egress",
-        "input": "IN-20261028-005",
-        "scope": "User-approved release and scoped egress enablement under IN-20261028-007; product tree bound to 28094984.",
-        "capsule": "codex-runtime/wp91-network-diagnosis/fxiaoke-egress-capsule.json"
-      },
-      {
-        "id": "production-domain-binding-proof",
-        "input": "IN-20261028-011",
-        "scope": "核验权威自定义域名绑定，修正deployment.alias缺项造成的误拒；仅验收工具与回归测试，产品树保持已批准28094984一致",
-        "capsule": "codex-runtime/wp91-domain-verifier/reproduction.json"
-      }
+    "reproduction_capsule": "codex-runtime/wp95-assessment/reproduction.json",
+    "acceptance_checks": [
+      "用户两条原文正确拆为两行，原文不丢失",
+      "无锡市滨湖区山水东路军东新村可提交，禁止编造门牌号",
+      "城市楼宇、村庄、部队、园区、多行、顿号至少30条回归，真正缺项和行政区冲突不放行",
+      "预览与后端校验一致；不调用顺丰，不产生重复订单"
     ],
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "code_green",
       "allowed_states": [
         "executing",
-        "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -269,140 +251,2097 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "fxiaoke_connection"
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
       ],
-      "production_database_mode": "controlled_write_approved",
-      "note": "用户批准28094984及其相同产品树的发布、两张网络接入表迁移、现有云电脑专用程序和指定出口白名单；Preview仍未通过，按受控Production顺序完成真实保存、回读、通讯录预览。不同步组织或改权限；失败停止新增程序并回退a243ca86。",
-      "runtime_profile": "application",
-      "runtime_contract_version": "f003-fxiaoke-connection-v1",
-      "required_production_runtime_evidence": [
-        "connection_preview",
-        "verifier"
-      ],
-      "preview_order_exception_approval_id": "IN-20261028-007",
-      "production_release_authorization": {
-        "status": "approved_for_final_release",
-        "micro_fix_approval_id": "IN-20261028-007",
-        "clarification_id": "IN-20261028-007",
-        "final_release_approval_id": "IN-20261028-007",
-        "micro_fix_scope": "Record the explicit 28094984 release decision without changing approved product code",
-        "final_scope": "WP91 28094984 release and existing-cloud Fxiaoke egress enablement; only approved two-table migration, scoped worker, confirmed cloud IP allowlist, connection save/readback and real directory preview",
-        "database_write_authorized": true,
-        "production_write_scope": [
-          "organization_fxiaoke_connections",
-          "organization_fxiaoke_egress",
-          "organization_fxiaoke_egress_jobs"
-        ],
-        "production_migrations_authorized": true,
-        "organization_sync_authorized": false,
-        "sales_permissions_authorized": false,
-        "egress_runtime_host": "existing_cloud",
-        "egress_allowed_ip": "42.192.213.170",
-        "egress_worker_authorized": true,
-        "authorized_egress_migration": {
-          "path": "product-truth/product-code/supabase/migrations/20261028083005_fxiaoke_egress_jobs.sql",
-          "sha256": "6580ee59c5804bd9189ee36847ce3602013010ab27d5763abed21afc82b2c809"
-        }
-      },
-      "final_acceptance": {
-        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
-        "production_database_mode": "controlled_write_approved"
-      }
+      "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-intake-v1",
+      "production_database_mode": "read_only",
+      "note": "先完成可审阅候选；生产发布及新写入不继承WP91授权。最终关闭须现有Chrome在sales.cyanlog.icu重放解析、校验与待确认提报；顺丰真实下单仍由用户确认。"
     },
-    "coordination_contract": {
-      "source": "IN-20261028-003",
-      "feature": "F003",
-      "path": "product-truth/feature-packets/F003-account-auth.md",
-      "sequence": [
-        "WP91",
-        "WP92",
-        "WP93",
-        "WP94"
-      ],
-      "shared_configuration": "纷享组织接入与SSO复用企业应用连接；ea后台获取，员工本人登录另经OAuth身份核验。",
-      "completion_rule": "只保存配置不算接通；正式站真实A/B登录、授权提报、本人查询和跨企业拒绝后才可关闭整条目标。"
-    }
+    "micro_fixes": [
+      {
+        "id": "workspace-test-queue-isolation",
+        "input": "IN-20261028-013",
+        "scope": "只修复工作树测试夹具继承真实队列导致WP39重复；不改门禁实现或验收条件。",
+        "capsule": "codex-runtime/wp95-assessment/strict-checks.log"
+      }
+    ]
   },
   "execution_queue": {
     "active": {
-      "id": "WP91",
-      "slug": "fxiaoke-connection-preview",
-      "name": "纷享应用配置与通讯录预览"
-    },
-    "next": {
       "id": "WP95",
       "slug": "shipping-address-location-validation",
-      "name": "寄件信息正确解析与无门牌地址提交",
-      "entry_gate": "WP91已批准范围证据收口后按F099 v2026-10-28.2推进；该目标正文在原工作树保留"
+      "name": "寄件信息正确解析与无门牌地址提交"
+    },
+    "next": {
+      "id": "WP82",
+      "slug": "permission-default-deny",
+      "name": "权限路由与菜单默认拒绝",
+      "scheduling_group": "权限安全",
+      "acceptance_state": "候选保留；安全专项未验收",
+      "remaining_acceptance": "无标书权限无菜单、直链拒绝、接口重放403、跨租户拒绝；覆盖新增模块",
+      "acceptance_owner": "WP82",
+      "source_records": [
+        "suspended_wp82_20261026"
+      ],
+      "reconciliation_source": "IN-20261028-010",
+      "historical_record": {
+        "id": "WP82",
+        "slug": "permission-default-deny",
+        "name": "权限路由与菜单默认拒绝",
+        "status": "active",
+        "reason": "按用户批准顺序；WP81换绑原型已提交，实际连接器未实现，未改变生产组织。"
+      }
     },
     "ready": [
+      {
+        "id": "WP83",
+        "slug": "atomic-permission-consistency",
+        "name": "原子权限勾选与实际访问一致",
+        "scheduling_group": "原子权限",
+        "acceptance_state": "代码候选；生产未验收",
+        "remaining_acceptance": "经营/部门/财务报表独立授权；勾选、保存回读、实际访问一致",
+        "acceptance_owner": "WP83",
+        "source_records": [
+          "current_queue.parked",
+          "suspended_tasks",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:active_task"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP83",
+          "name": "原子权限勾选与实际访问一致",
+          "slug": "atomic-permission-consistency",
+          "reason": "权限code_green候选保留；接续用户要求的机器人真实链路。"
+        }
+      },
+      {
+        "id": "WP77",
+        "slug": "navigation-performance",
+        "name": "导航性能真实读取复验",
+        "scheduling_group": "性能",
+        "acceptance_state": "生产目标未通过",
+        "remaining_acceptance": "冷启动首页及自助收寄→配置中心点击至可操作均<500ms",
+        "acceptance_owner": "WP77",
+        "source_records": [
+          "current_queue.parked",
+          "suspended_wp77",
+          "suspended_wp77_20261027"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP77",
+          "slug": "navigation-performance",
+          "name": "导航性能真实读取复验",
+          "reason": "按用户对WP83–WP90方案的执行指令暂缓；全部已有修改保留，生产性能未验收，不标完成。"
+        }
+      },
+      {
+        "id": "WP78",
+        "slug": "employee-workorder-recovery",
+        "name": "员工工单查询与退回恢复闭环",
+        "scheduling_group": "员工工单",
+        "acceptance_state": "候选保留；完整生产验收未完成",
+        "remaining_acceptance": "默认5条可展开；运单红色加粗；退回原因/修改重提/取消；A/B隔离",
+        "acceptance_owner": "WP78",
+        "source_records": [
+          "suspended_wp78",
+          "/Users/nsss/.codex/worktrees/wp76-wecom-cloud-runtime/Price-v3:next"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP78",
+          "slug": "employee-workorder-recovery",
+          "name": "员工工单查询与退回恢复闭环",
+          "status": "active",
+          "reason": "WP77代码候选已提交；运行验收及门禁证据阻断单独保留，按用户批准顺序推进下一代码批次。"
+        }
+      },
+      {
+        "id": "WP80",
+        "slug": "shipping-effective-company",
+        "name": "顺丰当前生效连接与企业主体",
+        "scheduling_group": "配置可维护",
+        "acceptance_state": "候选保留；业务未验收",
+        "remaining_acceptance": "唯一绿色当前生效、绑定系统企业名称、历史单沿用原连接",
+        "acceptance_owner": "WP80",
+        "source_records": [
+          "suspended_wp80_20261026"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP80",
+          "slug": "shipping-effective-company",
+          "name": "顺丰当前生效连接与企业主体",
+          "status": "active",
+          "reason": "按用户批准顺序继续；WP79代码候选已提交，唯一约束与界面待发布。"
+        }
+      },
+      {
+        "id": "WP79",
+        "slug": "wecom-bot-idempotency",
+        "name": "企微机器人去重与停用",
+        "scheduling_group": "机器人维护",
+        "acceptance_state": "候选保留；生产清理未验收",
+        "remaining_acceptance": "快速保存3次只1条；停用刷新保持且真实消息不响应；重复草稿可恢复清理",
+        "acceptance_owner": "WP79",
+        "source_records": [
+          "suspended_wp79_20261026"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP79",
+          "slug": "wecom-bot-idempotency",
+          "name": "企微机器人去重与停用",
+          "status": "active",
+          "reason": "按IN-20261026-007批准顺序执行；WP78代码候选已验证，迁移和线上复验待发布。"
+        }
+      },
+      {
+        "id": "WP46",
+        "slug": "tenant-membership-isolation-foundation",
+        "name": "租户成员与强制数据隔离基座",
+        "scheduling_group": "权限安全",
+        "acceptance_state": "代码通过；生产未验收",
+        "remaining_acceptance": "有效成员与活动租户唯一；跨租户ID注入和知识内容读取拒绝",
+        "acceptance_owner": "WP46",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP46",
+          "slug": "tenant-membership-isolation-foundation",
+          "name": "租户成员与强制数据隔离基座",
+          "completed_at": "2026-10-21T17:44:14Z",
+          "evidence_commit": "8ece0a3283a57cf7de20b6089510d7a967cf07c6",
+          "result": "达到code_green：唯一有效租户/成员解析、外部组织来源优先级、人员写路径实时成员上下文、跨租户组合约束与知识内容租户隔离已实现。目标24文件191测试、全量2788通过/5跳过、lint/typecheck/build与严格提交10/10通过；隔离数据库迁移和Preview仍未验收。",
+          "evidence": "codex-runtime/wp46-tenant-membership/"
+        }
+      },
+      {
+        "id": "WP64",
+        "slug": "tenant-route-authorization-closure",
+        "name": "服务端租户与权限守卫收口",
+        "scheduling_group": "权限安全",
+        "acceptance_state": "代码通过；剩余接口未收口",
+        "remaining_acceptance": "报价类实际动作及租户隔离；审计清单覆盖未接入路由，不能仅审计出问题",
+        "acceptance_owner": "WP64",
+        "source_records": [
+          "/Users/nsss/.codex/worktrees/wp45-tenant-identity-foundation/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP64",
+          "slug": "tenant-route-authorization-closure",
+          "name": "服务端租户与权限守卫收口",
+          "completed_at": "2026-10-22T11:19:56Z",
+          "evidence_commit": "b19cad91b16a055c0ef02b806521dd5d3efd2399",
+          "result": "达到code_green：新增活动租户+新鲜动作权限守卫，报价列表/创建/详情/修改/删除完成迁移；166条API路由进入机器可审计清单，新增/删除/认证边界变化会失败关闭。目标10文件104测试、全量2904通过/5跳过、严格10/10、lint/typecheck与99页build通过；剩余96条service_role租户路由、45条认证旧路由、隔离迁移、Preview和Production未验收。",
+          "evidence": "codex-runtime/wp64-tenant-authz/"
+        }
+      },
+      {
+        "id": "WP65",
+        "slug": "personnel-organization-authorization-closure",
+        "name": "人员与组织管理租户授权收口",
+        "scheduling_group": "权限安全",
+        "acceptance_state": "代码通过；生产未验收",
+        "remaining_acceptance": "人员/组织/角色API逐条验证新鲜授权和跨组织拒绝",
+        "acceptance_owner": "WP65",
+        "source_records": [
+          "/Users/nsss/.codex/worktrees/wp45-tenant-identity-foundation/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP65",
+          "slug": "personnel-organization-authorization-closure",
+          "name": "人员与组织管理租户授权收口",
+          "completed_at": "2026-10-22T11:52:23Z",
+          "evidence_commit": "cd13cc9b01407a845f20d04002cfde2073d10797",
+          "result": "达到code_green：16条人员、部门、组织聚合和角色主路由迁移到活动租户+新鲜动作权限守卫；邀请、成员移除/恢复、角色作用域、汇报关系、密码重置和原子RPC保护保留。目标18文件120测试、全量2906通过/5跳过、严格10/10、lint/typecheck与99页build通过；剩余82条service_role租户路由、45条认证旧路由、隔离迁移、Preview和Production未验收。",
+          "evidence": "codex-runtime/wp65-personnel-authz/"
+        }
+      },
+      {
+        "id": "WP66",
+        "slug": "shipping-route-tenant-authorization",
+        "name": "顺丰后台操作租户授权收口",
+        "scheduling_group": "权限安全",
+        "acceptance_state": "代码通过；生产未验收",
+        "remaining_acceptance": "寄件查询/操作/连接管理API权限分离，撤权后新请求拒绝",
+        "acceptance_owner": "WP66",
+        "source_records": [
+          "/Users/nsss/.codex/worktrees/wp45-tenant-identity-foundation/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP66",
+          "slug": "shipping-route-tenant-authorization",
+          "name": "顺丰后台操作租户授权收口",
+          "completed_at": "2026-10-22T12:09:05Z",
+          "evidence_commit": "797206cf6147980bab7046f3d4ebd97f9d7fc6b0",
+          "result": "达到code_green：shippingHandler/shippingManagerHandler和设置直调入口统一活动组织；操作员读取新鲜shipping:operate，连接管理读取新鲜shipping:manage_connections并保留未覆盖系统管理员兼容。17条顺丰后台路由进入shipping_permission_guarded，总守卫路由35条。目标7文件71测试、全量2909通过/5跳过、严格10/10、lint/typecheck与99页build通过；真实顺丰写单、隔离迁移、Preview和Production未验收。",
+          "evidence": "codex-runtime/wp66-shipping-authz/"
+        }
+      },
+      {
+        "id": "WP67",
+        "slug": "configuration-route-tenant-authorization",
+        "name": "配置中心租户授权与发布边界收口",
+        "scheduling_group": "权限安全",
+        "acceptance_state": "未完成",
+        "remaining_acceptance": "配置读取、草稿修改、发布/回滚及平台资产边界逐条拒绝越权",
+        "acceptance_owner": "WP67",
+        "source_records": [
+          "/Users/nsss/.codex/worktrees/wp45-tenant-identity-foundation/Price-v3:active_task",
+          "/Users/nsss/.codex/worktrees/wp45-tenant-identity-foundation/Price-v3:active"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP67",
+          "slug": "configuration-route-tenant-authorization",
+          "name": "配置中心租户授权与发布边界收口",
+          "status": "active",
+          "reason": "WP66已完成顺丰后台活动租户与新鲜权限收口；继续处理配置控制面的租户资源、平台资产和发布动作边界。"
+        }
+      },
+      {
+        "id": "WP92",
+        "slug": "fxiaoke-primary-source-sync",
+        "name": "纷享组织同步与主来源切换",
+        "scheduling_group": "组织来源",
+        "acceptance_state": "待开发",
+        "remaining_acceptance": "预览差异→确认同步/主来源切换→原子回滚；旧飞书和手工数据不丢",
+        "acceptance_owner": "WP92",
+        "source_records": [
+          "current_queue.next",
+          "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:next"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP92",
+          "slug": "fxiaoke-primary-source-sync",
+          "name": "纷享组织同步与主来源切换",
+          "depends_on": [
+            "WP91"
+          ]
+        },
+        "depends_on": [
+          "WP91",
+          "WP65"
+        ]
+      },
       {
         "id": "WP93",
         "slug": "unified-shipping-authorization",
         "name": "统一成员身份与寄件许可",
-        "entry_gate": "WP92正式站稳定身份映射、主来源切换和数据保护验收通过",
-        "entry_gate_status": "waiting_active_completion",
+        "scheduling_group": "统一寄件许可",
+        "acceptance_state": "待开发",
+        "remaining_acceptance": "统一成员/部门/角色授权，离职/停用/撤权后下一请求拒绝，历史归属不变",
+        "acceptance_owner": "WP93",
+        "source_records": [
+          "current_queue.ready",
+          "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:ready"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP93",
+          "slug": "unified-shipping-authorization",
+          "name": "统一成员身份与寄件许可",
+          "depends_on": [
+            "WP92"
+          ]
+        },
         "depends_on": [
-          "WP92"
+          "WP92",
+          "WP66",
+          "WP83"
+        ]
+      },
+      {
+        "id": "WP96",
+        "slug": "crm-approval-shipping-field-preview",
+        "name": "CRM审批寄件字段映射预览",
+        "scheduling_group": "CRM审批寄件",
+        "acceptance_state": "已登记；未开发",
+        "remaining_acceptance": "一条真实审批实例与原对象/子行准确映射到寄件预览，字段来源可核对",
+        "acceptance_owner": "WP96",
+        "source_records": [
+          "IN-20261028-009"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "depends_on": [
+          "WP91",
+          "WP95"
+        ]
+      },
+      {
+        "id": "WP97",
+        "slug": "crm-approved-shipping-intake",
+        "name": "CRM审批生成唯一待确认工单",
+        "scheduling_group": "CRM审批寄件",
+        "acceptance_state": "已登记；未开发",
+        "remaining_acceptance": "通过指定审批节点后只生成1张待确认工单；重复通知、撤回、重审、跨人跨租户均处理",
+        "acceptance_owner": "WP97",
+        "source_records": [
+          "IN-20261028-009"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "depends_on": [
+          "WP92",
+          "WP93",
+          "WP95",
+          "WP96"
+        ]
+      },
+      {
+        "id": "WP25",
+        "slug": "unknown-dispatch-reconciliation",
+        "name": "下单结果未知的查回恢复",
+        "scheduling_group": "异常恢复",
+        "acceptance_state": "本地候选；生产未验收",
+        "remaining_acceptance": "请求结果未知先查回；并发/重试不得新建第二运单",
+        "acceptance_owner": "WP25",
+        "source_records": [
+          "current_queue.parked",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:parked",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP25",
+          "slug": "unknown-dispatch-reconciliation",
+          "name": "下单结果未知的查回恢复",
+          "reason": "IN-20261014-001明确优先本人订单入口；WP25本地候选保留且未发布，不以旧单查明为下一批前置"
+        }
+      },
+      {
+        "id": "WP24",
+        "slug": "monthly-rejection-recovery",
+        "name": "月结拒绝后的原单恢复",
+        "scheduling_group": "异常恢复",
+        "acceptance_state": "待真实异常验收",
+        "remaining_acceptance": "明确月结拒绝后原单换合法配置恢复；历史尝试可追溯",
+        "acceptance_owner": "WP24",
+        "source_records": [
+          "current_queue.ready",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:ready",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:ready"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP24",
+          "slug": "monthly-rejection-recovery",
+          "name": "月结拒绝后的原单恢复"
+        }
+      },
+      {
+        "id": "WP23",
+        "slug": "confirmed-monthly-dispatch",
+        "name": "平台下单流程与原单恢复",
+        "scheduling_group": "真实顺丰闭环",
+        "acceptance_state": "已有实现；真实确认未验收",
+        "remaining_acceptance": "用户核对服务/付款/费用后真实出号；打印失败不得重新下单",
+        "acceptance_owner": "WP23",
+        "source_records": [
+          "current_queue.parked",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:parked",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP23",
+          "slug": "confirmed-monthly-dispatch",
+          "reason": "切换至WP25修复当前两票生命周期缺陷，已有下单到PDF实现保留，WP23未宣称生产验收完成",
+          "name": "平台下单流程与原单恢复"
+        },
+        "depends_on": [
+          "WP80",
+          "WP25",
+          "WP24"
+        ]
+      },
+      {
+        "id": "WP98",
+        "slug": "crm-shipping-result-writeback",
+        "name": "真实运单结果回填原CRM记录",
+        "scheduling_group": "CRM结果回填",
+        "acceptance_state": "已登记；未开发",
+        "remaining_acceptance": "确认出号后单号/承运商/状态写回原记录正确子行，回填失败可重试且不重复下单",
+        "acceptance_owner": "WP98",
+        "source_records": [
+          "IN-20261028-009"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "depends_on": [
+          "WP97",
+          "WP23"
         ]
       },
       {
         "id": "WP94",
         "slug": "fxiaoke-sales-intake",
         "name": "纷享销售登录与真实提报",
-        "entry_gate": "纷享企业连接可用、稳定成员身份映射及统一寄件许可已在正式站验收",
-        "entry_gate_status": "waiting_active_completion",
+        "scheduling_group": "纷享销售入口",
+        "acceptance_state": "待开发",
+        "remaining_acceptance": "真实A/B员工SSO登录、提报、本人查询与跨组织拒绝",
+        "acceptance_owner": "WP94",
+        "source_records": [
+          "current_queue.ready",
+          "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:ready"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP94",
+          "slug": "fxiaoke-sales-intake",
+          "name": "纷享销售登录与真实提报",
+          "depends_on": [
+            "WP91",
+            "WP92",
+            "WP93"
+          ]
+        },
         "depends_on": [
           "WP91",
           "WP92",
           "WP93"
-        ],
-        "related_inputs": [
-          "IN-20261028-002",
-          "IN-20261028-003"
-        ],
-        "scope_note": "复用企业应用连接，实现真实SSO入口、授权回调和销售本人提报；解决禁用占位按钮及不存在的管理员开通开关。"
-      },
-      {
-        "id": "WP32",
-        "slug": "sf-push-progress",
-        "name": "顺丰推送接收与工单进度",
-        "entry_gate": "WP33界面候选验证后恢复原接口闭环",
-        "entry_gate_status": "waiting_active_completion"
+        ]
       },
       {
         "id": "WP20",
         "slug": "wecom-waybill-notifications",
         "name": "出号通知到原销售",
-        "entry_gate": "按F054编号顺序，前一项验收后进入",
-        "entry_gate_status": "waiting_active_completion"
+        "scheduling_group": "结果通知",
+        "acceptance_state": "未完成真实回执",
+        "remaining_acceptance": "真实单号私发原销售；通知失败只重试通知，本人查询始终可用",
+        "acceptance_owner": "WP20",
+        "source_records": [
+          "current_queue.ready",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:ready",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:ready"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP20",
+          "slug": "wecom-waybill-notifications",
+          "name": "出号通知到原销售"
+        }
       },
       {
-        "id": "WP24",
-        "slug": "monthly-rejection-recovery",
-        "name": "月结拒绝后的原单恢复",
-        "entry_gate": "按F054编号顺序，前一项验收后进入",
-        "entry_gate_status": "waiting_active_completion"
+        "id": "WP29",
+        "slug": "shipment-cancellation-continuity",
+        "name": "取消动作关联原单及外部真实回执",
+        "scheduling_group": "异常恢复",
+        "acceptance_state": "本地候选；真实取消未验收",
+        "remaining_acceptance": "取消动作关联原单及外部真实回执；未知取消先核查",
+        "acceptance_owner": "WP29",
+        "source_records": [
+          "current_queue.parked",
+          "suspended_tasks",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP29",
+          "slug": "shipment-cancellation-continuity",
+          "reason": "本地候选保留，外部取消状态文档及真实验证待续接；未上线"
+        }
+      },
+      {
+        "id": "WP32",
+        "slug": "sf-push-progress",
+        "name": "顺丰推送接收与工单进度",
+        "scheduling_group": "物流进度",
+        "acceptance_state": "未完成真实推送验收",
+        "remaining_acceptance": "真实顺丰推送验签、幂等入站、状态不倒退并显示更新时间",
+        "acceptance_owner": "WP32",
+        "source_records": [
+          "current_queue.ready",
+          "suspended_tasks",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:next"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP32",
+          "slug": "sf-push-progress",
+          "name": "顺丰推送接收与工单进度"
+        }
+      },
+      {
+        "id": "WP27",
+        "slug": "scheduled-tracking-refresh",
+        "name": "轨迹半小时更新与异常通知",
+        "scheduling_group": "物流进度",
+        "acceptance_state": "代码通过；真实定时未验收",
+        "remaining_acceptance": "现有资源每30分钟更新活跃单；失败保留旧结果，终态停止，留运行记录",
+        "acceptance_owner": "WP27",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:ready",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP27",
+          "slug": "scheduled-tracking-refresh",
+          "name": "轨迹半小时更新与异常通知",
+          "completed_at": "2026-10-22T08:40:00Z",
+          "evidence_commit": "395c659b8829d5beada9c138ea8649a2050b7ec4",
+          "result": "达到code_green：活跃运单以30分钟updated_at租约领取，并发实例不重复查询；终态运单与订单收敛；单票失败保留旧轨迹，操作员异常提醒24小时去重且写入失败独立计数。受影响11文件136测试、全量2879通过/5跳过、严格10/10、lint/typecheck与98页build通过；Vercel套餐兼容、真实cron/顺丰批量、Preview与Production未验收。",
+          "evidence": "codex-runtime/wp27-tracking-refresh/"
+        }
+      },
+      {
+        "id": "WP75",
+        "slug": "shipping-card-disclosure-and-company-parser",
+        "name": "寄件卡片单向展开与公司简称解析修复",
+        "scheduling_group": "寄件交互",
+        "acceptance_state": "已发布补丁；完整复验未完成",
+        "remaining_acceptance": "fdb8e764相关路径：展开不勾选、可收起、出号后无横向滚动",
+        "acceptance_owner": "WP75",
+        "source_records": [
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:active_task",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:active",
+          "/Users/nsss/.codex/worktrees/wp76-wecom-cloud-runtime/Price-v3:ready"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP75",
+          "slug": "shipping-card-disclosure-and-company-parser",
+          "name": "寄件卡片单向展开与公司简称解析修复",
+          "status": "active",
+          "reason": "权限目录CRUD已生产发布；继续处理用户最新寄件卡片和公司简称解析反馈。"
+        }
+      },
+      {
+        "id": "WP76",
+        "slug": "wecom-private-shipping-intake",
+        "name": "单聊寄件提报与本人回执",
+        "scheduling_group": "企微入口",
+        "acceptance_state": "Demo部分链路通过；全流程未完成",
+        "remaining_acceptance": "正式ONES单聊、开机启动、断线恢复、消息防重、本人查询与真实出号私信",
+        "acceptance_owner": "WP76",
+        "source_records": [
+          "current_queue.parked",
+          "suspended_wp76_20261027_for_fxiaoke",
+          "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP76",
+          "slug": "wecom-private-shipping-intake",
+          "name": "单聊寄件提报与本人回执",
+          "reason": "用户批准建立统一组织接入目标并启动；已发布候选和真实单聊证据保留，正式顺丰验收仍未完成。"
+        }
+      },
+      {
+        "id": "WP73",
+        "slug": "wp73-acceptance",
+        "name": "WP73",
+        "scheduling_group": "人员生命周期",
+        "acceptance_state": "已发布；真实人员操作未验收",
+        "remaining_acceptance": "邀请送达/接受、离职拒绝新请求、复职、成员移除完整验收",
+        "acceptance_owner": "WP73",
+        "source_records": [
+          "IN-20261023-060"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP73",
+          "name": "WP73",
+          "source_input": "IN-20261023-060"
+        }
+      },
+      {
+        "id": "WP74",
+        "slug": "wp74-acceptance",
+        "name": "WP74",
+        "scheduling_group": "权限目录",
+        "acceptance_state": "已发布；目录操作未验收",
+        "remaining_acceptance": "权限点生命周期真实验收；无执行消费者的权限不得伪称配置即生效",
+        "acceptance_owner": "WP74",
+        "source_records": [
+          "IN-20261023-070"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP74",
+          "name": "WP74",
+          "source_input": "IN-20261023-070"
+        }
+      },
+      {
+        "id": "WP44",
+        "slug": "organization-custom-roles",
+        "name": "组织自定义角色创建、复制与分配",
+        "scheduling_group": "角色管理",
+        "acceptance_state": "待开发",
+        "remaining_acceptance": "组织内创建/复制角色、授权并分配；跨组织及越级授权拒绝",
+        "acceptance_owner": "WP44",
+        "source_records": [
+          "IN-20261020-002"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP44",
+          "slug": "organization-custom-roles",
+          "name": "组织自定义角色创建、复制与分配"
+        },
+        "depends_on": [
+          "WP83"
+        ]
+      },
+      {
+        "id": "WP84",
+        "slug": "parameter-draft-release-isolation",
+        "name": "参数草稿与生效版本隔离",
+        "scheduling_group": "参数与价盘",
+        "acceptance_state": "待开发",
+        "remaining_acceptance": "编辑草稿不改变当前报价结果；发布形成不可变可追溯版本",
+        "acceptance_owner": "WP84",
+        "source_records": [
+          "current_queue.parked",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:parked",
+          "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP84",
+          "slug": "parameter-draft-release-isolation",
+          "name": "参数草稿与生效版本隔离",
+          "status": "approved_pending_execution",
+          "depends_on": [],
+          "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。"
+        }
+      },
+      {
+        "id": "WP85",
+        "slug": "business-parameter-catalog",
+        "name": "业务参数中文目录与数据治理",
+        "scheduling_group": "参数与价盘",
+        "acceptance_state": "待开发",
+        "remaining_acceptance": "中文业务名称/单位/状态；测试数据不混入业务列表，清理可恢复",
+        "acceptance_owner": "WP85",
+        "source_records": [
+          "current_queue.parked",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:parked",
+          "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP85",
+          "slug": "business-parameter-catalog",
+          "name": "业务参数中文目录与数据治理",
+          "status": "approved_pending_execution",
+          "depends_on": [],
+          "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。"
+        }
+      },
+      {
+        "id": "WP86",
+        "slug": "maintenance-rate-schema-form",
+        "name": "维保费率Schema表单",
+        "scheduling_group": "参数与价盘",
+        "acceptance_state": "待开发",
+        "remaining_acceptance": "维保费率由Schema渲染百分比表单，边界与服务端校验一致",
+        "acceptance_owner": "WP86",
+        "source_records": [
+          "current_queue.parked",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:parked",
+          "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP86",
+          "slug": "maintenance-rate-schema-form",
+          "name": "维保费率Schema表单",
+          "status": "approved_pending_execution",
+          "depends_on": [
+            "WP84",
+            "WP85"
+          ],
+          "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。"
+        },
+        "depends_on": [
+          "WP84",
+          "WP85"
+        ]
+      },
+      {
+        "id": "WP87",
+        "slug": "discount-tier-schema-form",
+        "name": "折扣档位Schema表单",
+        "scheduling_group": "参数与价盘",
+        "acceptance_state": "待开发",
+        "remaining_acceptance": "折扣档位矩阵由Schema渲染，重叠/断档/越界拒绝",
+        "acceptance_owner": "WP87",
+        "source_records": [
+          "current_queue.parked",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:parked",
+          "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP87",
+          "slug": "discount-tier-schema-form",
+          "name": "折扣档位Schema表单",
+          "status": "approved_pending_execution",
+          "depends_on": [
+            "WP86"
+          ],
+          "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。"
+        },
+        "depends_on": [
+          "WP86"
+        ]
+      },
+      {
+        "id": "WP88",
+        "slug": "price-template-validation-preview",
+        "name": "中文价盘模板与校验预览",
+        "scheduling_group": "参数与价盘",
+        "acceptance_state": "待开发",
+        "remaining_acceptance": "下载中文Excel标准模板→上传→逐行业务校验与预览",
+        "acceptance_owner": "WP88",
+        "source_records": [
+          "current_queue.parked",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:parked",
+          "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP88",
+          "slug": "price-template-validation-preview",
+          "name": "中文价盘模板与校验预览",
+          "status": "approved_pending_execution",
+          "depends_on": [],
+          "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。"
+        }
+      },
+      {
+        "id": "WP89",
+        "slug": "price-import-confirmed-draft",
+        "name": "预览确认与幂等草稿导入",
+        "scheduling_group": "参数与价盘",
+        "acceptance_state": "待开发",
+        "remaining_acceptance": "用户确认预览后幂等写草稿；错误行不入库，撤销/恢复可追溯",
+        "acceptance_owner": "WP89",
+        "source_records": [
+          "current_queue.parked",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:parked",
+          "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP89",
+          "slug": "price-import-confirmed-draft",
+          "name": "预览确认与幂等草稿导入",
+          "status": "approved_pending_execution",
+          "depends_on": [
+            "WP88"
+          ],
+          "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。"
+        },
+        "depends_on": [
+          "WP88"
+        ]
+      },
+      {
+        "id": "WP90",
+        "slug": "price-release-quote-verification",
+        "name": "价盘发布与报价消费验收",
+        "scheduling_group": "参数与价盘",
+        "acceptance_state": "待开发",
+        "remaining_acceptance": "批准发布后新报价消费对应版本；历史报价版本/金额不漂移",
+        "acceptance_owner": "WP90",
+        "source_records": [
+          "current_queue.parked",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:parked",
+          "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP90",
+          "slug": "price-release-quote-verification",
+          "name": "价盘发布与报价消费验收",
+          "status": "approved_pending_execution",
+          "depends_on": [
+            "WP84",
+            "WP89"
+          ],
+          "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。"
+        },
+        "depends_on": [
+          "WP84",
+          "WP89"
+        ]
+      },
+      {
+        "id": "WP56",
+        "slug": "sf-enterprise-query-config",
+        "name": "顺丰企业查单接入配置",
+        "scheduling_group": "企业查件",
+        "acceptance_state": "配置候选；生产未验收",
+        "remaining_acceptance": "企业查单凭据独立保存、脱敏回读和真实连接验证；历史单不串配置",
+        "acceptance_owner": "WP56",
+        "source_records": [
+          "/Users/nsss/.codex/worktrees/wp39-harness-repair/Price-v3:active_task",
+          "/Users/nsss/.codex/worktrees/wp39-harness-repair/Price-v3:active",
+          "/Users/nsss/.codex/worktrees/wp56-enterprise-query/Price-v3:active_task"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP56",
+          "slug": "sf-enterprise-query-config",
+          "name": "顺丰企业查单接入配置",
+          "status": "active"
+        }
+      },
+      {
+        "id": "WP55",
+        "slug": "sf-enterprise-query",
+        "name": "顺丰企业查单切换",
+        "scheduling_group": "企业查件",
+        "acceptance_state": "待官方能力与实单验收",
+        "remaining_acceptance": "核实企业来件可发现范围；不知道运单号的发现能力不能用已知单查询替代",
+        "acceptance_owner": "WP55",
+        "source_records": [
+          "/Users/nsss/.codex/worktrees/wp39-harness-repair/Price-v3:next",
+          "/Users/nsss/.codex/worktrees/wp56-enterprise-query/Price-v3:next"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP55",
+          "slug": "sf-enterprise-query",
+          "name": "顺丰企业查单切换"
+        }
+      },
+      {
+        "id": "WP37",
+        "slug": "scheduled-pickup",
+        "name": "预约上门完整传递",
+        "scheduling_group": "寄件扩展",
+        "acceptance_state": "待开发",
+        "remaining_acceptance": "预约日期时段传到承运商并展示真实受理；不支持时段不静默忽略",
+        "acceptance_owner": "WP37",
+        "source_records": [
+          "IN-20261016-011"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP37",
+          "slug": "scheduled-pickup",
+          "name": "预约上门完整传递"
+        }
+      },
+      {
+        "id": "WP38",
+        "slug": "shipping-package-options",
+        "name": "寄件规格与包装需求",
+        "scheduling_group": "寄件扩展",
+        "acceptance_state": "待拆批",
+        "remaining_acceptance": "物品/件数/重量默认值可逐票覆盖；包装/保价收费服务单独确认和验收",
+        "acceptance_owner": "WP38",
+        "source_records": [
+          "IN-20261016-012"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP38",
+          "slug": "shipping-package-options",
+          "name": "寄件规格与包装需求"
+        },
+        "activation_gate": "先按单一可演示结果拆成不超过一个工作日的批次；本轮不激活伞形范围"
       },
       {
         "id": "WP28",
         "slug": "multi-carrier-tracking-readiness",
         "name": "多承运商查件扩展",
-        "entry_gate": "按F054编号顺序，前一项验收后进入",
-        "entry_gate_status": "waiting_active_completion"
+        "scheduling_group": "后续承运商",
+        "acceptance_state": "待能力与费用确认",
+        "remaining_acceptance": "每家承运商独立证明授权数据源、真实单查询与可接受成本",
+        "acceptance_owner": "WP28",
+        "source_records": [
+          "current_queue.ready",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:ready",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:ready"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP28",
+          "slug": "multi-carrier-tracking-readiness",
+          "name": "多承运商查件扩展"
+        },
+        "activation_gate": "先按单一可演示结果拆成不超过一个工作日的批次；本轮不激活伞形范围"
+      },
+      {
+        "id": "WP01",
+        "slug": "ai-platform-foundation",
+        "name": "正式站创建、发布、回滚AI连接/应用/路由",
+        "scheduling_group": "合同与AI",
+        "acceptance_state": "历史Preview；生产待验收",
+        "remaining_acceptance": "正式站创建、发布、回滚AI连接/应用/路由；密钥不泄露",
+        "acceptance_owner": "WP01",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP01",
+          "slug": "ai-platform-foundation",
+          "completed_at": "2026-07-20T20:59:57+08:00",
+          "evidence_commit": "4269840fbc798eb9a92faee44d6e467a250033b4",
+          "result": "六对象 AI 平台控制面、Provider 安全、五任务 UI、Preview 创建/修订/发布/回滚/清理和桌面/iPad 验收完成；Production 未写入或部署"
+        }
+      },
+      {
+        "id": "WP02",
+        "slug": "ai-runtime-truth",
+        "name": "正式站真实模型产生ReviewRun、调用与token证据",
+        "scheduling_group": "合同与AI",
+        "acceptance_state": "历史Preview；生产待验收",
+        "remaining_acceptance": "正式站真实模型产生ReviewRun、调用与token证据；降级和失败可追溯",
+        "acceptance_owner": "WP02",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP02",
+          "slug": "ai-runtime-truth",
+          "completed_at": "2026-07-21T12:05:00+08:00",
+          "evidence_commit": "c25ec17a8e51ec6476432ccccf9c30ee0dd9553b",
+          "result": "五个注册业务用点均由发布路由执行并有当前真实证据；本地 Gemma、云端模型、顺序降级、token、model_invocations、不可漂移计划、真实合同 ReviewRun 与桌面/iPad 验收完成；规则编译和独立准确率明确转交 WP03/WP05，Production 未写入或部署"
+        }
+      },
+      {
+        "id": "WP03",
+        "slug": "rule-collection",
+        "name": "业务规则配置、测试、发布并由真实合同消费",
+        "scheduling_group": "合同与AI",
+        "acceptance_state": "历史Preview；生产待验收",
+        "remaining_acceptance": "业务规则配置、测试、发布并由真实合同消费；不以能调用模型证明准确率",
+        "acceptance_owner": "WP03",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP03",
+          "slug": "rule-collection",
+          "completed_at": "2026-07-21T18:31:22+08:00",
+          "evidence_commit": "ebdb3c59f0205f1ed20b8a2bf4c2a67e5a29f4b5",
+          "result": "业务人员可从空白建立规则集、问题分类、具体规则、业务属性、判定和处理，完成五路径测试与发布；真实 DOCX 经真实 Provider 形成可追溯 ReviewRun、token、规则快照和风险证据；桌面/iPad 与全量工程门禁通过，独立金标准确率仍明确阻断"
+        }
+      },
+      {
+        "id": "WP05",
+        "slug": "multiformat-review-cycle",
+        "name": "独立金标审核准确率、上传新版本、风险迁移、循环复审及原文件批注交付分别验收",
+        "scheduling_group": "合同与AI",
+        "acceptance_state": "交互部分通过；质量未验收",
+        "remaining_acceptance": "独立金标审核准确率、上传新版本、风险迁移、循环复审及原文件批注交付分别验收",
+        "acceptance_owner": "WP05",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP05",
+          "slug": "multiformat-review-cycle",
+          "completed_scope": "interaction_correction",
+          "completed_at": "2026-07-21T19:27:00+08:00",
+          "evidence_commit": "12b977fa",
+          "result": "默认审查入口、URL 页签状态、长 DOCX 单一滚动轴、source_range 确定性定位、重复/跨段证据失败关闭以及文本/扫描 PDF 人工定位边界通过；准确率、版本迁移和循环复审仍未完成"
+        }
+      },
+      {
+        "id": "WP04",
+        "slug": "contract-center-ia",
+        "name": "四类合同入口、原文件身份、上传幂等和真实审阅入口可用",
+        "scheduling_group": "合同与AI",
+        "acceptance_state": "历史Preview；生产待验收",
+        "remaining_acceptance": "四类合同入口、原文件身份、上传幂等和真实审阅入口可用",
+        "acceptance_owner": "WP04",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP04",
+          "slug": "contract-center-ia",
+          "completed_at": "2026-07-22T01:23:24+08:00",
+          "evidence_commit": "a987f85d5701a38a13a245e0ebc5484cadecb3ab",
+          "result": "四类合同任务、源文件身份与上传编排候选已固化；同一隔离 Preview 的真实合同列表入口默认进入审查，桌面/iPad 选中第 45 页风险后只滚动 DOCX 内部正文，window 不移动；临时风险和认证 token 已精确清理，Production 未写入或部署"
+        }
+      },
+      {
+        "id": "WP06",
+        "slug": "document-compare",
+        "name": "真实两版合同差异可定位、可复核、结果可交付",
+        "scheduling_group": "合同与AI",
+        "acceptance_state": "历史Preview；生产待验收",
+        "remaining_acceptance": "真实两版合同差异可定位、可复核、结果可交付",
+        "acceptance_owner": "WP06",
+        "source_records": [
+          "current_queue.parked",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:parked",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP06",
+          "slug": "document-compare",
+          "reason": "免费 Preview 候选已完成并清理；状态仅为 completed_preview_candidate，Production 验收仍归 WP09"
+        }
+      },
+      {
+        "id": "WP07",
+        "slug": "contract-drafting",
+        "name": "合同起草闭环",
+        "scheduling_group": "合同与AI",
+        "acceptance_state": "待开发",
+        "remaining_acceptance": "可编辑草稿、版本保存、DOCX导出及转审核/对比；激活前按独立结果拆批",
+        "acceptance_owner": "WP07",
+        "source_records": [
+          "/Users/nsss/.local/share/price-v3-release-repair:next",
+          "/Users/nsss/.local/share/price-v3-sf-self-service-order:next",
+          "/Users/nsss/.local/share/price-v3-wp11-main:next"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP07",
+          "slug": "contract-drafting",
+          "name": "合同起草闭环"
+        },
+        "activation_gate": "先按单一可演示结果拆成不超过一个工作日的批次；本轮不激活伞形范围"
       },
       {
         "id": "WP08",
         "slug": "experience-umbrella",
         "name": "品牌、组织与响应式体验",
-        "activation_requirement": "激活前拆为品牌主题、组织交互、响应式 Shell 三个独立子包"
+        "scheduling_group": "横切体验",
+        "acceptance_state": "待拆批",
+        "remaining_acceptance": "品牌主题、组织交互、响应式Shell分别建批；不作为混合Active",
+        "acceptance_owner": "WP08",
+        "source_records": [
+          "current_queue.ready",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:ready",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:ready"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP08",
+          "slug": "experience-umbrella",
+          "name": "品牌、组织与响应式体验"
+        },
+        "activation_gate": "先按单一可演示结果拆成不超过一个工作日的批次；本轮不激活伞形范围"
+      },
+      {
+        "id": "WP09",
+        "slug": "release-acceptance",
+        "name": "保存成功路径、RLS及真实生产模型链",
+        "scheduling_group": "合同与AI",
+        "acceptance_state": "部分实现；未验收",
+        "remaining_acceptance": "保存成功路径、RLS及真实生产模型链；按业务批次分别验收",
+        "acceptance_owner": "WP09",
+        "source_records": [
+          "current_queue.parked",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:parked",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP09",
+          "slug": "release-acceptance",
+          "reason": "用户主线已切换至报价域 WP10（IN-20260820-001 激活）；WP09 的保存成功路径与 P0 RLS 发布门禁未完成，保留追溯，不视为 completed"
+        }
       },
       {
         "id": "WP10",
         "slug": "quote-domain-complete-migration",
         "name": "报价域完整形态与换机可迁移基座",
-        "entry_gate": "F054 WP18 production release and user Chrome acceptance",
-        "entry_gate_status": "waiting_active_completion"
+        "scheduling_group": "报价完整形态",
+        "acceptance_state": "待拆批",
+        "remaining_acceptance": "商机报价关联、统一算价、版本冻结、派生一致及换机恢复分别建批",
+        "acceptance_owner": "WP10",
+        "source_records": [
+          "current_queue.ready",
+          "suspended_tasks",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:ready"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP10",
+          "slug": "quote-domain-complete-migration",
+          "name": "报价域完整形态与换机可迁移基座"
+        },
+        "activation_gate": "先按单一可演示结果拆成不超过一个工作日的批次；本轮不激活伞形范围"
+      },
+      {
+        "id": "WP39",
+        "slug": "harness-workspace-preflight",
+        "name": "Harness工作区与工具执行闭环",
+        "scheduling_group": "交付证据",
+        "acceptance_state": "待收口",
+        "remaining_acceptance": "正确校验精确部署、域名与原会话证据；不让错误合同冒充产品失败或假通过",
+        "acceptance_owner": "WP39",
+        "source_records": [
+          "parked_tasks"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP39",
+          "slug": "harness-workspace-preflight",
+          "name": "Harness工作区与工具执行闭环",
+          "status": "awaiting_integration",
+          "reason": "配置UI合同及精确只读工具分类已有本地修复和目标验证；恢复产品候选验收"
+        }
+      }
+    ],
+    "parked": [
+      {
+        "id": "WP11",
+        "slug": "shipping-collaboration",
+        "name": "复用台账与安全存储",
+        "scheduling_group": "寄件基础",
+        "acceptance_state": "旧形态已替代；保留追溯",
+        "remaining_acceptance": "复用台账与安全存储；不恢复与统一成员许可冲突的旧独立白名单",
+        "acceptance_owner": "WP18",
+        "source_records": [
+          "current_queue.parked",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:parked",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP11",
+          "slug": "shipping-collaboration",
+          "reason": "既有匿名提报、台账、顺丰沙盒与安全存储作为WP12复用基线；旧双栏/Tab产品形态由新确认方案取代"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP12",
+        "slug": "self-service-shipping-workbench",
+        "name": "操作员工作台与销售提报入口可用",
+        "scheduling_group": "寄件交互",
+        "acceptance_state": "已有代码；待生产复验",
+        "remaining_acceptance": "操作员工作台与销售提报入口可用；桌面/窄屏不遮挡操作",
+        "acceptance_owner": "WP75",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP12",
+          "slug": "self-service-shipping-workbench",
+          "completed_at": "2026-09-23T03:58:42+00:00",
+          "evidence_commit": "7fb4f2d4e3dabaefd1b9f871c09f70f1a4fed15b",
+          "result": "单一自助收寄导航、登录操作员三栏同屏、独立销售提报页、客户/收件人/城市待办摘要、特殊需求和无打印范围达到code_green；Production未更新"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP13",
+        "slug": "batch-shipping-execution",
+        "name": "批量输入逐行纠错、稳定幂等、部分失败不重建成功单",
+        "scheduling_group": "寄件交互",
+        "acceptance_state": "已有代码；待生产复验",
+        "remaining_acceptance": "批量输入逐行纠错、稳定幂等、部分失败不重建成功单",
+        "acceptance_owner": "WP95",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP13",
+          "slug": "batch-shipping-execution",
+          "completed_at": "2026-09-23T04:05:48+00:00",
+          "evidence_commit": "b7194f859b6f9e3cb2bea8435c8b6b47e2bfba62",
+          "result": "CSV/XLSX/文本解析、逐行纠错、统一参数、稳定幂等批次执行和部分失败恢复达到code_green；Production未更新"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP14",
+        "slug": "shipping-provider-closure",
+        "name": "真实出号、取消回执和轨迹能力分别证明",
+        "scheduling_group": "真实顺丰闭环",
+        "acceptance_state": "已有代码；业务未闭环",
+        "remaining_acceptance": "真实出号、取消回执和轨迹能力分别证明；查询成功不外推写单能力",
+        "acceptance_owner": "WP18",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP14",
+          "slug": "shipping-provider-closure",
+          "completed_at": "2026-09-23T07:45:13.667Z",
+          "evidence_commit": "32a2c4faf545a5ed8f3df799009cc2911a2fb364",
+          "result": "delivery-check code_green在当前精确SHA上通过，含目标测试、全量测试、lint、typecheck、build证据；未push或部署Production。"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP15",
+        "slug": "shipping-carrier-configuration",
+        "name": "凭据脱敏、连接/月结/默认寄件人保存回读、停用保持",
+        "scheduling_group": "配置可维护",
+        "acceptance_state": "已有代码；待复验",
+        "remaining_acceptance": "凭据脱敏、连接/月结/默认寄件人保存回读、停用保持",
+        "acceptance_owner": "WP80",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP15",
+          "slug": "shipping-carrier-configuration",
+          "completed_at": "2026-09-23T08:12:23.217Z",
+          "evidence_commit": "d68b28d07f5726b61ca0a3ddcfdc01ee8b7c33da",
+          "result": "配置抽屉、服务端AES-256-GCM凭据、组织级管理权限、多月结账号脱敏/默认/停用、默认寄件人保存和顺丰沙盒只读探测代码达到code_green；目标测试25项、全量2034项通过/5跳过，lint、typecheck、build与提交钩子均通过。因本机无Docker/PostgreSQL，迁移未应用，真实沙盒连接未执行；无生产写入。"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP16",
+        "slug": "shipping-dynamic-order-consumption",
+        "name": "新单取当前连接，历史单打印/查询/取消沿用原连接快照",
+        "scheduling_group": "配置可维护",
+        "acceptance_state": "已有代码；待复验",
+        "remaining_acceptance": "新单取当前连接，历史单打印/查询/取消沿用原连接快照",
+        "acceptance_owner": "WP80",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP16",
+          "slug": "shipping-dynamic-order-consumption",
+          "completed_at": "2026-09-23T08:48:03.496Z",
+          "evidence_commit": "6b736e6551833b2332523c36266ef86ad49d1fe1",
+          "result": "运行时SF固定环境变量依赖已从应用代码和示例环境中移除；批量/确认下单读取组织级有效连接、月结账号、授权服务和默认寄件人；销售提报使用标准/加急偏好；查询、取消、轨迹基于订单连接/账号快照。目标91测试、全量2039通过/5跳过、lint/typecheck/build及10项提交门禁通过，delivery-check code_green通过。迁移未应用本地数据库，无供应商实连。"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP17",
+        "slug": "shipping-production-readiness",
+        "name": "准备清单不关闭真实生产下单、打印与恢复结果",
+        "scheduling_group": "真实顺丰闭环",
+        "acceptance_state": "准备材料已交付；业务未验收",
+        "remaining_acceptance": "准备清单不关闭真实生产下单、打印与恢复结果",
+        "acceptance_owner": "WP18",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP17",
+          "slug": "shipping-production-readiness",
+          "completed_at": "2026-09-23T09:34:46.080Z",
+          "evidence_commit": "0282568d742cb07985591aad093157bc26c3cb96",
+          "result": "Production环境变量清单、迁移/RLS/密钥部署指引、回滚步骤与用户指定真实寄件验收方案已交付；目标114测试、全量2039通过/5跳过、lint/typecheck/build通过；delivery-check code_green及Harness完成审计通过。只读Production审计随后确认新迁移和连接配置表缺失；未做数据库或平台写入。"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP18",
+        "slug": "shipping-production-release-and-acceptance",
+        "name": "真实业务核对费用→确认→唯一出号→面单PDF→轨迹",
+        "scheduling_group": "真实顺丰闭环",
+        "acceptance_state": "未完成真实业务验收",
+        "remaining_acceptance": "真实业务核对费用→确认→唯一出号→面单PDF→轨迹；不为测试虚构包裹",
+        "acceptance_owner": "WP18",
+        "source_records": [
+          "current_queue.parked",
+          "suspended_tasks",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP18",
+          "slug": "shipping-production-release-and-acceptance",
+          "reason": "已有配置和前台修复保留；顺丰真实API连接/下单/轨迹未验收，企微批次不冒充其完成。"
+        }
+      },
+      {
+        "id": "WP19",
+        "slug": "wecom-authorized-shipping-intake",
+        "name": "企微企业接入与员工提报校验",
+        "scheduling_group": "企微入口",
+        "acceptance_state": "部分发布；正式企业待验收",
+        "remaining_acceptance": "正式ONES员工接入、本人提报、外部身份拒绝；域名/资质仍按提供方规则",
+        "acceptance_owner": "WP76",
+        "source_records": [
+          "current_queue.parked",
+          "suspended_tasks",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:ready"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP19",
+          "slug": "wecom-authorized-shipping-intake",
+          "name": "企微企业接入与员工提报校验",
+          "reason": "用户批准WP39先修Harness；已发布候选与本地UI微修复保留，未把历史门禁声明为完成"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP22",
+        "slug": "reusable-sender-intake",
+        "name": "保留寄方复用证据",
+        "scheduling_group": "寄件交互",
+        "acceptance_state": "历史部分验收；新增回归未通过",
+        "remaining_acceptance": "保留寄方复用证据；两条新样本的单位/姓名/电话/地址分离及村庄规则通过",
+        "acceptance_owner": "WP95",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP22",
+          "slug": "reusable-sender-intake",
+          "result": "仅编号02：寄方复用、共享解析、客户字段与记录布局已生产验收，测试工单提报至待审核并退回，无运单；其余目标仍未完成",
+          "evidence": "codex-runtime/wp22-production-intake.json"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP26",
+        "slug": "employee-workorder-continuity",
+        "name": "凭本人稳定身份查看全部状态、原因和修订历史，A不能读B",
+        "scheduling_group": "员工工单",
+        "acceptance_state": "已有代码；生产未验收",
+        "remaining_acceptance": "凭本人稳定身份查看全部状态、原因和修订历史，A不能读B",
+        "acceptance_owner": "WP78",
+        "source_records": [
+          "current_queue.parked",
+          "suspended_tasks",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP26",
+          "slug": "employee-workorder-continuity",
+          "reason": "代码候选已通过门禁，生产发布和现有Chrome验收尚未完成；顺序开发WP29，不冒充交付完成"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP30",
+        "slug": "submitted-shipment-amendment",
+        "name": "未出号原工单修改",
+        "scheduling_group": "员工工单",
+        "acceptance_state": "已有代码；生产未验收",
+        "remaining_acceptance": "待核对/已退回无运单可修订；版本冲突拒绝，归属不变",
+        "acceptance_owner": "WP78",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:parked",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP30",
+          "slug": "submitted-shipment-amendment",
+          "name": "未出号原工单修改",
+          "completed_at": "2026-10-21T23:17:46Z",
+          "evidence_commit": "159b9ffeb04f81eade7e6e3a21c89ba31f9ab0de",
+          "result": "达到code_green：仅待核对/已退回且无运单的工单可版本化修改；每次保存 revision+1、保留created_by/身份快照、写入before/after审计并重新待核对，不自动下单。目标3文件59测试、全量2831通过/5跳过、lint/typecheck/98页build与严格10/10通过；隔离迁移、Preview和Production未验收。",
+          "evidence": "codex-runtime/wp30-shipping-amendment/"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP31",
+        "slug": "bulk-review-selection",
+        "name": "筛选内批量选择、参数切换保持选择",
+        "scheduling_group": "寄件交互",
+        "acceptance_state": "本地候选；生产未验收",
+        "remaining_acceptance": "筛选内批量选择、参数切换保持选择；资料变更只撤销受影响票核对",
+        "acceptance_owner": "WP75",
+        "source_records": [
+          "current_queue.parked",
+          "suspended_tasks",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP31",
+          "slug": "bulk-review-selection",
+          "reason": "本地候选eca8056a保留，尚未发布；用户明确开始推送接收下一步"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP33",
+        "slug": "shipping-configuration-usability",
+        "name": "寄件配置与操作反馈",
+        "scheduling_group": "配置可维护",
+        "acceptance_state": "历史线上重放；证据待对齐",
+        "remaining_acceptance": "配置与操作反馈的真实成果保留；修正无关验收合同，不重做已证实结果",
+        "acceptance_owner": "WP39",
+        "source_records": [
+          "current_queue.parked",
+          "suspended_tasks",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP33",
+          "slug": "shipping-configuration-usability",
+          "name": "寄件配置与操作反馈",
+          "reason": "生产界面已实际发布并在用户Chrome重放，形式production_released门禁缺少无关contract_comparison_diffs目录；未冒充门禁通过。生产下单事故WP34优先，随后收尾。"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP34",
+        "slug": "shipping-auth-recovery",
+        "name": "顺丰认证失败与原单安全恢复",
+        "scheduling_group": "异常恢复",
+        "acceptance_state": "历史发布；范围证据待对齐",
+        "remaining_acceptance": "认证失败未发单与发送后未知明确区分；原单安全恢复真实复验",
+        "acceptance_owner": "WP25",
+        "source_records": [
+          "suspended_tasks",
+          "parked_tasks",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:active_task"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP34",
+          "slug": "shipping-auth-recovery",
+          "name": "顺丰认证失败与原单安全恢复",
+          "status": "archived",
+          "reason": "已生产发布，交付证据保存在WP34独立codex-runtime；本次用户明确开始WP35。"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP35",
+        "slug": "sales-intake-experience",
+        "name": "销售寄件提报体验",
+        "scheduling_group": "寄件交互",
+        "acceptance_state": "历史候选；完整验收待对齐",
+        "remaining_acceptance": "销售资料预填、草稿保护及错误反馈；本票地址始终由销售确认",
+        "acceptance_owner": "WP94",
+        "source_records": [
+          "suspended_tasks",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:next",
+          "/Users/nsss/.codex/worktrees/prod-address-parser-hotfix/Price-v3:next"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP35",
+          "slug": "sales-intake-experience",
+          "name": "销售寄件提报体验",
+          "status": "active"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP36",
+        "slug": "workorder-review-expansion",
+        "name": "双栏三栏工单展开核对与详情闭环",
+        "scheduling_group": "寄件交互",
+        "acceptance_state": "代码通过；生产复验未完成",
+        "remaining_acceptance": "收起/展开独立、双/三栏可核对、出号卡片不横向滚动",
+        "acceptance_owner": "WP75",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP36",
+          "slug": "workorder-review-expansion",
+          "name": "双栏三栏工单展开核对与详情闭环",
+          "completed_at": "2026-10-22T07:51:00Z",
+          "evidence_commit": "20b05e778c8f3f6b90011222c6d1385a77b1134c",
+          "result": "达到code_green：工作台实现真实三栏/两栏/单列，移动端页面级滚动；卡片正文与展开按钮分离，未发单展开服务核对、已发单展开递送信息；正式参数改为轻量box的两列事项:信息并默认隐藏详细控件；选中出号工单自动刷新轨迹。目标5文件80测试、全量2862通过/5跳过、严格10/10、98页build通过；1440/1024/390真实浏览器无横向溢出，截图保存在wp36-workbench。Preview、Production和现有Chrome验收未完成。",
+          "evidence": "codex-runtime/wp36-workbench/"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP40",
+        "slug": "shipping-integration-settings",
+        "name": "寄件接入配置整理",
+        "scheduling_group": "配置可维护",
+        "acceptance_state": "历史候选；完整复验未完成",
+        "remaining_acceptance": "顺丰与企业接入字段清晰、无挤压，错误可定位、草稿保留",
+        "acceptance_owner": "WP80",
+        "source_records": [
+          "parked_tasks"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP40",
+          "slug": "shipping-integration-settings",
+          "name": "寄件接入配置整理",
+          "status": "awaiting_integration",
+          "reason": "配置页候选已验证；Production发布独立授权"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP41",
+        "slug": "wecom-bot-long-connection",
+        "name": "企微智能机器人长连接接入",
+        "scheduling_group": "企微入口",
+        "acceptance_state": "候选保留；链路未闭环",
+        "remaining_acceptance": "API机器人长连接接收、心跳、断线恢复；不把普通聊天回复当落库",
+        "acceptance_owner": "WP76",
+        "source_records": [
+          "current_queue.parked",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:parked",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP41",
+          "slug": "wecom-bot-long-connection",
+          "name": "企微智能机器人长连接接入",
+          "reason": "用户批准切换至F003权限模型；长连接候选保留，未宣称完成"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP42",
+        "slug": "shipping-configuration-persistence",
+        "name": "寄件基础配置持久化",
+        "scheduling_group": "配置可维护",
+        "acceptance_state": "历史发布；证据待对齐",
+        "remaining_acceptance": "保存、刷新及版本更新后配置一致；保留历史已验收证据",
+        "acceptance_owner": "WP80",
+        "source_records": [
+          "parked_tasks"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP42",
+          "slug": "shipping-configuration-persistence",
+          "name": "寄件基础配置持久化",
+          "status": "production_released",
+          "release_evidence": "worktree codex-runtime/checks/wp42/production-release.json"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP43",
+        "slug": "org-scoped-role-permissions",
+        "name": "组织级角色权限收紧与生效",
+        "scheduling_group": "原子权限",
+        "acceptance_state": "已发布范围有限；写入未验收",
+        "remaining_acceptance": "组织角色保存回读与访问一致，不能以只读页面证明授权持久化",
+        "acceptance_owner": "WP83",
+        "source_records": [
+          "current_queue.parked",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:parked",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP43",
+          "slug": "org-scoped-role-permissions",
+          "name": "组织级角色权限收紧与生效",
+          "reason": "用户批准切换WP46；发布WP43组织级角色权限修复及其必要发布证据适配；允许提交、推送、隔离Preview验证、精确SHA Production部署和现有Chrome只读复验。Production不做数据库迁移、不修改业务角色权限，不以只读复验声称生产持久化已验收。；权限语义仍由IN-20261021-021阻断，不以Production部署代替验收。"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP47",
+        "slug": "personnel-lifecycle-management",
+        "name": "人员生命周期与组织来源协调",
+        "scheduling_group": "人员生命周期",
+        "acceptance_state": "代码通过；生产未验收",
+        "remaining_acceptance": "邀请、调岗、离职、复职有审计；最后管理员保护",
+        "acceptance_owner": "WP73",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP47",
+          "slug": "personnel-lifecycle-management",
+          "name": "人员生命周期与组织来源协调",
+          "completed_at": "2026-10-21T21:53:27Z",
+          "evidence_commit": "3aff7dc3fb5ddc4861e2fa492841a4e4e9f3fe96",
+          "result": "达到code_green：待激活邀请与公开激活页、任职周期/审计、原子调岗/角色/账户/密码/汇报/离职/复职、最后管理员保护、来源1完整快照离职协调及离职/复职UI已实现。目标12文件99测试、全量2824通过/5跳过、lint/typecheck/98页build与严格10/10通过；隔离迁移、邮件发送、Preview和生产人员写入未验收。",
+          "evidence": "codex-runtime/wp47-personnel-lifecycle/"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP48",
+        "slug": "permission-catalog-lifecycle",
+        "name": "权限点目录生命周期与清晰授权层级",
+        "scheduling_group": "权限目录",
+        "acceptance_state": "代码通过；生产未验收",
+        "remaining_acceptance": "目录增改、发布、停用、恢复与已注册执行端一致",
+        "acceptance_owner": "WP74",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP48",
+          "slug": "permission-catalog-lifecycle",
+          "name": "权限点目录生命周期与清晰授权层级",
+          "completed_at": "2026-10-21T19:09:37Z",
+          "evidence_commit": "ec045b1e00cd9c12f920e0aa797143ba067d1acc",
+          "result": "达到code_green：单一版本化权限注册表、草稿到停用/软删除/恢复生命周期、执行消费者校验、平台目录管理 UI、清晰直接/组合/依赖/未接入授权语义和角色保存限制已实现。目标42测试、全量2809通过/5跳过、lint/typecheck/build与严格10/10通过；隔离迁移、平台管理员环境绑定、Preview和生产写入未验收。",
+          "evidence": "codex-runtime/wp48-permission-registry/"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP49",
+        "slug": "shipping-domain-authorization",
+        "name": "顺丰业务域身份与授权收敛",
+        "scheduling_group": "统一寄件许可",
+        "acceptance_state": "代码通过；生产未验收",
+        "remaining_acceptance": "寄件操作权限与本人可见范围均来自中央成员/角色模型",
+        "acceptance_owner": "WP93",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP49",
+          "slug": "shipping-domain-authorization",
+          "name": "顺丰业务域身份与授权收敛",
+          "completed_at": "2026-10-21T22:33:51Z",
+          "evidence_commit": "e3b81c54cc2c5222c2adac1ecb77de8361b3ca3e",
+          "result": "达到code_green：顺丰后台操作员统一来自中央 SHIPPING_OPERATOR 角色与 shipping:operate 权限，legacy直接授权迁移后删除第二来源；本人订单按tenant+owner查询，操作员台账/轨迹/动作继续走独立权限。目标3文件25测试、全量2826通过/5跳过、lint/typecheck/98页build与严格10/10通过；隔离迁移、Preview、真实顺丰写入与生产人员授权未验收。",
+          "evidence": "codex-runtime/wp49-shipping-authorization/"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP54",
+        "slug": "delivery-truth-and-production-acceptance",
+        "name": "逐项交付与生产验收",
+        "scheduling_group": "交付证据",
+        "acceptance_state": "未完成全量交付核验",
+        "remaining_acceptance": "逐WP保留已发布/待验收/未开发事实；不把队列登记算产品交付",
+        "acceptance_owner": "WP39",
+        "source_records": [
+          "/Users/nsss/.codex/worktrees/wp39-harness-repair/Price-v3:parked"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP54",
+          "slug": "delivery-truth-and-production-acceptance",
+          "name": "逐项交付与生产验收",
+          "reason": "企业查单优先，原工作保留"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP57",
+        "slug": "project-review-performance",
+        "name": "项目评审与高频路径性能修复",
+        "scheduling_group": "性能",
+        "acceptance_state": "代码通过；生产未验收",
+        "remaining_acceptance": "请求合并与缓存收益用真实耗时证明，撤权新请求仍立即拒绝",
+        "acceptance_owner": "WP77",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP57",
+          "slug": "project-review-performance",
+          "name": "项目评审与高频路径性能修复",
+          "completed_at": "2026-10-21T23:45:36Z",
+          "evidence_commit": "dfeb15727e462ed075248c1975096ecb6aecc254",
+          "result": "达到code_green：Sidebar寄件导航权限按token缓存并合并并发请求，换页不再重复读取寄件设置；中间件用户/成员与角色/组织设置分两批并行，将五段串行缩短为三段且保留即时撤权。全量2832通过/5跳过、lint/typecheck/98页build与严格10/10通过；Production Web Vitals和路由延迟未验收。",
+          "evidence": "codex-runtime/wp57-project-review/"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP58",
+        "slug": "membership-invitation-scope-completion",
+        "name": "成员邀请生命周期与角色作用域补全",
+        "scheduling_group": "人员生命周期",
+        "acceptance_state": "代码通过；生产未验收",
+        "remaining_acceptance": "邀请撤销、成员移除/恢复、默认组织与角色作用域一致",
+        "acceptance_owner": "WP73",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP58",
+          "slug": "membership-invitation-scope-completion",
+          "name": "成员邀请生命周期与角色作用域补全",
+          "completed_at": "2026-10-22T01:10:00Z",
+          "evidence_commit": "447cc74240669dcfb0c9473032041cf66a64e561",
+          "result": "达到code_green：邀请撤销与invited成员关系原子结束，新增独立租户成员移除、多组织默认关系切换、最后管理员/根管理员保护、组织聚合显式成员状态，以及部门/销售空间作用域展示与撤销。目标5文件18测试、全量2846通过/5跳过、lint/typecheck/98页build与严格10/10通过；隔离迁移、Preview、邮件投递、Production人员写入与现有Chrome验收未完成。",
+          "evidence": "codex-runtime/wp58-membership-removal/"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP59",
+        "slug": "external-org-source-priority",
+        "name": "外部组织来源优先级与唯一身份匹配",
+        "scheduling_group": "组织来源",
+        "acceptance_state": "代码通过；真实同步未验收",
+        "remaining_acceptance": "主来源写骨架，次来源只按唯一标识补缺；姓名不参与合并",
+        "acceptance_owner": "WP92",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP59",
+          "slug": "external-org-source-priority",
+          "name": "外部组织来源优先级与唯一身份匹配",
+          "completed_at": "2026-10-22T01:50:00Z",
+          "evidence_commit": "dfdddf75715e1c675425b79f5f997b820c446582",
+          "result": "达到code_green：来源1独占部门层级、主部门、任职和离职协调；来源2/3/4不再写组织骨架或创建成员，只按唯一工号/邮箱/手机补充缺失资料；同标识多人命中转conflict、零命中转unresolved、姓名不参与匹配，补充来源只需用户写权限。目标3文件27测试、全量2853通过/5跳过、lint/typecheck/98页build与严格10/10通过；真实飞书外呼、隔离迁移、Preview和Production未验收。",
+          "evidence": "codex-runtime/wp59-external-org-source/"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP60",
+        "slug": "middleware-hot-path-performance",
+        "name": "中间件高频路径负载与请求收敛",
+        "scheduling_group": "性能",
+        "acceptance_state": "代码通过；生产未验收",
+        "remaining_acceptance": "路由/中间件/配置读取性能在正式站满足500ms，而非仅包体缩小",
+        "acceptance_owner": "WP77",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP60",
+          "slug": "middleware-hot-path-performance",
+          "name": "中间件高频路径负载与请求收敛",
+          "completed_at": "2026-10-22T02:40:00Z",
+          "evidence_commit": "f5fdf0689313b39310de198037504661d6cb3988",
+          "result": "达到code_green：middleware改为原生PostgREST精确读取并移除完整Supabase客户端与权限目录，普通配置tab不再请求auth/me，寄件配置抽屉动态加载，tab悬停/聚焦后台预取不切换可见loading。middleware 203→146 kB、/configs first-load 273→210 kB；全量2858通过/5跳过、严格10/10和98页build通过；Preview与Production Web Vitals未验收。",
+          "evidence": "codex-runtime/wp60-middleware-performance/"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP61",
+        "slug": "permission-checkbox-semantics",
+        "name": "权限复选框显式授权与依赖解释",
+        "scheduling_group": "原子权限",
+        "acceptance_state": "旧方案被否决；待替换",
+        "remaining_acceptance": "取消未勾选却当前有效的派生授权；采用已批准扁平原子权限",
+        "acceptance_owner": "WP83",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP61",
+          "slug": "permission-checkbox-semantics",
+          "name": "权限复选框显式授权与依赖解释",
+          "completed_at": "2026-10-22T08:18:00Z",
+          "evidence_commit": "27b636b1b9870d0fc2f96bb5f808cd3789351601",
+          "result": "达到code_green：复选框改为精确显式授权，依赖/通配符派生访问以独立“当前有效”和来源解释；单项切换不再连带其他复选框，组全选与组清除保持明确批量语义。目标及受影响9文件72测试、全量2871通过/5跳过、严格10/10、lint/typecheck与98页build通过；Preview、Production、真实角色写入和现有Chrome验收未完成。",
+          "evidence": "codex-runtime/wp61-permission-checkbox/"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP62",
+        "slug": "organization-source-bindings",
+        "name": "组织来源绑定解绑换绑与提供方状态",
+        "scheduling_group": "组织来源",
+        "acceptance_state": "代码通过；真实换绑未验收",
+        "remaining_acceptance": "绑定/解绑/换绑持久化、能力状态真实、失败回滚",
+        "acceptance_owner": "WP92",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP62",
+          "slug": "organization-source-bindings",
+          "name": "组织来源绑定解绑换绑与提供方状态",
+          "completed_at": "2026-10-22T09:15:00Z",
+          "evidence_commit": "49296217fb298b5d6e744b2f309c9f803492c05d",
+          "result": "达到code_green：组织来源绑定、解绑、换绑、来源1权威、提供方能力状态和飞书持久化来源读取已实现；原子迁移函数支持失败回滚。全量391文件2889测试、严格10/10、typecheck/lint与99页build通过，并补充迁移版本唯一性门禁；隔离数据库尚未应用迁移，真实飞书/企微/钉钉、Preview和Production未验收。",
+          "evidence": "codex-runtime/wp62-organization-source-bindings/, codex-runtime/wp62-migration-closure/"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP63",
+        "slug": "strict-address-company-parser",
+        "name": "寄件文本省市区与公司简称严格解析",
+        "scheduling_group": "地址解析",
+        "acceptance_state": "历史发布；新增样本失败",
+        "remaining_acceptance": "姓名/手机/单位/行政区分离；村庄无数字门牌不能拦截",
+        "acceptance_owner": "WP95",
+        "source_records": [
+          "/Users/nsss/.codex/worktrees/prod-address-parser-hotfix/Price-v3:active_task",
+          "/Users/nsss/.codex/worktrees/prod-address-parser-hotfix/Price-v3:active",
+          "/Users/nsss/.codex/worktrees/shipping-workbench-release/Price-v3:active_task"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP63",
+          "slug": "strict-address-company-parser",
+          "name": "寄件文本省市区与公司简称严格解析",
+          "status": "active",
+          "reason": "WP62组织来源绑定已在49296217达到code_green；用户明确要求优先修复省市区与公司简称解析缺陷。"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP68",
+        "slug": "wp68-acceptance",
+        "name": "WP68",
+        "scheduling_group": "组织来源",
+        "acceptance_state": "已发布；真实操作未验收",
+        "remaining_acceptance": "不可用提供方不显示已接通；绑定/换绑保存回读及冲突队列可核对",
+        "acceptance_owner": "WP92",
+        "source_records": [
+          "IN-20261023-020"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP68",
+          "name": "WP68",
+          "source_input": "IN-20261023-020"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP69",
+        "slug": "wp69-acceptance",
+        "name": "WP69",
+        "scheduling_group": "性能",
+        "acceptance_state": "已发布；真实性能未验收",
+        "remaining_acceptance": "正式站冷启动与页签点击到可操作耗时均小于500ms",
+        "acceptance_owner": "WP77",
+        "source_records": [
+          "IN-20261023-030"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP69",
+          "name": "WP69",
+          "source_input": "IN-20261023-030"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP70",
+        "slug": "wp70-acceptance",
+        "name": "WP70",
+        "scheduling_group": "原子权限",
+        "acceptance_state": "已发布旧语义；待替换",
+        "remaining_acceptance": "显式勾选不连带；权限只有有/无，保存重开和后台执行一致",
+        "acceptance_owner": "WP83",
+        "source_records": [
+          "IN-20261023-032"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP70",
+          "name": "WP70",
+          "source_input": "IN-20261023-032"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP71",
+        "slug": "wp71-acceptance",
+        "name": "WP71",
+        "scheduling_group": "员工工单",
+        "acceptance_state": "已发布；真实修订未验收",
+        "remaining_acceptance": "退回原单修改、旧版本冲突、重新待核对和审计在生产验证",
+        "acceptance_owner": "WP78",
+        "source_records": [
+          "IN-20261023-040"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP71",
+          "name": "WP71",
+          "source_input": "IN-20261023-040"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP72",
+        "slug": "wp72-acceptance",
+        "name": "WP72",
+        "scheduling_group": "组织来源",
+        "acceptance_state": "已发布；真实同步未验收",
+        "remaining_acceptance": "唯一工号/邮箱等受信标识补缺，多命中提示冲突，绝不按姓名合并",
+        "acceptance_owner": "WP92",
+        "source_records": [
+          "IN-20261023-050"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP72",
+          "name": "WP72",
+          "source_input": "IN-20261023-050"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP81",
+        "slug": "organization-rebind-design",
+        "name": "组织换绑规则与原型",
+        "scheduling_group": "组织来源",
+        "acceptance_state": "原型已准备；连接器未验收",
+        "remaining_acceptance": "换绑字段、影响预览、旧来源保留、手工数据保护及失败回滚",
+        "acceptance_owner": "WP92",
+        "source_records": [
+          "suspended_wp81_20261026"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP81",
+          "slug": "organization-rebind-design",
+          "name": "组织换绑规则与原型",
+          "status": "active",
+          "reason": "按用户批准顺序；WP80候选通过67目标测试与typecheck、build，未发布。"
+        },
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      }
+    ],
+    "completed": [
+      {
+        "id": "WP00",
+        "slug": "goal-baseline-consolidation",
+        "name": "编号与目标基线已固化",
+        "scheduling_group": "历史治理",
+        "acceptance_state": "已交付限定范围",
+        "remaining_acceptance": "编号与目标基线已固化；不代表产品完成",
+        "acceptance_owner": "WP00",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP00",
+          "slug": "goal-baseline-consolidation",
+          "completed_at": "2026-07-20T17:58:48+08:00",
+          "evidence_commit": "18dad230bbc12a6cf664e5868cc25d57bbb65fd3",
+          "result": "唯一目标命名空间、调度、Harness 与候选真相快照已固化"
+        }
+      },
+      {
+        "id": "WP21",
+        "slug": "existing-waybill-production-tracking",
+        "name": "仅四票已知运单生产查询已验收",
+        "scheduling_group": "历史已验收",
+        "acceptance_state": "已交付限定范围",
+        "remaining_acceptance": "仅四票已知运单生产查询已验收；未知企业来件属于WP55",
+        "acceptance_owner": "WP21",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP21",
+          "slug": "existing-waybill-production-tracking",
+          "result": "仅编号01查件范围：四票真实顺丰运单生产查询与官网对照，错误尾号拒绝、未登录401、长轨迹可读。其余九项未完成，已知上游连接超时限制保留。",
+          "evidence": "codex-runtime/wp21-production-samples.json"
+        }
+      },
+      {
+        "id": "WP45",
+        "slug": "tenant-identity-access-assessment",
+        "name": "多租户身份权限与人员架构体检",
+        "scheduling_group": "历史治理",
+        "acceptance_state": "已交付限定范围",
+        "remaining_acceptance": "身份权限架构评估和D01-D21决定已交付；不代表后续实现完成",
+        "acceptance_owner": "WP45",
+        "source_records": [
+          "current_queue.completed",
+          "/Users/nsss/.codex/worktrees/delivery-p0-performance/Price-v3:completed",
+          "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:completed"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "historical_record": {
+          "id": "WP45",
+          "slug": "tenant-identity-access-assessment",
+          "name": "多租户身份权限与人员架构体检",
+          "completed_at": "2026-10-21T14:25:27Z",
+          "result": "完成身份、成员、外部组织优先级、权限控制面、资源隔离、人员生命周期、顺丰边界和WP46-WP49验收合同；决策清单D01-D21获用户批准。",
+          "evidence": "codex-runtime/wp45-tenant-identity-access-assessment/"
+        }
+      },
+      {
+        "id": "WP91",
+        "slug": "fxiaoke-connection-preview",
+        "name": "纷享应用配置与通讯录预览",
+        "acceptance_state": "production_released",
+        "result": "保存200、刷新回读、真实只读预览73部门404员工；只关闭连接配置与预览范围。组织同步、主来源、SSO和寄件授权仍未交付。",
+        "evidence": "27b53ea6的refs/notes/price-v3-delivery；codex-runtime/wp91-domain-verifier/closed-delivery-evidence.json"
       }
     ],
     "release_blockers": [
@@ -410,431 +2349,6 @@
       "顺丰控制台观察到下单接口待上线、月结管理绑定失败及免面单申请驳回。这些是不同接入环节，不能仅据管理认证页面推导普通月结寄件必须财务负责人审批。先核实所选API的上线条件和月结使用范围，保留适用的官方规则/真实响应；取消能力仍需独立验证，不以模拟结果或查询成功外推。不得绕过供应商真实授权或自动新增云打印方案。",
       "仍需用户现有Chrome在https://sales.cyanlog.icu对精确发布版本完成实际下单、未揽收取消及轨迹验收；机器部署/域名和只读HTTP证据不能代替该浏览器验收。",
       "Production没有托管备份/PITR；如后续需再执行DDL或不可逆数据操作，先另行确认可恢复备份。"
-    ],
-    "parked": [
-      {
-        "id": "WP43",
-        "slug": "org-scoped-role-permissions",
-        "name": "组织级角色权限收紧与生效",
-        "reason": "用户批准切换WP46；发布WP43组织级角色权限修复及其必要发布证据适配；允许提交、推送、隔离Preview验证、精确SHA Production部署和现有Chrome只读复验。Production不做数据库迁移、不修改业务角色权限，不以只读复验声称生产持久化已验收。；权限语义仍由IN-20261021-021阻断，不以Production部署代替验收。"
-      },
-      {
-        "id": "WP11",
-        "slug": "shipping-collaboration",
-        "reason": "既有匿名提报、台账、顺丰沙盒与安全存储作为WP12复用基线；旧双栏/Tab产品形态由新确认方案取代"
-      },
-      {
-        "id": "WP09",
-        "slug": "release-acceptance",
-        "reason": "用户主线已切换至报价域 WP10（IN-20260820-001 激活）；WP09 的保存成功路径与 P0 RLS 发布门禁未完成，保留追溯，不视为 completed"
-      },
-      {
-        "id": "WP06",
-        "slug": "document-compare",
-        "reason": "免费 Preview 候选已完成并清理；状态仅为 completed_preview_candidate，Production 验收仍归 WP09"
-      },
-      {
-        "id": "LEGACY-P0-ONLINE-SYNC-RULE-COLLECTION-RESET",
-        "reason": "原任务把发布同步、规则产品和平台 AI 纠偏混成一个 Active；已拆分为 WP01、WP03、WP09，仅保留追溯"
-      },
-      {
-        "id": "DECISION-ONLINE-OFFICE-PARKED",
-        "reason": "CSPP/WPS/OnlyOffice 与在线协同不属于当前批注目标，保留调研记录但不开发"
-      },
-      {
-        "id": "F002-LEGACY-ACTIVE",
-        "reason": "旧 active-task 状态已过期，保留追溯但不执行"
-      },
-      {
-        "id": "WP18",
-        "slug": "shipping-production-release-and-acceptance",
-        "reason": "已有配置和前台修复保留；顺丰真实API连接/下单/轨迹未验收，企微批次不冒充其完成。"
-      },
-      {
-        "id": "WP23",
-        "slug": "confirmed-monthly-dispatch",
-        "reason": "切换至WP25修复当前两票生命周期缺陷，已有下单到PDF实现保留，WP23未宣称生产验收完成",
-        "name": "平台下单流程与原单恢复"
-      },
-      {
-        "id": "WP25",
-        "slug": "unknown-dispatch-reconciliation",
-        "name": "下单结果未知的查回恢复",
-        "reason": "IN-20261014-001明确优先本人订单入口；WP25本地候选保留且未发布，不以旧单查明为下一批前置"
-      },
-      {
-        "id": "WP26",
-        "slug": "employee-workorder-continuity",
-        "reason": "代码候选已通过门禁，生产发布和现有Chrome验收尚未完成；顺序开发WP29，不冒充交付完成"
-      },
-      {
-        "id": "WP29",
-        "slug": "shipment-cancellation-continuity",
-        "reason": "本地候选保留，外部取消状态文档及真实验证待续接；未上线"
-      },
-      {
-        "id": "WP31",
-        "slug": "bulk-review-selection",
-        "reason": "本地候选eca8056a保留，尚未发布；用户明确开始推送接收下一步"
-      },
-      {
-        "id": "WP33",
-        "slug": "shipping-configuration-usability",
-        "name": "寄件配置与操作反馈",
-        "reason": "生产界面已实际发布并在用户Chrome重放，形式production_released门禁缺少无关contract_comparison_diffs目录；未冒充门禁通过。生产下单事故WP34优先，随后收尾。"
-      },
-      {
-        "id": "WP19",
-        "slug": "wecom-authorized-shipping-intake",
-        "name": "企微企业接入与员工提报校验",
-        "reason": "用户批准WP39先修Harness；已发布候选与本地UI微修复保留，未把历史门禁声明为完成",
-        "execution_workspace": "/Users/nsss/.codex/worktrees/wp35-sales-intake/Price-v3"
-      },
-      {
-        "id": "WP41",
-        "slug": "wecom-bot-long-connection",
-        "name": "企微智能机器人长连接接入",
-        "reason": "用户批准切换至F003权限模型；长连接候选保留，未宣称完成",
-        "execution_workspace": "/Users/nsss/.codex/worktrees/wp39-harness-repair/Price-v3"
-      },
-      {
-        "id": "WP84",
-        "slug": "parameter-draft-release-isolation",
-        "name": "参数草稿与生效版本隔离",
-        "status": "approved_pending_execution",
-        "feature_id": "F042",
-        "approval": "IN-20261026-030",
-        "depends_on": [],
-        "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。",
-        "entry_gate": "已发布参数编辑风险及引用关系复现",
-        "contract": "product-truth/delivery-prototypes/config-permission-plan-review.md"
-      },
-      {
-        "id": "WP85",
-        "slug": "business-parameter-catalog",
-        "name": "业务参数中文目录与数据治理",
-        "status": "approved_pending_execution",
-        "feature_id": "F042",
-        "approval": "IN-20261026-030",
-        "depends_on": [],
-        "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。",
-        "entry_gate": "数据来源、引用清单及列表原型明确",
-        "contract": "product-truth/delivery-prototypes/config-permission-plan-review.md"
-      },
-      {
-        "id": "WP86",
-        "slug": "maintenance-rate-schema-form",
-        "name": "维保费率Schema表单",
-        "status": "approved_pending_execution",
-        "feature_id": "F042",
-        "approval": "IN-20261026-030",
-        "depends_on": [
-          "WP84",
-          "WP85"
-        ],
-        "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。",
-        "entry_gate": "百分比存储与消费口径核实",
-        "contract": "product-truth/delivery-prototypes/config-permission-plan-review.md"
-      },
-      {
-        "id": "WP87",
-        "slug": "discount-tier-schema-form",
-        "name": "折扣档位Schema表单",
-        "status": "approved_pending_execution",
-        "feature_id": "F042",
-        "approval": "IN-20261026-030",
-        "depends_on": [
-          "WP86"
-        ],
-        "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。",
-        "entry_gate": "折扣减免与支付比例语义明确",
-        "contract": "product-truth/delivery-prototypes/config-permission-plan-review.md"
-      },
-      {
-        "id": "WP88",
-        "slug": "price-template-validation-preview",
-        "name": "中文价盘模板与校验预览",
-        "status": "approved_pending_execution",
-        "feature_id": "F038",
-        "approval": "IN-20261026-030",
-        "depends_on": [],
-        "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。",
-        "entry_gate": "模板版本、业务字段单位及规则明确",
-        "contract": "product-truth/delivery-prototypes/config-permission-plan-review.md"
-      },
-      {
-        "id": "WP89",
-        "slug": "price-import-confirmed-draft",
-        "name": "预览确认与幂等草稿导入",
-        "status": "approved_pending_execution",
-        "feature_id": "F038",
-        "approval": "IN-20261026-030",
-        "depends_on": [
-          "WP88"
-        ],
-        "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。",
-        "entry_gate": "预览绑定摘要、组织、版本与确认人",
-        "contract": "product-truth/delivery-prototypes/config-permission-plan-review.md"
-      },
-      {
-        "id": "WP90",
-        "slug": "price-release-quote-verification",
-        "name": "价盘发布与报价消费验收",
-        "status": "approved_pending_execution",
-        "feature_id": "F038",
-        "approval": "IN-20261026-030",
-        "depends_on": [
-          "WP84",
-          "WP89"
-        ],
-        "reason": "用户批准先登记目标；保持原执行顺序，待前置核查及激活。",
-        "entry_gate": "价盘适用性确认：若WP84共享机制不足，激活前拆分，不混成大批次",
-        "contract": "product-truth/delivery-prototypes/config-permission-plan-review.md"
-      },
-      {
-        "id": "WP77",
-        "slug": "navigation-performance",
-        "name": "导航性能真实读取复验",
-        "reason": "按用户对WP83–WP90方案的执行指令暂缓；全部已有修改保留，生产性能未验收，不标完成。"
-      },
-      {
-        "id": "WP83",
-        "name": "原子权限勾选与实际访问一致",
-        "slug": "atomic-permission-consistency",
-        "reason": "权限code_green候选保留；接续用户要求的机器人真实链路。",
-        "execution_workspace": "/Users/nsss/.codex/worktrees/wp83-permission-candidate/Price-v3"
-      },
-      {
-        "id": "WP76",
-        "slug": "wecom-private-shipping-intake",
-        "name": "单聊寄件提报与本人回执",
-        "reason": "用户批准建立统一组织接入目标并启动；已发布候选和真实单聊证据保留，正式顺丰验收仍未完成。"
-      }
-    ],
-    "completed": [
-      {
-        "id": "WP62",
-        "slug": "organization-source-bindings",
-        "name": "组织来源绑定解绑换绑与提供方状态",
-        "completed_at": "2026-10-22T09:15:00Z",
-        "evidence_commit": "49296217fb298b5d6e744b2f309c9f803492c05d",
-        "result": "达到code_green：组织来源绑定、解绑、换绑、来源1权威、提供方能力状态和飞书持久化来源读取已实现；原子迁移函数支持失败回滚。全量391文件2889测试、严格10/10、typecheck/lint与99页build通过，并补充迁移版本唯一性门禁；隔离数据库尚未应用迁移，真实飞书/企微/钉钉、Preview和Production未验收。",
-        "evidence": "codex-runtime/wp62-organization-source-bindings/, codex-runtime/wp62-migration-closure/"
-      },
-      {
-        "id": "WP27",
-        "slug": "scheduled-tracking-refresh",
-        "name": "轨迹半小时更新与异常通知",
-        "completed_at": "2026-10-22T08:40:00Z",
-        "evidence_commit": "395c659b8829d5beada9c138ea8649a2050b7ec4",
-        "result": "达到code_green：活跃运单以30分钟updated_at租约领取，并发实例不重复查询；终态运单与订单收敛；单票失败保留旧轨迹，操作员异常提醒24小时去重且写入失败独立计数。受影响11文件136测试、全量2879通过/5跳过、严格10/10、lint/typecheck与98页build通过；Vercel套餐兼容、真实cron/顺丰批量、Preview与Production未验收。",
-        "evidence": "codex-runtime/wp27-tracking-refresh/"
-      },
-      {
-        "id": "WP61",
-        "slug": "permission-checkbox-semantics",
-        "name": "权限复选框显式授权与依赖解释",
-        "completed_at": "2026-10-22T08:18:00Z",
-        "evidence_commit": "27b636b1b9870d0fc2f96bb5f808cd3789351601",
-        "result": "达到code_green：复选框改为精确显式授权，依赖/通配符派生访问以独立“当前有效”和来源解释；单项切换不再连带其他复选框，组全选与组清除保持明确批量语义。目标及受影响9文件72测试、全量2871通过/5跳过、严格10/10、lint/typecheck与98页build通过；Preview、Production、真实角色写入和现有Chrome验收未完成。",
-        "evidence": "codex-runtime/wp61-permission-checkbox/"
-      },
-      {
-        "id": "WP36",
-        "slug": "workorder-review-expansion",
-        "name": "双栏三栏工单展开核对与详情闭环",
-        "completed_at": "2026-10-22T07:51:00Z",
-        "evidence_commit": "20b05e778c8f3f6b90011222c6d1385a77b1134c",
-        "result": "达到code_green：工作台实现真实三栏/两栏/单列，移动端页面级滚动；卡片正文与展开按钮分离，未发单展开服务核对、已发单展开递送信息；正式参数改为轻量box的两列事项:信息并默认隐藏详细控件；选中出号工单自动刷新轨迹。目标5文件80测试、全量2862通过/5跳过、严格10/10、98页build通过；1440/1024/390真实浏览器无横向溢出，截图保存在wp36-workbench。Preview、Production和现有Chrome验收未完成。",
-        "evidence": "codex-runtime/wp36-workbench/"
-      },
-      {
-        "id": "WP60",
-        "slug": "middleware-hot-path-performance",
-        "name": "中间件高频路径负载与请求收敛",
-        "completed_at": "2026-10-22T02:40:00Z",
-        "evidence_commit": "f5fdf0689313b39310de198037504661d6cb3988",
-        "result": "达到code_green：middleware改为原生PostgREST精确读取并移除完整Supabase客户端与权限目录，普通配置tab不再请求auth/me，寄件配置抽屉动态加载，tab悬停/聚焦后台预取不切换可见loading。middleware 203→146 kB、/configs first-load 273→210 kB；全量2858通过/5跳过、严格10/10和98页build通过；Preview与Production Web Vitals未验收。",
-        "evidence": "codex-runtime/wp60-middleware-performance/"
-      },
-      {
-        "id": "WP59",
-        "slug": "external-org-source-priority",
-        "name": "外部组织来源优先级与唯一身份匹配",
-        "completed_at": "2026-10-22T01:50:00Z",
-        "evidence_commit": "dfdddf75715e1c675425b79f5f997b820c446582",
-        "result": "达到code_green：来源1独占部门层级、主部门、任职和离职协调；来源2/3/4不再写组织骨架或创建成员，只按唯一工号/邮箱/手机补充缺失资料；同标识多人命中转conflict、零命中转unresolved、姓名不参与匹配，补充来源只需用户写权限。目标3文件27测试、全量2853通过/5跳过、lint/typecheck/98页build与严格10/10通过；真实飞书外呼、隔离迁移、Preview和Production未验收。",
-        "evidence": "codex-runtime/wp59-external-org-source/"
-      },
-      {
-        "id": "WP58",
-        "slug": "membership-invitation-scope-completion",
-        "name": "成员邀请生命周期与角色作用域补全",
-        "completed_at": "2026-10-22T01:10:00Z",
-        "evidence_commit": "447cc74240669dcfb0c9473032041cf66a64e561",
-        "result": "达到code_green：邀请撤销与invited成员关系原子结束，新增独立租户成员移除、多组织默认关系切换、最后管理员/根管理员保护、组织聚合显式成员状态，以及部门/销售空间作用域展示与撤销。目标5文件18测试、全量2846通过/5跳过、lint/typecheck/98页build与严格10/10通过；隔离迁移、Preview、邮件投递、Production人员写入与现有Chrome验收未完成。",
-        "evidence": "codex-runtime/wp58-membership-removal/"
-      },
-      {
-        "id": "WP57",
-        "slug": "project-review-performance",
-        "name": "项目评审与高频路径性能修复",
-        "completed_at": "2026-10-21T23:45:36Z",
-        "evidence_commit": "dfeb15727e462ed075248c1975096ecb6aecc254",
-        "result": "达到code_green：Sidebar寄件导航权限按token缓存并合并并发请求，换页不再重复读取寄件设置；中间件用户/成员与角色/组织设置分两批并行，将五段串行缩短为三段且保留即时撤权。全量2832通过/5跳过、lint/typecheck/98页build与严格10/10通过；Production Web Vitals和路由延迟未验收。",
-        "evidence": "codex-runtime/wp57-project-review/"
-      },
-      {
-        "id": "WP30",
-        "slug": "submitted-shipment-amendment",
-        "name": "未出号原工单修改",
-        "completed_at": "2026-10-21T23:17:46Z",
-        "evidence_commit": "159b9ffeb04f81eade7e6e3a21c89ba31f9ab0de",
-        "result": "达到code_green：仅待核对/已退回且无运单的工单可版本化修改；每次保存 revision+1、保留created_by/身份快照、写入before/after审计并重新待核对，不自动下单。目标3文件59测试、全量2831通过/5跳过、lint/typecheck/98页build与严格10/10通过；隔离迁移、Preview和Production未验收。",
-        "evidence": "codex-runtime/wp30-shipping-amendment/"
-      },
-      {
-        "id": "WP49",
-        "slug": "shipping-domain-authorization",
-        "name": "顺丰业务域身份与授权收敛",
-        "completed_at": "2026-10-21T22:33:51Z",
-        "evidence_commit": "e3b81c54cc2c5222c2adac1ecb77de8361b3ca3e",
-        "result": "达到code_green：顺丰后台操作员统一来自中央 SHIPPING_OPERATOR 角色与 shipping:operate 权限，legacy直接授权迁移后删除第二来源；本人订单按tenant+owner查询，操作员台账/轨迹/动作继续走独立权限。目标3文件25测试、全量2826通过/5跳过、lint/typecheck/98页build与严格10/10通过；隔离迁移、Preview、真实顺丰写入与生产人员授权未验收。",
-        "evidence": "codex-runtime/wp49-shipping-authorization/"
-      },
-      {
-        "id": "WP47",
-        "slug": "personnel-lifecycle-management",
-        "name": "人员生命周期与组织来源协调",
-        "completed_at": "2026-10-21T21:53:27Z",
-        "evidence_commit": "3aff7dc3fb5ddc4861e2fa492841a4e4e9f3fe96",
-        "result": "达到code_green：待激活邀请与公开激活页、任职周期/审计、原子调岗/角色/账户/密码/汇报/离职/复职、最后管理员保护、来源1完整快照离职协调及离职/复职UI已实现。目标12文件99测试、全量2824通过/5跳过、lint/typecheck/98页build与严格10/10通过；隔离迁移、邮件发送、Preview和生产人员写入未验收。",
-        "evidence": "codex-runtime/wp47-personnel-lifecycle/"
-      },
-      {
-        "id": "WP48",
-        "slug": "permission-catalog-lifecycle",
-        "name": "权限点目录生命周期与清晰授权层级",
-        "completed_at": "2026-10-21T19:09:37Z",
-        "evidence_commit": "ec045b1e00cd9c12f920e0aa797143ba067d1acc",
-        "result": "达到code_green：单一版本化权限注册表、草稿到停用/软删除/恢复生命周期、执行消费者校验、平台目录管理 UI、清晰直接/组合/依赖/未接入授权语义和角色保存限制已实现。目标42测试、全量2809通过/5跳过、lint/typecheck/build与严格10/10通过；隔离迁移、平台管理员环境绑定、Preview和生产写入未验收。",
-        "evidence": "codex-runtime/wp48-permission-registry/"
-      },
-      {
-        "id": "WP46",
-        "slug": "tenant-membership-isolation-foundation",
-        "name": "租户成员与强制数据隔离基座",
-        "completed_at": "2026-10-21T17:44:14Z",
-        "evidence_commit": "8ece0a3283a57cf7de20b6089510d7a967cf07c6",
-        "result": "达到code_green：唯一有效租户/成员解析、外部组织来源优先级、人员写路径实时成员上下文、跨租户组合约束与知识内容租户隔离已实现。目标24文件191测试、全量2788通过/5跳过、lint/typecheck/build与严格提交10/10通过；隔离数据库迁移和Preview仍未验收。",
-        "evidence": "codex-runtime/wp46-tenant-membership/"
-      },
-      {
-        "id": "WP45",
-        "slug": "tenant-identity-access-assessment",
-        "name": "多租户身份权限与人员架构体检",
-        "completed_at": "2026-10-21T14:25:27Z",
-        "result": "完成身份、成员、外部组织优先级、权限控制面、资源隔离、人员生命周期、顺丰边界和WP46-WP49验收合同；决策清单D01-D21获用户批准。",
-        "evidence": "codex-runtime/wp45-tenant-identity-access-assessment/"
-      },
-      {
-        "id": "WP22",
-        "slug": "reusable-sender-intake",
-        "result": "仅编号02：寄方复用、共享解析、客户字段与记录布局已生产验收，测试工单提报至待审核并退回，无运单；其余目标仍未完成",
-        "evidence": "codex-runtime/wp22-production-intake.json"
-      },
-      {
-        "id": "WP21",
-        "slug": "existing-waybill-production-tracking",
-        "result": "仅编号01查件范围：四票真实顺丰运单生产查询与官网对照，错误尾号拒绝、未登录401、长轨迹可读。其余九项未完成，已知上游连接超时限制保留。",
-        "evidence": "codex-runtime/wp21-production-samples.json"
-      },
-      {
-        "id": "WP17",
-        "slug": "shipping-production-readiness",
-        "completed_at": "2026-09-23T09:34:46.080Z",
-        "evidence_commit": "0282568d742cb07985591aad093157bc26c3cb96",
-        "result": "Production环境变量清单、迁移/RLS/密钥部署指引、回滚步骤与用户指定真实寄件验收方案已交付；目标114测试、全量2039通过/5跳过、lint/typecheck/build通过；delivery-check code_green及Harness完成审计通过。只读Production审计随后确认新迁移和连接配置表缺失；未做数据库或平台写入。"
-      },
-      {
-        "id": "WP16",
-        "slug": "shipping-dynamic-order-consumption",
-        "completed_at": "2026-09-23T08:48:03.496Z",
-        "evidence_commit": "6b736e6551833b2332523c36266ef86ad49d1fe1",
-        "result": "运行时SF固定环境变量依赖已从应用代码和示例环境中移除；批量/确认下单读取组织级有效连接、月结账号、授权服务和默认寄件人；销售提报使用标准/加急偏好；查询、取消、轨迹基于订单连接/账号快照。目标91测试、全量2039通过/5跳过、lint/typecheck/build及10项提交门禁通过，delivery-check code_green通过。迁移未应用本地数据库，无供应商实连。"
-      },
-      {
-        "id": "WP15",
-        "slug": "shipping-carrier-configuration",
-        "completed_at": "2026-09-23T08:12:23.217Z",
-        "evidence_commit": "d68b28d07f5726b61ca0a3ddcfdc01ee8b7c33da",
-        "result": "配置抽屉、服务端AES-256-GCM凭据、组织级管理权限、多月结账号脱敏/默认/停用、默认寄件人保存和顺丰沙盒只读探测代码达到code_green；目标测试25项、全量2034项通过/5跳过，lint、typecheck、build与提交钩子均通过。因本机无Docker/PostgreSQL，迁移未应用，真实沙盒连接未执行；无生产写入。"
-      },
-      {
-        "id": "WP14",
-        "slug": "shipping-provider-closure",
-        "completed_at": "2026-09-23T07:45:13.667Z",
-        "evidence_commit": "32a2c4faf545a5ed8f3df799009cc2911a2fb364",
-        "result": "delivery-check code_green在当前精确SHA上通过，含目标测试、全量测试、lint、typecheck、build证据；未push或部署Production。"
-      },
-      {
-        "id": "WP13",
-        "slug": "batch-shipping-execution",
-        "completed_at": "2026-09-23T04:05:48+00:00",
-        "evidence_commit": "b7194f859b6f9e3cb2bea8435c8b6b47e2bfba62",
-        "result": "CSV/XLSX/文本解析、逐行纠错、统一参数、稳定幂等批次执行和部分失败恢复达到code_green；Production未更新"
-      },
-      {
-        "id": "WP12",
-        "slug": "self-service-shipping-workbench",
-        "completed_at": "2026-09-23T03:58:42+00:00",
-        "evidence_commit": "7fb4f2d4e3dabaefd1b9f871c09f70f1a4fed15b",
-        "result": "单一自助收寄导航、登录操作员三栏同屏、独立销售提报页、客户/收件人/城市待办摘要、特殊需求和无打印范围达到code_green；Production未更新"
-      },
-      {
-        "id": "WP00",
-        "slug": "goal-baseline-consolidation",
-        "completed_at": "2026-07-20T17:58:48+08:00",
-        "evidence_commit": "18dad230bbc12a6cf664e5868cc25d57bbb65fd3",
-        "result": "唯一目标命名空间、调度、Harness 与候选真相快照已固化"
-      },
-      {
-        "id": "WP01",
-        "slug": "ai-platform-foundation",
-        "completed_at": "2026-07-20T20:59:57+08:00",
-        "evidence_commit": "4269840fbc798eb9a92faee44d6e467a250033b4",
-        "result": "六对象 AI 平台控制面、Provider 安全、五任务 UI、Preview 创建/修订/发布/回滚/清理和桌面/iPad 验收完成；Production 未写入或部署"
-      },
-      {
-        "id": "WP02",
-        "slug": "ai-runtime-truth",
-        "completed_at": "2026-07-21T12:05:00+08:00",
-        "evidence_commit": "c25ec17a8e51ec6476432ccccf9c30ee0dd9553b",
-        "result": "五个注册业务用点均由发布路由执行并有当前真实证据；本地 Gemma、云端模型、顺序降级、token、model_invocations、不可漂移计划、真实合同 ReviewRun 与桌面/iPad 验收完成；规则编译和独立准确率明确转交 WP03/WP05，Production 未写入或部署"
-      },
-      {
-        "id": "WP03",
-        "slug": "rule-collection",
-        "completed_at": "2026-07-21T18:31:22+08:00",
-        "evidence_commit": "ebdb3c59f0205f1ed20b8a2bf4c2a67e5a29f4b5",
-        "result": "业务人员可从空白建立规则集、问题分类、具体规则、业务属性、判定和处理，完成五路径测试与发布；真实 DOCX 经真实 Provider 形成可追溯 ReviewRun、token、规则快照和风险证据；桌面/iPad 与全量工程门禁通过，独立金标准确率仍明确阻断"
-      },
-      {
-        "id": "WP05",
-        "slug": "multiformat-review-cycle",
-        "completed_scope": "interaction_correction",
-        "completed_at": "2026-07-21T19:27:00+08:00",
-        "evidence_commit": "12b977fa",
-        "result": "默认审查入口、URL 页签状态、长 DOCX 单一滚动轴、source_range 确定性定位、重复/跨段证据失败关闭以及文本/扫描 PDF 人工定位边界通过；准确率、版本迁移和循环复审仍未完成"
-      },
-      {
-        "id": "WP04",
-        "slug": "contract-center-ia",
-        "completed_at": "2026-07-22T01:23:24+08:00",
-        "evidence_commit": "a987f85d5701a38a13a245e0ebc5484cadecb3ab",
-        "preview_deployment": "dpl_2P11eFtwxutsQXMUoU8R46XdDGUx",
-        "result": "四类合同任务、源文件身份与上传编排候选已固化；同一隔离 Preview 的真实合同列表入口默认进入审查，桌面/iPad 选中第 45 页风险后只滚动 DOCX 内部正文，window 不移动；临时风险和认证 token 已精确清理，Production 未写入或部署"
-      }
     ]
   },
   "verification": {
@@ -3142,15 +4656,16 @@
     ]
   },
   "approved_goal_registration": {
-    "source": "IN-20261026-030",
-    "status": "registered_pending_execution",
-    "scope": "目标登记，不切换Active，不开放产品代码或生产写入",
+    "source": "IN-20261028-010",
+    "status": "approved_goal_registration_only",
+    "scope": "全队列统一调度与目标文件；本轮不开发、部署或业务验收，未改变现有生产写入边界",
     "paths": [
+      "governance/runtime-state/active-task.json",
+      "governance/runtime-state/demand-inbox.jsonl",
       "product-truth/REQ_REGISTRY.yml",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "product-truth/feature-packets/F003-account-auth.md",
-      "product-truth/feature-packets/F042-business-params.md",
-      "product-truth/feature-packets/F038-price-matrix.md"
+      "product-truth/feature-packets/F054-sf-self-service-order.md",
+      "product-truth/feature-packets/F003-account-auth.md"
     ]
   },
   "suspended_wp77_20261027": {
@@ -3264,5 +4779,33 @@
     "started_at": "2026-10-27T02:16:27.830593+00:00",
     "micro_fixes": [],
     "reason": "复用旧WP76代码，所有旧工作区保留。"
+  },
+  "queue_reconciliation": {
+    "source": "IN-20261028-010",
+    "version": "2026-10-28.2",
+    "objective": "销售只提交一次真实收件信息，系统正确生成归属本人的待确认工单；授权人员核对并确认后，顺丰只下单一次，真实运单号回到原销售及原CRM业务记录。全部入口共享组织身份、权限、寄件校验及订单状态；错误可定位、原单可恢复、数据不串人不串企业。正式站未跑通的功能不得标记交付。",
+    "inventory_count": 95,
+    "scope": "当前队列、20个本地工作树队列、暂停快照、Inbox及F099；历史仅保留，其他工作树未修改",
+    "implementation_started": false,
+    "execution_before_goal_feedback": false,
+    "active_unchanged": "WP91",
+    "next": "WP95",
+    "evidence_policy": "历史completed_at/result只保留在historical_record；代码和Preview不等于生产验收；同一工作包只在一个调度槽位出现",
+    "legacy_non_wp_records": [
+      {
+        "id": "LEGACY-P0-ONLINE-SYNC-RULE-COLLECTION-RESET",
+        "reason": "原任务把发布同步、规则产品和平台 AI 纠偏混成一个 Active；已拆分为 WP01、WP03、WP09，仅保留追溯"
+      },
+      {
+        "id": "DECISION-ONLINE-OFFICE-PARKED",
+        "reason": "CSPP/WPS/OnlyOffice 与在线协同不属于当前批注目标，保留调研记录但不开发"
+      },
+      {
+        "id": "F002-LEGACY-ACTIVE",
+        "reason": "旧 active-task 状态已过期，保留追溯但不执行"
+      }
+    ],
+    "open_delivery_evidence_issue": "IN-20261028-011",
+    "complete_source_index": "codex-runtime/goal-consolidation-20261028/inventory-before.json"
   }
 }

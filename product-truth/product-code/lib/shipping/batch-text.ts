@@ -1,4 +1,5 @@
 import { parseAddress } from './address'
+import { addressDetailError } from './address-detail'
 import { DOMESTIC_SHIPPING_PHONE_PATTERN, normalizeDomesticShippingPhone, recipientPhoneError } from './phone'
 import type { BatchDraftRow } from './import-parser'
 import type { Contact } from './types'
@@ -14,10 +15,15 @@ const provinceStart = /北京市?|上海市?|天津市?|重庆市?|内蒙古自�
 // editable; extracting a domestic-looking suffix would silently change the destination contact.
 const phoneCandidates = /(?<![\d+])(?:(?:\+|00)\d(?:[\d ()（）-]*\d)?|(?:86[ -]?)?(?:1\d{2}[ -]\d{4}[ -]\d{4}|0\d{2,3}[- ]\d{7,8}(?:[- ]\d{1,6})?|\d{7,20}))(?!\d)/g
 const mobilePhone = /^1[3-9]\d{9}$/
-const namedPhone = new RegExp(`(?:^|[\\s，,；;：:])([\\p{L}·][\\p{L}·.'-]{0,59})\\s*(?=${phoneCandidates.source})`, 'gu')
+const namedPhone = new RegExp(`(?:^|[\\s，,、；;：:])([\\p{L}·][\\p{L}·.'-]{0,59})[\\s，,、]*(?=${phoneCandidates.source})`, 'gu')
 const recordMarker = /^\s*(?:\d{1,3}[、.．)]|[-*])\s*/
+const organizationHeading = /(?:公司|集团|单位|中心|大学|医院|银行|科技|实业|工作室|办公室|办事处|部队)$/u
 
-function clean(value: string) { return value.replace(/[，,；;。/／\t]/g, ' ').replace(/\s+/g, ' ').trim() }
+function clean(value: string) { return value.replace(/[，,、；;。/／\t]/g, ' ').replace(/\s+/g, ' ').trim() }
+function explicitOrganizationHeading(raw: string) {
+  const prefix = raw.replace(recordMarker, '').match(/^\s*([^：:\n]{2,80})[：:]/u)?.[1].trim()
+  return prefix && organizationHeading.test(prefix) ? prefix : undefined
+}
 function companyValue(value: string) {
   const candidate = value
     .replace(recordMarker, '')
@@ -37,6 +43,13 @@ function extractCompanyAbbreviation(raw: string): string | undefined {
   }
 
   const firstLine = raw.split(/\r?\n/).map(line => line.replace(recordMarker, '').trim()).find(Boolean) || ''
+  // Read explicit context before looking for a geographic prefix: 北京办公室 is
+  // the recipient organization, not the start of a Beijing street address.
+  const leadingPrefix = explicitOrganizationHeading(firstLine)
+  if (leadingPrefix) {
+    const value = companyValue(leadingPrefix)
+    if (value) return value
+  }
   const documentHeading = firstLine.match(/^\s*([^：:\s]{2,80}?)(?:验收文件|寄件资料|寄件文件|资料|文件|合同|样品|礼品)/u)
   if (documentHeading) {
     const value = companyValue(documentHeading[1])
@@ -58,11 +71,6 @@ function extractCompanyAbbreviation(raw: string): string | undefined {
     if (value) return value
   }
 
-  const leadingPrefix = firstLine.match(/^\s*([^：:\n]{2,80})[：:]/u)
-  if (leadingPrefix && /(?:公司|集团|单位|中心|大学|医院|银行|科技|实业|工作室)$/u.test(leadingPrefix[1].trim())) {
-    const value = companyValue(leadingPrefix[1])
-    if (value) return value
-  }
   return undefined
 }
 function fieldOf(label: string): TextField {
@@ -83,9 +91,10 @@ function plausibleName(value: string) {
 }
 function textForFields(raw: string) {
   return raw.split(/\r?\n/).map(line => {
-    const prefix = line.match(/^\s*([^:：，,；;]+)[:：]\s*/)
+    line = line.replace(recordMarker, '')
+    const prefix = line.match(/^\s*([^:：，,、；;]+)[:：]\s*/)
     // A company/customer heading is context, not a recipient or street. Keep it in originalText.
-    if (prefix && !/(?:邮政编码|邮编)\s*$/.test(prefix[1]) && !fieldParts(`${prefix[1]}：`).length && !provinceStart.test(prefix[1]) && ![...prefix[1].matchAll(phoneCandidates)].length) line = line.slice(prefix[0].length)
+    if (prefix && !/(?:邮政编码|邮编)\s*$/.test(prefix[1]) && !fieldParts(`${prefix[1]}：`).length && (!provinceStart.test(prefix[1]) || organizationHeading.test(prefix[1].trim())) && ![...prefix[1].matchAll(phoneCandidates)].length) line = line.slice(prefix[0].length)
     return line.replace(/(?:邮政编码|邮编)\s*[:：]\s*\d{6}(?!\d)/g, ' ')
   }).join('\n')
 }
@@ -141,7 +150,8 @@ function recordsFromText(text: string): string[] {
     // A bare word alone is not a new recipient. A separate name followed by a phone-only
     // line is supported, while building/floor continuations remain in their address.
     if (!unit.named && unit.parsed.recipient && !unit.parsed.address && !unit.parsed.phone && next?.parsed.phone && !next.parsed.recipient && !next.parsed.address) unit.named = true
-    if ((unit.named && hasName) || (unit.independentAddress && hasAddress)) flush()
+    if ((unit.named && hasName) || (unit.independentAddress && hasAddress)
+      || ((hasName || hasAddress) && explicitOrganizationHeading(unit.raw))) flush()
     units.push(unit)
     hasName ||= unit.named
     hasAddress ||= unit.independentAddress
@@ -221,7 +231,8 @@ export function prepareBatchRecipient(row: BatchDraftRow): { recipient: Contact;
   else {
     if (!recipient.province || !recipient.city || !recipient.county) fieldErrors.address.push('地址需包含完整省市区，请补充后重新确认')
     if ([recipient.province, recipient.city, recipient.county].some(value => value.length > 30)) fieldErrors.address.push('省市区名称不能超过30字')
-    if (recipient.address.length < 5 || !/\d|[一二三四五六七八九十百]+(?:号|栋|幢|楼|室)/.test(recipient.address)) fieldErrors.address.push('请补充街道和门牌号')
+    const detailError = addressDetailError(recipient.address)
+    if (detailError) fieldErrors.address.push(detailError)
     if (recipient.address.length > 200 || row.address.length > 2000) fieldErrors.address.push('详细地址不能超过200字')
   }
   return { recipient, errors: [...fieldErrors.recipient, ...fieldErrors.phone, ...fieldErrors.address], fieldErrors }

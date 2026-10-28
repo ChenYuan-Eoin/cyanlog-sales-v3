@@ -14,6 +14,7 @@ const cities = [
   // under Baoding. Keep the carrier-facing composition explicit.
   { province: '河北省', city: '雄安新区', counties: ['容城县', '雄县', '安新县'] },
 ]
+const knownCounties = new Set(cities.flatMap(item => item.counties))
 const provinceShortNames = new Set([
   ...Object.keys(regions).map((name) => name.replace(/(?:省|市|壮族自治区|回族自治区|维吾尔自治区|自治区|特别行政区)$/u, '')),
   '内蒙古', '广西', '西藏', '宁夏', '新疆', '香港', '澳门',
@@ -66,6 +67,9 @@ export function parseAddress(raw: string) {
     const literalCounty = countyHit?.index === 0
       ? null
       : countyInput.match(/^([^\s]{2,12}?(?:新区|区|县|旗))/u)?.[1] || null
+    // Preserve new functional-zone names, but never accept a known county under
+    // an incompatible city (for example 无锡市海淀区 or 北京市浦东新区).
+    if (literalCounty && knownCounties.has(literalCounty) && !item.counties.includes(literalCounty)) return []
     if ((!countyHit || countyHit.index !== 0) && !literalCounty) return []
     const county = countyHit?.index === 0 ? countyHit.name : literalCounty!
     const countyLength = countyHit?.index === 0 ? countyHit.length : literalCounty!.length
