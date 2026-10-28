@@ -26,7 +26,7 @@ test('controlled verifier checks anonymous denial and binds operator artifacts',
     fs.writeFileSync(path.join(runtime, 'operator.json'), original);
     const envelope = { artifact_path: 'operator.json', sha256: sha(original), payload };
     const seen = [];
-    const request = async (url, options) => { seen.push({ url, ...options }); return new Response(JSON.stringify({ error: '请先登录。' }), { status: 401, headers: { 'content-type': 'application/json' } }); };
+    const request = async (url, options) => { seen.push({ url, ...options }); return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'content-type': 'application/json' } }); };
     const result = await v.verify({ runtime, operator: envelope, commit: expected.commit, deploymentId: expected.deploymentId, request });
     assert.equal(seen.length, 2);
     assert.deepEqual(seen.map(x => x.method), ['GET', 'POST']);
@@ -35,6 +35,7 @@ test('controlled verifier checks anonymous denial and binds operator artifacts',
     assert.notEqual(v.productionBlockers({ ...result, verifier: { payload: { ...result.verifier.payload, observed_at: 'invalid' } } }, expected).length, 0);
     assert.notEqual(v.productionBlockers({ ...result, connection_preview: { payload: { ...result.connection_preview.payload, source: 'machine' } } }, expected).length, 0);
     await assert.rejects(v.verify({ runtime, operator: envelope, commit: expected.commit, deploymentId: expected.deploymentId, request: async () => new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }) }), /was not denied/);
+    await assert.rejects(v.verify({ runtime, operator: envelope, commit: expected.commit, deploymentId: expected.deploymentId, request: async () => new Response(JSON.stringify({ error: 'Forbidden' }), { status: 401, headers: { 'content-type': 'application/json' } }) }), /was not denied/);
     fs.writeFileSync(path.join(runtime, 'evidence.png'), 'tampered');
     await assert.rejects(v.verify({ runtime, operator: envelope, commit: expected.commit, deploymentId: expected.deploymentId, request }), /hash mismatch/);
   } finally { fs.rmSync(runtime, { recursive: true, force: true }); }

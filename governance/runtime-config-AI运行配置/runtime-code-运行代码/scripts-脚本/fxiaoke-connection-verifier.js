@@ -9,6 +9,7 @@ const ORIGIN = 'https://sales.cyanlog.icu';
 const PREVIEW_ACTIONS = Object.freeze(['open_fxiaoke_configuration', 'inspect_required_fields', 'verify_internal_account_hidden']);
 const PRODUCTION_ACTIONS = Object.freeze(['open_fxiaoke_configuration', 'save_application_configuration', 'reload_configuration', 'preview_directory']);
 const nonempty = value => typeof value === 'string' && value.trim().length > 0;
+const applicationDenial = (status, error) => status === 401 ? ['Unauthorized', '请先登录。'].includes(error) : status === 403 && ['Forbidden', '无权管理此企业的组织接入。'].includes(error);
 const hash = value => /^[a-f0-9]{64}$/.test(value || '');
 function hasArtifacts(value) {
   return Array.isArray(value) && value.length > 0 && value.every(item => nonempty(item?.path) && hash(item?.sha256));
@@ -55,7 +56,7 @@ function productionBlockers(section, expected) {
   if (!Array.isArray(probes) || probes.length !== 2) errors.push('anonymous access probes are missing');
   else for (const [index, method] of ['GET', 'POST'].entries()) {
     const probe = probes[index];
-    if (probe?.method !== method || probe?.path !== '/api/admin/organization-sources/fxiaoke' || probe?.credentials !== 'omit' || ![401, 403].includes(probe?.status) || !/^application\/json(?:\s*;|$)/i.test(probe?.content_type || '') || !['请先登录。', '无权管理此企业的组织接入。'].includes(probe?.error)) errors.push(`anonymous ${method} was not denied by the application`);
+    if (probe?.method !== method || probe?.path !== '/api/admin/organization-sources/fxiaoke' || probe?.credentials !== 'omit' || !applicationDenial(probe?.status, probe?.error) || !/^application\/json(?:\s*;|$)/i.test(probe?.content_type || '')) errors.push(`anonymous ${method} was not denied by the application`);
     if (!verifier.attachments?.some(item => item.path === probe?.response_artifact?.path && item.sha256 === probe?.response_artifact?.sha256)) errors.push(`anonymous ${method} response is not bound to an attachment`);
   }
   return errors;
@@ -111,7 +112,7 @@ async function verify({ runtime, operator, commit, deploymentId, request = fetch
     let body;
     try { body = JSON.parse(raw); } catch { throw Error(`Fxiaoke anonymous ${method} did not return JSON`); }
     const probe = { method, path: endpoint, status: response.status, credentials: 'omit', content_type: response.headers.get('content-type'), error: typeof body?.error === 'string' ? body.error : '' };
-    if (![401, 403].includes(probe.status) || !/^application\/json(?:\s*;|$)/i.test(probe.content_type || '') || !['请先登录。', '无权管理此企业的组织接入。'].includes(probe.error)) throw Error(`Fxiaoke anonymous ${method} was not denied by the application`);
+    if (!applicationDenial(probe.status, probe.error) || !/^application\/json(?:\s*;|$)/i.test(probe.content_type || '')) throw Error(`Fxiaoke anonymous ${method} was not denied by the application`);
     // Record only allowlisted error data, never provider bodies or credentials.
     probe.response_artifact = write(`anonymous-${method.toLowerCase()}.json`, JSON.stringify(probe, null, 2) + '\n');
     apiArtifacts.push(probe.response_artifact); probes.push(probe);
