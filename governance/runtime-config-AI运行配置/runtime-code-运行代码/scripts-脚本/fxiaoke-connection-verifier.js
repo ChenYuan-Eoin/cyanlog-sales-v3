@@ -8,6 +8,26 @@ const CONTRACT = 'f003-fxiaoke-connection-v1';
 const ORIGIN = 'https://sales.cyanlog.icu';
 const PREVIEW_ACTIONS = Object.freeze(['open_fxiaoke_configuration', 'inspect_required_fields', 'verify_internal_account_hidden']);
 const PRODUCTION_ACTIONS = Object.freeze(['open_fxiaoke_configuration', 'save_application_configuration', 'reload_configuration', 'preview_directory']);
+// The user journey writes only connection configuration and preview metadata.
+// It never grants migration, organization-sync or shipping-permission authority.
+function productionWriteBoundaryBlockers(value) {
+  const errors = [];
+  if (JSON.stringify(value?.production_write_scope) !== JSON.stringify(['organization_fxiaoke_connections'])) errors.push('Fxiaoke Production writes must be limited to the connection table');
+  for (const flag of ['production_migrations_authorized', 'organization_sync_authorized', 'sales_permissions_authorized']) {
+    if (value?.[flag] !== false) errors.push(`Fxiaoke connection acceptance must explicitly exclude ${flag}`);
+  }
+  return errors;
+}
+function productionReleaseScopeBlockers(contract) {
+  const authorization = contract?.production_release_authorization;
+  const approved = authorization?.status === 'approved_for_final_release';
+  const errors = productionWriteBoundaryBlockers(authorization);
+  if (!approved && authorization?.status !== 'pending_security_gate_and_final_write_approval') errors.push('Fxiaoke save acceptance requires controlled-write approval, not a code-only release');
+  const mode = approved ? 'controlled_write_approved' : 'read_only_pending_security_gate_and_final_approval';
+  if (contract?.production_database_mode !== mode || contract?.final_acceptance?.production_database_mode !== mode) errors.push('Fxiaoke database modes must match the explicit write-approval state');
+  if (authorization?.database_write_authorized !== approved) errors.push('Fxiaoke database-write authorization must match the explicit approval state');
+  return errors;
+}
 const nonempty = value => typeof value === 'string' && value.trim().length > 0;
 const applicationDenial = (status, error) => status === 401 ? ['Unauthorized', '请先登录。'].includes(error) : status === 403 && ['Forbidden', '无权管理此企业的组织接入。'].includes(error);
 const hash = value => /^[a-f0-9]{64}$/.test(value || '');
@@ -126,4 +146,4 @@ async function verify({ runtime, operator, commit, deploymentId, request = fetch
   if (blockers.length) throw Error(blockers.join('; '));
   return section;
 }
-module.exports = { CONTRACT, ORIGIN, PREVIEW_ACTIONS, PRODUCTION_ACTIONS, previewBlockers, productionOperatorBlockers, productionBlockers, verify };
+module.exports = { CONTRACT, ORIGIN, PREVIEW_ACTIONS, PRODUCTION_ACTIONS, productionWriteBoundaryBlockers, productionReleaseScopeBlockers, previewBlockers, productionOperatorBlockers, productionBlockers, verify };

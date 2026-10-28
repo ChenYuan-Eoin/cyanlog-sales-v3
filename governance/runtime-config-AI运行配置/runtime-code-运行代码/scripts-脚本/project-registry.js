@@ -528,16 +528,17 @@ function validateSchedulerSnapshot(options, candidate) {
   }
   const requiredRuntimeEvidence = deliveryContract?.required_runtime_evidence;
   const profile = runtimeProfileOf(state);
+  const contractVersion = runtimeContractVersionOf(state);
+  const fxiaokeRelease = profile === 'application' && contractVersion === FXIAOKE_CONNECTION_CONTRACT;
+  const fxiaokeProduction = fxiaokeRelease && deliveryContract.target_state === 'production_released';
   if (!['ai', 'shipping', 'shipping_workspace', 'application'].includes(profile)) errors.push('Unknown runtime evidence profile');
   if (profile === 'application' && (
     state.active_task?.feature_id !== 'F003'
     || (deliveryContract.target_state !== 'code_green' && ![APPLICATION_PERMISSION_CONTRACT, FXIAOKE_CONNECTION_CONTRACT].includes(runtimeContractVersionOf(state)))
-    || deliveryContract.production_database_mode !== 'read_only'
-  )) errors.push('Application permission profile requires F003, a scoped release contract and read-only Production');
+    || (!fxiaokeProduction && deliveryContract.production_database_mode !== 'read_only')
+  )) errors.push('Application profile requires F003 and a scoped contract; only explicitly approved Fxiaoke connection saves may write Production');
   if (['shipping', 'shipping_workspace'].includes(profile) && state.active_task?.feature_id !== 'F054') errors.push('Shipping evidence profile requires the F054 feature binding');
-  const contractVersion = runtimeContractVersionOf(state);
   const applicationRelease = profile === 'application' && [APPLICATION_PERMISSION_CONTRACT, FXIAOKE_CONNECTION_CONTRACT].includes(contractVersion);
-  const fxiaokeRelease = profile === 'application' && contractVersion === FXIAOKE_CONNECTION_CONTRACT;
   if (contractVersion && !applicationRelease && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1'].includes(contractVersion))) errors.push('Unknown or mismatched runtime contract version');
   if (contractVersion === 'f054-config-ui-v1' && (!['code_green', 'clean_preview_green'].includes(deliveryContract.target_state) || deliveryContract.production_database_mode !== 'read_only')) errors.push('Configuration UI contract is limited to read-only Preview acceptance');
   const canonicalRuntimeEvidence = fxiaokeRelease ? FXIAOKE_CONNECTION_ITEMS : profile === 'application' ? APPLICATION_PERMISSION_ITEMS : profile === 'shipping_workspace' ? (contractVersion === 'f054-config-ui-v1' ? SHIPPING_CONFIG_UI_ITEMS : SHIPPING_WORKSPACE_ITEMS) : profile === 'shipping' ? SHIPPING_RUNTIME_ITEMS : ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
@@ -583,7 +584,8 @@ function validateSchedulerSnapshot(options, candidate) {
     if (releaseAuthorization?.status === 'approved_for_final_release' && databaseMode !== 'controlled_write_approved') {
       errors.push('final Production release approval requires controlled_write_approved database mode');
     }
-    if (applicationRelease && releaseAuthorization?.status !== 'approved_code_only') errors.push('Application permission Production acceptance is code-only and must not authorize business writes');
+    if (applicationRelease && !fxiaokeRelease && releaseAuthorization?.status !== 'approved_code_only') errors.push('Application permission Production acceptance is code-only and must not authorize business writes');
+    if (fxiaokeRelease) errors.push(...require('./fxiaoke-connection-verifier').productionReleaseScopeBlockers(deliveryContract));
     if (releaseAuthorization?.status === 'approved_code_only' && (databaseMode !== 'read_only' || (!applicationRelease && !['f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1'].includes(contractVersion))
       || releaseAuthorization.database_write_authorized !== false)) errors.push('Code-only release requires the UI or recovery contract and explicit read-only database boundary');
   }
@@ -635,6 +637,7 @@ function validateSchedulerSnapshot(options, candidate) {
       if (releaseAuthorization.status === 'approved_code_only') {
         if (finalRecord?.code_release_authorized !== true || finalRecord?.production_database_write_authorized !== false) errors.push('Code-only Production authorization must explicitly preserve the database write boundary');
       } else if (finalRecord?.production_write_authorized !== true) errors.push('final Production authorization inbox record does not allow controlled writes');
+      if (fxiaokeRelease) errors.push(...require('./fxiaoke-connection-verifier').productionWriteBoundaryBlockers(finalRecord));
       if (finalRecord?.authorized_commit_binding !== 'delivery_attestation_current_head') errors.push('final Production authorization inbox record has no exact-HEAD attestation binding');
     }
   }
@@ -2148,7 +2151,7 @@ const LIVE_APPLICATION_PERMISSION_RECEIPT = Symbol('live application permission 
 const LIVE_FXIAOKE_CONNECTION_RECEIPT = Symbol('live Fxiaoke connection verifier receipt');
 async function verifyFxiaokeConnectionProduction(options = {}) {
   const status = getDeliveryStatus(options), repoRoot = status.repoRoot;
-  if (!status.scheduler.ok || status.featureId !== 'F003' || status.runtimeProfile !== 'application' || status.runtimeContractVersion !== FXIAOKE_CONNECTION_CONTRACT || status.targetState !== 'production_released' || !['approved_code_only', 'approved_for_final_release'].includes(status.productionReleaseAuthorization?.status)) throw new Error('Fxiaoke verifier requires the scoped approved Production release');
+  if (!status.scheduler.ok || status.featureId !== 'F003' || status.runtimeProfile !== 'application' || status.runtimeContractVersion !== FXIAOKE_CONNECTION_CONTRACT || status.targetState !== 'production_released' || status.productionReleaseAuthorization?.status !== 'approved_for_final_release' || status.productionDatabaseMode !== 'controlled_write_approved') throw new Error('Fxiaoke verifier requires the scoped approved Production connection write');
   if (status.git.remoteProduction !== status.git.head || !status.git.clean) throw new Error('Verifier requires the clean deployed production commit');
   const live = verifyVercelProductionState(repoRoot, status.git.head, { stage: 'production_released' });
   if (live.blockers.length) throw new Error(live.blockers.join('; '));

@@ -465,6 +465,58 @@ function runApplicationPermissionSelftest(repoRoot) {
   wrongFx.active_task.delivery_contract.required_runtime_evidence = ['role_edit_save', 'role_access_enforcement'];
   writeJson(schedulerPath, wrongFx);
   assert.strictEqual(validateSchedulerState({ repoRoot }).ok, false);
+  // Saving the Fxiaoke connection is a controlled write, unlike the read-only
+  // permission-page release. The grant remains scoped to the connection table.
+  const fxProduction = structuredClone(fx);
+  const connectionScope = {
+    production_write_scope: ['organization_fxiaoke_connections'],
+    production_migrations_authorized: false,
+    organization_sync_authorized: false,
+    sales_permissions_authorized: false
+  };
+  Object.assign(fxProduction.active_task.delivery_contract, {
+    target_state: 'production_released',
+    allowed_states: ['executing', 'code_green', 'clean_preview_green', 'integration_ready', 'main_integrated', 'production_released'],
+    production_database_mode: 'controlled_write_approved',
+    required_production_runtime_evidence: ['connection_preview', 'verifier'],
+    production_release_authorization: {
+      status: 'approved_for_final_release', micro_fix_approval_id: 'IN-SELFTEST-MICROFIX-APPROVAL',
+      clarification_id: 'IN-SELFTEST-CLARIFICATION', final_release_approval_id: 'IN-SELFTEST-FINAL-APPROVAL',
+      micro_fix_scope: 'F003 connection only', final_scope: 'selftest controlled Production runtime and release',
+      database_write_authorized: true, ...connectionScope
+    },
+    final_acceptance: {
+      browser: 'trusted_operator_attestation_from_user_existing_chrome_only',
+      production_database_mode: 'controlled_write_approved'
+    }
+  });
+  const fxInboxPath = path.join(repoRoot, 'governance/runtime-state/demand-inbox.jsonl');
+  const originalFxInbox = fs.readFileSync(fxInboxPath, 'utf8');
+  const fxInbox = originalFxInbox.trim().split('\n').map(line => JSON.parse(line));
+  const finalFxApproval = fxInbox.find(item => item.id === 'IN-SELFTEST-FINAL-APPROVAL');
+  Object.assign(finalFxApproval, connectionScope);
+  fs.writeFileSync(fxInboxPath, fxInbox.map(item => JSON.stringify(item)).join('\n') + '\n');
+  writeJson(schedulerPath, fxProduction);
+  assert.deepStrictEqual(validateSchedulerState({ repoRoot }).errors, [], 'Fxiaoke connection save must support an explicitly scoped write approval');
+  for (const mutate of [
+    value => { value.active_task.delivery_contract.production_release_authorization.status = 'approved_code_only'; },
+    value => { value.active_task.delivery_contract.production_release_authorization.database_write_authorized = false; },
+    value => { value.active_task.delivery_contract.production_release_authorization.production_write_scope.push('users'); },
+    value => { value.active_task.delivery_contract.production_release_authorization.production_migrations_authorized = true; },
+    value => { value.active_task.delivery_contract.production_release_authorization.organization_sync_authorized = true; },
+    value => { value.active_task.delivery_contract.production_release_authorization.sales_permissions_authorized = true; },
+    value => { value.active_task.delivery_contract.production_database_mode = 'read_only'; },
+    value => { value.active_task.delivery_contract.final_acceptance.production_database_mode = 'read_only'; },
+    value => { value.active_task.delivery_contract.required_production_runtime_evidence = ['role_edit_save', 'role_access_enforcement']; }
+  ]) {
+    const invalid = structuredClone(fxProduction); mutate(invalid); writeJson(schedulerPath, invalid);
+    assert.strictEqual(validateSchedulerState({ repoRoot }).ok, false, 'Fxiaoke writes must not expand or masquerade as read-only');
+  }
+  writeJson(schedulerPath, fxProduction);
+  delete finalFxApproval.production_write_scope;
+  fs.writeFileSync(fxInboxPath, fxInbox.map(item => JSON.stringify(item)).join('\n') + '\n');
+  assert.strictEqual(validateSchedulerState({ repoRoot }).ok, false, 'The user approval must include the same write boundary');
+  fs.writeFileSync(fxInboxPath, originalFxInbox);
   // The new profile must not change the existing AI default or evidence gates.
   const ai = structuredClone(scheduler);
   delete ai.active_task.delivery_contract.runtime_profile;
