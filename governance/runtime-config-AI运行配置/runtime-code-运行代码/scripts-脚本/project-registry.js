@@ -1721,10 +1721,12 @@ function loadBehaviorLogProof(repoRoot, head) {
     }
   }
 
-  const commitTree = runGit(repoRoot, ['show', '--no-patch', '--format=%T', head]);
-  const firstParent = runGit(repoRoot, ['show', '--no-patch', '--format=%P', head])
-    .split(' ')
-    .filter(Boolean)[0] || 'unborn';
+  const commitObject = runGit(repoRoot, ['cat-file', '-p', head]);
+  const commitTree = commitObject.match(/^tree ([0-9a-f]{40,64})$/m)?.[1] || '';
+  const firstParent = commitObject.match(/^parent ([0-9a-f]{40,64})$/m)?.[1] || 'unborn';
+  if (!commitTree) {
+    return { ok: false, blocker: 'current HEAD commit object has no readable tree id' };
+  }
   const entry = [...entries].reverse().find((item) => (
     item?.trigger === 'post-commit'
     && item?.commit === head
