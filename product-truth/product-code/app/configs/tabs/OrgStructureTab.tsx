@@ -20,13 +20,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, PowerOffIcon, PowerIcon, LockIcon, UnlockIcon, RefreshCwIcon, MailIcon, BanIcon } from 'lucide-react'
+import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, PowerOffIcon, PowerIcon, LockIcon, UnlockIcon, RefreshCwIcon, MailIcon, BanIcon, FingerprintIcon } from 'lucide-react'
 import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment, FeishuSyncFeedback } from '../types'
 import Fuse from 'fuse.js'
 import { success, error, confirmAction } from '@/lib/toast'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
+import { IdentityBindingDialog } from './components/IdentityBindingDialog'
 import { OrganizationSourcePanel } from './OrganizationSourcePanel'
 import { getRoleMutationRestriction } from './role-assignment-policy'
 import {
@@ -329,10 +330,11 @@ interface MemberTableProps {
   currentUserId: string | null
   onEditUser: (user: OrgSummaryUser) => void
   onAssignRole: (user: OrgSummaryUser) => void
+  onBindIdentity: (user: OrgSummaryUser) => void
   onRefresh?: () => void | Promise<void>
 }
 
-function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onRefresh }: MemberTableProps) {
+function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIdentity, onRefresh }: MemberTableProps) {
   const [globalFilter, setGlobalFilter] = useState('')
 
   // 使用 Fuse.js 进行模糊搜索
@@ -474,6 +476,14 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onRefresh
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
+
+              <DropdownMenuItem
+                disabled={isInvited || isDisabled}
+                onSelect={() => onBindIdentity(user)}
+              >
+                <FingerprintIcon className="h-4 w-4 mr-2" />
+                绑定纷享身份
+              </DropdownMenuItem>
 
               <DropdownMenuItem
                 disabled={!isInvited}
@@ -676,7 +686,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onRefresh
         )
       },
     },
-  ], [currentUserId, onEditUser, onAssignRole, onRefresh])
+  ], [currentUserId, onEditUser, onAssignRole, onBindIdentity, onRefresh])
 
   const table = useReactTable({
     data: filteredUsers,
@@ -813,6 +823,7 @@ export default function OrgStructureTab({
   // 编辑用户状态
   const [editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)
   const [assigningUser, setAssigningUser] = useState<OrgSummaryUser | null>(null)
+  const [bindingUser, setBindingUser] = useState<OrgSummaryUser | null>(null)
 
   const isEmptyState = stats.deptCount === 0 && stats.userCount === 0
 
@@ -933,6 +944,7 @@ export default function OrgStructureTab({
                   }
                   setAssigningUser(user)
                 }}
+                onBindIdentity={setBindingUser}
                 onRefresh={onRefresh}
               />
             </div>
@@ -1057,6 +1069,13 @@ export default function OrgStructureTab({
           }}
         />
       )}
+
+      <IdentityBindingDialog
+        user={bindingUser}
+        open={Boolean(bindingUser)}
+        onOpenChange={(open) => !open && setBindingUser(null)}
+        onBound={onRefresh}
+      />
 
       {/* 分配角色 Dialog */}
       {assigningUser && (

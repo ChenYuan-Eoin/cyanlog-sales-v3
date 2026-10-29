@@ -233,6 +233,7 @@
       "product-truth/product-code/app/configs/tabs/OrgStructureTab.tsx",
       "product-truth/product-code/app/configs/tabs/RoleDetailPanel.tsx",
       "product-truth/product-code/app/configs/tabs/components/UserFormDialog.tsx",
+      "product-truth/product-code/app/configs/tabs/components/IdentityBindingDialog.tsx",
       "product-truth/product-code/app/configs/types.ts",
       "product-truth/product-code/app/login/LoginForm.test.tsx",
       "product-truth/product-code/app/login/LoginForm.tsx",
@@ -292,7 +293,7 @@
       "users.phone 只用于展示和受审计的后续绑定核验；当前值与历史归属分离，同一企业当前手机号唯一，phone_history 保留有效期",
       "超级管理员不经过特殊身份匹配路径；解析出 users.id 后只核验其既有系统角色，禁止用 employee_number 或部署配置绕过统一映射链",
       "零租户系统 bootstrap、租户创建者自动超管、Owner 硬保护和角色授予矩阵归 WP82，不得在 WP94 建按租户授予超管的临时入口",
-      "没有稳定映射时登录必须失败关闭；已有 canonical user 的稳定映射被另一个 provider subject 占用时必须拒绝并转人工，不得按手机号覆盖或重新绑定",
+      "没有稳定映射时登录必须失败关闭；只允许当前组织超级管理员通过受审计预绑定接口显式选择现有成员并写入稳定映射；已有 canonical user 的稳定映射被另一个 provider subject 占用时必须拒绝并转人工，不得按手机号覆盖或重新绑定",
       "phone_history 同一企业的同一手机号时间区间必须由 PostgreSQL 排他约束禁止重叠，不能只依赖应用检查或普通触发器",
       "本地密码列、密码 RPC、登录/注册/改密/重置密码入口在 SSO 生产验证和恢复证据满足后由前进迁移物理删除；代码候选不得保留可用后门"
     ],

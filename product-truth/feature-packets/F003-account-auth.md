@@ -282,3 +282,5 @@ WP92：切换前展示新增/保留/冲突/停同步清单；旧飞书组织保�
 - 本地密码列、密码 RPC、登录/注册/改密/重置密码入口由前进迁移物理删除；删除迁移只有在全部活跃超管已有稳定映射后才能执行。
 - 零租户系统 bootstrap、企业创建人 Owner、默认 `employee` 角色、平台/租户角色拆分、权限子集委托和拒绝审计归 WP82。
 - 完整目标设计见 `governance/runtime-state/identity-authorization-blueprint.md`；当前 F003 只承载 WP94 可执行合同。
+- 生产只读核验：`cyanlog-sales-v3` 当前有 43 个用户、31 个活跃用户、5 个组织超管、1 条纷享连接，但 `organization_sources=0`、`external_identities=0`，`phone_history` 与 OAuth state 表尚不存在。删除密码迁移当前必须保持阻断。
+- WP94 增加受审计的超级管理员预绑定：只允许当前组织 SUPER_ADMIN 选择现有活跃成员，输入纷享 `openUserId`；服务端自动读取并校验企业 `corpId`，原子写入 `organization_sources` 与 `external_identities`，记录 `bind_external_identity` 生命周期事件，不按手机号或姓名猜测。
