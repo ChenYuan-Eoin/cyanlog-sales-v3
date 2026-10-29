@@ -223,7 +223,12 @@
       "product-truth/product-code/lib/shipping/batch-text-locations.test.ts",
       "product-truth/product-code/lib/shipping/validation.ts",
       "product-truth/product-code/lib/shipping/validation.test.ts",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.test.js"
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-workspace.test.js",
+      "AGENTS.md",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-parser-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-parser-verifier.test.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js"
     ],
     "reproduction_capsule": "codex-runtime/wp95-assessment/reproduction.json",
     "acceptance_checks": [
@@ -233,10 +238,14 @@
       "预览与后端校验一致；不调用顺丰，不产生重复订单"
     ],
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -251,14 +260,33 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "shipping_workspace",
-        "shipping_tracking",
-        "shipping_access"
+        "shipping_parser"
       ],
       "runtime_profile": "shipping_workspace",
-      "runtime_contract_version": "f054-intake-v1",
+      "runtime_contract_version": "f054-parser-v1",
       "production_database_mode": "read_only",
-      "note": "先完成可审阅候选；生产发布及新写入不继承WP91授权。最终关闭须现有Chrome在sales.cyanlog.icu重放解析、校验与待确认提报；顺丰真实下单仍由用户确认。"
+      "note": "用户已批准发布f0a80b37的产品树并在现有Chrome解析复验；自动发布规则由IN-20261029-002持续授权。生产不写业务数据、不调用顺丰。版本发布与解析通过不关闭真实工单提交验收。",
+      "required_production_runtime_evidence": [
+        "shipping_parser"
+      ],
+      "preview_order_exception_approval_id": "IN-20261029-001",
+      "final_acceptance": {
+        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+        "production_database_mode": "read_only",
+        "scope": "两条原文解析与缺项校验；真实提报尚未验收。"
+      },
+      "production_release_authorization": {
+        "status": "approved_code_only",
+        "micro_fix_approval_id": "IN-20261029-002",
+        "clarification_id": "IN-20261029-001",
+        "final_release_approval_id": "IN-20261029-001",
+        "micro_fix_scope": "自动发布政策及解析复验合同对齐；产品树保持已批准候选。",
+        "final_scope": "WP95已核验产品候选的代码发布和现有Chrome正式站解析重放；不创建测试工单、不改已有单据、不调用顺丰、不迁移数据库，真实提交验收保留。",
+        "database_write_authorized": false,
+        "carrier_calls_authorized": false,
+        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
+      }
     },
     "micro_fixes": [
       {
@@ -266,6 +294,16 @@
         "input": "IN-20261028-013",
         "scope": "只修复工作树测试夹具继承真实队列导致WP39重复；不改门禁实现或验收条件。",
         "capsule": "codex-runtime/wp95-assessment/strict-checks.log"
+      },
+      {
+        "id": "standing-release-policy",
+        "input": "IN-20261029-002",
+        "scope": "按用户明确指令取消逐候选人工发布审批；保留检查与真实验收。"
+      },
+      {
+        "id": "parser-release-evidence",
+        "input": "IN-20261029-003",
+        "scope": "以解析复验合同替换无关员工提报/顺丰轨迹合同；不改产品代码。"
       }
     ]
   },
@@ -4807,5 +4845,16 @@
     ],
     "open_delivery_evidence_issue": "IN-20261028-011",
     "complete_source_index": "codex-runtime/goal-consolidation-20261028/inventory-before.json"
+  },
+  "release_policy": {
+    "authority": "IN-20261029-002",
+    "mode": "automatic_after_required_checks",
+    "scope": "approved_product_scope",
+    "push": true,
+    "pull_request": true,
+    "production_deploy": true,
+    "per_candidate_confirmation_required": false,
+    "production_acceptance_required": true,
+    "business_confirmation_boundaries_preserved": true
   }
 }

@@ -1687,7 +1687,7 @@ function main() {
       runConfigurationUiSelftest(repoRoot);
       return;
     }
-    const verifierTests = spawnSync(process.execPath, ['--test', path.join(__dirname, 'shipping-workspace-verifier.test.js')], {
+    const verifierTests = spawnSync(process.execPath, ['--test', path.join(__dirname, 'shipping-workspace-verifier.test.js'), path.join(__dirname, 'shipping-parser-verifier.test.js')], {
       encoding: 'utf8', timeout: 60000
     });
     assert.strictEqual(verifierTests.status, 0, verifierTests.stderr || verifierTests.stdout || 'Shipping verifier offline tests failed');
