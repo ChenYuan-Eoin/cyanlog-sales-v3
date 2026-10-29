@@ -12,7 +12,7 @@ import type { NextRequest } from 'next/server'
 describe('auth context role overrides',()=>{
  beforeEach(()=>{
    vi.clearAllMocks()
-   const query={select:vi.fn(),eq:vi.fn(),single:vi.fn(async()=>({data:{must_change_password:false},error:null}))}
+   const query={select:vi.fn(),eq:vi.fn(),single:vi.fn(async()=>({data:{},error:null}))}
    query.select.mockReturnValue(query);query.eq.mockReturnValue(query)
    vi.mocked(supabaseAdmin.from).mockReturnValue(query as never)
  })

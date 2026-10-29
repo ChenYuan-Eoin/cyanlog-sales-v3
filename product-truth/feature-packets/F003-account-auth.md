@@ -6,7 +6,7 @@
 - **名称**: Account (认证与权限)
 - **模块**: Account
 - **优先级**: P0
-- **状态**: in_progress（WP43 角色权限配置修复）
+- **状态**: in_progress（WP94 纷享 SSO 与稳定身份门禁）
 - **来源**: Account.md (已归档)
 
 ---
@@ -15,25 +15,30 @@
 建立自主可控的认证体系，支持多种身份源，并实现可配置的 RBAC 权限模型。
 
 **关键原则**：
-- 自主可控：不依赖 Clerk/Auth0
-- 部门树来源：自建为主，飞书为辅
+- `users.id` UUID 是唯一主体根；权限、审计和业务关系只引用 UUID
+- 外部身份以 `external_identities` 稳定映射到 UUID；姓名和手机号只做展示与受限检索
+- 纷享为主入口，企微/飞书辅入口统一服从同一主体映射，不建立权限孤岛
+- 不保留本地密码登录、注册、改密或管理员重置密码后门
+- 部门树来源：纷享为主，飞书等旧来源保留过渡和停同步边界
 - 权限可配置：当前组织根超管维护组织级权限覆盖；`roles.permissions` 保留为全局模板，不能由组织配置直接改写。
 
 ---
 ## 核心功能
 
 ### 1. 用户认证
-- 邮箱/手机号 + 密码登录
-- Token 会话管理（JWT + PostgreSQL 存储）
-- Token 过期与失效机制
+- 纷享 OAuth 授权码登录，服务端校验一次性 state、企业 corpId 和稳定 subject
+- 企微/飞书后续作为辅助 OIDC/授权码入口，不另建权限真相
+- `external_identities → users.id` 是唯一登录解析链路
+- Token 会话使用随机系统 token + PostgreSQL `auth_tokens`，可撤销、可过期
+- 无稳定映射、映射冲突、停用、跨企业或零有效角色时拒绝登录
 
 **登录方式优先级**：
 | 方式 | 优先级 | 说明 |
 |------|--------|------|
-| 手机号+密码 | P0 | 主要方式 |
-| 邮箱+密码 | P0 | 备用方式 |
-| 手机号+验证码 | P1 | 快捷登录 |
-| 飞书扫码 | P1 | 首次登录自动注册 |
+| 纷享 OAuth（PC 扫码/授权码） | P0 | 当前主入口 |
+| 企微 OAuth | P1 | 后续辅助入口，共用主体和权限 |
+| 飞书 OAuth | P1 | 后续辅助入口，共用主体和权限 |
+| 一次性绑定码 | P1 | 仅用于受审计首次绑定，不产生长期密码 |
 
 ### 2. 角色权限 (RBAC)
 
@@ -82,18 +87,16 @@ admin:access
 ## 数据模型
 
 ```sql
--- 用户表
+-- 用户表（当前实现以迁移文件为准）
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  uuid VARCHAR(8) UNIQUE DEFAULT generate_ulid(),
-  email VARCHAR(128) UNIQUE,
-  phone VARCHAR(32) UNIQUE,
-  password_hash VARCHAR(255) NOT NULL,
-  name VARCHAR(64) NOT NULL,
-  name_pinyin VARCHAR(128),
-  avatar VARCHAR(255),
-  role_id VARCHAR(8) REFERENCES roles(uuid),
-  status VARCHAR(16) DEFAULT 'ACTIVE', -- ACTIVE/INACTIVE/DISABLED
+  org_id UUID NOT NULL REFERENCES organizations(id),
+  email VARCHAR(128),
+  phone VARCHAR(32),
+  employee_id VARCHAR(64),
+  display_name VARCHAR(64) NOT NULL,
+  status VARCHAR(16) DEFAULT 'active',
+  login_enabled BOOLEAN DEFAULT true,
   last_login_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -107,6 +110,27 @@ CREATE TABLE auth_tokens (
   expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 稳定外部身份与手机号历史
+CREATE TABLE external_identities (
+  id UUID PRIMARY KEY,
+  source_id UUID NOT NULL,
+  system_org_id UUID NOT NULL,
+  external_user_id TEXT NOT NULL,
+  canonical_user_id UUID REFERENCES users(id),
+  match_status TEXT NOT NULL,
+  match_method TEXT NOT NULL
+);
+
+CREATE TABLE phone_history (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id),
+  org_id UUID NOT NULL REFERENCES organizations(id),
+  phone TEXT NOT NULL,
+  valid_from TIMESTAMPTZ NOT NULL,
+  valid_to TIMESTAMPTZ,
+  reason TEXT NOT NULL
+);
 ```
 
 ---
@@ -115,12 +139,13 @@ CREATE TABLE auth_tokens (
 ### 认证接口
 | 接口 | 方法 | 路径 | 权限 |
 |------|------|------|------|
-| 用户注册 | POST | /api/auth/register | - |
-| 用户登录 | POST | /api/auth/login | - |
+| 企业登录提供方读取 | GET | /api/auth/providers | - |
+| 纷享 OAuth 开始 | GET | /api/auth/fxiaoke/start | - |
+| 纷享 OAuth 回调 | GET | /api/auth/fxiaoke/callback | 一次性 state |
 | 用户登出 | POST | /api/auth/logout | 需 token |
 | 获取当前用户 | GET | /api/auth/me | 需 token |
-| 修改密码 | POST | /api/auth/password | 需 token |
-| 飞书回调 | GET | /api/auth/feishu/callback | - |
+| 成员激活 | POST | /api/auth/invitations/accept | 一次性激活码 |
+| 本地密码入口 | * | /api/auth/login 等 | 已删除，目标 404 |
 
 ### 用户管理接口
 | 接口 | 方法 | 路径 | 权限要求 |
@@ -206,7 +231,7 @@ CREATE TABLE auth_tokens (
 | WP91 | 管理员配置纷享应用并预览通讯录 | executing | 正式站保存加密凭据、刷新回读，真实应用读取权限范围内部门和员工；错误和空结果如实显示，不写入组织骨架 |
 | WP92 | 确认同步并切换纷享主来源 | queued | 预览差异后原子切换；唯一主来源，旧来源和手工数据保留；失败回滚，无按姓名合并 |
 | WP93 | 在系统组织权限中管理寄件许可 | queued | 无独立寄件白名单；部门/成员/角色授权一致；撤权新请求立即拒绝；历史归属保留 |
-| WP94 | 销售通过纷享登录并提报本人工单 | queued | 真实 A/B 账号验证登录、提交、查询隔离；工单待确认，不自动顺丰下单 |
+| WP94 | 销售通过纷享登录并提报本人工单 | executing | 真实 A/B 账号验证登录、提交、查询隔离；工单待确认，不自动顺丰下单 |
 
 WP91 用户填写字段：AppID、APPSecret、永久授权码、员工 ID，沿用纷享后台名称；企业账号 ea 和企业身份由服务端通过应用凭据获取、验证并保存，不要求管理员查找或填写。EncodingAESKey 不属于本批通讯录认证或员工 OAuth 登录必填项。服务端固定官方云地址，其他云经核验后扩展。配置不显示 MCP 或 CLI 字段。令牌、请求追踪由服务端处理。凭据必须按系统组织绑定，加密存储且不回传；预览不允许改变角色、部门、成员、历史工单或主来源。
 
@@ -214,13 +239,13 @@ WP76 暂缓，已发布候选与单聊证据保留，未完成的正式顺丰验
 
 ## 2026-10-28 纷享接入与企业 SSO 统一调度（IN-20261028-003）
 
-用户指令：把纷享销客接入与无法启用的企业 SSO 统一调度。沿用同一个交付目标和 WP91 → WP92 → WP93 → WP94 顺序，保持一个 Active。WP 分批验收不等于整条接入链路已经可用；只有正式站真实员工完成登录、获授权提报和本人查询，且 A/B 与跨企业隔离通过，才能宣布纷享接入完成。
+用户指令：把纷享销客接入与无法启用的企业 SSO 统一调度。原 `WP91 → WP92 → WP93 → WP94` 顺序已由 `IN-20261029-004` 更新；当前按 Project Charter 以 `WP94 → WP82 → WP77 → WP92 → WP93` 串行推进，保持一个 Active。WP 分批验收不等于整条接入链路已经可用；只有正式站真实员工完成登录、获授权提报和本人查询，且 A/B 与跨企业隔离通过，才能宣布纷享接入完成。
 
 ### 共用配置与身份合同
 
 - 一个系统企业复用同一份纷享自建应用连接；目录读取和 SSO 从该连接读取 AppID、加密 APPSecret 与已验证企业身份，不新增要求用户重复录入的 SSO 密钥表单。
 - 永久授权码和员工 ID 用于服务端目录读取；员工本人登录使用 OAuth 授权码回调取得身份。不得把用于读取通讯录的员工 ID 当作所有销售的登录身份。
-- 服务端自动取得并核验企业账号 ea、企业标识。OAuth 返回的 corpId 必须与已验证企业一致，使用提供方、企业标识和员工稳定 ID 绑定系统成员；跨企业身份拒绝，禁止按姓名自动合并。
+- 服务端自动取得并核验企业账号 ea、企业标识。OAuth 返回的 corpId 必须与已验证企业一致，使用提供方、企业标识和员工稳定 ID 绑定系统成员；跨企业身份拒绝，禁止按姓名自动合并。稳定映射复用现有 `organization_sources` / `external_identities` 身份台账，不新建平行身份真相表。公开登录入口只解析唯一已配置组织，不接受浏览器传入的组织 ID。
 - 回调地址由系统生成并提供复制及明确的纷享后台填写路径，不要求用户推导地址。授权跳转、随机 state、回调校验、一次性 code 和系统会话归属由后端负责。
 - 组织来源、登录开通和寄件许可分别显示真实状态。应用已保存或通讯录已读取不能自动显示“SSO 已开通”；登录成功也不能自动授予寄件权限。
 - 未实现或未配置的登录方式不显示可操作的占位按钮，不再提示用户联系管理员去寻找不存在的开通开关。启用后的“使用纷享销客登录”必须进入真实授权流程。
@@ -241,8 +266,19 @@ WP94 的 SSO 入口缺陷 IN-20261028-002 与登录能力一并交付；不是�
 
 ## 2026-10-28 业务结果合同与全队列顺序
 
-IN-20261028-010：当前产品结果是员工以真实身份获得同一套组织/寄件许可，完成本人提报与查询，并被跨人/跨企业隔离保护。WP91→WP92→WP93→WP94继续作为技术依赖链；全仓执行顺序改以F099 v2026-10-28.2为准。目标登记后按IN-20261028-012续接，Active为WP95，Next为WP82。
+IN-20261029-004：当前产品结果是员工以真实身份获得同一套组织/寄件许可，完成本人提报与查询，并被跨人/跨企业隔离保护。全仓执行顺序以 `main-chain-governance-charter.md` 为准；当前 Active 为 WP94，Next 为 WP82。代码、Preview、main 和部署状态均不得替代正式站真实登录验收。
 
 WP91已部署范围的保存/回读/真实目录预览已有73部门404员工证据；该数字仅代表当前员工可读范围，不证明全公司权限、组织已同步或SSO已接通。发布27b53ea6已完成权威域名核验、现有Chrome重放及production_released门禁。目录读取员工ID不是销售本人身份，CRM审批申请员工也须以组织内稳定映射验证，不能按姓名授权。
 
 WP92：切换前展示新增/保留/冲突/停同步清单；旧飞书组织保留且停同步，手工部门/人员不删除；失败原子回滚。WP93：禁用/离职/撤权后下一次寄件请求拒绝，历史工单归属不变。WP94：真实A/B账号各自登录/提报/查询，直链和重放拒绝越权。仅保存应用凭据不能关闭上述结果。
+
+## 2026-10-29 身份安全与权限拓扑收口（IN-20261029-010/011）
+
+- provider 返回手机号不宣称独立验证，也不允许触发静默 JIT 绑定。无 `external_identities` 稳定映射时，WP94 登录 fail-closed。
+- 首次绑定后续采用管理员预绑定或一次性绑定码等强 step-up；短信验证码如需接入，单独评估供应商、费用和隐私，不作为默认依赖。
+- `external_identities` 同时约束稳定 subject 和 canonical `users.id`；已有主体被另一个 subject 占用时拒绝并转人工。
+- `phone_history` 使用 PostgreSQL 排他约束禁止同一组织内手机号时间区间重叠；历史业务只按当时 `user_id` 追溯。
+- 超级管理员与其他成员共用 `external_identities → users.id` 链路，不按 `employee_number`、姓名或手机号做特殊匹配。
+- 本地密码列、密码 RPC、登录/注册/改密/重置密码入口由前进迁移物理删除；删除迁移只有在全部活跃超管已有稳定映射后才能执行。
+- 零租户系统 bootstrap、企业创建人 Owner、默认 `employee` 角色、平台/租户角色拆分、权限子集委托和拒绝审计归 WP82。
+- 完整目标设计见 `governance/runtime-state/identity-authorization-blueprint.md`；当前 F003 只承载 WP94 可执行合同。

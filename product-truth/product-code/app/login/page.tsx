@@ -1,118 +1,66 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { persistClientSession } from '@/lib/session-client'
-import {
-  primeHomeAuthContext,
-  primeHomeInitialData,
-  primeHomeInitialSnapshot,
-  primeHomeProfile,
-} from '@/lib/home-data-client'
-import { primeCorePageCaches, scheduleCorePageWarmup } from '@/lib/core-page-warmup'
+import { useEffect, useState } from 'react'
 import { BrandMark } from '@/components/branding/BrandMark'
 import { useBranding } from '@/components/branding/BrandingProvider'
 
-const LOGIN_PREWARM_DELAY_MS = 100
-const LOGIN_PREWARM_STALE_MS = 4000
+type EnterpriseProviderState =
+  | { status: 'loading' }
+  | { status: 'available'; label: string; startUrl: string }
+  | { status: 'unavailable' }
+
+const SSO_ERROR_MESSAGES: Record<string, string> = {
+  SSO_NOT_CONFIGURED: '企业统一登录尚未配置，请联系管理员。',
+  SSO_CONFIGURATION_AMBIGUOUS: '检测到多个企业登录配置，管理员处理后才能登录。',
+  SSO_CONFIGURATION_INVALID: '企业登录配置不可用，请联系管理员重新核对应用凭据。',
+  SSO_STATE_INVALID: '企业登录状态已失效，请重新发起登录。',
+  SSO_STATE_UNAVAILABLE: '企业登录状态暂时无法校验，请稍后重试。',
+  SSO_PROVIDER_DENIED: '纷享登录授权未完成，请重新登录。',
+  SSO_PROVIDER_FAILED: '纷享登录服务暂时不可用，请稍后重试。',
+  SSO_ENTERPRISE_MISMATCH: '当前纷享员工不属于系统绑定企业，登录已拒绝。',
+  SSO_IDENTITY_REJECTED: '当前员工尚未绑定、已停用或存在身份冲突，请联系管理员。',
+  SSO_SESSION_FAILED: '系统会话创建失败，请稍后重试。',
+  SSO_START_FAILED: '企业登录暂时无法启动，请稍后重试。',
+  SSO_CALLBACK_FAILED: '企业登录未完成，请重新登录。',
+}
+
+function initialSsoError() {
+  if (typeof window === 'undefined') return ''
+  const code = new URLSearchParams(window.location.search).get('sso_error') || ''
+  return SSO_ERROR_MESSAGES[code] || (code ? '企业登录未完成，请重新登录或联系管理员。' : '')
+}
 
 export default function LoginPage() {
-  const router = useRouter()
   const branding = useBranding()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const prewarmAbortRef = useRef<AbortController | null>(null)
-  const prewarmInFlightRef = useRef(false)
-  const lastPrewarmStartedAtRef = useRef(0)
+  const [error] = useState(initialSsoError)
+  const [enterpriseProvider, setEnterpriseProvider] = useState<EnterpriseProviderState>({ status: 'loading' })
 
   useEffect(() => {
-    const runPrewarm = () => {
-      const now = Date.now()
-      const hasFreshPrewarm = now - lastPrewarmStartedAtRef.current < LOGIN_PREWARM_STALE_MS
-      if (prewarmInFlightRef.current || hasFreshPrewarm) {
-        return
-      }
-
-      prewarmInFlightRef.current = true
-      lastPrewarmStartedAtRef.current = now
-      const controller = new AbortController()
-      prewarmAbortRef.current = controller
-      void fetch('/api/auth/login', {
-        method: 'GET',
-        headers: { 'X-Login-Prewarm': '1' },
-        cache: 'no-store',
-        signal: controller.signal,
-      }).catch(() => {
-        // Login remains fully functional if opportunistic prewarm fails.
-      }).finally(() => {
-        prewarmInFlightRef.current = false
-        if (prewarmAbortRef.current === controller) {
-          prewarmAbortRef.current = null
+    const controller = new AbortController()
+    void fetch('/api/auth/providers', { cache: 'no-store', signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error('provider discovery failed')
+        const data = await response.json() as { providers?: Array<{ id?: unknown; label?: unknown; startUrl?: unknown }> }
+        const provider = data.providers?.find(item => item.id === 'fxiaoke')
+        if (
+          typeof provider?.label !== 'string'
+          || provider.startUrl !== '/api/auth/fxiaoke/start'
+        ) {
+          setEnterpriseProvider({ status: 'unavailable' })
+          return
         }
+        setEnterpriseProvider({
+          status: 'available',
+          label: provider.label,
+          startUrl: provider.startUrl,
+        })
       })
-    }
-
-    const delayId = window.setTimeout(runPrewarm, LOGIN_PREWARM_DELAY_MS)
-    window.addEventListener('pointerdown', runPrewarm, { passive: true })
-    window.addEventListener('keydown', runPrewarm)
-    window.addEventListener('focusin', runPrewarm)
-
-    return () => {
-      window.clearTimeout(delayId)
-      window.removeEventListener('pointerdown', runPrewarm)
-      window.removeEventListener('keydown', runPrewarm)
-      window.removeEventListener('focusin', runPrewarm)
-      prewarmAbortRef.current?.abort()
-      prewarmAbortRef.current = null
-      prewarmInFlightRef.current = false
-    }
+      .catch(error => {
+        if (error instanceof Error && error.name === 'AbortError') return
+        setEnterpriseProvider({ status: 'unavailable' })
+      })
+    return () => controller.abort()
   }, [])
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.error || '登录失败')
-        return
-      }
-
-      persistClientSession(data.token)
-      const nextPath = data.mustChangePassword ? '/change-password' : '/'
-      if (!data.mustChangePassword) {
-        const hasInitialDashboard = Boolean(data.initialDashboard)
-        primeHomeProfile(data.token, data.user)
-        primeHomeInitialSnapshot(data.token, data.user, data.initialDashboard)
-        primeCorePageCaches(data.token, data.initialCore)
-        if (!hasInitialDashboard) {
-          primeHomeInitialData(data.token)
-        } else if (!data.authContextReady) {
-          primeHomeAuthContext(data.token)
-        }
-        window.setTimeout(() => {
-          scheduleCorePageWarmup(data.token, (href) => router.prefetch(href))
-        }, 0)
-      }
-
-      router.replace(nextPath)
-    } catch {
-      setError('网络错误，请稍后重试')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   return (
     <div className="shell-row min-h-screen">
@@ -185,43 +133,20 @@ export default function LoginPage() {
           <h1>{branding.loginTitle}</h1>
           <p className="subtitle">{branding.loginSubtitle}</p>
 
-          <form
-            method="post"
-            action="/api/auth/login"
-            onSubmit={handleSubmit}
-            style={{ marginTop: 32 }}
-            autoComplete="on"
-          >
-            <div className="form-group">
-              <label htmlFor="login-email">企业邮箱</label>
-              <input
-                id="login-email"
-                name="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@company.com"
-                autoComplete="username"
-                inputMode="email"
-                disabled={loading}
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="login-password">密码</label>
-              <input
-                id="login-password"
-                name="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                autoComplete="current-password"
-                disabled={loading}
-                required
-              />
-            </div>
+          <div style={{ marginTop: 32 }}>
+            {enterpriseProvider.status === 'available' ? (
+              <a
+                className="btn btn-primary"
+                href={enterpriseProvider.startUrl}
+                style={{ display: 'flex', justifyContent: 'center', textDecoration: 'none' }}
+              >
+                使用{enterpriseProvider.label}登录
+              </a>
+            ) : enterpriseProvider.status === 'loading' ? (
+              <div aria-live="polite" className="subtitle">正在检查企业统一登录…</div>
+            ) : (
+              <div className="subtitle">企业统一登录尚未就绪，请联系管理员完成配置。</div>
+            )}
 
             {error && (
               <div role="alert" aria-live="polite" style={{
@@ -230,30 +155,14 @@ export default function LoginPage() {
                 color: 'var(--danger-700)',
                 borderRadius: 'var(--radius-md)',
                 fontSize: 'var(--text-body-sm)',
-                marginBottom: 16,
+                marginTop: 16,
+                marginBottom: 8,
               }}>
                 {error}
               </div>
             )}
 
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading}
-              style={{ marginTop: 8, marginBottom: 12 }}
-            >
-              {loading ? '登录中...' : '进入工作台'}
-            </button>
-
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled
-              title="请联系管理员开通企业 SSO 账号"
-            >
-              使用企业 SSO 登录（请联系管理员开通）
-            </button>
-          </form>
+          </div>
         </div>
 
         <p className="bottom-notice">

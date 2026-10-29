@@ -17,7 +17,6 @@ function makeUser(overrides: Partial<OrgSummaryUser> = {}): OrgSummaryUser {
     role_ids: ['role-sales'],
     role_codes: ['SALES'],
     status: 'active',
-    must_change_password: false,
     ...overrides,
   }
 }

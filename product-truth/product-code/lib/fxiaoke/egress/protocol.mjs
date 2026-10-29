@@ -8,6 +8,7 @@ const projections = {
   DepartmentObj: ['_id','name','parent_id','status'],
   PersonnelObj: ['_id','user_id','name','main_department','status','is_pause_login'],
 };
+const identityProjection = ['_id','user_id','full_name','name','phone','employee_number','status','is_pause_login','life_status','is_deleted'];
 export function validRequest(input) {
   try {
     if (!exactKeys(input, ['url','headers','body']) || typeof input.body !== 'string' || input.body.length > 8192) return false;
@@ -27,9 +28,25 @@ export function validRequest(input) {
     if (!exactKeys(body, ['convertUserId','data']) || body.convertUserId !== false || !exactKeys(body.data, ['dataObjectApiName','search_query_info'])) return false;
     const query = body.data.search_query_info;
     const fields = projections[body.data.dataObjectApiName];
-    return !!fields && exactKeys(query, ['limit','offset','fieldProjection','filters'])
-      && query.limit === 100 && Number.isInteger(query.offset) && query.offset >= 0 && query.offset <= 5000 && query.offset % 100 === 0
-      && JSON.stringify(query.fieldProjection) === JSON.stringify(fields) && Array.isArray(query.filters) && query.filters.length === 0;
+    if (
+      !fields
+      || !exactKeys(query, ['limit','offset','fieldProjection','filters','orders'])
+      || query.limit !== 100 || !Number.isInteger(query.offset) || query.offset < 0 || query.offset > 5000 || query.offset % 100 !== 0
+      || !Array.isArray(query.orders) || query.orders.length !== 0
+      || !Array.isArray(query.filters)
+    ) return false;
+    const isPreview = JSON.stringify(query.fieldProjection) === JSON.stringify(fields)
+      && query.filters.length === 0;
+    const isIdentityLookup = body.data.dataObjectApiName === 'PersonnelObj'
+      && JSON.stringify(query.fieldProjection) === JSON.stringify(identityProjection)
+      && query.filters.length === 1
+      && exactKeys(query.filters[0], ['field_name','field_values','operator'])
+      && query.filters[0].field_name === 'user_id'
+      && query.filters[0].operator === 'EQ'
+      && Array.isArray(query.filters[0].field_values)
+      && query.filters[0].field_values.length === 1
+      && identifier(String(query.filters[0].field_values[0]));
+    return isPreview || isIdentityLookup;
   } catch { return false; }
 }
 export function validResult(value) {

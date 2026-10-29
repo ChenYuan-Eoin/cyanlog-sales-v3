@@ -11,13 +11,15 @@ const browser = await chromium.launch({ headless: true, channel: 'chrome' })
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 page.setDefaultTimeout(20000)
 
-// 1. 登录
-await page.goto(`${BASE}/login`)
-await page.fill('input[name=email]', 'e2e-admin@huarun.com')
-await page.fill('input[name=password]', 'E2ETestPassword123!')
-await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}), page.click('button[type=submit]')])
-await page.waitForTimeout(1500)
-E('UI 登录', page.url() !== `${BASE}/login` || true, `url=${page.url()}`)
+// 1. 本地可撤销会话（由 setup-e2e-user.mjs 生成，不使用本地密码）
+const token = process.env.E2E_AUTH_TOKEN
+if (!token) throw new Error('缺少 E2E_AUTH_TOKEN')
+await page.context().addCookies([
+  { name: 'token', value: token, domain: 'localhost', path: '/', httpOnly: true },
+  { name: 'client_token', value: token, domain: 'localhost', path: '/' },
+])
+await page.addInitScript((value) => localStorage.setItem('token', value), token)
+E('本地 E2E 会话', true)
 
 // 2. 配置中心截图（交易配置）
 await page.goto(`${BASE}/configs`, { waitUntil: 'domcontentloaded' })

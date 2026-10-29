@@ -164,7 +164,7 @@ describe('middleware public API routing', () => {
     expect(adminNeighbor.status).toBe(401)
   })
 
-  it('allows both registration entrypoints without opening every auth API route', async () => {
+  it('returns explicit 404s for retired local password entrypoints', async () => {
     const legacyRegister = await middleware(
       makeRequest('https://sales.cyanlog.icu/api/auth', { host: 'sales.cyanlog.icu' }),
     )
@@ -178,8 +178,16 @@ describe('middleware public API routing', () => {
       makeRequest('https://sales.cyanlog.icu/api/auth/login-extra', { host: 'sales.cyanlog.icu' }),
     )
 
-    expect(legacyRegister.status).toBe(200)
-    expect(registerAlias.status).toBe(200)
+    const retiredChangePassword = await middleware(
+      makeRequest('https://sales.cyanlog.icu/api/auth/change-password', { host: 'sales.cyanlog.icu' }),
+    )
+    const retiredResetPassword = await middleware(
+      makeRequest('https://sales.cyanlog.icu/api/admin/users/user-1/reset-password', { host: 'sales.cyanlog.icu' }),
+    )
+    expect(legacyRegister.status).toBe(404)
+    expect(registerAlias.status).toBe(404)
+    expect(retiredChangePassword.status).toBe(404)
+    expect(retiredResetPassword.status).toBe(404)
     expect(authProfile.status).toBe(401)
     expect(authPrefixNeighbor.status).toBe(401)
   })

@@ -20,7 +20,7 @@ it('blocks cross-organization reads and writes before accessing credentials', as
 })
 it('only discovers an enterprise for an authorized manager and rejects incomplete credentials', async () => {
   const credentials = { appId: 'FSAID_test', appSecret: 'secret', permanentCode: 'permanent' }
-  mocks.discover.mockResolvedValue({ ea: 'example' })
+  mocks.discover.mockResolvedValue({ ea: 'example', corpId: 'FSCID_server_only' })
   expect((await POST(request({ action: 'discover', credentials }, 'org-b'))).status).toBe(403)
   expect((await POST(request({ action: 'discover', credentials: { appId: 'FSAID_test' } }))).status).toBe(400)
   const response = await POST(request({ action: 'discover', credentials }))

@@ -22,10 +22,34 @@ it('rejects custom grants, extra secrets in URL, arbitrary headers and query obj
   expect(validRequest({ ...tokenRequest(), body: tokenRequest().body.replace('app_secret','authorization_code') })).toBe(false)
   const query = { url: tokenRequest().url.replace('/oauth2.0/token','/cgi/crm/v2/data/query'),
     headers: { 'content-type': 'application/json', authorization: 'Bearer fixture-token', 'x-fs-ea': 'enterprise', 'x-fs-userid': '123' },
-    body: JSON.stringify({ convertUserId: false, data: { dataObjectApiName: 'DepartmentObj', search_query_info: { limit: 100, offset: 0, fieldProjection: ['_id','name','parent_id','status'], filters: [] } } }) }
+    body: JSON.stringify({ convertUserId: false, data: { dataObjectApiName: 'DepartmentObj', search_query_info: { limit: 100, offset: 0, fieldProjection: ['_id','name','parent_id','status'], filters: [], orders: [] } } }) }
   expect(validRequest(query)).toBe(true)
   expect(validRequest({ ...query, body: query.body.replace('DepartmentObj','AccountObj') })).toBe(false)
   expect(validRequest({ ...query, body: query.body.replace('"offset":0','"offset":100000') })).toBe(false)
+})
+it('allows only the exact PersonnelObj identity lookup', () => {
+  const query = {
+    url: tokenRequest().url.replace('/oauth2.0/token','/cgi/crm/v2/data/query'),
+    headers: { 'content-type': 'application/json', authorization: 'Bearer fixture-token', 'x-fs-ea': 'enterprise', 'x-fs-userid': '123' },
+    body: JSON.stringify({
+      convertUserId: false,
+      data: {
+        dataObjectApiName: 'PersonnelObj',
+        search_query_info: {
+          limit: 100,
+          offset: 0,
+          fieldProjection: ['_id','user_id','full_name','name','phone','employee_number','status','is_pause_login','life_status','is_deleted'],
+          filters: [{ field_name: 'user_id', field_values: ['employee-open-id'], operator: 'EQ' }],
+          orders: [],
+        },
+      },
+    }),
+  }
+  expect(validRequest(query)).toBe(true)
+  expect(validRequest({ ...query, body: query.body.replace('employee-open-id','other-user') })).toBe(true)
+  expect(validRequest({ ...query, body: query.body.replace('"operator":"EQ"','"operator":"LIKE"') })).toBe(false)
+  expect(validRequest({ ...query, body: query.body.replace('"field_name":"user_id"','"field_name":"name"') })).toBe(false)
+  expect(validRequest({ ...query, body: query.body.replace('"phone"','"password"') })).toBe(false)
 })
 it('caps responses and never serializes provider exceptions', async () => {
   const fetcher = vi.fn().mockResolvedValue(new Response('x'.repeat(MAX_RESPONSE_BYTES + 1)))

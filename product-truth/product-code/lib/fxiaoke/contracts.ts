@@ -16,7 +16,9 @@ export const connectionInput = z.object({
   revision: z.string().uuid().nullable(),
 }).strict()
 export type ConnectionInput = z.infer<typeof connectionInput>
-export type Credentials = Required<Omit<ConnectionInput, 'revision'>>
+export type Credentials = Required<Omit<ConnectionInput, 'revision'>> & {
+  expectedCorpId?: string
+}
 export type ConnectionSummary = {
   appId: string; expectedEa: string; apiUserId: string; revision: string
   configured: boolean; lastCheckedAt: string | null
@@ -25,6 +27,16 @@ export type ConnectionSummary = {
 }
 export type DirectoryDepartment = { id: string; name: string; parentId: string | null; status: string }
 export type DirectoryEmployee = { id: string; name: string; departmentIds: string[]; status: string; loginDisabled: boolean | null }
+export type VerifiedEmployeeIdentity = {
+  externalSubject: string
+  phone: string | null
+  employeeNumber: string | null
+  displayName: string
+  status: string
+  loginDisabled: boolean | null
+  lifeStatus: string | null
+  deleted: boolean
+}
 export type DirectoryPreview = {
   ea: string; corpId: string; checkedAt: string
   departments: DirectoryDepartment[]; employees: DirectoryEmployee[]

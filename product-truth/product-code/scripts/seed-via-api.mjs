@@ -20,7 +20,6 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
 const id = (n) => `${n.toString(16).padStart(8, '0')}-0000-0000-0000-000000000000`
 
 const ORG_ID = id(0x00000001)
-const HASH = '$2b$10$5jD6hf7CCBmVdcUIIV41r.2igA7ILgxoKvKDzPQ5l1IlhIAsPlnd6' // password123
 
 async function main() {
   console.log('1. Organizations...')
@@ -55,29 +54,29 @@ async function main() {
 
   console.log('4. Users...')
   const users = [
-    { id: id(0x30000001), org_id: ORG_ID, email: 'superadmin@huarun.com', display_name: '系统超管', title: '超级管理员', primary_dept_id: id(0x20000004), password_hash: HASH },
-    { id: id(0x30000002), org_id: ORG_ID, email: 'admin@huarun.com', display_name: '王管理', title: '组织管理员', primary_dept_id: id(0x20000004), password_hash: HASH },
-    { id: id(0x30000010), org_id: ORG_ID, email: 'east.lead@huarun.com', display_name: '李华东', title: '华东销售总监', primary_dept_id: id(0x20000011), password_hash: HASH },
-    { id: id(0x30000011), org_id: ORG_ID, email: 'north.lead@huarun.com', display_name: '王华北', title: '华北销售总监', primary_dept_id: id(0x20000012), password_hash: HASH },
-    { id: id(0x30000012), org_id: ORG_ID, email: 'south.lead@huarun.com', display_name: '陈华南', title: '华南销售总监', primary_dept_id: id(0x20000013), password_hash: HASH },
-    { id: id(0x30000101), org_id: ORG_ID, email: 'zhang.ym@huarun.com', display_name: '张一鸣', title: '高级销售代表', primary_dept_id: id(0x20000021), password_hash: HASH },
-    { id: id(0x30000102), org_id: ORG_ID, email: 'li.fy@huarun.com', display_name: '李芳颖', title: '销售代表', primary_dept_id: id(0x20000021), password_hash: HASH },
-    { id: id(0x30000103), org_id: ORG_ID, email: 'wang.zy@huarun.com', display_name: '王志远', title: '销售代表', primary_dept_id: id(0x20000022), password_hash: HASH },
-    { id: id(0x30000104), org_id: ORG_ID, email: 'chen.hj@huarun.com', display_name: '陈慧娟', title: '销售经理', primary_dept_id: id(0x20000022), password_hash: HASH },
-    { id: id(0x30000105), org_id: ORG_ID, email: 'liu.jh@huarun.com', display_name: '刘建华', title: '销售代表', primary_dept_id: id(0x20000023), password_hash: HASH },
-    { id: id(0x30000106), org_id: ORG_ID, email: 'zhao.mn@huarun.com', display_name: '赵美娜', title: '销售代表', primary_dept_id: id(0x20000023), password_hash: HASH },
-    { id: id(0x30000201), org_id: ORG_ID, email: 'sun.ll@huarun.com', display_name: '孙丽丽', title: '销售代表', primary_dept_id: id(0x20000012), password_hash: HASH },
-    { id: id(0x30000202), org_id: ORG_ID, email: 'ma.jf@huarun.com', display_name: '马建飞', title: '销售代表', primary_dept_id: id(0x20000012), password_hash: HASH },
-    { id: id(0x30000203), org_id: ORG_ID, email: 'gao.xm@huarun.com', display_name: '高小明', title: '销售代表', primary_dept_id: id(0x20000012), password_hash: HASH },
-    { id: id(0x30000204), org_id: ORG_ID, email: 'hu.jh@huarun.com', display_name: '胡建华', title: '销售经理', primary_dept_id: id(0x20000012), password_hash: HASH },
-    { id: id(0x30000301), org_id: ORG_ID, email: 'guo.yf@huarun.com', display_name: '郭永福', title: '销售代表', primary_dept_id: id(0x20000013), password_hash: HASH },
-    { id: id(0x30000302), org_id: ORG_ID, email: 'lin.xq@huarun.com', display_name: '林小青', title: '销售代表', primary_dept_id: id(0x20000013), password_hash: HASH },
-    { id: id(0x30000303), org_id: ORG_ID, email: 'he.jm@huarun.com', display_name: '何健明', title: '销售代表', primary_dept_id: id(0x20000013), password_hash: HASH },
-    { id: id(0x30000304), org_id: ORG_ID, email: 'yang.lh@huarun.com', display_name: '杨丽华', title: '销售经理', primary_dept_id: id(0x20000013), password_hash: HASH },
-    { id: id(0x30000401), org_id: ORG_ID, email: 'legal01@huarun.com', display_name: '陈法务', title: '法务专员', primary_dept_id: id(0x20000002), password_hash: HASH },
-    { id: id(0x30000402), org_id: ORG_ID, email: 'legal02@huarun.com', display_name: '赵法务', title: '法务主管', primary_dept_id: id(0x20000002), password_hash: HASH },
-    { id: id(0x30000501), org_id: ORG_ID, email: 'finance01@huarun.com', display_name: '钱会计', title: '会计', primary_dept_id: id(0x20000003), password_hash: HASH },
-    { id: id(0x30000502), org_id: ORG_ID, email: 'finance02@huarun.com', display_name: '孙出纳', title: '出纳', primary_dept_id: id(0x20000003), password_hash: HASH },
+    { id: id(0x30000001), org_id: ORG_ID, email: 'superadmin@huarun.com', display_name: '系统超管', title: '超级管理员', primary_dept_id: id(0x20000004) },
+    { id: id(0x30000002), org_id: ORG_ID, email: 'admin@huarun.com', display_name: '王管理', title: '组织管理员', primary_dept_id: id(0x20000004) },
+    { id: id(0x30000010), org_id: ORG_ID, email: 'east.lead@huarun.com', display_name: '李华东', title: '华东销售总监', primary_dept_id: id(0x20000011) },
+    { id: id(0x30000011), org_id: ORG_ID, email: 'north.lead@huarun.com', display_name: '王华北', title: '华北销售总监', primary_dept_id: id(0x20000012) },
+    { id: id(0x30000012), org_id: ORG_ID, email: 'south.lead@huarun.com', display_name: '陈华南', title: '华南销售总监', primary_dept_id: id(0x20000013) },
+    { id: id(0x30000101), org_id: ORG_ID, email: 'zhang.ym@huarun.com', display_name: '张一鸣', title: '高级销售代表', primary_dept_id: id(0x20000021) },
+    { id: id(0x30000102), org_id: ORG_ID, email: 'li.fy@huarun.com', display_name: '李芳颖', title: '销售代表', primary_dept_id: id(0x20000021) },
+    { id: id(0x30000103), org_id: ORG_ID, email: 'wang.zy@huarun.com', display_name: '王志远', title: '销售代表', primary_dept_id: id(0x20000022) },
+    { id: id(0x30000104), org_id: ORG_ID, email: 'chen.hj@huarun.com', display_name: '陈慧娟', title: '销售经理', primary_dept_id: id(0x20000022) },
+    { id: id(0x30000105), org_id: ORG_ID, email: 'liu.jh@huarun.com', display_name: '刘建华', title: '销售代表', primary_dept_id: id(0x20000023) },
+    { id: id(0x30000106), org_id: ORG_ID, email: 'zhao.mn@huarun.com', display_name: '赵美娜', title: '销售代表', primary_dept_id: id(0x20000023) },
+    { id: id(0x30000201), org_id: ORG_ID, email: 'sun.ll@huarun.com', display_name: '孙丽丽', title: '销售代表', primary_dept_id: id(0x20000012) },
+    { id: id(0x30000202), org_id: ORG_ID, email: 'ma.jf@huarun.com', display_name: '马建飞', title: '销售代表', primary_dept_id: id(0x20000012) },
+    { id: id(0x30000203), org_id: ORG_ID, email: 'gao.xm@huarun.com', display_name: '高小明', title: '销售代表', primary_dept_id: id(0x20000012) },
+    { id: id(0x30000204), org_id: ORG_ID, email: 'hu.jh@huarun.com', display_name: '胡建华', title: '销售经理', primary_dept_id: id(0x20000012) },
+    { id: id(0x30000301), org_id: ORG_ID, email: 'guo.yf@huarun.com', display_name: '郭永福', title: '销售代表', primary_dept_id: id(0x20000013) },
+    { id: id(0x30000302), org_id: ORG_ID, email: 'lin.xq@huarun.com', display_name: '林小青', title: '销售代表', primary_dept_id: id(0x20000013) },
+    { id: id(0x30000303), org_id: ORG_ID, email: 'he.jm@huarun.com', display_name: '何健明', title: '销售代表', primary_dept_id: id(0x20000013) },
+    { id: id(0x30000304), org_id: ORG_ID, email: 'yang.lh@huarun.com', display_name: '杨丽华', title: '销售经理', primary_dept_id: id(0x20000013) },
+    { id: id(0x30000401), org_id: ORG_ID, email: 'legal01@huarun.com', display_name: '陈法务', title: '法务专员', primary_dept_id: id(0x20000002) },
+    { id: id(0x30000402), org_id: ORG_ID, email: 'legal02@huarun.com', display_name: '赵法务', title: '法务主管', primary_dept_id: id(0x20000002) },
+    { id: id(0x30000501), org_id: ORG_ID, email: 'finance01@huarun.com', display_name: '钱会计', title: '会计', primary_dept_id: id(0x20000003) },
+    { id: id(0x30000502), org_id: ORG_ID, email: 'finance02@huarun.com', display_name: '孙出纳', title: '出纳', primary_dept_id: id(0x20000003) },
   ]
   const { error: usersErr } = await supabase.from('users').upsert(users)
   if (usersErr) console.error('Users error:', usersErr)

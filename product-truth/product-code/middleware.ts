@@ -35,7 +35,16 @@ import { createMiddlewareRestClient } from '@/lib/middleware-rest-client'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
 import { resolveRolePermissions } from '@/lib/role-permission-resolution'
 
-const PUBLIC_PATHS = ['/login', '/register', '/accept-invitation', '/sales-portal']
+const PUBLIC_PATHS = ['/login', '/accept-invitation', '/sales-portal']
+const RETIRED_EXACT_PATHS = new Set([
+  '/register',
+  '/change-password',
+  '/api/auth',
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/prewarm',
+  '/api/auth/change-password',
+])
 const PRIMARY_HOST = 'sales.cyanlog.icu'
 const HOST_REDIRECTS: Record<string, { rootPath: string; preservePath: boolean }> = {
   'quote.cyanlog.icu': { rootPath: '/quotes', preservePath: true },
@@ -44,10 +53,9 @@ const HOST_REDIRECTS: Record<string, { rootPath: string; preservePath: boolean }
   'www.cyanlog.icu': { rootPath: '/', preservePath: true },
 }
 const PUBLIC_API_PATHS = new Set([
-  '/api/auth',
-  '/api/auth/login',
-  '/api/auth/prewarm',
-  '/api/auth/register',
+  '/api/auth/providers',
+  '/api/auth/fxiaoke/start',
+  '/api/auth/fxiaoke/callback',
   '/api/auth/invitations/accept',
   '/api/client-errors',
   '/api/contracts/process',
@@ -57,12 +65,6 @@ const PUBLIC_API_PATHS = new Set([
   // Scoped machine credential is checked in the handler; no interactive user session.
   '/api/admin/organization-sources/fxiaoke/egress',
 ])
-const PASSWORD_CHANGE_ALLOWED_PATHS = [
-  '/change-password',
-  '/api/auth/me',
-  '/api/auth/change-password',
-]
-
 // REQ: F003 自主可控 + RBAC
 // 路径 → 所需权限（路由级权限，权限可配置于 roles.permissions）
 const ROUTE_PERMISSIONS: Record<string, string> = {
@@ -73,7 +75,6 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
 type MiddlewareAuthContext = {
   userId: string
   orgId: string
-  mustChangePassword: boolean
   roleCodes: string[]
   authorizationRoleCodes: string[]
   allPermissions: string[]
@@ -90,15 +91,16 @@ function isPublicPath(pathname: string): boolean {
     || pathname.startsWith('/brand/')
 }
 
+function isRetiredAuthPath(pathname: string): boolean {
+  return RETIRED_EXACT_PATHS.has(pathname)
+    || /^\/api\/admin\/users\/[^/]+\/reset-password$/.test(pathname)
+}
+
 function getRequiredPermission(pathname: string): string | null {
   for (const [prefix, perm] of Object.entries(ROUTE_PERMISSIONS)) {
     if (pathname === prefix || pathname.startsWith(prefix + '/')) return perm
   }
   return null
-}
-
-function isPasswordChangeAllowedPath(pathname: string): boolean {
-  return PASSWORD_CHANGE_ALLOWED_PATHS.some((path) => pathname === path || pathname.startsWith(path + '/'))
 }
 
 function buildRedirectUrl(request: NextRequest, pathname: string, search = ''): URL {
@@ -144,10 +146,9 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
     rest.selectRows<{
       id: string
       org_id: string | null
-      must_change_password: boolean | null
       status: string
       login_enabled: boolean | null
-    }>('users', { id: userId }, 'id,org_id,must_change_password,status,login_enabled'),
+    }>('users', { id: userId }, 'id,org_id,status,login_enabled'),
     rest.selectRows<{ org_id: string }>('user_organizations', {
       user_id: userId,
       status: 'active',
@@ -198,7 +199,6 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
   return {
     userId,
     orgId,
-    mustChangePassword: Boolean(userRow.must_change_password),
     roleCodes,
     authorizationRoleCodes,
     allPermissions,
@@ -222,6 +222,12 @@ export async function middleware(request: NextRequest) {
     url.host = PRIMARY_HOST
     url.pathname = redirectRule.preservePath && pathname !== '/' ? pathname : redirectRule.rootPath
     return NextResponse.redirect(url, 308)
+  }
+
+  if (isRetiredAuthPath(pathname)) {
+    return pathname.startsWith('/api/')
+      ? NextResponse.json({ error: 'Not Found' }, { status: 404 })
+      : new NextResponse('Not Found', { status: 404 })
   }
 
   if (isPublicPath(pathname)) {
@@ -249,13 +255,6 @@ export async function middleware(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
       return NextResponse.redirect(buildRedirectUrl(request, '/login'))
-    }
-
-    if (authContext.mustChangePassword && !isPasswordChangeAllowedPath(pathname)) {
-      if (pathname.startsWith('/api/')) {
-        return NextResponse.json({ error: 'Password change required', code: 'MUST_CHANGE_PASSWORD' }, { status: 403 })
-      }
-      return NextResponse.redirect(buildRedirectUrl(request, '/change-password'))
     }
 
     // 路径级权限校验

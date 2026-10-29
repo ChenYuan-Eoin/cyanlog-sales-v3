@@ -14,11 +14,12 @@ vi.mock('@/lib/scoped-access', () => ({
 
 vi.mock('@/lib/admin/org-membership', () => ({
   assertDepartmentInOrg: vi.fn(),
-  createAdminTempPassword: vi.fn(),
   ensureDefaultOrganizationMembership: vi.fn(),
-  hashAdminPassword: vi.fn(),
   syncPrimaryDepartmentMembership: vi.fn(),
   syncUserSalesSpaces: vi.fn(),
+}))
+vi.mock('@/lib/fxiaoke/identity', () => ({
+  normalizeIdentityPhone: vi.fn((value: string) => value ? '+8613900000000' : null),
 }))
 
 vi.mock('@/lib/admin/org-role-authority', () => ({
@@ -40,9 +41,7 @@ import {
 } from '@/lib/scoped-access'
 import {
   assertDepartmentInOrg,
-  createAdminTempPassword,
   ensureDefaultOrganizationMembership,
-  hashAdminPassword,
   syncPrimaryDepartmentMembership,
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
@@ -61,6 +60,7 @@ function makeRequest(overrides: Record<string, unknown> = {}): any {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       email: 'new.user@example.test',
+      phone: '13900000000',
       display_name: 'New User',
       role_ids: [],
       ...overrides,
@@ -90,6 +90,7 @@ function makeQuery(result: { data?: unknown; error?: unknown }) {
 
 function mockSuccessfulUserInsert() {
   const duplicateLookup = makeQuery({ data: null, error: null })
+  const duplicatePhoneLookup = makeQuery({ data: null, error: null })
   const userInsert = makeQuery({
     data: {
       id: userId,
@@ -106,6 +107,7 @@ function mockSuccessfulUserInsert() {
   const invitationInsert = makeQuery({ data: null, error: null })
   ;(supabaseAdmin.from as any)
     .mockReturnValueOnce(duplicateLookup)
+    .mockReturnValueOnce(duplicatePhoneLookup)
     .mockReturnValueOnce(userInsert)
     .mockReturnValueOnce(membershipUpdate)
     .mockReturnValueOnce(invitationInsert)
@@ -122,8 +124,6 @@ describe('POST /api/admin/users', () => {
     ;(canMutateOrgDepartments as any).mockReturnValue(true)
     ;(validateOrgRoleAssignment as any).mockResolvedValue({ ok: true, roleIds: [] })
     ;(assertDepartmentInOrg as any).mockResolvedValue({ id: primaryDepartmentId })
-    ;(createAdminTempPassword as any).mockReturnValue('Temp-password')
-    ;(hashAdminPassword as any).mockResolvedValue('password-hash')
     ;(ensureDefaultOrganizationMembership as any).mockResolvedValue(undefined)
     ;(syncPrimaryDepartmentMembership as any).mockResolvedValue(undefined)
     ;(syncUserSalesSpaces as any).mockResolvedValue(undefined)
@@ -152,7 +152,7 @@ describe('POST /api/admin/users', () => {
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
-  it('主部门权限不属于当前组织时在部门查询、插入和 bcrypt 前拒绝', async () => {
+  it('主部门权限不属于当前组织时在部门查询和插入前拒绝', async () => {
     ;(canMutateOrgDepartments as any).mockReturnValue(false)
 
     const res = await POST(makeRequest({ primary_dept_id: primaryDepartmentId }))
@@ -164,7 +164,6 @@ describe('POST /api/admin/users', () => {
     expect(canMutateOrgDepartments).toHaveBeenCalledWith(freshAssignments, orgId)
     expect(validateOrgRoleAssignment).not.toHaveBeenCalled()
     expect(assertDepartmentInOrg).not.toHaveBeenCalled()
-    expect(hashAdminPassword).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 

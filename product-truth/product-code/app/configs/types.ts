@@ -570,6 +570,7 @@ export interface ScopedRoleAssignment {
 export interface OrgSummaryUser {
   id: string
   email: string
+  phone?: string | null
   display_name: string
   title: string
   primary_dept_name: string
@@ -581,7 +582,6 @@ export interface OrgSummaryUser {
   status: string
   membership_status?: 'invited' | 'active' | 'suspended' | 'ended'
   employment_status?: 'active' | 'suspended' | 'ended'
-  must_change_password: boolean
   login_enabled?: boolean
   report_to_user_id?: string | null
   report_to_user_name?: string | null

@@ -61,7 +61,7 @@ it('carries enterprise discovery through encrypted jobs and only broadcasts an e
     expect(JSON.stringify(fake.tables)).not.toContain('example-token')
     return { success:true }
   })
-  expect(await discoverEnterprise(credentials,transportForOrganization(org))).toEqual({ ea:'fixture-enterprise' })
+  expect(await discoverEnterprise(credentials,transportForOrganization(org))).toEqual({ ea:'fixture-enterprise', corpId:'FSCID_fixture' })
   expect(fake.wake).toHaveBeenCalledWith('wake',{}, {timeout:3000})
   expect(fake.tables.organization_fxiaoke_egress_jobs).toHaveLength(0)
   expect(JSON.stringify(fake.inserts)).not.toContain(credentials.appSecret)

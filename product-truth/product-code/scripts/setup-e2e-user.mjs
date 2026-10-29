@@ -1,144 +1,120 @@
-// 重置 seed 用户的密码用于 E2E 测试
-// 一次性脚本
+// Create a local E2E operator and a revocable application session directly.
+// No local password is created. Remote Supabase targets are rejected.
 
+import { randomUUID } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
-import bcrypt from 'bcryptjs'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error('❌ 缺少 SUPABASE 环境变量')
+  console.error('缺少 SUPABASE 环境变量')
+  process.exit(1)
+}
+if (!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(SUPABASE_URL)) {
+  console.error('E2E 用户脚本仅允许本地临时 Supabase；生产唯一库 cyanlog-sales-v3 不使用该脚本')
   process.exit(1)
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
-
+const ORG_ID = '00000001-0000-0000-0000-000000000000'
 const TEST_EMAIL = 'e2e-admin@huarun.com'
-const TEST_PASSWORD = 'E2ETestPassword123!'
+const TEST_PHONE = process.env.E2E_TEST_PHONE || '+8613900000000'
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { autoRefreshToken: false, persistSession: false },
+})
 
 async function main() {
-  console.log('🔐 重置 E2E 测试用户密码...')
-
-  // 1. 查找用户
-  const { data: user, error: findErr } = await supabase
-    .from('users')
+  const { data: role, error: roleError } = await supabase
+    .from('roles')
     .select('id')
-    .eq('email', TEST_EMAIL)
+    .eq('code', 'SUPER_ADMIN')
     .single()
-
-  if (findErr || !user) {
-    console.log('ℹ️  用户不存在，将创建')
-    const HASH = await bcrypt.hash(TEST_PASSWORD, 10)
-
-    // 找到 super_admin role 和 IT 部门
-    const { data: role } = await supabase
-      .from('roles')
-      .select('id')
-      .eq('code', 'SUPER_ADMIN')
-      .single()
-
-    const { data: dept } = await supabase
-      .from('departments')
-      .select('id')
-      .eq('code', 'IT')
-      .single()
-
-    if (!role || !dept) {
-      console.error('❌ 找不到 SUPER_ADMIN role 或 IT 部门')
-      process.exit(1)
-    }
-
-    const ORG_ID = '00000001-0000-0000-0000-000000000000'
-    const USER_ID = '00030001-0000-0000-0000-000000000000'
-
-    const { error: insertErr } = await supabase.from('users').insert({
-      id: USER_ID,
-      org_id: ORG_ID,
-      email: TEST_EMAIL,
-      display_name: 'E2E 测试管理员',
-      title: 'E2E 管理员',
-      primary_dept_id: dept.id,
-      password_hash: HASH,
-      status: 'active',
-    })
-
-    if (insertErr) {
-      console.error('❌ 创建用户失败:', insertErr.message)
-      process.exit(1)
-    }
-
-    // 关联 role（匹配当前组织模型）
-    await supabase.from('user_roles').insert({
-      user_id: USER_ID,
-      role_id: role.id,
-      scope_type: 'org',
-      scope_id: ORG_ID,
-    })
-
-    // 关联部门
-    await supabase.from('user_departments').insert({
-      user_id: USER_ID,
-      department_id: dept.id,
-      is_primary: true,
-    })
-
-    // 关联默认组织
-    await supabase.from('user_organizations').upsert({
-      user_id: USER_ID,
-      org_id: ORG_ID,
-      is_default: true,
-    }, { onConflict: 'user_id,org_id' })
-
-    console.log(`✅ E2E 用户创建成功: ${TEST_EMAIL}`)
-  } else {
-    // 更新密码
-    const HASH = await bcrypt.hash(TEST_PASSWORD, 10)
-    const { error: updateErr } = await supabase
-      .from('users')
-      .update({ password_hash: HASH, must_change_password: false })
-      .eq('id', user.id)
-
-    if (updateErr) {
-      console.error('❌ 更新密码失败:', updateErr.message)
-      process.exit(1)
-    }
-
-    const { data: currentUser } = await supabase
-      .from('users')
-      .select('id, org_id')
-      .eq('id', user.id)
-      .single()
-
-    if (currentUser?.org_id) {
-      const { data: adminRole } = await supabase
-        .from('roles')
-        .select('id')
-        .eq('code', 'ADMIN')
-        .single()
-
-      if (adminRole) {
-        await supabase.from('user_roles').upsert({
-          user_id: currentUser.id,
-          role_id: adminRole.id,
-          scope_type: 'org',
-          scope_id: currentUser.org_id,
-        }, { onConflict: 'user_id,role_id,scope_type,scope_id' })
-      }
-
-      await supabase.from('user_organizations').upsert({
-        user_id: currentUser.id,
-        org_id: currentUser.org_id,
-        is_default: true,
-      }, { onConflict: 'user_id,org_id' })
-    }
-    console.log(`✅ E2E 用户密码已重置: ${TEST_EMAIL}`)
+  const { data: department, error: departmentError } = await supabase
+    .from('departments')
+    .select('id')
+    .eq('org_id', ORG_ID)
+    .eq('code', 'IT')
+    .single()
+  if (roleError || departmentError || !role || !department) {
+    console.error('本地种子缺少 SUPER_ADMIN 角色或 IT 部门')
+    process.exit(1)
   }
 
-  console.log('')
-  console.log('凭证：')
-  console.log(`  email:    ${TEST_EMAIL}`)
-  console.log(`  password: ${TEST_PASSWORD}`)
+  const { data: existing, error: findError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('org_id', ORG_ID)
+    .eq('email', TEST_EMAIL)
+    .maybeSingle()
+  if (findError) {
+    console.error('查询 E2E 用户失败:', findError.message)
+    process.exit(1)
+  }
+
+  const userId = existing?.id || randomUUID()
+  if (!existing) {
+    const { error: insertError } = await supabase.from('users').insert({
+      id: userId,
+      org_id: ORG_ID,
+      email: TEST_EMAIL,
+      phone: TEST_PHONE,
+      display_name: 'E2E 测试管理员',
+      title: 'E2E 管理员',
+      primary_dept_id: department.id,
+      status: 'active',
+      login_enabled: true,
+    })
+    if (insertError) {
+      console.error('创建 E2E 用户失败:', insertError.message)
+      process.exit(1)
+    }
+  } else {
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ phone: TEST_PHONE, status: 'active', login_enabled: true })
+      .eq('id', userId)
+    if (updateError) {
+      console.error('更新 E2E 用户失败:', updateError.message)
+      process.exit(1)
+    }
+  }
+
+  await supabase.from('user_roles').upsert({
+    user_id: userId,
+    role_id: role.id,
+    org_id: ORG_ID,
+    scope_type: 'org',
+    scope_id: ORG_ID,
+  }, { onConflict: 'user_id,role_id,scope_type,scope_id' })
+  await supabase.from('user_organizations').upsert({
+    user_id: userId,
+    org_id: ORG_ID,
+    is_default: true,
+    status: 'active',
+  }, { onConflict: 'user_id,org_id' })
+  await supabase.from('user_departments').upsert({
+    user_id: userId,
+    department_id: department.id,
+    is_primary: true,
+  }, { onConflict: 'user_id,department_id' })
+
+  const token = randomUUID()
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+  const { error: tokenError } = await supabase.from('auth_tokens').insert({
+    id: randomUUID(),
+    token,
+    user_id: userId,
+    expires_at: expiresAt,
+  })
+  if (tokenError) {
+    console.error('创建本地 E2E 会话失败:', tokenError.message)
+    process.exit(1)
+  }
+
+  console.log('E2E 本地成员已就绪，无本地密码')
+  console.log(`user_id: ${userId}`)
+  console.log(`token: ${token}`)
+  console.log(`expires_at: ${expiresAt}`)
 }
 
-main()
+void main()

@@ -2,25 +2,12 @@
 import { test, expect } from '@playwright/test'
 
 test('100 行 SKU 预览刷新 <500ms', async ({ page, request }) => {
-  // API 登录，拿到 token 与 cookie
-  const res = await request.post('http://localhost:3100/api/auth/login', {
-    data: { email: 'e2e-admin@huarun.com', password: 'E2ETestPassword123!' },
-  })
-  expect(res.ok()).toBeTruthy()
-  const body = await res.json()
-  const token = body.token || body.data?.token
+  const token = process.env.E2E_AUTH_TOKEN
   expect(token).toBeTruthy()
-
-  const setCookie = res.headers()['set-cookie']
-  console.log('[DIAG] set-cookie:', setCookie?.slice(0, 80) ?? 'none')
-  if (setCookie) {
-    const cookies = setCookie.split(/,(?=[^;]+=[^;]+)/).map((part) => {
-      const [pair] = part.trim().split(';')
-      const eq = pair.indexOf('=')
-      return { name: pair.slice(0, eq), value: pair.slice(eq + 1), domain: 'localhost', path: '/' }
-    })
-    await page.context().addCookies(cookies)
-  }
+  await page.context().addCookies([
+    { name: 'token', value: token!, domain: 'localhost', path: '/', httpOnly: true },
+    { name: 'client_token', value: token!, domain: 'localhost', path: '/' },
+  ])
   await page.addInitScript((t) => localStorage.setItem('token', t), token)
   await page.goto('http://localhost:3100/quotes/new', { waitUntil: 'domcontentloaded' })
   try {

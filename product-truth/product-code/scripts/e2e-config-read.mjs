@@ -1,8 +1,10 @@
 // 改参数不重启生效：配置中心 API 创建/发布/更新/再发布/读取（同一运行中服务）
 const BASE = 'http://localhost:3100'
-const login = await fetch(`${BASE}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'e2e-admin@huarun.com', password: 'E2ETestPassword123!' }) })
-const j = await login.json()
-const token = j.token || j.data?.token || j.access_token
+const token = process.env.E2E_AUTH_TOKEN
+if (!token) {
+  console.error('缺少 E2E_AUTH_TOKEN；先运行 node scripts/setup-e2e-user.mjs')
+  process.exit(1)
+}
 const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 const E = (l, ok, d = '') => console.log(`${ok ? '✅' : '❌'} ${l}${d ? ' — ' + d : ''}`)
 

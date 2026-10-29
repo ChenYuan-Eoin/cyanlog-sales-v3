@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
-import { discoverEnterprise, previewDirectory } from './client'
+import { discoverEnterprise, previewDirectory, readEmployeeIdentity } from './client'
 const credentials = { appId: 'FSAID_test', appSecret: 'test-only-secret', permanentCode: 'test-only-code', expectedEa: 'example', apiUserId: '123' }
 const token = { errorCode: 0, appId: credentials.appId, ea: 'example', openUserId: 'FSCID_test', accessToken: 'test-token' }
 const department = { _id: '100', name: '销售部', parent_id: [], status: 0 }
@@ -9,12 +9,11 @@ const page = (rows: unknown[], total = rows.length) => ({ errorCode: 0, data: { 
 function fixture(...values: unknown[]) { return vi.fn<typeof fetch>().mockImplementation(async () => Response.json(values.shift())) }
 
 describe('Fxiaoke direct directory preview', () => {
-  it('discovers only the enterprise account, without returning the access token or company ID', async () => {
+  it('returns server-side enterprise identity fields while discarding the access token', async () => {
     const request = fixture(token)
     const result = await discoverEnterprise(credentials, request)
-    expect(result).toEqual({ ea: 'example' })
+    expect(result).toEqual({ ea: 'example', corpId: token.openUserId })
     expect(JSON.stringify(result)).not.toContain('test-token')
-    expect(JSON.stringify(result)).not.toContain('FSCID_')
     expect(JSON.parse(String(request.mock.calls[0][1]?.body))).toEqual({ appId: credentials.appId, appSecret: credentials.appSecret, permanentCode: credentials.permanentCode, grantType: 'app_secret' })
   })
   it('rejects a discovery response for a different app or with an invalid enterprise account', async () => {
@@ -67,5 +66,41 @@ describe('Fxiaoke direct directory preview', () => {
   it('does not reflect upstream secrets in errors', async () => {
     await expect(previewDirectory(credentials, fixture({ errorCode: 20016, errorMessage: credentials.appSecret }))).rejects.toThrow('错误码 20016')
     await expect(previewDirectory(credentials, fixture({ errorCode: 20016, errorMessage: credentials.appSecret }))).rejects.not.toThrow(credentials.appSecret)
+  })
+  it('reads one verified employee profile by OAuth subject without using the system work number', async () => {
+    const profile = {
+      _id: 'record1',
+      user_id: 'employee-open-id',
+      full_name: '测试员工',
+      name: '测试员工昵称',
+      phone: '13900000000',
+      employee_number: 'E1001',
+      status: '启用',
+      is_pause_login: false,
+      life_status: '正常',
+      is_deleted: false,
+    }
+    const request = fixture(token, page([profile]))
+    await expect(readEmployeeIdentity(credentials, 'employee-open-id', request)).resolves.toEqual({
+      externalSubject: 'employee-open-id',
+      phone: '13900000000',
+      employeeNumber: 'E1001',
+      displayName: '测试员工',
+      status: '启用',
+      loginDisabled: false,
+      lifeStatus: '正常',
+      deleted: false,
+    })
+    const query = JSON.parse(String(request.mock.calls[1][1]?.body)).data.search_query_info
+    expect(query.filters).toEqual([{ field_name: 'user_id', field_values: ['employee-open-id'], operator: 'EQ' }])
+    expect(query.fieldProjection).not.toContain('password')
+    expect(JSON.stringify(request.mock.calls[1][1])).not.toContain('employee_number":"E1001')
+  })
+  it('fails closed for missing, ambiguous, mismatched or inactive provider profiles', async () => {
+    const profile = { _id: 'record1', user_id: 'employee-open-id', name: '测试员工', phone: '13900000000', employee_number: 'E1001', status: '启用', is_pause_login: false, life_status: '正常', is_deleted: false }
+    await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(token, page([])))).rejects.toMatchObject({ code: 'IDENTITY_PROFILE_UNAVAILABLE', status: 403 })
+    await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(token, page([profile, { ...profile, _id: 'record2' }])))).rejects.toMatchObject({ code: 'IDENTITY_PROFILE_UNAVAILABLE', status: 403 })
+    await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(token, page([{ ...profile, user_id: 'other-user' }])))).rejects.toMatchObject({ code: 'IDENTITY_PROFILE_MISMATCH', status: 409 })
+    await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(token, page([{ ...profile, is_pause_login: true }])))).rejects.toMatchObject({ code: 'EMPLOYEE_INACTIVE', status: 403 })
   })
 })

@@ -1,12 +1,10 @@
 import { createHash } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { hashAdminPassword } from '@/lib/admin/org-membership'
 import { supabaseAdmin } from '@/lib/supabase'
 
 const acceptInvitationSchema = z.object({
   token: z.string().trim().min(24).max(500),
-  password: z.string().min(12, '密码至少需要 12 个字符').max(128),
 })
 
 export async function POST(req: NextRequest) {
@@ -19,10 +17,8 @@ export async function POST(req: NextRequest) {
   }
 
   const tokenHash = createHash('sha256').update(parsed.data.token).digest('hex')
-  const passwordHash = await hashAdminPassword(parsed.data.password)
   const { data, error } = await supabaseAdmin.rpc('accept_personnel_invitation_v1', {
     p_token_hash: tokenHash,
-    p_password_hash: passwordHash,
     p_request_id: req.headers.get('x-request-id'),
   })
   if (error) {
@@ -39,6 +35,6 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     success: true,
     data,
-    message: '账号已激活，可以登录',
+    message: '成员关系已激活，请使用企业统一登录',
   })
 }

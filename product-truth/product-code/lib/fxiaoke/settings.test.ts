@@ -25,20 +25,30 @@ vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: (table: string) => {
     },
   }; return query
 } } }))
-import { loadConnection, previewSavedConnection, saveConnection } from './settings'
+import { loadConnection, loadOAuthCredentials, previewSavedConnection, saveConnection } from './settings'
 import { decryptCredentials } from './crypto'
 const input = { appId: 'FSAID_test', expectedEa: 'example', apiUserId: '123', appSecret: 'test-secret', permanentCode: 'test-code', revision: null }
-beforeEach(() => { db.rows.length = 0; db.projections.length = 0; upstream.preview.mockReset(); upstream.discover.mockReset().mockResolvedValue({ ea: "example" }); vi.stubEnv('ORGANIZATION_CREDENTIALS_ENCRYPTION_KEY', 'ab'.repeat(32)) })
+beforeEach(() => { db.rows.length = 0; db.projections.length = 0; upstream.preview.mockReset(); upstream.discover.mockReset().mockResolvedValue({ ea: "example", corpId: 'FSCID_example' }); vi.stubEnv('ORGANIZATION_CREDENTIALS_ENCRYPTION_KEY', 'ab'.repeat(32)) })
 afterEach(() => vi.unstubAllEnvs())
 it('encrypts on save, reads public metadata back, and never returns secrets', async () => {
   const result = await saveConnection('org-a', 'admin', input)
   expect(result).toMatchObject({ configured: true, lastCheckStatus: 'not_checked' })
   expect(JSON.stringify(result)).not.toContain('test-secret')
   expect(JSON.stringify(db.rows)).not.toContain('test-secret')
-  expect(JSON.parse(decryptCredentials('org-a', String(db.rows[0].credentials_ciphertext)))).toMatchObject({ appSecret: input.appSecret })
+  expect(JSON.parse(decryptCredentials('org-a', String(db.rows[0].credentials_ciphertext)))).toMatchObject({ appSecret: input.appSecret, expectedCorpId: 'FSCID_example' })
   db.projections.length = 0
   expect(await loadConnection('org-b')).toBeNull()
   expect(db.projections.some(value => value.includes('ciphertext'))).toBe(false)
+})
+it('loads OAuth credentials only through the server-side encrypted row', async () => {
+  await saveConnection('org-a', 'admin', input)
+  await expect(loadOAuthCredentials('org-a')).resolves.toMatchObject({
+    appId: input.appId,
+    appSecret: input.appSecret,
+    expectedEa: input.expectedEa,
+    expectedCorpId: 'FSCID_example',
+  })
+  expect(JSON.stringify(await loadConnection('org-a'))).not.toContain(input.appSecret)
 })
 it('preserves blank-edit secrets only within the same app and enterprise', async () => {
   const saved = await saveConnection('org-a', 'admin', input)

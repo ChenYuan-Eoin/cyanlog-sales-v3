@@ -2,11 +2,10 @@ export const AUTH_CONTEXT_COOKIE_NAME = 'auth_context'
 export const AUTH_CONTEXT_COOKIE_MAX_AGE_SECONDS = 15
 
 export type AuthContextCookie = {
-  v: 2
+  v: 3
   userId: string
   orgId: string
   tokenHash: string
-  mustChangePassword: boolean
   roleCodes: string[]
   allPermissions: string[]
   full: boolean
@@ -107,7 +106,7 @@ export async function createAuthContextCookieValue(
   input: AuthContextCookieInput
 ): Promise<string | null> {
   const payload: AuthContextCookie = {
-    v: 2,
+    v: 3,
     ...input,
     tokenHash: await hashAuthContextToken(token),
     exp: Date.now() + AUTH_CONTEXT_COOKIE_MAX_AGE_SECONDS * 1000,
@@ -134,7 +133,7 @@ export async function readAuthContextCookieValue(
 
   try {
     const payload = JSON.parse(textDecoder.decode(payloadBytes)) as AuthContextCookie
-    if (payload.v !== 2 || payload.exp < Date.now()) return null
+    if (payload.v !== 3 || payload.exp < Date.now()) return null
     if (payload.tokenHash !== await hashAuthContextToken(token)) return null
     if (
       !payload.userId

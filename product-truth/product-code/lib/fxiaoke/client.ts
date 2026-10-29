@@ -2,7 +2,7 @@
 // https://developer.fxiaoke.com/openapi_v2/start/auth/app-info.html
 // https://developer.fxiaoke.com/openapi_v2/start/example/public.html
 import { randomUUID } from 'node:crypto'
-import { FxiaokeError, type Credentials, type DirectoryPreview } from './contracts'
+import { FxiaokeError, type Credentials, type DirectoryPreview, type VerifiedEmployeeIdentity } from './contracts'
 
 const ORIGIN = 'https://open.fxiaoke.com'
 const LIMIT = 100
@@ -27,6 +27,9 @@ function name(value: unknown): string {
   return value.trim()
 }
 function status(value: unknown) { return typeof value === 'string' || typeof value === 'number' ? String(value) : 'unknown' }
+function optionalText(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
 
 // Classify known transport failures without returning upstream error text, URLs or credentials.
 function connectionFailure(error: unknown): FxiaokeError {
@@ -80,7 +83,7 @@ export async function previewDirectory(credentials: Credentials, request: typeof
     for (let offset = 0; offset <= MAX_RECORDS; offset += LIMIT) {
       const response = await post('/cgi/crm/v2/data/query', {
         convertUserId: false, data: { dataObjectApiName: apiName, search_query_info: {
-          limit: LIMIT, offset, fieldProjection: fields, filters: [],
+          limit: LIMIT, offset, fieldProjection: fields, filters: [], orders: [],
         } },
       }, headers)
       const page = object(response.data)
@@ -110,8 +113,142 @@ export async function previewDirectory(credentials: Credentials, request: typeof
   return { ea: credentials.expectedEa, corpId: token.openUserId, checkedAt: new Date().toISOString(), departments, employees, warnings, visibility: 'authorized_scope', applied: false }
 }
 
+/**
+ * Reads the provider profile for the already-authenticated OAuth subject.
+ * openUserId is only a provider lookup key here; it is never compared with the
+ * system work number. PersonnelObj.phone is a provider-returned value, not an
+ * independent verification claim. The identity resolver still requires one
+ * canonical phone match before persisting a new mapping.
+ */
+export async function readEmployeeIdentity(
+  credentials: Credentials,
+  externalSubject: string,
+  request: typeof fetch = fetch,
+): Promise<VerifiedEmployeeIdentity> {
+  if (!/^[A-Za-z0-9_-]{1,255}$/.test(externalSubject)) {
+    throw new FxiaokeError('INVALID_IDENTITY', '纷享员工身份标识无效。', 403)
+  }
+
+  async function post(path: string, body: unknown, headers: Record<string, string> = {}) {
+    let response: Response
+    try {
+      response = await request(`${ORIGIN}${path}?thirdTraceId=${randomUUID()}`, {
+        method: 'POST',
+        redirect: 'error',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(30_000),
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify(body),
+      })
+    } catch (error) {
+      throw connectionFailure(error)
+    }
+    if (!response.ok) {
+      throw new FxiaokeError('PROVIDER_HTTP_ERROR', `纷享人员接口返回 HTTP ${response.status}。`, 502)
+    }
+    let data: Row
+    try {
+      data = object(await response.json())
+    } catch {
+      throw new FxiaokeError('INVALID_RESPONSE', '纷享人员接口没有返回有效数据。', 502)
+    }
+    if (data.errorCode !== 0) {
+      const code = Number.isSafeInteger(data.errorCode) ? String(data.errorCode) : '未知'
+      throw new FxiaokeError('PROVIDER_REJECTED', `纷享拒绝读取当前员工资料（错误码 ${code}）。`, 502)
+    }
+    return data
+  }
+
+  const token = await post('/oauth2.0/token', {
+    appId: credentials.appId,
+    appSecret: credentials.appSecret,
+    permanentCode: credentials.permanentCode,
+    grantType: 'app_secret',
+  })
+  if (token.ea !== credentials.expectedEa || token.appId !== credentials.appId) {
+    throw new FxiaokeError('TENANT_MISMATCH', '授权返回的企业或应用与配置不一致。', 409)
+  }
+  if (
+    typeof token.accessToken !== 'string'
+    || !token.accessToken
+    || typeof token.openUserId !== 'string'
+    || !token.openUserId.startsWith('FSCID_')
+  ) {
+    throw new FxiaokeError('INVALID_TOKEN_RESPONSE', '纷享未返回有效的企业授权信息。', 502)
+  }
+
+  const response = await post('/cgi/crm/v2/data/query', {
+    convertUserId: false,
+    data: {
+      dataObjectApiName: 'PersonnelObj',
+      search_query_info: {
+        limit: 100,
+        offset: 0,
+        fieldProjection: [
+          '_id',
+          'user_id',
+          'full_name',
+          'name',
+          'phone',
+          'employee_number',
+          'status',
+          'is_pause_login',
+          'life_status',
+          'is_deleted',
+        ],
+        filters: [{
+          field_name: 'user_id',
+          field_values: [externalSubject],
+          operator: 'EQ',
+        }],
+        orders: [],
+      },
+    },
+  }, {
+    authorization: `Bearer ${token.accessToken}`,
+    'x-fs-ea': credentials.expectedEa,
+    'x-fs-userid': credentials.apiUserId,
+  })
+
+  const page = object(response.data)
+  if (!Array.isArray(page.dataList) || page.dataList.length !== 1) {
+    throw new FxiaokeError(
+      'IDENTITY_PROFILE_UNAVAILABLE',
+      page.dataList && Array.isArray(page.dataList) && page.dataList.length === 0
+        ? '未找到当前纷享员工的唯一企业资料，登录已拒绝。'
+        : '当前纷享员工的企业资料不唯一，登录已拒绝。',
+      403,
+    )
+  }
+  const row = object(page.dataList[0])
+  if (id(row.user_id) !== externalSubject) {
+    throw new FxiaokeError('IDENTITY_PROFILE_MISMATCH', '纷享员工资料与登录身份不一致。', 409)
+  }
+
+  const lifeStatus = optionalText(row.life_status)
+  const profile: VerifiedEmployeeIdentity = {
+    externalSubject,
+    phone: optionalText(row.phone),
+    employeeNumber: optionalText(row.employee_number),
+    displayName: optionalText(row.full_name) || name(row.name),
+    status: status(row.status),
+    loginDisabled: typeof row.is_pause_login === 'boolean' ? row.is_pause_login : null,
+    lifeStatus,
+    deleted: row.is_deleted === true,
+  }
+  if (
+    profile.deleted
+    || profile.loginDisabled === true
+    || profile.status === '停用'
+    || (profile.lifeStatus && profile.lifeStatus !== '正常')
+  ) {
+    throw new FxiaokeError('EMPLOYEE_INACTIVE', '当前纷享员工已停用、离职或不可登录。', 403)
+  }
+  return profile
+}
+
 // Only returns the provider's enterprise account; tokens and corp identifiers remain server-side.
-export async function discoverEnterprise(credentials: Pick<Credentials, 'appId' | 'appSecret' | 'permanentCode'>, request: typeof fetch = fetch): Promise<{ ea: string }> {
+export async function discoverEnterprise(credentials: Pick<Credentials, 'appId' | 'appSecret' | 'permanentCode'>, request: typeof fetch = fetch): Promise<{ ea: string; corpId: string }> {
   let response: Response
   try {
     response = await request(`${ORIGIN}/oauth2.0/token?thirdTraceId=${randomUUID()}`, {
@@ -132,5 +269,5 @@ export async function discoverEnterprise(credentials: Pick<Credentials, 'appId' 
   if (data.appId !== credentials.appId || typeof data.ea !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(data.ea) || typeof data.accessToken !== 'string' || !data.accessToken || typeof data.openUserId !== 'string' || !data.openUserId.startsWith('FSCID_')) {
     throw new FxiaokeError('INVALID_TOKEN_RESPONSE', '纷享未返回有效的企业授权信息，请检查应用配置。', 502)
   }
-  return { ea: data.ea }
+  return { ea: data.ea, corpId: data.openUserId }
 }

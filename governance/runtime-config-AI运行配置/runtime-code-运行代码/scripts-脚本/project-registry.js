@@ -47,6 +47,9 @@ const APPLICATION_PERMISSION_CONTRACT = 'f003-role-permissions-v1';
 const FXIAOKE_CONNECTION_CONTRACT = 'f003-fxiaoke-connection-v1';
 const FXIAOKE_CONNECTION_ITEMS = Object.freeze(['fxiaoke_connection']);
 const FXIAOKE_CONNECTION_PRODUCTION_ITEMS = Object.freeze(['connection_preview']);
+const FXIAOKE_SSO_CONTRACT = 'f003-fxiaoke-sso-v1';
+const FXIAOKE_SSO_ITEMS = Object.freeze(['fxiaoke_sso']);
+const FXIAOKE_SSO_PRODUCTION_ITEMS = Object.freeze(['fxiaoke_sso_login', 'fxiaoke_sso_denials']);
 const SHIPPING_PARSER_CONTRACT = 'f054-parser-v1';
 const SHIPPING_PARSER_ITEMS = Object.freeze(['shipping_parser']);
 const APPLICATION_PERMISSION_ACTIONS = Object.freeze(['open_roles', 'save_role_permissions', 'verify_saved_permissions', 'revoke_role_permissions', 'verify_access_denied', 'restore_role_permissions']);
@@ -317,6 +320,10 @@ function runtimeContractVersionOf(state) {
 }
 function requiredReplayActions(state, environment = 'preview') {
   if (runtimeContractVersionOf(state) === SHIPPING_PARSER_CONTRACT) return require('./shipping-parser-verifier').ACTIONS;
+  if (runtimeProfileOf(state) === 'application' && runtimeContractVersionOf(state) === FXIAOKE_SSO_CONTRACT) {
+    const verifier = require('./fxiaoke-sso-verifier');
+    return environment === 'production' ? verifier.PRODUCTION_ACTIONS : verifier.PREVIEW_ACTIONS;
+  }
   if (runtimeProfileOf(state) === 'application' && runtimeContractVersionOf(state) === FXIAOKE_CONNECTION_CONTRACT) {
     const verifier = require('./fxiaoke-connection-verifier');
     return environment === 'production' ? verifier.PRODUCTION_ACTIONS : verifier.PREVIEW_ACTIONS;
@@ -454,7 +461,11 @@ function getPreviewOrderException(state, repoRoot, inboxRecords) {
   const approval = inboxRecords.find(record => record?.id === approvalId);
   const base = /^[a-f0-9]{40}$/.test(approval?.approved_candidate || '') ? approval.approved_candidate : null;
   const changed = base ? runGit(repoRoot, ['diff', '--name-only', '-z', base, 'HEAD'], { allowFailure: true }) : null;
-  const verifier = runtimeContractVersionOf(state) === SHIPPING_PARSER_CONTRACT ? './shipping-parser-verifier' : './fxiaoke-connection-verifier';
+  const verifier = runtimeContractVersionOf(state) === SHIPPING_PARSER_CONTRACT
+    ? './shipping-parser-verifier'
+    : runtimeContractVersionOf(state) === FXIAOKE_SSO_CONTRACT
+      ? './fxiaoke-sso-verifier'
+      : './fxiaoke-connection-verifier';
   const blockers = require(verifier).productionFirstExceptionBlockers({
     approval, activeId: state.active_task?.id, contractVersion: runtimeContractVersionOf(state),
     productTree: runGit(repoRoot, ['rev-parse', 'HEAD:product-truth/product-code'], { allowFailure: true }),
@@ -551,20 +562,35 @@ function validateSchedulerSnapshot(options, candidate) {
   const profile = runtimeProfileOf(state);
   const contractVersion = runtimeContractVersionOf(state);
   const fxiaokeRelease = profile === 'application' && contractVersion === FXIAOKE_CONNECTION_CONTRACT;
+  const fxiaokeSsoRelease = profile === 'application' && contractVersion === FXIAOKE_SSO_CONTRACT;
   const parserRelease = profile === 'shipping_workspace' && contractVersion === SHIPPING_PARSER_CONTRACT;
   const fxiaokeProduction = fxiaokeRelease && deliveryContract.target_state === 'production_released';
+  const fxiaokeSsoProduction = fxiaokeSsoRelease && deliveryContract.target_state === 'production_released';
   if (!['ai', 'shipping', 'shipping_workspace', 'application'].includes(profile)) errors.push('Unknown runtime evidence profile');
   if (profile === 'application' && (
     state.active_task?.feature_id !== 'F003'
-    || (deliveryContract.target_state !== 'code_green' && ![APPLICATION_PERMISSION_CONTRACT, FXIAOKE_CONNECTION_CONTRACT].includes(runtimeContractVersionOf(state)))
-    || (!fxiaokeProduction && deliveryContract.production_database_mode !== 'read_only')
+    || (deliveryContract.target_state !== 'code_green' && ![APPLICATION_PERMISSION_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(runtimeContractVersionOf(state)))
+    || (!fxiaokeProduction && !fxiaokeSsoProduction && deliveryContract.production_database_mode !== 'read_only')
   )) errors.push('Application profile requires F003 and a scoped contract; only explicitly approved Fxiaoke connection saves may write Production');
   if (['shipping', 'shipping_workspace'].includes(profile) && state.active_task?.feature_id !== 'F054') errors.push('Shipping evidence profile requires the F054 feature binding');
-  const applicationRelease = profile === 'application' && [APPLICATION_PERMISSION_CONTRACT, FXIAOKE_CONNECTION_CONTRACT].includes(contractVersion);
+  const applicationRelease = profile === 'application' && [APPLICATION_PERMISSION_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(contractVersion);
   if (contractVersion && !applicationRelease && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', SHIPPING_PARSER_CONTRACT].includes(contractVersion))) errors.push('Unknown or mismatched runtime contract version');
   if (parserRelease && (state.active_task.id !== 'WP95' || deliveryContract.production_database_mode !== 'read_only')) errors.push('Parser contract is limited to WP95 without business writes');
+  if (fxiaokeSsoRelease && state.active_task.id !== 'WP94') errors.push('Fxiaoke SSO contract is limited to WP94');
   if (contractVersion === 'f054-config-ui-v1' && (!['code_green', 'clean_preview_green'].includes(deliveryContract.target_state) || deliveryContract.production_database_mode !== 'read_only')) errors.push('Configuration UI contract is limited to read-only Preview acceptance');
-  const canonicalRuntimeEvidence = parserRelease ? SHIPPING_PARSER_ITEMS : fxiaokeRelease ? FXIAOKE_CONNECTION_ITEMS : profile === 'application' ? APPLICATION_PERMISSION_ITEMS : profile === 'shipping_workspace' ? (contractVersion === 'f054-config-ui-v1' ? SHIPPING_CONFIG_UI_ITEMS : SHIPPING_WORKSPACE_ITEMS) : profile === 'shipping' ? SHIPPING_RUNTIME_ITEMS : ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
+  const canonicalRuntimeEvidence = parserRelease
+    ? SHIPPING_PARSER_ITEMS
+    : fxiaokeRelease
+      ? FXIAOKE_CONNECTION_ITEMS
+      : fxiaokeSsoRelease
+        ? FXIAOKE_SSO_ITEMS
+        : profile === 'application'
+          ? APPLICATION_PERMISSION_ITEMS
+          : profile === 'shipping_workspace'
+            ? (contractVersion === 'f054-config-ui-v1' ? SHIPPING_CONFIG_UI_ITEMS : SHIPPING_WORKSPACE_ITEMS)
+            : profile === 'shipping'
+              ? SHIPPING_RUNTIME_ITEMS
+              : ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
   if (
     deliveryContract
     && (
@@ -577,7 +603,13 @@ function validateSchedulerSnapshot(options, candidate) {
   }
   if (deliveryContract?.target_state === 'production_released') {
     const requiredProductionRuntimeEvidence = deliveryContract.required_production_runtime_evidence;
-    const canonicalProductionEvidence = fxiaokeRelease ? FXIAOKE_CONNECTION_PRODUCTION_ITEMS : applicationRelease ? APPLICATION_PERMISSION_PRODUCTION_ITEMS : canonicalRuntimeEvidence;
+    const canonicalProductionEvidence = fxiaokeRelease
+      ? FXIAOKE_CONNECTION_PRODUCTION_ITEMS
+      : fxiaokeSsoRelease
+        ? FXIAOKE_SSO_PRODUCTION_ITEMS
+        : applicationRelease
+          ? APPLICATION_PERMISSION_PRODUCTION_ITEMS
+          : canonicalRuntimeEvidence;
     if (
       !Array.isArray(requiredProductionRuntimeEvidence)
       || canonicalProductionEvidence.some((item) => !requiredProductionRuntimeEvidence.includes(item))
@@ -607,7 +639,7 @@ function validateSchedulerSnapshot(options, candidate) {
     if (releaseAuthorization?.status === 'approved_for_final_release' && databaseMode !== 'controlled_write_approved') {
       errors.push('final Production release approval requires controlled_write_approved database mode');
     }
-    if (applicationRelease && !fxiaokeRelease && releaseAuthorization?.status !== 'approved_code_only') errors.push('Application permission Production acceptance is code-only and must not authorize business writes');
+    if (applicationRelease && !fxiaokeRelease && !fxiaokeSsoRelease && releaseAuthorization?.status !== 'approved_code_only') errors.push('Application permission Production acceptance is code-only and must not authorize business writes');
     if (fxiaokeRelease) errors.push(...require('./fxiaoke-connection-verifier').productionReleaseScopeBlockers(deliveryContract));
     if (parserRelease && (releaseAuthorization?.status !== 'approved_code_only' || releaseAuthorization.carrier_calls_authorized !== false)) errors.push('Parser release must exclude carrier calls');
     if (releaseAuthorization?.status === 'approved_code_only' && (databaseMode !== 'read_only' || (!applicationRelease && !['f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', SHIPPING_PARSER_CONTRACT].includes(contractVersion))
@@ -1485,6 +1517,16 @@ function productionRuntimeEvidenceBlockers(evidence, requiredItems, repoRoot, ex
     blockers.push(...require('./fxiaoke-connection-verifier').productionBlockers(section, expected));
     return blockers;
   }
+  if (expected.runtimeContractVersion === FXIAOKE_SSO_CONTRACT) {
+    for (const item of ['verifier', ...FXIAOKE_SSO_PRODUCTION_ITEMS]) {
+      const envelope = section[item];
+      if (!evidenceEnvelopeValid(envelope, repoRoot) || !evidenceEnvelopeUnderPrefix(envelope, 'production-runtime-verifier')) {
+        blockers.push(`Fxiaoke SSO Production controlled evidence missing or invalid: ${item}`);
+      }
+    }
+    blockers.push(...require('./fxiaoke-sso-verifier').productionBlockers(section, expected));
+    return blockers;
+  }
   if (expected.runtimeContractVersion === APPLICATION_PERMISSION_CONTRACT) {
     for (const item of ['verifier', ...APPLICATION_PERMISSION_PRODUCTION_ITEMS]) {
       const envelope = section[item];
@@ -1950,7 +1992,7 @@ function checkDeliveryStage(stage, options = {}) {
     }
   }
   if (deliveryStateAtLeast(stage, 'clean_preview_green') && !productionFirst) {
-    const applicationPermissions = status.runtimeProfile === 'application' && [APPLICATION_PERMISSION_CONTRACT, FXIAOKE_CONNECTION_CONTRACT].includes(status.runtimeContractVersion);
+    const applicationPermissions = status.runtimeProfile === 'application' && [APPLICATION_PERMISSION_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(status.runtimeContractVersion);
     if (evidence.preview?.commit !== status.git.head) blockers.push('Preview commit does not equal HEAD');
     if (evidence.preview?.provider_source_commit !== status.git.head) blockers.push('Preview provider source commit does not equal HEAD');
     if (!/^dpl_[A-Za-z0-9]+$/.test(String(evidence.preview?.deployment_id || ''))) blockers.push('Preview deployment ID is missing');
@@ -1987,7 +2029,7 @@ function checkDeliveryStage(stage, options = {}) {
       } else {
         if (envelope.payload.commit !== status.git.head) blockers.push(`runtime evidence commit mismatch: ${item}`);
         if (envelope.payload.deployment_id !== evidence.preview?.deployment_id) blockers.push(`runtime evidence deployment mismatch: ${item}`);
-        if (['f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', APPLICATION_PERMISSION_CONTRACT, FXIAOKE_CONNECTION_CONTRACT].includes(status.runtimeContractVersion)) {
+        if (['f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', APPLICATION_PERMISSION_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(status.runtimeContractVersion)) {
           try {
             const origin = new URL(envelope.payload.origin);
             if (origin.protocol !== 'https:' || origin.origin !== new URL(evidence.preview.url).origin) blockers.push(`runtime evidence origin mismatch: ${item}`);
@@ -1995,7 +2037,9 @@ function checkDeliveryStage(stage, options = {}) {
         }
       }
     }
-    if (status.runtimeProfile === 'application' && status.runtimeContractVersion === FXIAOKE_CONNECTION_CONTRACT) {
+    if (status.runtimeProfile === 'application' && status.runtimeContractVersion === FXIAOKE_SSO_CONTRACT) {
+      blockers.push(...require('./fxiaoke-sso-verifier').previewBlockers(evidence.runtime?.fxiaoke_sso?.payload, { commit: status.git.head, deploymentId: evidence.preview?.deployment_id }));
+    } else if (status.runtimeProfile === 'application' && status.runtimeContractVersion === FXIAOKE_CONNECTION_CONTRACT) {
       blockers.push(...require('./fxiaoke-connection-verifier').previewBlockers(evidence.runtime?.fxiaoke_connection?.payload, { commit: status.git.head, deploymentId: evidence.preview?.deployment_id }));
     } else if (status.runtimeProfile === 'application' && status.runtimeContractVersion === APPLICATION_PERMISSION_CONTRACT) {
       blockers.push(...require('./application-permissions-verifier').previewBlockers(evidence.runtime || {}));
@@ -2221,6 +2265,7 @@ function checkDeliveryStage(stage, options = {}) {
 const LIVE_SHIPPING_WORKSPACE_RECEIPT = Symbol('live shipping workspace verifier receipt');
 const LIVE_APPLICATION_PERMISSION_RECEIPT = Symbol('live application permission verifier receipt');
 const LIVE_FXIAOKE_CONNECTION_RECEIPT = Symbol('live Fxiaoke connection verifier receipt');
+const LIVE_FXIAOKE_SSO_RECEIPT = Symbol('live Fxiaoke SSO verifier receipt');
 const LIVE_SHIPPING_PARSER_RECEIPT = Symbol('live shipping parser verifier receipt');
 async function verifyShippingParserProduction(options = {}) {
   const status = getDeliveryStatus(options), repoRoot = status.repoRoot;
@@ -2253,6 +2298,30 @@ async function verifyFxiaokeConnectionProduction(options = {}) {
   const result = productionRuntimeEvidenceBlockers({ production_runtime: payload }, status.requiredProductionRuntimeEvidence, repoRoot, expected);
   if (result.length) throw new Error(result.join('; '));
   return recordDeliveryEvidence('production_runtime', payload, { repoRoot, liveFxiaokeConnectionReceipt: LIVE_FXIAOKE_CONNECTION_RECEIPT });
+}
+async function verifyFxiaokeSsoProduction(options = {}) {
+  const status = getDeliveryStatus(options), repoRoot = status.repoRoot;
+  if (!status.scheduler.ok || status.activeId !== 'WP94' || status.featureId !== 'F003'
+    || status.runtimeProfile !== 'application' || status.runtimeContractVersion !== FXIAOKE_SSO_CONTRACT
+    || status.targetState !== 'production_released'
+    || status.productionReleaseAuthorization?.status !== 'approved_for_final_release'
+    || status.productionDatabaseMode !== 'controlled_write_approved') {
+    throw new Error('Fxiaoke SSO verifier requires the approved WP94 Production identity release');
+  }
+  if (status.git.remoteProduction !== status.git.head || !status.git.clean) throw new Error('Verifier requires the clean deployed production commit');
+  const live = verifyVercelProductionState(repoRoot, status.git.head, { stage: 'production_released' });
+  if (live.blockers.length) throw new Error(live.blockers.join('; '));
+  const expected = { commit: status.git.head, deploymentId: live.snapshot.deployment.id, runtimeContractVersion: status.runtimeContractVersion };
+  const operatorBlockers = productionBrowserOperatorAttestationBlockers(options.operator, repoRoot, expected);
+  operatorBlockers.push(...require('./fxiaoke-sso-verifier').productionOperatorBlockers(options.operator?.payload, expected));
+  if (operatorBlockers.length) throw new Error(operatorBlockers.join('; '));
+  const { runtimePath } = loadDeliveryMutableBase({ repoRoot });
+  const payload = await require('./fxiaoke-sso-verifier').verify({
+    runtime: path.dirname(runtimePath), operator: options.operator, commit: expected.commit, deploymentId: expected.deploymentId
+  });
+  const blockers = productionRuntimeEvidenceBlockers({ production_runtime: payload }, status.requiredProductionRuntimeEvidence, repoRoot, expected);
+  if (blockers.length) throw new Error(blockers.join('; '));
+  return recordDeliveryEvidence('production_runtime', payload, { repoRoot, liveFxiaokeSsoReceipt: LIVE_FXIAOKE_SSO_RECEIPT });
 }
 async function verifyApplicationPermissionsProduction(options = {}) {
   const status = getDeliveryStatus(options), repoRoot = status.repoRoot;
@@ -2302,6 +2371,7 @@ function recordDeliveryEvidence(section, payload, options = {}) {
       && options.liveShippingWorkspaceReceipt !== LIVE_SHIPPING_WORKSPACE_RECEIPT
       && options.liveApplicationPermissionReceipt !== LIVE_APPLICATION_PERMISSION_RECEIPT
       && options.liveFxiaokeConnectionReceipt !== LIVE_FXIAOKE_CONNECTION_RECEIPT
+      && options.liveFxiaokeSsoReceipt !== LIVE_FXIAOKE_SSO_RECEIPT
       && options.liveShippingParserReceipt !== LIVE_SHIPPING_PARSER_RECEIPT
       && !(options.testOnlyControlledProductionRuntime === true && loadRegistry(options.repoRoot).registry.version === 'selftest')
     ) {
@@ -2579,6 +2649,12 @@ module.exports = {
   APPLICATION_PERMISSION_CONTRACT,
   APPLICATION_PERMISSION_ACTIONS,
   APPLICATION_PERMISSION_PRODUCTION_ACTIONS,
+  FXIAOKE_CONNECTION_CONTRACT,
+  FXIAOKE_CONNECTION_ITEMS,
+  FXIAOKE_CONNECTION_PRODUCTION_ITEMS,
+  FXIAOKE_SSO_CONTRACT,
+  FXIAOKE_SSO_ITEMS,
+  FXIAOKE_SSO_PRODUCTION_ITEMS,
   SHIPPING_RUNTIME_ITEMS,
   SHIPPING_REPLAY_ACTIONS,
   SHIPPING_COLLABORATION_ACTIONS,
@@ -2614,6 +2690,7 @@ module.exports = {
   verifyShippingWorkspaceProduction,
   verifyApplicationPermissionsProduction,
   verifyFxiaokeConnectionProduction,
+  verifyFxiaokeSsoProduction,
   verifyShippingParserProduction,
   productionRuntimeEvidenceBlockers,
   resolveVercelDeploymentCommit,

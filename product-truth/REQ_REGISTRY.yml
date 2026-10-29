@@ -9,8 +9,8 @@
 #   - 代码位置由 AI 在开发时回填
 #   - 代码中的 REQ 标记必须与之一致
 
-version: "2026-10-28.2"
-last_updated: "2026-10-28T10:49:15.101216+00:00"
+version: "2026-10-29.1"
+last_updated: "2026-10-29T06:10:00+00:00"
 
 goal_governance:
   status: active
@@ -27,31 +27,32 @@ goal_governance:
     feature: F003
     source: IN-20261028-003
     name: 纷享组织接入与企业SSO及寄件许可
-    sequence: [WP91, WP92, WP93, WP94]
+    sequence: [WP91, WP94, WP92, WP93]
     contract: product-truth/feature-packets/F003-account-auth.md
     shared_configuration: "目录读取与员工SSO复用企业应用连接；ea后台获取；目录读取员工ID不代替登录身份。"
-    final_acceptance: "sales.cyanlog.icu真实A/B员工登录、获授权提报、本人查询、撤权即时拒绝和跨企业隔离；仅配置保存不算接通。"
+    final_acceptance: "WP94先以真实A/B管理员和员工完成纷享SSO、稳定身份映射、跨企业拒绝及角色正确；随后WP92/93完成组织主来源和寄件许可。仅配置保存不算接通。"
   delivery_outcome_contract:
     version: "2026-10-28.2"
     source: IN-20261028-010
     objective: "销售一次填写真实收件信息，形成归属正确的待确认工单；授权人员确认后顺丰只下单一次，单号回到原销售与原CRM记录。共享组织权限，数据隔离，原单可恢复。"
     ledger: product-truth/feature-packets/F099-current-goal-ledger.md
-    active: WP95
+    active: WP94
     next: WP82
     execution_policy: "目标已建立，按F099顺序保持单一Active，每批一个可演示用户任务；生产实证才可交付，不继承上一WP的发布或数据写入批准。"
     data_boundary: "仅cyanlog-sales-v3；销售填写本票地址；村庄无门牌合法；客户档案已有地址不得覆盖；正式顺丰下单由用户确认。"
-    intake_chain: [WP95, WP92, WP93, WP96, WP97, WP23, WP98]
+    intake_chain: [WP94, WP92, WP93, WP96, WP97, WP99, WP98]
     sales_login_chain: [WP91, WP92, WP93, WP94]
     note: "依赖链不等于全部排期；全队列顺序与每项验收以F099为准。"
   work_package_crosswalk:
     WP98: {name: 真实运单结果回填原CRM记录, primary_goals: [], state: queued_goal_registered}
     WP97: {name: CRM审批生成唯一待确认工单, primary_goals: [], state: queued_goal_registered}
     WP96: {name: CRM审批寄件字段映射预览, primary_goals: [], state: queued_goal_registered}
-    WP95: {name: 寄件信息正确解析与无门牌地址提交, primary_goals: [], state: executing}
+    WP95: {name: 寄件信息正确解析与无门牌地址提交, primary_goals: [], state: production_released, closed_scope: "解析与无门牌地址校验；真实履约移交WP99"}
     WP91: {name: 纷享应用配置与通讯录预览, primary_goals: [G5, G7, G10], state: production_released}
     WP92: {name: 纷享组织同步与主来源切换, primary_goals: [G5, G7, G10], state: queued}
     WP93: {name: 统一成员身份与寄件许可, primary_goals: [G5, G7, G10], state: queued}
-    WP94: {name: 纷享销售登录与真实提报, primary_goals: [G5, G7, G10], state: queued}
+    WP94: {name: 纷享SSO与联合身份门禁, primary_goals: [G5, G7, G10], state: executing}
+    WP99: {name: 顺丰真实履约端到端闭环, primary_goals: [G5, G7, G10], state: queued}
     WP00: {name: 目标基线整合, primary_goals: [G1, G10, G11], state: completed_goal_baseline_commit_18dad230}
     WP01: {name: 平台模型接入与应用底座, primary_goals: [G4], supporting_goals: [G3, G7], state: production_acceptance_pending}
     WP02: {name: AI 运行真实性与路由证据, primary_goals: [G3], supporting_goals: [G7, G10], state: production_acceptance_pending}

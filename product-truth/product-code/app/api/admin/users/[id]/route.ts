@@ -14,9 +14,11 @@ import {
   assertDepartmentInOrg,
 } from '@/lib/admin/org-membership'
 import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
+import { normalizeIdentityPhone } from '@/lib/fxiaoke/identity'
 
 const updateUserSchema = z.object({
   display_name: z.string().trim().min(1, '姓名不能为空').optional(),
+  phone: z.string().trim().min(1, '手机号不能为空').optional(),
   title: z.string().trim().nullable().optional(),
   primary_dept_id: z.string().regex(/^[0-9a-f-]{36}$/i, '主部门 ID 格式不正确').nullable().optional(),
   status: z.enum(['active', 'inactive', 'suspended']).optional(),
@@ -49,8 +51,15 @@ export async function PATCH(
     }
 
     const { display_name, title, primary_dept_id, status, login_enabled, report_to_user_id } = parseResult.data
+    const phone = parseResult.data.phone === undefined
+      ? undefined
+      : normalizeIdentityPhone(parseResult.data.phone)
+    if (parseResult.data.phone !== undefined && !phone) {
+      return NextResponse.json({ error: '手机号格式不正确', code: 'INVALID_PHONE' }, { status: 400 })
+    }
     const hasAccountStateMutation = status !== undefined || login_enabled !== undefined
     const hasProfileMutation = display_name !== undefined
+      || phone !== undefined
       || title !== undefined
       || primary_dept_id !== undefined
       || report_to_user_id !== undefined
@@ -79,7 +88,7 @@ export async function PATCH(
 
     const { data: existing, error: checkError } = await supabaseAdmin
       .from('users')
-      .select('id, email, display_name, title, primary_dept_id, status, login_enabled, report_to_user_id')
+      .select('id, email, phone, display_name, title, primary_dept_id, status, login_enabled, report_to_user_id')
       .eq('id', id)
       .eq('org_id', orgId)
       .maybeSingle()
@@ -136,6 +145,20 @@ export async function PATCH(
       }
     }
 
+    if (phone) {
+      const { data: phoneOwner } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('org_id', orgId)
+        .eq('phone', phone)
+        .eq('status', 'active')
+        .neq('id', id)
+        .maybeSingle()
+      if (phoneOwner) {
+        return NextResponse.json({ error: '该手机号已被使用', code: 'PHONE_EXISTS' }, { status: 409 })
+      }
+    }
+
     if (report_to_user_id) {
       if (report_to_user_id === id) {
         return NextResponse.json(
@@ -159,6 +182,7 @@ export async function PATCH(
     // 更新数据
     const updateData: Record<string, unknown> = {}
     if (display_name !== undefined) updateData.display_name = display_name
+    if (phone !== undefined) updateData.phone = phone
     if (title !== undefined) updateData.title = title
     if (report_to_user_id !== undefined) updateData.report_to_user_id = report_to_user_id || null
 
@@ -169,7 +193,7 @@ export async function PATCH(
         .update(updateData)
         .eq('id', id)
         .eq('org_id', orgId)
-        .select('id, email, display_name, title, primary_dept_id, status, login_enabled, report_to_user_id')
+        .select('id, email, phone, display_name, title, primary_dept_id, status, login_enabled, report_to_user_id')
         .single()
 
       if (error) {

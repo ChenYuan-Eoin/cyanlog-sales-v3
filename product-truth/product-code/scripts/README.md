@@ -78,7 +78,7 @@ pnpm db:seed
 | legal01@huarun.com | LEGAL | 陈法务 | 法务部 |
 | finance01@huarun.com | FINANCE | 钱会计 | 财务部 |
 
-**默认密码**：`password123`
+本地种子不包含任何可长期使用的密码。E2E 会话由 `node scripts/setup-e2e-user.mjs` 直接创建可撤销 token。
 
 ### 合同审核规则（10条）
 
@@ -120,11 +120,11 @@ pnpm dev
 http://localhost:3000/login
 ```
 
-### 3. 使用测试账号登录
+### 3. 创建本地 E2E 会话
 ```
-邮箱: superadmin@huarun.com
-密码: password123
+node scripts/setup-e2e-user.mjs
 ```
+将输出的 token 设为 `E2E_AUTH_TOKEN` 后再运行 E2E 脚本。
 
 ### 4. 验证功能
 - ✅ 首页：显示今日优先队列、统计卡

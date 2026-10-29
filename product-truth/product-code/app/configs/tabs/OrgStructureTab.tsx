@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, KeyRoundIcon, PowerOffIcon, PowerIcon, LockIcon, UnlockIcon, RefreshCwIcon, MailIcon, BanIcon } from 'lucide-react'
+import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, PowerOffIcon, PowerIcon, LockIcon, UnlockIcon, RefreshCwIcon, MailIcon, BanIcon } from 'lucide-react'
 import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment, FeishuSyncFeedback } from '../types'
 import Fuse from 'fuse.js'
 import { success, error, confirmAction } from '@/lib/toast'
@@ -474,32 +474,6 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onRefresh
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
-
-              {/* P0: 重置密码 */}
-              <DropdownMenuItem
-                disabled={isInvited}
-                onSelect={async () => {
-                  if (!await confirmAction(`确定要重置用户 "${user.display_name}" 的密码吗？\n将生成临时密码，用户首次登录需改密。`, { confirmText: '重置密码' })) return
-                  try {
-                    const res = await fetch(`/api/admin/users/${user.id}/reset-password`, {
-                      method: 'POST',
-                      headers: buildAuthHeaders(),
-                    })
-                    const result = await res.json()
-                    if (!res.ok) {
-                      error(result.error || '重置密码失败')
-                      return
-                    }
-                    success(`密码已重置，临时密码：${result.data?.tempPassword}`)
-                    await onRefresh?.()
-                  } catch (_err) {
-                    error('重置密码请求失败')
-                  }
-                }}
-              >
-                <KeyRoundIcon className="h-4 w-4 mr-2" />
-                重置密码
-              </DropdownMenuItem>
 
               <DropdownMenuItem
                 disabled={!isInvited}

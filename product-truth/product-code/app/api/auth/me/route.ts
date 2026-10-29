@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       getDefaultOrgId(user.id),
       supabaseAdmin
         .from('users')
-        .select('id, email, phone, display_name, avatar_url, title, employee_id, last_login_at, primary_dept_id, org_id, must_change_password')
+        .select('id, email, phone, display_name, avatar_url, title, employee_id, last_login_at, primary_dept_id, org_id')
         .eq('id', user.id)
         .single(),
     ])
@@ -43,7 +43,6 @@ export async function GET(req: NextRequest) {
         roles,
         scopedRoles: scopedAssignments,
         canManageOrg: canManageOrg(scopedAssignments, orgId),
-        mustChangePassword: Boolean(userRow.must_change_password),
       },
     })
   } catch (error) {

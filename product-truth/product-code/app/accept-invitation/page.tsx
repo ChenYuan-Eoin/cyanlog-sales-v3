@@ -9,8 +9,6 @@ import { Input } from '@/components/ui/input'
 export default function AcceptInvitationPage() {
   const router = useRouter()
   const [token, setToken] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmation, setConfirmation] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [accepted, setAccepted] = useState(false)
@@ -23,20 +21,12 @@ export default function AcceptInvitationPage() {
   async function submit(event: React.FormEvent) {
     event.preventDefault()
     setError('')
-    if (password.length < 12) {
-      setError('密码至少需要 12 个字符。')
-      return
-    }
-    if (password !== confirmation) {
-      setError('两次输入的密码不一致。')
-      return
-    }
     setSaving(true)
     try {
       const response = await fetch('/api/auth/invitations/accept', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, password }),
+        body: JSON.stringify({ token }),
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) {
@@ -61,7 +51,7 @@ export default function AcceptInvitationPage() {
           </div>
           <div>
             <h1 className="text-xl font-semibold text-slate-900">激活成员账号</h1>
-            <p className="text-sm text-slate-500">设置登录密码后完成组织成员激活。</p>
+            <p className="text-sm text-slate-500">确认成员关系后，使用企业统一登录进入系统。</p>
           </div>
         </div>
 
@@ -79,30 +69,6 @@ export default function AcceptInvitationPage() {
                 value={token}
                 autoComplete="one-time-code"
                 onChange={(event) => setToken(event.target.value.trim())}
-                required
-              />
-            </label>
-            <label className="block text-sm font-medium text-slate-700">
-              新密码
-              <Input
-                className="mt-1"
-                type="password"
-                minLength={12}
-                value={password}
-                autoComplete="new-password"
-                onChange={(event) => setPassword(event.target.value)}
-                required
-              />
-            </label>
-            <label className="block text-sm font-medium text-slate-700">
-              确认密码
-              <Input
-                className="mt-1"
-                type="password"
-                minLength={12}
-                value={confirmation}
-                autoComplete="new-password"
-                onChange={(event) => setConfirmation(event.target.value)}
                 required
               />
             </label>

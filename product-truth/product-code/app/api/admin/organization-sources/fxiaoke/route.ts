@@ -41,7 +41,8 @@ export async function POST(req: NextRequest) {
     if (body.action === 'discover') {
       const parsed = discoveryInput.safeParse(body.credentials)
       if (!parsed.success) throw new FxiaokeError('INVALID_CONFIGURATION', '请先填写 AppID、APPSecret 和永久授权码。')
-      return { enterprise: await discoverEnterprise(parsed.data, transportForOrganization(orgId)) }
+      const enterprise = await discoverEnterprise(parsed.data, transportForOrganization(orgId))
+      return { enterprise: { ea: enterprise.ea } }
     }
     if (body.action === 'preview' && typeof body.revision === 'string' && /^[0-9a-f-]{36}$/i.test(body.revision)) {
       return { preview: await previewSavedConnection(orgId, body.revision) }

@@ -84,7 +84,7 @@ const PERMISSION_CATALOG: PermissionCatalogGroup[] = [
       { key: 'dept:*', label: '部门维护', description: '允许新建、调整和停用部门。' },
       { key: 'dept:view', label: '部门查看', description: '允许查看部门树和成员归属。' },
       { key: 'dept:write', label: '部门编辑', description: '允许调整部门结构。' },
-      { key: 'user:*', label: '成员维护', description: '允许创建成员、分配角色、重置密码。' },
+      { key: 'user:*', label: '成员维护', description: '允许创建成员、分配角色、停用登录。' },
       { key: 'user:view', label: '成员查看', description: '允许查看成员档案和角色绑定。' },
       { key: 'user:write', label: '成员编辑', description: '允许调整成员状态与角色。' },
       { key: 'feishu:sync', label: '外部通讯录同步', description: '允许从飞书等源刷新部门结构。' },

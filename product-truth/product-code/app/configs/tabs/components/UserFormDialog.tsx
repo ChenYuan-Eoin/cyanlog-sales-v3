@@ -34,6 +34,7 @@ import type { OrgSummaryUser, OrgSummaryDepartment } from '../../types'
 
 const userSchema = z.object({
   email: z.string().email('请输入有效的邮箱地址'),
+  phone: z.string().min(1, '手机号不能为空'),
   display_name: z.string().min(1, '姓名不能为空'),
   title: z.string().optional(),
   primary_dept_id: z.string().nullable(),
@@ -71,6 +72,7 @@ export function UserFormDialog({
     resolver: zodResolver(userSchema),
     defaultValues: {
       email: editingUser?.email ?? '',
+      phone: editingUser?.phone ?? '',
       display_name: editingUser?.display_name ?? '',
       title: editingUser?.title ?? '',
       primary_dept_id: editingUser?.primary_dept_id ?? null,
@@ -130,6 +132,24 @@ export function UserFormDialog({
                       placeholder="例如：zhangsan@company.com"
                       {...field}
                       disabled={!!editingUser}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>手机号</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="tel"
+                      placeholder="例如：13900000000"
+                      autoComplete="tel"
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />

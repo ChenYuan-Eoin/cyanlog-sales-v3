@@ -13,7 +13,6 @@ function makeInput() {
   return {
     userId: '30000001-0000-0000-0000-000000000000',
     orgId: '10000001-0000-0000-0000-000000000000',
-    mustChangePassword: false,
     roleCodes: ['SUPER_ADMIN'],
     allPermissions: ['*'],
     full: true,

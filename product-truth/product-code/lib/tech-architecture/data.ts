@@ -110,7 +110,7 @@ export const securityConstraints: SecurityConstraint[] = [
   { area: 'SQL 注入', requirement: '使用 ORM/参数化查询，禁止拼接 SQL' },
   { area: 'XSS', requirement: '输出编码，防止脚本注入' },
   { area: 'CSRF', requirement: '使用 SameSite Cookie' },
-  { area: '敏感数据', requirement: '密码 bcrypt 哈希，Token 随机生成' },
+  { area: '敏感数据', requirement: '外部身份稳定映射，系统会话 token 随机生成' },
 ]
 
 // ============ 服务调用模式 ============

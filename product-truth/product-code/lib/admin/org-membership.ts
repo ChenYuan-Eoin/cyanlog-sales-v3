@@ -1,14 +1,4 @@
-import { randomBytes } from 'node:crypto'
-import bcrypt from 'bcryptjs'
 import { supabaseAdmin } from '@/lib/supabase'
-
-export function createAdminTempPassword(): string {
-  return `Cyan!${randomBytes(9).toString('base64url')}`
-}
-
-export async function hashAdminPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 12)
-}
 
 export async function assertDepartmentInOrg(orgId: string, departmentId: string | null | undefined) {
   if (!departmentId) {

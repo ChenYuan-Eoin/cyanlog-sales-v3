@@ -274,10 +274,10 @@ async function listOrgPayload(orgId: string) {
   let usersData: Array<{
     id: string
     email: string | null
+    phone: string | null
     display_name: string
     title: string | null
     status: string
-    must_change_password: boolean | null
     primary_dept_id: string | null
     login_enabled: boolean | null
     report_to_user_id: string | null
@@ -287,7 +287,7 @@ async function listOrgPayload(orgId: string) {
   if (orgUserIds.length > 0) {
     const { data, error: usersError } = await supabaseAdmin
       .from('users')
-      .select('id, email, display_name, title, status, must_change_password, primary_dept_id, login_enabled, report_to_user_id, created_at')
+      .select('id, email, phone, display_name, title, status, primary_dept_id, login_enabled, report_to_user_id, created_at')
       .in('id', orgUserIds)
       .neq('status', 'inactive')
       .order('created_at', { ascending: false })
@@ -379,6 +379,7 @@ async function listOrgPayload(orgId: string) {
     return {
       id: row.id,
       email: row.email || '',
+      phone: row.phone || '',
       display_name: row.display_name,
       title: row.title || '',
       primary_dept_id: row.primary_dept_id,
@@ -392,7 +393,6 @@ async function listOrgPayload(orgId: string) {
       role_codes: userRoleEntries.filter((r) => r.scopeType === 'org').map((r) => r.roleCode),
       scoped_roles: userRoleEntries,
       status: row.status,
-      must_change_password: Boolean(row.must_change_password),
       login_enabled: row.login_enabled ?? true,
       report_to_user_id: row.report_to_user_id || null,
       report_to_user_name: row.report_to_user_id ? (userNameById.get(row.report_to_user_id) || null) : null,

@@ -18,11 +18,10 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
 const BASE = 'http://localhost:3100'
 const E = (label, ok, detail = '') => console.log(`${ok ? '✅' : '❌'} ${label}${detail ? ' — ' + detail : ''}`)
 
-// 1. 登录
-const login = await fetch(`${BASE}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'e2e-admin@huarun.com', password: 'E2ETestPassword123!' }) })
-const loginJson = await login.json()
-const token = loginJson?.token || loginJson?.data?.token || loginJson?.access_token
-E('登录', login.ok && !!token, `http=${login.status}`)
+// 1. 本地可撤销会话（无本地密码）
+const token = process.env.E2E_AUTH_TOKEN
+E('本地 E2E 会话', !!token)
+if (!token) process.exit(1)
 const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
 
 // 2. 结构化建单（PROJECT 企业版公有云按年订阅 10 账号，折扣 40%）

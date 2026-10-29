@@ -14,7 +14,6 @@ import {
   getOrgRoleCodes,
   getUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
-import { supabaseAdmin } from '@/lib/supabase'
 
 export const preferredRegion = 'sin1'
 
@@ -30,19 +29,10 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await requireAuth(req)
-    const [assignments, orgId, userResult] = await Promise.all([
+    const [assignments, orgId] = await Promise.all([
       getUserScopedRoleAssignments(user.id),
       getDefaultOrgId(user.id),
-      supabaseAdmin
-        .from('users')
-        .select('must_change_password')
-        .eq('id', user.id)
-        .single(),
     ])
-
-    if (userResult.error || !userResult.data) {
-      return errorResponse('读取用户失败', 500, 'USER_FETCH_FAILED')
-    }
 
     const roleCodes = getOrgRoleCodes(assignments, orgId)
     const authorizationRoleCodes = getOrgAuthorizationRoleCodes(assignments, orgId)
@@ -54,7 +44,6 @@ export async function POST(req: NextRequest) {
     const authContextCookie = await createAuthContextCookieValue(token, {
       userId: user.id,
       orgId,
-      mustChangePassword: Boolean(userResult.data.must_change_password),
       roleCodes,
       allPermissions,
       full: true,

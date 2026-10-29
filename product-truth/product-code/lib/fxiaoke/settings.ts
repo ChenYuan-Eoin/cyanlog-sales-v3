@@ -1,4 +1,4 @@
-// REQ: F003 / WP91. Tenant-scoped credentials with optimistic concurrency.
+// REQ: F003 / WP91-WP94. Tenant-scoped credentials with optimistic concurrency.
 import { randomUUID } from 'node:crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { connectionInput, FxiaokeError, type ConnectionSummary, type Credentials } from './contracts'
@@ -35,13 +35,15 @@ export async function saveConnection(orgId: string, actorId: string, raw: unknow
   if (!appSecret || !permanentCode) throw new FxiaokeError('CREDENTIALS_REQUIRED', '首次配置或更换应用时，请填写 APPSecret 和永久授权码。')
   // Never trust a browser-supplied enterprise identifier; obtain it from the provider.
   const shouldDiscover = !existing || input.appId !== existing.app_id || !!input.appSecret || !!input.permanentCode
-  const expectedEa = shouldDiscover
-    ? (await discoverEnterprise({ appId: input.appId, appSecret, permanentCode }, transportForOrganization(orgId))).ea
-    : existing.expected_ea
+  const enterprise = shouldDiscover
+    ? await discoverEnterprise({ appId: input.appId, appSecret, permanentCode }, transportForOrganization(orgId))
+    : null
+  const expectedEa = enterprise?.ea || existing?.expected_ea || ''
+  const expectedCorpId = enterprise?.corpId || previous.expectedCorpId
   if ((input.expectedEa && input.expectedEa !== expectedEa) || (existing && existing.expected_ea !== expectedEa)) {
     throw new FxiaokeError('ENTERPRISE_MISMATCH', '应用所属企业与现有配置不一致，请核对应用凭据。', 409)
   }
-  const credentials: Credentials = { appId: input.appId, expectedEa, apiUserId: input.apiUserId, appSecret, permanentCode }
+  const credentials: Credentials = { appId: input.appId, expectedEa, apiUserId: input.apiUserId, appSecret, permanentCode, ...(expectedCorpId ? { expectedCorpId } : {}) }
   const row = { system_org_id: orgId, app_id: input.appId, expected_ea: expectedEa, api_user_id: input.apiUserId,
     revision: randomUUID(), credentials_ciphertext: encryptCredentials(orgId, JSON.stringify(credentials)), updated_by: actorId,
     updated_at: new Date().toISOString(), last_checked_at: null, last_check_status: 'not_checked', last_error: null }
@@ -55,6 +57,36 @@ export async function saveConnection(orgId: string, actorId: string, raw: unknow
   if (!saved || saved.revision !== row.revision) throw new FxiaokeError('READBACK_CHANGED', '保存后配置发生变化，请重新读取核对。', 409)
   return saved
 }
+
+// Server-only credential source for the employee OAuth callback. No caller may
+// return this object to a browser or include its secret values in logs.
+export async function loadOAuthCredentials(orgId: string) {
+  const row = await secretRow(orgId)
+  if (!row) throw new FxiaokeError('CONFIGURATION_REQUIRED', '尚未配置纷享自建应用，请先由管理员完成配置。', 409)
+
+  let decoded: Credentials
+  try {
+    decoded = JSON.parse(decryptCredentials(orgId, row.credentials_ciphertext)) as Credentials
+  } catch {
+    throw new FxiaokeError('CREDENTIALS_UNREADABLE', '已保存的纷享凭据无法解密，请管理员重新配置。', 503)
+  }
+
+  if (
+    !decoded
+    || decoded.appId !== row.app_id
+    || decoded.expectedEa !== row.expected_ea
+    || decoded.apiUserId !== row.api_user_id
+    || typeof decoded.appSecret !== 'string'
+    || !decoded.appSecret
+    || typeof decoded.permanentCode !== 'string'
+    || !decoded.permanentCode
+  ) {
+    throw new FxiaokeError('CREDENTIALS_UNREADABLE', '已保存的纷享凭据与配置不一致，请管理员重新配置。', 503)
+  }
+
+  return decoded
+}
+
 export async function previewSavedConnection(orgId: string, revision: string) {
   const row = await secretRow(orgId)
   if (!row || row.revision !== revision) throw new FxiaokeError('CONFIG_CHANGED', '配置不存在或已修改，请重新读取后再预览。', 409)
@@ -69,7 +101,8 @@ export async function previewSavedConnection(orgId: string, revision: string) {
   let preview
   try {
     const decoded = JSON.parse(decryptCredentials(orgId, row.credentials_ciphertext)) as Credentials
-    const parsed = connectionInput.safeParse({ ...decoded, revision })
+    const { expectedCorpId: _serverOnlyCorpId, ...connectionFields } = decoded
+    const parsed = connectionInput.safeParse({ ...connectionFields, revision })
     if (!parsed.success || !decoded.appSecret || !decoded.permanentCode || decoded.appId !== row.app_id || decoded.expectedEa !== row.expected_ea || decoded.apiUserId !== row.api_user_id) throw new FxiaokeError('CREDENTIALS_UNREADABLE', '已保存凭据与配置不一致，请重新配置。', 503)
     preview = await previewDirectory(decoded, transportForOrganization(orgId))
   } catch (err) {

@@ -42,6 +42,9 @@ const REQUIRED_TABLES = [
   'user_organizations',
   'organization_sources',
   'external_identities',
+  'phone_history',
+  'organization_fxiaoke_connections',
+  'organization_fxiaoke_oauth_states',
   'shipping_orders',
   'shipping_order_revisions',
   'personnel_employment_periods',
@@ -78,9 +81,11 @@ export interface SchemaStatus {
 }
 
 const REQUIRED_COLUMNS: Record<string, string[]> = {
-  users: ['id', 'password_hash', 'must_change_password', 'org_id', 'primary_dept_id', 'login_enabled', 'report_to_user_id'],
+  users: ['id', 'org_id', 'phone', 'employee_id', 'primary_dept_id', 'login_enabled', 'report_to_user_id'],
   auth_tokens: ['id', 'token', 'user_id', 'expires_at'],
   user_roles: ['user_id', 'role_id', 'org_id', 'scope_type', 'scope_id'],
+  organization_fxiaoke_oauth_states: ['state_hash', 'system_org_id', 'redirect_url', 'expires_at', 'consumed_at', 'created_at'],
+  phone_history: ['id', 'user_id', 'org_id', 'phone', 'valid_from', 'valid_to', 'reason'],
   user_permission_assignments: ['user_id', 'permission_point_id', 'org_id'],
   permission_points: [
     'id',

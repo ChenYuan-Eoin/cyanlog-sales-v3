@@ -15,16 +15,16 @@ import {
 } from '@/lib/scoped-access'
 import {
   assertDepartmentInOrg,
-  createAdminTempPassword,
   ensureDefaultOrganizationMembership,
-  hashAdminPassword,
   syncPrimaryDepartmentMembership,
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
 import { validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
+import { normalizeIdentityPhone } from '@/lib/fxiaoke/identity'
 
 const createUserSchema = z.object({
   email: z.string().trim().email('请输入有效的邮箱地址').transform((value) => value.toLowerCase()),
+  phone: z.string().trim().min(1, '手机号不能为空'),
   display_name: z.string().trim().min(1, '姓名不能为空'),
   title: z.string().trim().nullable().optional(),
   primary_dept_id: z.string().regex(/^[0-9a-f-]{36}$/i, '主部门 ID 格式不正确').nullable().optional(),
@@ -114,6 +114,10 @@ export async function POST(req: NextRequest) {
     }
 
     const { email, display_name, title, primary_dept_id, role_ids } = parseResult.data
+    const phone = normalizeIdentityPhone(parseResult.data.phone)
+    if (!phone) {
+      return NextResponse.json({ error: '手机号格式不正确', code: 'INVALID_PHONE' }, { status: 400 })
+    }
 
     if (primary_dept_id && !canMutateOrgDepartments(actorAssignments, orgId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_DEPARTMENT_PERMISSION' }, { status: 403 })
@@ -148,25 +152,30 @@ export async function POST(req: NextRequest) {
     if (existing) {
       return NextResponse.json({ error: '该邮箱已被使用' }, { status: 409 })
     }
+    const { data: existingPhone } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('org_id', orgId)
+      .eq('phone', phone)
+      .eq('status', 'active')
+      .maybeSingle()
+    if (existingPhone) {
+      return NextResponse.json({ error: '该手机号已被使用' }, { status: 409 })
+    }
 
     const activationCode = randomBytes(24).toString('base64url')
     const activationTokenHash = createHash('sha256').update(activationCode).digest('hex')
     const activationExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-    // The account cannot authenticate until invitation acceptance replaces this
-    // placeholder with the user's chosen password.
-    const passwordHash = await hashAdminPassword(createAdminTempPassword())
-
     // 创建用户
     const { data: user, error: userError } = await supabaseAdmin
       .from('users')
       .insert({
         org_id: orgId,
         email,
+        phone,
         display_name,
         title: title || null,
         primary_dept_id: primary_dept_id || null,
-        password_hash: passwordHash,
-        must_change_password: false,
         status: 'inactive',
         login_enabled: false,
       })
