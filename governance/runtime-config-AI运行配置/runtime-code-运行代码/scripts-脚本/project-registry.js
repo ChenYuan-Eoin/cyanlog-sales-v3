@@ -977,7 +977,7 @@ function runVercelApi(repoRoot, endpoint) {
     cwd: productCodeRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 30000,
+    timeout: 120000,
     killSignal: 'SIGTERM',
     maxBuffer: 25 * 1024 * 1024,
     env: { ...process.env, NO_COLOR: '1' }
