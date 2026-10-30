@@ -284,3 +284,16 @@ WP92：切换前展示新增/保留/冲突/停同步清单；旧飞书组织保�
 - 完整目标设计见 `governance/runtime-state/identity-authorization-blueprint.md`；当前 F003 只承载 WP94 可执行合同。
 - 生产只读核验：`cyanlog-sales-v3` 当前有 43 个用户、31 个活跃用户、5 个组织超管、1 条纷享连接，但 `organization_sources=0`、`external_identities=0`，`phone_history` 与 OAuth state 表尚不存在。删除密码迁移当前必须保持阻断。
 - WP94 增加受审计的超级管理员预绑定：只允许当前组织 SUPER_ADMIN 选择现有活跃成员，输入纷享 `openUserId`；服务端自动读取并校验企业 `corpId`，原子写入 `organization_sources` 与 `external_identities`，记录 `bind_external_identity` 生命周期事件，不按手机号或姓名猜测。
+
+## 2026-10-30 重复账号统一合并规则（IN-20261030-003/004）
+
+所有后续重复账号沿用同一条主账号优先规则，不为单个账号写一次性例外：
+
+- 主账号由系统配置的权威身份绑定源决定：`organization_sources.status='active'` 且 `authority_scope.identity='authoritative'`，权威来源的稳定 subject 已映射到哪个 `users.id`，哪个账号就是该自然人的主账号。`SUPER_ADMIN`、`ADMIN` 等权限角色只约束“谁可以执行合并”，不定义主账号；`系统超管` 一类展示名称也不能定义身份。
+- 权威来源尚未形成一对一稳定映射、或同一自然人存在多个互相冲突的权威映射时必须失败关闭。业务引用数量、历史责任数量和当前角色数量只能用于评估合并影响，不能反向选择主账号。
+- 合并时保留主账号 UUID、资料、会话和已存在的稳定外部映射，合并来源账号仍独立存在的部门、角色；来源账号的其他受外键保护业务引用迁移到主账号。
+- 同一外部来源在主、来源账号均已有 `matched` 映射时拒绝合并转人工，不覆盖任一 `openUserId`。
+- 来源账号的会话直接撤销，不迁移到主账号；来源账号手机号、员工号等可变标识清空，以防止新唯一约束和历史归属冲突。
+- 来源用户行、来源组织关系、历史生命周期事件和停用原因永久保留，并记录 `merge_duplicate_identity_primary` 与 `merge_duplicate_identity_source` 审计事件。
+- 当前 `系统超管` 与 `PANG 源` 的真主账号归属，以纷享权威绑定源的显式稳定映射为准；映射确认前不执行合并。E2E 测试管理员不在本规则本次执行范围内。
+- RBAC/权限角色（`roles`、`user_roles`）回答“能否操作平台能力”。未来的“系统角色”若指业务对象“系统”上的责任人/参与者角色，则属于独立业务域对象，必须使用独立实体与授权合同，不得塞进 RBAC `roles.code`、`user_roles` 或权限点；该业务角色模型不在 WP94 实现。

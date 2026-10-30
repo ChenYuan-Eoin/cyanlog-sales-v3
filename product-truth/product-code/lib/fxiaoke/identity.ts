@@ -11,6 +11,12 @@ type ExternalIdentityMapping = {
   match_status: 'unresolved' | 'matched' | 'conflict' | 'ignored'
 }
 
+type IdentitySource = {
+  id: string
+  status: string
+  authority_scope: Record<string, unknown>
+}
+
 type UserRow = {
   id: string
   org_id: string | null
@@ -34,7 +40,7 @@ export function normalizeIdentityPhone(value: string | null | undefined) {
 async function findIdentitySource(orgId: string) {
   const { data, error } = await supabaseAdmin
     .from('organization_sources')
-    .select('id')
+    .select('id,status,authority_scope')
     .eq('system_org_id', orgId)
     .eq('provider', 'fxiaoke')
     .limit(2)
@@ -47,7 +53,20 @@ async function findIdentitySource(orgId: string) {
       409,
     )
   }
-  return rows[0]?.id as string | undefined
+  const source = rows[0] as IdentitySource | undefined
+  if (!source) return undefined
+  if (
+    source.status !== 'active'
+    || !source.authority_scope
+    || source.authority_scope.identity !== 'authoritative'
+  ) {
+    throw new FxiaokeError(
+      'IDENTITY_SOURCE_INACTIVE',
+      '当前纷享绑定源未启用身份裁决权，登录已拒绝。',
+      403,
+    )
+  }
+  return source.id
 }
 
 async function loadIdentityMapping(sourceId: string, orgId: string, externalSubject: string) {

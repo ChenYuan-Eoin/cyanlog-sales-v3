@@ -72,6 +72,8 @@ function seedSource() {
     system_org_id: orgId,
     provider: 'fxiaoke',
     external_tenant_id: input.corpId,
+    status: 'active',
+    authority_scope: { identity: 'authoritative', organization: 'evidence' },
   })
 }
 
@@ -127,6 +129,24 @@ describe('Fxiaoke stable identity resolution', () => {
     seedUser()
     await expect(resolveFxiaokeIdentity(input)).rejects.toMatchObject({
       code: 'IDENTITY_BINDING_REQUIRED',
+      status: 403,
+    })
+  })
+
+  it('requires an active binding source with identity authority', async () => {
+    seedSource()
+    db.sources[0].status = 'draft'
+    seedMapping()
+    seedUser()
+    await expect(resolveFxiaokeIdentity(input)).rejects.toMatchObject({
+      code: 'IDENTITY_SOURCE_INACTIVE',
+      status: 403,
+    })
+
+    db.sources[0].status = 'active'
+    db.sources[0].authority_scope = { identity: 'evidence' }
+    await expect(resolveFxiaokeIdentity(input)).rejects.toMatchObject({
+      code: 'IDENTITY_SOURCE_INACTIVE',
       status: 403,
     })
   })

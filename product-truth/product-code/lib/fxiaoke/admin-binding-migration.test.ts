@@ -22,6 +22,13 @@ describe('administrator Fxiaoke identity binding migration', () => {
     expect(sql).not.toMatch(/display_name\s*=\s*p_/i)
   })
 
+  it('marks the configured Fxiaoke source as the active identity authority', () => {
+    expect(sql).toContain("'active',")
+    expect(sql).toContain("'identity', 'authoritative'")
+    expect(sql).toContain("'organization', 'evidence'")
+    expect(sql).toContain("authority_scope = authority_scope || jsonb_build_object")
+  })
+
   it('uses the existing source and identity ledger and records an audit event', () => {
     expect(sql).toContain('public.organization_sources')
     expect(sql).toContain('public.external_identities')

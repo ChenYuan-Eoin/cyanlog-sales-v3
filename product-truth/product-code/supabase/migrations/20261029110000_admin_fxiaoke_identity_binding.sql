@@ -101,8 +101,8 @@ begin
       'fxiaoke',
       p_external_tenant_id,
       100,
-      'draft',
-      jsonb_build_object('identity', 'evidence'),
+      'active',
+      jsonb_build_object('identity', 'authoritative', 'organization', 'evidence'),
       'enrichment',
       p_actor_id,
       p_actor_id
@@ -119,6 +119,18 @@ begin
       raise exception 'Fxiaoke enterprise does not match the tenant identity source'
         using errcode = '23514';
     end if;
+
+    update public.organization_sources
+       set status = 'active',
+           authority_scope = authority_scope || jsonb_build_object(
+             'identity', 'authoritative',
+             'organization', coalesce(authority_scope->>'organization', 'evidence')
+           ),
+           sync_mode = 'enrichment',
+           updated_by = p_actor_id,
+           updated_at = now()
+     where id = v_source.id
+       and system_org_id = p_org_id;
   end if;
 
   select canonical_user_id, match_status
