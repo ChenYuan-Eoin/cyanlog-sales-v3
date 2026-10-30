@@ -59,6 +59,10 @@ export async function POST(
     })
 
     if (error) {
+      console.error('[fxiaoke-identity-binding] RPC failed', {
+        code: error.code,
+        message: error.message,
+      })
       const conflict = error.code === '23505' || error.code === '23514'
       return NextResponse.json(
         {

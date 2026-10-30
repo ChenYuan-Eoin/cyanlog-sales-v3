@@ -76,6 +76,15 @@ describe('system session issuance', () => {
     expect(mocks.insert).not.toHaveBeenCalled()
   })
 
+  it('fails closed when an active member has no effective organization role', async () => {
+    const scopedAccess = await import('@/lib/scoped-access')
+    vi.mocked(scopedAccess.getOrgRoleCodes).mockReturnValueOnce([])
+
+    await expect(issueSystemSession(userId, orgId)).rejects.toMatchObject({ code: 'SESSION_NO_ROLE' })
+    expect(mocks.insert).not.toHaveBeenCalled()
+    expect(mocks.cookie).not.toHaveBeenCalled()
+  })
+
   it('sets the existing HttpOnly server token and client handoff cookie', () => {
     const response = NextResponse.json({ ok: true })
     applySystemSessionCookies(response, {

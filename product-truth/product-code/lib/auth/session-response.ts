@@ -58,6 +58,9 @@ export async function issueSystemSession(userId: string, orgId: string): Promise
   }
 
   const roleCodes = getOrgRoleCodes(assignments, orgId)
+  if (roleCodes.length === 0) {
+    throw new SessionIssueError('SESSION_NO_ROLE', '登录用户没有可用的组织角色。')
+  }
   const authorizationRoleCodes = getOrgAuthorizationRoleCodes(assignments, orgId)
   const allPermissions = getOrgPermissions(assignments, orgId)
   if (authorizationRoleCodes.includes('SUPER_ADMIN') && !allPermissions.includes('*')) {

@@ -6,6 +6,10 @@ const sql = readFileSync(
   join(process.cwd(), 'supabase/migrations/20261029110000_admin_fxiaoke_identity_binding.sql'),
   'utf8',
 )
+const fixSql = readFileSync(
+  join(process.cwd(), 'supabase/migrations/20261030110000_fix_fxiaoke_identity_binding_uuid.sql'),
+  'utf8',
+)
 
 describe('administrator Fxiaoke identity binding migration', () => {
   it('requires an active exact-organization SUPER_ADMIN and an active target member', () => {
@@ -36,5 +40,14 @@ describe('administrator Fxiaoke identity binding migration', () => {
     expect(sql).toContain('private.personnel_insert_event_v1')
     expect(sql).toContain('grant execute on function public.admin_bind_fxiaoke_identity_v1')
     expect(sql).toContain('to service_role')
+  })
+
+  it('repairs UUID source selection without unsupported min(uuid)', () => {
+    expect(fixSql).not.toMatch(/min\s*\(\s*id\s*\)/i)
+    expect(fixSql).toContain('select count(*)')
+    expect(fixSql).toContain('select id')
+    expect(fixSql).toContain('private.personnel_lock_org_v1(p_org_id)')
+    expect(fixSql).toContain('admin_bind_fxiaoke_identity_v1')
+    expect(fixSql).toContain('grant execute on function public.admin_bind_fxiaoke_identity_v1')
   })
 })
