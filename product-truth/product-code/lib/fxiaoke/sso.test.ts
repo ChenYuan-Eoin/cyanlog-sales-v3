@@ -23,7 +23,7 @@ vi.mock('./settings', () => ({ loadOAuthCredentials: mocks.credentials }))
 
 import { resolveConfiguredOAuthOrganization } from './sso'
 
-const first = '11111111-1111-4111-8111-111111111111'
+const first = '00000001-0000-0000-0000-000000000000'
 const second = '22222222-2222-4222-8222-222222222222'
 const credentials = { appId: 'FSAID_test', expectedEa: 'example' }
 
@@ -40,6 +40,11 @@ describe('Fxiaoke SSO organization resolution', () => {
 
     mocks.rows.push({ system_org_id: second })
     await expect(resolveConfiguredOAuthOrganization()).rejects.toMatchObject({ code: 'SSO_ORGANIZATION_AMBIGUOUS', status: 409 })
+  })
+
+  it('accepts database seed UUIDs that do not carry RFC version bits', async () => {
+    mocks.rows.push({ system_org_id: first })
+    await expect(resolveConfiguredOAuthOrganization()).resolves.toEqual({ orgId: first, credentials })
   })
 
   it('does not accept a browser-selected organization and fails closed when discovery is unavailable', async () => {

@@ -50,7 +50,7 @@ vi.mock('@/lib/supabase', () => ({
 
 import { normalizeIdentityPhone, resolveFxiaokeIdentity } from './identity'
 
-const orgId = '11111111-1111-4111-8111-111111111111'
+const orgId = '00000001-0000-0000-0000-000000000000'
 const otherOrgId = '99999999-9999-4999-8999-999999999999'
 const userId = '22222222-2222-4222-8222-222222222222'
 const otherUserId = '33333333-3333-4333-8333-333333333333'
@@ -121,6 +121,13 @@ describe('Fxiaoke stable identity resolution', () => {
     seedMapping()
     seedUser()
 
+    await expect(resolveFxiaokeIdentity(input)).resolves.toEqual({ userId, orgId })
+  })
+
+  it('resolves the database seed organization UUID', async () => {
+    seedSource()
+    seedMapping()
+    seedUser()
     await expect(resolveFxiaokeIdentity(input)).resolves.toEqual({ userId, orgId })
   })
 

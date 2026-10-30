@@ -27,7 +27,7 @@ import {
   oauthStatesMatch,
 } from './oauth-state'
 
-const orgId = '11111111-1111-4111-8111-111111111111'
+const orgId = '00000001-0000-0000-0000-000000000000'
 const redirectUrl = 'https://sales.cyanlog.icu/api/auth/fxiaoke/callback'
 
 describe('Fxiaoke OAuth state', () => {
@@ -46,6 +46,12 @@ describe('Fxiaoke OAuth state', () => {
     expect(db.inserts[0]).toMatchObject({ system_org_id: orgId, redirect_url: redirectUrl })
     expect(db.inserts[0].state_hash).toBe(hashOAuthState(result.state))
     expect(JSON.stringify(db.inserts[0])).not.toContain(result.state)
+  })
+
+  it('supports database seed UUIDs without RFC version bits', async () => {
+    const result = await createOAuthState(orgId, redirectUrl)
+    expect(db.inserts[0]).toMatchObject({ system_org_id: orgId, redirect_url: redirectUrl })
+    expect(result.state).toMatch(/^[A-Za-z0-9_-]{43}$/)
   })
 
   it('atomically consumes one exact organization-bound redirect and rejects expired or replayed state', async () => {

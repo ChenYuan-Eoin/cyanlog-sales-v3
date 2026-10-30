@@ -4,7 +4,8 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { FxiaokeError } from './contracts'
 import { loadOAuthCredentials } from './settings'
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+// Database seeds use valid UUID text without RFC version/variant bits.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function listConfiguredOAuthOrganizationIds(limit = 2) {
   const { data, error } = await supabaseAdmin
