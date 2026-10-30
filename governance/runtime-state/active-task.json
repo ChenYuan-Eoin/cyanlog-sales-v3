@@ -329,12 +329,12 @@
       "runtime_profile": "application",
       "runtime_contract_version": "f003-fxiaoke-sso-v1",
       "production_database_mode": "controlled_write_approved",
-      "preview_order_exception_approval_id": "IN-20261030-005",
+      "preview_order_exception_approval_id": "IN-20261030-006",
       "production_release_authorization": {
         "status": "approved_for_final_release",
         "micro_fix_approval_id": "IN-20261029-005",
         "clarification_id": "IN-20261030-004",
-        "final_release_approval_id": "IN-20261030-005",
+        "final_release_approval_id": "IN-20261030-006",
         "micro_fix_scope": "WP94 F003 authoritative-source SSO, one-time OAuth state, audited explicit pre-binding, stable subject resolution and local password entry removal.",
         "final_scope": "WP94 Fxiaoke SSO connectivity release: install only the non-destructive identity binding, OAuth-state and merge-function migrations, deploy the exact candidate to Production, and temporarily bind Fxiaoke openUserId 1093 to the existing E2E administrator for login-chain validation; no account merge, phone-history migration, password removal or carrier call.",
         "database_write_authorized": true

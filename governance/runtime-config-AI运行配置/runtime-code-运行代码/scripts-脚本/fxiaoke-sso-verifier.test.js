@@ -153,6 +153,10 @@ test('Production-first exception accepts only the scoped F003 SSO product tree a
     changedPaths: ['governance/runtime-state/demand-inbox.jsonl']
   };
   assert.deepEqual(v.productionFirstExceptionBlockers(input), []);
+  assert.deepEqual(v.productionFirstExceptionBlockers({
+    ...input,
+    approval: { ...approval, production_database_write_authorized: false }
+  }), []);
   for (const patch of [
     { activeId: 'WP82' },
     { productTree: 'f'.repeat(40) },

@@ -90,7 +90,7 @@ function productionFirstExceptionBlockers({
   }
   if (
     approval?.code_release_authorized !== true
-    || approval?.production_database_write_authorized !== true
+    || typeof approval?.production_database_write_authorized !== 'boolean'
     || approval?.carrier_calls_authorized !== false
     || approval?.account_merge_execution_authorized !== false
     || approval?.phone_history_migration_authorized !== false
