@@ -126,6 +126,46 @@ test('Production operator cannot turn a code-only or incomplete login path into 
   }
 });
 
+test('Production-first exception accepts only the scoped F003 SSO product tree and write boundaries', () => {
+  const approval = {
+    type: 'final_production_release_authorization',
+    source: 'user_explicit',
+    state: 'approved',
+    code_release_authorized: true,
+    production_database_write_authorized: true,
+    carrier_calls_authorized: false,
+    account_merge_execution_authorized: false,
+    phone_history_migration_authorized: false,
+    password_removal_authorized: false,
+    preview_order_exception: true,
+    preview_status: 'not_passed',
+    approved_candidate: 'b'.repeat(40),
+    approved_product_tree: 'c'.repeat(40),
+    rollback_commit: 'd'.repeat(40),
+    authorized_migrations: [{ path: 'supabase/migrations/sso.sql', sha256: 'e'.repeat(64) }]
+  };
+  const input = {
+    approval,
+    activeId: 'WP94',
+    contractVersion: v.CONTRACT,
+    productTree: 'c'.repeat(40),
+    candidateIsAncestor: true,
+    changedPaths: ['governance/runtime-state/demand-inbox.jsonl']
+  };
+  assert.deepEqual(v.productionFirstExceptionBlockers(input), []);
+  for (const patch of [
+    { activeId: 'WP82' },
+    { productTree: 'f'.repeat(40) },
+    { candidateIsAncestor: false },
+    { changedPaths: ['product-truth/product-code/app/login/page.tsx'] },
+    { approval: { ...approval, account_merge_execution_authorized: true } },
+    { approval: { ...approval, phone_history_migration_authorized: true } },
+    { approval: { ...approval, authorized_migrations: [] } }
+  ]) {
+    assert.notEqual(v.productionFirstExceptionBlockers({ ...input, ...patch }).length, 0);
+  }
+});
+
 test('controlled Production verifier rejects an invalid-state redirect that does not fail closed', async () => {
   const fs = require('fs');
   const os = require('os');

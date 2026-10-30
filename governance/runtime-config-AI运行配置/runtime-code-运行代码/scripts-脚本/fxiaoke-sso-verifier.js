@@ -36,6 +36,12 @@ const PRODUCTION_ACTIONS = Object.freeze([
   'verify_no_silent_phone_autolink',
   'verify_password_recovery_removed'
 ]);
+const RULE_PATHS = new Set([
+  'governance/runtime-state/active-task.json',
+  'governance/runtime-state/demand-inbox.jsonl',
+  ...['project-registry.js', 'fxiaoke-sso-verifier.js', 'fxiaoke-sso-verifier.test.js', 'harness-selftest.js']
+    .map(name => `governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/${name}`)
+]);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -59,6 +65,65 @@ function attachmentShapeValid(attachments) {
   return Array.isArray(attachments)
     && attachments.length > 0
     && attachments.every(item => nonempty(item?.path) && SHA256.test(String(item?.sha256 || '')));
+}
+
+function productionFirstExceptionBlockers({
+  approval,
+  activeId,
+  contractVersion,
+  productTree,
+  changedPaths,
+  candidateIsAncestor
+} = {}) {
+  const errors = [];
+  if (activeId !== 'WP94' || contractVersion !== CONTRACT) {
+    errors.push('F003 SSO Production-first ordering is limited to WP94');
+  }
+  if (
+    approval?.type !== 'final_production_release_authorization'
+    || approval?.source !== 'user_explicit'
+    || approval?.state !== 'approved'
+    || approval?.preview_order_exception !== true
+    || approval?.preview_status !== 'not_passed'
+  ) {
+    errors.push('Explicit F003 SSO release authority must preserve Preview as not passed');
+  }
+  if (
+    approval?.code_release_authorized !== true
+    || approval?.production_database_write_authorized !== true
+    || approval?.carrier_calls_authorized !== false
+    || approval?.account_merge_execution_authorized !== false
+    || approval?.phone_history_migration_authorized !== false
+    || approval?.password_removal_authorized !== false
+  ) {
+    errors.push('F003 SSO release must allow only scoped SSO migrations and preserve excluded write boundaries');
+  }
+  if (
+    !/^[a-f0-9]{40}$/.test(approval?.approved_candidate || '')
+    || candidateIsAncestor !== true
+    || !/^[a-f0-9]{40}$/.test(approval?.approved_product_tree || '')
+    || productTree !== approval?.approved_product_tree
+  ) {
+    errors.push('F003 SSO release must retain the approved product tree and ancestry');
+  }
+  if (
+    !Array.isArray(changedPaths)
+    || changedPaths.some(file => !RULE_PATHS.has(file))
+  ) {
+    errors.push('Only scoped F003 SSO delivery rules may follow the approved candidate');
+  }
+  if (!/^[a-f0-9]{40}$/.test(approval?.rollback_commit || '')) {
+    errors.push('Concrete F003 SSO rollback commit required');
+  }
+  const migrations = approval?.authorized_migrations;
+  if (
+    !Array.isArray(migrations)
+    || migrations.length === 0
+    || migrations.some(item => !nonempty(item?.path) || !SHA256.test(String(item?.sha256 || '')))
+  ) {
+    errors.push('Explicit F003 SSO migration hashes are required');
+  }
+  return errors;
 }
 
 function previewBlockers(payload, expected = {}) {
@@ -387,6 +452,7 @@ module.exports = {
   ORIGIN,
   PREVIEW_ACTIONS,
   PRODUCTION_ACTIONS,
+  productionFirstExceptionBlockers,
   previewBlockers,
   productionOperatorBlockers,
   productionBlockers,

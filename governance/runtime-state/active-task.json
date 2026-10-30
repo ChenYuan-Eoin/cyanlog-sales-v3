@@ -298,10 +298,14 @@
       "本地密码列、密码 RPC、登录/注册/改密/重置密码入口在 SSO 生产验证和恢复证据满足后由前进迁移物理删除；代码候选不得保留可用后门"
     ],
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -318,10 +322,28 @@
       "required_runtime_evidence": [
         "fxiaoke_sso"
       ],
+      "required_production_runtime_evidence": [
+        "fxiaoke_sso_login",
+        "fxiaoke_sso_denials"
+      ],
       "runtime_profile": "application",
       "runtime_contract_version": "f003-fxiaoke-sso-v1",
-      "production_database_mode": "read_only",
-      "note": "开发阶段只允许推进到 code_green；一次性 state、企业归属、稳定员工映射、会话签发和拒绝路径全部验证后，才可另行申请 Preview、生产迁移与真实登录验收。"
+      "production_database_mode": "controlled_write_approved",
+      "preview_order_exception_approval_id": "IN-20261030-005",
+      "production_release_authorization": {
+        "status": "approved_for_final_release",
+        "micro_fix_approval_id": "IN-20261029-005",
+        "clarification_id": "IN-20261030-004",
+        "final_release_approval_id": "IN-20261030-005",
+        "micro_fix_scope": "WP94 F003 authoritative-source SSO, one-time OAuth state, audited explicit pre-binding, stable subject resolution and local password entry removal.",
+        "final_scope": "WP94 Fxiaoke SSO connectivity release: install only the non-destructive identity binding, OAuth-state and merge-function migrations, deploy the exact candidate to Production, and temporarily bind Fxiaoke openUserId 1093 to the existing E2E administrator for login-chain validation; no account merge, phone-history migration, password removal or carrier call.",
+        "database_write_authorized": true
+      },
+      "final_acceptance": {
+        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+        "production_database_mode": "controlled_write_approved"
+      },
+      "note": "Code is green. Production may install only the explicitly authorized non-destructive SSO migrations and deploy the exact attested candidate; real login remains pending until the existing-Chrome operator completes Fxiaoke OAuth. Destructive password and phone-history migrations remain excluded."
     },
     "micro_fixes": [
       {
