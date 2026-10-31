@@ -155,6 +155,16 @@ test('Production-first exception accepts only the scoped F003 SSO product tree a
   assert.deepEqual(v.productionFirstExceptionBlockers(input), []);
   assert.deepEqual(v.productionFirstExceptionBlockers({
     ...input,
+    changedPaths: [
+      'product-truth/product-code/app/api/admin/users/[id]/identity-binding/route.ts',
+      'product-truth/product-code/lib/auth/session-response.ts',
+      'product-truth/product-code/lib/auth/session-response.test.ts',
+      'product-truth/product-code/lib/fxiaoke/admin-binding-migration.test.ts',
+      'product-truth/product-code/supabase/migrations/20261030110000_fix_fxiaoke_identity_binding_uuid.sql'
+    ]
+  }), []);
+  assert.deepEqual(v.productionFirstExceptionBlockers({
+    ...input,
     approval: { ...approval, production_database_write_authorized: false }
   }), []);
   for (const patch of [
