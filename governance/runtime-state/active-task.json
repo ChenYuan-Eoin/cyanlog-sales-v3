@@ -329,14 +329,14 @@
       "runtime_profile": "application",
       "runtime_contract_version": "f003-fxiaoke-sso-v1",
       "production_database_mode": "controlled_write_approved",
-      "preview_order_exception_approval_id": "IN-20261031-001",
+      "preview_order_exception_approval_id": "IN-20261031-002",
       "production_release_authorization": {
         "status": "approved_for_final_release",
         "micro_fix_approval_id": "IN-20261029-005",
-        "clarification_id": "IN-20261030-004",
-        "final_release_approval_id": "IN-20261030-006",
+        "clarification_id": "IN-20261031-002",
+        "final_release_approval_id": "IN-20261031-002",
         "micro_fix_scope": "WP94 F003 authoritative-source SSO, one-time OAuth state, audited explicit pre-binding, stable subject resolution and local password entry removal.",
-        "final_scope": "WP94 Fxiaoke SSO connectivity release: install only the non-destructive identity binding, OAuth-state and merge-function migrations, deploy the exact candidate to Production, and temporarily bind Fxiaoke openUserId 1093 to the existing E2E administrator for login-chain validation; no account merge, phone-history migration, password removal or carrier call.",
+        "final_scope": "继续 WP94 并修复真实纷享 OAuth 拦截：将 state 限制为纷享兼容的 32 位随机字母数字串，发布精确候选并部署 Production，以现有 Chrome 继续完成扫码和验收；不得扩大到账号合并、手机历史、密码删除或顺丰业务。",
         "database_write_authorized": true
       },
       "final_acceptance": {

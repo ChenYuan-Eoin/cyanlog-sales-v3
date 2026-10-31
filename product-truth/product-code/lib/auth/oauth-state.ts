@@ -4,7 +4,9 @@ import { supabaseAdmin } from '@/lib/supabase'
 export const FXIAOKE_OAUTH_STATE_COOKIE = 'fxiaoke_oauth_state'
 export const FXIAOKE_OAUTH_STATE_MAX_AGE_SECONDS = 5 * 60
 
-const STATE_PATTERN = /^[A-Za-z0-9_-]{43}$/
+// Fxiaoke rejects state values containing '-' or '_'. Keep a 128-bit random
+// value while matching the provider's 32-character alphanumeric contract.
+const STATE_PATTERN = /^[A-Za-z0-9]{32}$/
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export type ConsumedOAuthState = {
@@ -36,7 +38,7 @@ export async function createOAuthState(orgId: string, redirectUrl: string) {
     throw new OAuthStateError('OAUTH_STATE_STORE_UNAVAILABLE', 'OAuth 回调地址无效。')
   }
 
-  const state = randomBytes(32).toString('base64url')
+  const state = randomBytes(16).toString('hex')
   const now = new Date()
   const expiresAt = new Date(now.getTime() + FXIAOKE_OAUTH_STATE_MAX_AGE_SECONDS * 1000)
   const { error } = await supabaseAdmin

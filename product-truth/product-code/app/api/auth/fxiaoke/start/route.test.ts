@@ -23,7 +23,7 @@ const request = (path = '/api/auth/fxiaoke/start') => new NextRequest(`https://s
 describe('Fxiaoke OAuth start', () => {
   beforeEach(() => {
     mocks.resolve.mockReset().mockResolvedValue({ orgId, credentials: { appId: 'FSAID_test' } })
-    mocks.state.mockReset().mockResolvedValue({ state: 's'.repeat(43), expiresAt: new Date('2026-10-29T03:05:00Z') })
+    mocks.state.mockReset().mockResolvedValue({ state: 's'.repeat(32), expiresAt: new Date('2026-10-29T03:05:00Z') })
     mocks.authorize.mockReset().mockReturnValue(new URL('https://open.fxiaoke.com/oauth2.0/authorize?responseType=code'))
   })
 

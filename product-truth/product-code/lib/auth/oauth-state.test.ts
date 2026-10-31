@@ -41,7 +41,9 @@ describe('Fxiaoke OAuth state', () => {
   it('stores only a hash of a random state and returns the raw state to the browser', async () => {
     const result = await createOAuthState(orgId, redirectUrl)
 
-    expect(result.state).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(result.state).toMatch(/^[A-Za-z0-9]{32}$/)
+    expect(result.state).not.toContain('-')
+    expect(result.state).not.toContain('_')
     expect(db.inserts).toHaveLength(1)
     expect(db.inserts[0]).toMatchObject({ system_org_id: orgId, redirect_url: redirectUrl })
     expect(db.inserts[0].state_hash).toBe(hashOAuthState(result.state))
@@ -51,11 +53,11 @@ describe('Fxiaoke OAuth state', () => {
   it('supports database seed UUIDs without RFC version bits', async () => {
     const result = await createOAuthState(orgId, redirectUrl)
     expect(db.inserts[0]).toMatchObject({ system_org_id: orgId, redirect_url: redirectUrl })
-    expect(result.state).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(result.state).toMatch(/^[A-Za-z0-9]{32}$/)
   })
 
   it('atomically consumes one exact organization-bound redirect and rejects expired or replayed state', async () => {
-    const state = 'a'.repeat(43)
+    const state = 'a'.repeat(32)
     db.rpcData = [{ system_org_id: orgId, redirect_url: redirectUrl }]
     await expect(consumeOAuthState(state)).resolves.toEqual({ orgId, redirectUrl })
 
@@ -65,11 +67,12 @@ describe('Fxiaoke OAuth state', () => {
   })
 
   it('compares state cookies in constant time and fails closed on missing or malformed values', () => {
-    const state = 'b'.repeat(43)
+    const state = 'b'.repeat(32)
     expect(oauthStatesMatch(state, state)).toBe(true)
-    expect(oauthStatesMatch(state, 'c'.repeat(43))).toBe(false)
+    expect(oauthStatesMatch(state, 'c'.repeat(32))).toBe(false)
     expect(oauthStatesMatch(undefined, state)).toBe(false)
     expect(oauthStatesMatch(state, 'short')).toBe(false)
+    expect(oauthStatesMatch('a'.repeat(43), 'a'.repeat(43))).toBe(false)
   })
 
   it('never reflects storage failures or raw state values', async () => {
@@ -79,6 +82,6 @@ describe('Fxiaoke OAuth state', () => {
     })
 
     db.rpcError = { message: 'database secret' }
-    await expect(consumeOAuthState('d'.repeat(43))).rejects.not.toThrow('database secret')
+    await expect(consumeOAuthState('d'.repeat(32))).rejects.not.toThrow('database secret')
   })
 })

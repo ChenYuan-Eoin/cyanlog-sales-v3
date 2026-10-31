@@ -157,6 +157,9 @@ test('Production-first exception accepts only the scoped F003 SSO product tree a
     ...input,
     changedPaths: [
       'product-truth/product-code/app/api/admin/users/[id]/identity-binding/route.ts',
+      'product-truth/product-code/app/api/auth/fxiaoke/start/route.test.ts',
+      'product-truth/product-code/lib/auth/oauth-state.ts',
+      'product-truth/product-code/lib/auth/oauth-state.test.ts',
       'product-truth/product-code/lib/auth/session-response.ts',
       'product-truth/product-code/lib/auth/session-response.test.ts',
       'product-truth/product-code/lib/fxiaoke/admin-binding-migration.test.ts',

@@ -40,8 +40,11 @@ const RULE_PATHS = new Set([
   'governance/runtime-state/active-task.json',
   'governance/runtime-state/demand-inbox.jsonl',
   'product-truth/product-code/app/api/admin/users/[id]/identity-binding/route.ts',
+  'product-truth/product-code/app/api/auth/fxiaoke/start/route.test.ts',
   'product-truth/product-code/lib/auth/session-response.ts',
   'product-truth/product-code/lib/auth/session-response.test.ts',
+  'product-truth/product-code/lib/auth/oauth-state.ts',
+  'product-truth/product-code/lib/auth/oauth-state.test.ts',
   'product-truth/product-code/lib/fxiaoke/admin-binding-migration.test.ts',
   'product-truth/product-code/supabase/migrations/20261030110000_fix_fxiaoke_identity_binding_uuid.sql',
   ...['project-registry.js', 'fxiaoke-sso-verifier.js', 'fxiaoke-sso-verifier.test.js', 'harness-selftest.js']
