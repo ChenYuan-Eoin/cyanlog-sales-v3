@@ -1,0 +1,231 @@
+{
+  "version": 1,
+  "activeId": "WP94",
+  "commit": "70eb575f5cc0594923c417f698f45150988556dd",
+  "evidence": {
+    "code": {
+      "commit": "70eb575f5cc0594923c417f698f45150988556dd",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "Fxiaoke OAuth state target suites"
+          ],
+          "artifact_path": "wp94-oauth-state-compat/target-tests.log",
+          "sha256": "2cc9fee24e86be945e9c2f3b569722ab2a5e37066f8ee02a54d7f07418775313",
+          "log_sha256": "2cc9fee24e86be945e9c2f3b569722ab2a5e37066f8ee02a54d7f07418775313",
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "name": "full_tests",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh"
+          ],
+          "artifact_path": "check-logs/36945a7950c73429bb03f111fe18c39ac7b2357d/check-03-test.log",
+          "sha256": "1df1045e0075fb95e1c39c7f8e1abfc75461caa12cd01412ca003834d4fd3582",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "1df1045e0075fb95e1c39c7f8e1abfc75461caa12cd01412ca003834d4fd3582"
+        },
+        {
+          "name": "lint",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-02-lint.sh"
+          ],
+          "artifact_path": "check-logs/36945a7950c73429bb03f111fe18c39ac7b2357d/check-02-lint.log",
+          "sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c"
+        },
+        {
+          "name": "typecheck",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-01-typecheck.sh"
+          ],
+          "artifact_path": "check-logs/36945a7950c73429bb03f111fe18c39ac7b2357d/check-01-typecheck.log",
+          "sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+        },
+        {
+          "name": "build",
+          "command": [
+            "npm",
+            "run",
+            "build"
+          ],
+          "artifact_path": "wp94-oauth-state-compat/build.log",
+          "sha256": "d69a334250102a2f121684b6776e45028127b4bfe69c7022a01fd8ecdeb65309",
+          "log_sha256": "d69a334250102a2f121684b6776e45028127b4bfe69c7022a01fd8ecdeb65309",
+          "exit_code": 0,
+          "timeout": false
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "fe02345dead36a693b86090054c00907e77085c45497395c12c84eb52f4109c8",
+        "entry_sha256": "facdcb841686c8b0525a74e3a0c906abf6fa6967b02163bbc5f2c7568f690539"
+      },
+      "summary": "Uses Fxiaoke-compatible 32-character alphanumeric OAuth state values to avoid provider error 10006.",
+      "boundary": "Code and local checks are green; Production deployment and real login remain required."
+    }
+  },
+  "updatedAt": "2026-11-01T01:03:20.964Z",
+  "completionState": "integration_ready",
+  "releaseControl": {
+    "production_branch": "production",
+    "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+    "production_branch_evidence": {
+      "payload": {
+        "project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "branch": "production",
+        "observed_at": "2026-11-01T00:47:01.592Z",
+        "source": "live-vercel-api",
+        "attachments": [
+          {
+            "path": "vercel-production-verifier/integration_ready/2026-11-01T00-47-01-592Z-58556-project.json",
+            "sha256": "b38ad00dc9d35050ea311ef5d1e1544bc845d43401767196f3a3b8d62e4dd324"
+          },
+          {
+            "path": "vercel-production-verifier/integration_ready/2026-11-01T00-47-01-592Z-58556-domain.json",
+            "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+          },
+          {
+            "path": "vercel-production-verifier/integration_ready/2026-11-01T00-47-01-592Z-58556-alias.json",
+            "sha256": "5cb01d236887f7a6f32725b4e0528e3843dfb4d6aaf237a0655f04fa699fbc37"
+          },
+          {
+            "path": "vercel-production-verifier/integration_ready/2026-11-01T00-47-01-592Z-58556-deployment.json",
+            "sha256": "4a1bfe414cd1da55cddcf550928a8d9a2b6bfa6e1692eb26fd019a42542af058"
+          }
+        ]
+      },
+      "artifact_path": "wp94-oauth-state-compat/production-branch-before.json",
+      "sha256": "c417b038c9ce38023702d591b76f1baee1e6e538ea0d11394a668a1b86954eb0"
+    },
+    "production_commit_before": "39a0977baa9503e4b005d9deff3262ab7d864cc0",
+    "production_deployment_id_before": "dpl_2TT6CBbaYiLW9QLfr7rTSiNuACt8",
+    "production_commit_after": "39a0977baa9503e4b005d9deff3262ab7d864cc0",
+    "production_deployment_id_after": "dpl_2TT6CBbaYiLW9QLfr7rTSiNuACt8"
+  },
+  "gateSnapshots": {
+    "integration_ready": {
+      "stage": "integration_ready",
+      "checkedAt": "2026-11-01T01:03:20.943Z",
+      "head": "70eb575f5cc0594923c417f698f45150988556dd",
+      "originMain": "39a0977baa9503e4b005d9deff3262ab7d864cc0",
+      "remoteMain": "39a0977baa9503e4b005d9deff3262ab7d864cc0",
+      "remoteProduction": "39a0977baa9503e4b005d9deff3262ab7d864cc0",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "931782a32499dd31c51f0ada9dbb1575175e0b12",
+      "remoteAttestationRefOid": "931782a32499dd31c51f0ada9dbb1575175e0b12",
+      "remoteSnapshotCheckedAt": "2026-11-01T01:03:09.869Z",
+      "vercelProduction": {
+        "version": 1,
+        "source": "live-vercel-api",
+        "checkedAt": "2026-11-01T01:03:12.238Z",
+        "contract": {
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "projectName": "cyanlog-sales-v3",
+          "rootDirectory": "product-truth/product-code",
+          "domain": "sales.cyanlog.icu",
+          "productionBranch": "production"
+        },
+        "endpoints": {
+          "project": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "domain": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF/domains/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "alias": "/v4/aliases/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "deployment": "/v13/deployments/dpl_2TT6CBbaYiLW9QLfr7rTSiNuACt8?teamId=team_xayPRcgRTNOgdPdNf7bOV017"
+        },
+        "project": {
+          "id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "name": "cyanlog-sales-v3",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "rootDirectory": "product-truth/product-code",
+          "productionBranch": "production",
+          "productionDeploymentId": "dpl_2TT6CBbaYiLW9QLfr7rTSiNuACt8"
+        },
+        "domain": {
+          "name": "sales.cyanlog.icu",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "verified": true
+        },
+        "alias": {
+          "name": "sales.cyanlog.icu",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "deploymentId": "dpl_2TT6CBbaYiLW9QLfr7rTSiNuACt8",
+          "deploymentReferenceId": "dpl_2TT6CBbaYiLW9QLfr7rTSiNuACt8",
+          "redirect": null,
+          "deletedAt": null
+        },
+        "deployment": {
+          "id": "dpl_2TT6CBbaYiLW9QLfr7rTSiNuACt8",
+          "name": "cyanlog-sales-v3",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "target": "production",
+          "readyState": "READY",
+          "readySubstate": "PROMOTED",
+          "status": "READY",
+          "gitCommitSha": "39a0977baa9503e4b005d9deff3262ab7d864cc0",
+          "gitCommitSources": [
+            "gitSource.sha",
+            "meta.githubCommitSha"
+          ]
+        },
+        "remoteProduction": "39a0977baa9503e4b005d9deff3262ab7d864cc0",
+        "raw": {
+          "project": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-11-01T01-03-12-238Z-61282-project.json",
+            "sha256": "b38ad00dc9d35050ea311ef5d1e1544bc845d43401767196f3a3b8d62e4dd324"
+          },
+          "domain": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-11-01T01-03-12-238Z-61282-domain.json",
+            "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+          },
+          "alias": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-11-01T01-03-12-238Z-61282-alias.json",
+            "sha256": "5cb01d236887f7a6f32725b4e0528e3843dfb4d6aaf237a0655f04fa699fbc37"
+          },
+          "deployment": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-11-01T01-03-12-238Z-61282-deployment.json",
+            "sha256": "4a1bfe414cd1da55cddcf550928a8d9a2b6bfa6e1692eb26fd019a42542af058"
+          }
+        }
+      },
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "18c58326f7e7fe3c563048776123bd9ae107b7feaa9a4038791419677ec9dadd",
+  "sealedAt": "2026-11-01T01:03:20.965Z",
+  "attestationDigest": "4a6e63d7da6283406fa6ddb708048944ee688f57c8da27ff27f545aeb83b6f25"
+}
