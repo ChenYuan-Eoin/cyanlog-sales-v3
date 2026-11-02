@@ -979,12 +979,128 @@ function loadVercelLiveReadToken() {
     const getter = require(path.resolve(dist, imported[1])).getAuthConfigFilePath;
     if (typeof getter !== 'function') throw new Error('unavailable');
     const auth = JSON.parse(fs.readFileSync(getter(), 'utf8'));
-    // Reject config/header injection, including whitespace, quotes and backslashes.
+    // Reject header/control injection, including whitespace, quotes and backslashes.
     if (typeof auth.token !== 'string' || !/^[A-Za-z0-9_.-]{16,4096}$/.test(auth.token)) throw new Error('unavailable');
     return auth.token;
   } catch {
     throw new Error('Existing Vercel CLI authentication is unavailable for the live read');
   }
+}
+
+// Serialized into an isolated Node child. Built-ins only; no application code,
+// environment configuration, redirected request, or caller-selected host.
+function vercelHttpsGetChild(contract) {
+  'use strict';
+  const https = require('node:https');
+  const tls = require('node:tls');
+  const fs = require('node:fs');
+  const maximum = 25 * 1024 * 1024;
+  const deadline = Date.now() + 30000;
+  const retryable = new Set(['ECONNRESET', 'ECONNABORTED', 'EPIPE', 'ETIMEDOUT', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH']);
+  let finished = false;
+  let request;
+  let response;
+  let attempts = 0;
+  function stop() {
+    clearTimeout(timer);
+    response?.destroy();
+    request?.destroy();
+  }
+  function fail(kind) {
+    if (finished) return;
+    finished = true;
+    stop();
+    // Fixed diagnostics only: network errors may contain headers or credentials.
+    process.stderr.write(`VERCEL_LIVE_READ_${kind}\n`);
+    process.exitCode = 1;
+  }
+  const timer = setTimeout(() => fail('TIMEOUT'), 30000);
+  let input;
+  try {
+    const raw = fs.readFileSync(0, 'utf8');
+    if (Buffer.byteLength(raw) > 8192) throw new Error('input');
+    input = JSON.parse(raw);
+    if (!input || typeof input !== 'object' || Array.isArray(input)
+      || Object.keys(input).sort().join(',') !== 'endpoint,token'
+      || typeof input.token !== 'string' || !/^[A-Za-z0-9_.-]{16,4096}$/.test(input.token)) throw new Error('input');
+    const query = `teamId=${encodeURIComponent(contract.teamId)}`;
+    const fixed = new Set([
+      `/v9/projects/${contract.projectId}?${query}`,
+      `/v9/projects/${contract.projectId}/domains/${contract.domain}?${query}`,
+      `/v4/aliases/${contract.domain}?${query}`
+    ]);
+    const deployment = typeof input.endpoint === 'string' && input.endpoint.startsWith('/v13/deployments/')
+      && /^dpl_[A-Za-z0-9]+$/.test(input.endpoint.slice('/v13/deployments/'.length).split('?')[0])
+      && input.endpoint === `/v13/deployments/${input.endpoint.slice('/v13/deployments/'.length).split('?')[0]}?${query}`;
+    if (!fixed.has(input.endpoint) && !deployment) throw new Error('endpoint');
+  } catch {
+    fail('INPUT');
+    return;
+  }
+  function attempt() {
+    if (finished) return;
+    if (Date.now() >= deadline) return fail('TIMEOUT');
+    const number = ++attempts;
+    let receivedHeaders = false;
+    try {
+      const current = https.request({
+        protocol: 'https:', hostname: 'api.vercel.com', port: 443,
+        servername: 'api.vercel.com', path: input.endpoint, method: 'GET',
+        rejectUnauthorized: true,
+        checkServerIdentity: (hostname, certificate) => hostname === 'api.vercel.com'
+          ? tls.checkServerIdentity('api.vercel.com', certificate)
+          : new Error('Unexpected Vercel TLS hostname'),
+        agent: false,
+        headers: { Accept: 'application/json', Authorization: `Bearer ${input.token}` }
+      }, incoming => {
+        if (finished || number !== attempts) { incoming.destroy(); return; }
+        receivedHeaders = true;
+        response = incoming;
+        // Inspect the authorized socket at headers, before end releases it.
+        if (incoming.socket?.authorized !== true) return fail('TLS');
+        const status = incoming.statusCode;
+        if (!Number.isInteger(status) || status < 200 || status >= 300) {
+          finished = true;
+          stop();
+          process.stdout.write(`\n__VERCEL_HTTP_STATUS__${Number.isInteger(status) ? status : 0}`);
+          return;
+        }
+        const declared = incoming.headers['content-length'];
+        if (declared !== undefined && (!/^\d+$/.test(String(declared)) || Number(declared) > maximum)) return fail('SIZE');
+        const chunks = [];
+        let size = 0;
+        incoming.on('data', chunk => {
+          if (finished) return;
+          size += chunk.length;
+          if (size > maximum) return fail('SIZE');
+          chunks.push(chunk);
+        });
+        incoming.once('error', () => fail('NETWORK'));
+        incoming.once('aborted', () => fail('NETWORK'));
+        incoming.once('end', () => {
+          if (finished) return;
+          if (!incoming.complete) return fail('NETWORK');
+          finished = true;
+          stop();
+          process.stdout.write(Buffer.concat(chunks).toString('utf8') + `\n__VERCEL_HTTP_STATUS__${status}`);
+        });
+      });
+      request = current;
+      current.once('error', error => {
+        if (finished || number !== attempts) return;
+        // One idempotent retry before headers, under the original total deadline.
+        // TLS/certificate errors and HTTP responses are deliberately excluded.
+        if (!receivedHeaders && attempts < 2 && retryable.has(error?.code) && Date.now() < deadline) {
+          current.destroy();
+          attempt();
+        } else fail('NETWORK');
+      });
+      current.end(); // GET has no request body.
+    } catch {
+      fail('NETWORK');
+    }
+  }
+  attempt();
 }
 
 function runVercelApi(repoRoot, endpoint) {
@@ -1000,14 +1116,13 @@ function runVercelApi(repoRoot, endpoint) {
   if (!fixed.has(endpoint) && !deployment) throw new Error('Vercel live read endpoint is outside the fixed Production contract');
 
   const token = loadVercelLiveReadToken();
-  const input = `url = "https://api.vercel.com${endpoint}"\nrequest = "GET"\nheader = "Accept: application/json"\nheader = "Authorization: Bearer ${token}"\n`;
-  // -q must be first: ~/.curlrc must not enable trace, output files or redirects.
-  const result = spawnSync('/usr/bin/curl', [
-    '-q', '--silent', '--show-error', '--http1.1', '--proto', '=https',
-    '--connect-timeout', '10', '--max-time', '30', '--max-redirs', '0',
-    '--config', '-', '--write-out', '\n__VERCEL_HTTP_STATUS__%{http_code}'
-  ], {
+  const input = JSON.stringify({ endpoint, token });
+  const child = `(${vercelHttpsGetChild.toString()})(${JSON.stringify(VERCEL_PRODUCTION_CONTRACT)});`;
+  const result = spawnSync(process.execPath, ['--input-type=commonjs', '-e', child], {
     cwd: path.join(repoRoot, VERCEL_PRODUCTION_CONTRACT.rootDirectory),
+    // No inherited NODE_OPTIONS, NODE_DEBUG, TLS overrides, proxy, preload,
+    // alternate trust store, key-log path, or other credential-bearing variables.
+    env: {},
     input,
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -1375,7 +1490,7 @@ function sealDeliveryAttestation(options = {}) {
       remoteRefs: 'git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery',
       ancestor: 'git merge-base --is-ancestor origin/main HEAD',
       worktree: 'git status --porcelain=v1 --untracked-files=all',
-      vercelProduction: 'official api.vercel.com live GET via TLS-verified curl; existing CLI credential only through stdin'
+      vercelProduction: 'official api.vercel.com live GET via isolated node:https with verified TLS; existing CLI credential only through stdin'
     }
   };
   const runtimeUpdate = writeDeliveryRuntime({

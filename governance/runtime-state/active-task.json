@@ -363,7 +363,7 @@
         "organization_configuration_write_authorized": false,
         "directory_sync_authorized": false,
         "source_unbind_authorized": false,
-        "transport_execution_clarification_id": "IN-20261102-020"
+        "transport_execution_clarification_id": "IN-20261102-026"
       },
       "final_acceptance": {
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",

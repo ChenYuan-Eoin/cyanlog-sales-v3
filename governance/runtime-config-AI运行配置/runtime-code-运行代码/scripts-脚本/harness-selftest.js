@@ -1804,7 +1804,7 @@ function runVercelHttpsTransportSelftest(repoRoot) {
       if (name === 'child_process') return { ...require('child_process'), spawnSync: (command, args, opts) => {
         calls.push({ command, args, opts });
         if (command === 'which') return { status: 0, stdout: '/vendor/vercel/dist/vc.js\n' };
-        assert.strictEqual(command, '/usr/bin/curl');
+        assert.strictEqual(command, process.execPath);
         return options.result || success;
       } };
       if (name === '/vendor/vercel/dist/chunks/chunk-selftest.js') return { getAuthConfigFilePath: () => '/private/existing-vercel-auth.json' };
@@ -1821,18 +1821,15 @@ function runVercelHttpsTransportSelftest(repoRoot) {
   const valid = fixture();
   const response = valid.read(repoRoot, endpoint);
   assert.strictEqual(response.parsed.alias, 'sales.cyanlog.icu');
-  const call = valid.calls.find(item => item.command === '/usr/bin/curl');
-  assert.strictEqual(call.args[0], '-q');
-  assert.strictEqual(call.args[call.args.indexOf('--config') + 1], '-');
-  assert.strictEqual(call.args[call.args.indexOf('--proto') + 1], '=https');
-  assert.strictEqual(call.args[call.args.indexOf('--max-redirs') + 1], '0');
-  assert.strictEqual(call.args[call.args.indexOf('--max-time') + 1], '30');
+  const call = valid.calls.find(item => item.command === process.execPath);
+  assert.strictEqual(call.args[0], '--input-type=commonjs');
+  assert.strictEqual(call.args[1], '-e');
   assert.strictEqual(call.opts.timeout, 35000);
   assert.strictEqual(call.opts.maxBuffer, 25 * 1024 * 1024);
-  assert(call.opts.input.includes(`url = "https://api.vercel.com${endpoint}"\nrequest = "GET"\n`));
-  assert(call.opts.input.includes(`header = "Authorization: Bearer ${fixtureToken}"\n`));
+  assert.deepStrictEqual(JSON.parse(call.opts.input), { endpoint, token: fixtureToken });
+  assert.deepStrictEqual(Object.keys(call.opts.env), [], 'child must inherit no TLS/debug/preload/proxy/secret environment');
   assert(!JSON.stringify(call.args).includes(fixtureToken));
-  for (const forbidden of ['-k', '--insecure', '-L', '--location', '--verbose', '--trace', '--output']) assert(!call.args.includes(forbidden));
+  assert.strictEqual(call.args.length, 3);
   assert.deepStrictEqual(Array.from(call.opts.stdio), ['pipe', 'pipe', 'pipe']);
 
   for (const bad of ['https://elsewhere.test/', '//elsewhere.test/', endpoint + '&teamId=other', endpoint.replace('teamId=', 'wrong='), endpoint + '\nheader="injected"', '/v13/deployments/../auth?teamId=' + VERCEL_PRODUCTION_CONTRACT.teamId]) {
@@ -1843,7 +1840,7 @@ function runVercelHttpsTransportSelftest(repoRoot) {
   for (const token of ['', 'short', fixtureToken + '\nheader="injected"', fixtureToken + '"', fixtureToken + '\\']) {
     const sample = fixture({ token });
     assert.throws(() => sample.read(repoRoot, endpoint), /authentication is unavailable/);
-    assert(!sample.calls.some(item => item.command === '/usr/bin/curl'));
+    assert(!sample.calls.some(item => item.command === process.execPath));
   }
   assert.throws(() => fixture({ authText: '{invalid' }).read(repoRoot, endpoint), /authentication is unavailable/);
   assert.throws(() => fixture({ packageName: 'other' }).read(repoRoot, endpoint), /authentication is unavailable/);
@@ -1863,6 +1860,138 @@ function runVercelHttpsTransportSelftest(repoRoot) {
     assert(thrown, 'transport/HTTP/JSON failure must fail closed');
     assert(!String(thrown.message).includes(fixtureToken), 'credential/response text must not leak through errors');
   }
+
+  // Execute the exact serialized child with built-in transport doubles. This
+  // exercises request options, response streaming, deadlines and failure paths;
+  // no real credential, endpoint override or network request is involved.
+  function childProbe(plan = [{}], inputOverrides = {}) {
+    const { EventEmitter } = require('node:events');
+    const requests = [], checks = [], timers = [];
+    let stdout = '', stderr = '', now = 0;
+    const childProcess = { exitCode: 0, stdout: { write: text => { stdout += text; } }, stderr: { write: text => { stderr += text; } } };
+    const tls = { checkServerIdentity: (host, certificate) => {
+      checks.push(host);
+      return certificate.reject ? Object.assign(new Error(fixtureToken), { code: 'ERR_TLS_CERT_ALTNAME_INVALID' }) : undefined;
+    } };
+    const https = { request: (options, callback) => {
+      const scenario = plan[requests.length] || {};
+      const current = new EventEmitter();
+      const entry = { options, current, endArgs: null, response: null };
+      requests.push(entry);
+      current.destroy = () => { current.destroyed = true; return current; };
+      current.end = (...args) => {
+        entry.endArgs = args;
+        if (scenario.wait) return;
+        if (scenario.now !== undefined) now = scenario.now;
+        if (scenario.error) {
+          current.emit('error', Object.assign(new Error(fixtureToken), { code: scenario.error }));
+          return;
+        }
+        const identityError = options.checkServerIdentity(options.servername, scenario.certificate || {});
+        if (identityError) { current.emit('error', identityError); return; }
+        const incoming = new EventEmitter();
+        entry.response = incoming;
+        incoming.socket = { authorized: scenario.authorized !== false };
+        incoming.statusCode = scenario.status ?? 200;
+        incoming.headers = scenario.headers || {};
+        incoming.complete = scenario.complete !== false;
+        incoming.destroy = () => { incoming.destroyed = true; return incoming; };
+        callback(incoming);
+        if (incoming.destroyed) return;
+        for (const chunk of scenario.chunks || [Buffer.from('{"ok":true}')]) {
+          incoming.emit('data', chunk);
+          if (incoming.destroyed) return;
+        }
+        if (scenario.responseError) incoming.emit('error', new Error(fixtureToken));
+        else if (scenario.aborted) incoming.emit('aborted');
+        else incoming.emit('end');
+      };
+      return current;
+    } };
+    const input = JSON.stringify({ endpoint, token: fixtureToken, ...inputOverrides });
+    const childRequire = name => {
+      if (name === 'node:https') return https;
+      if (name === 'node:tls') return tls;
+      if (name === 'node:fs') return { readFileSync: (fd, encoding) => {
+        assert.strictEqual(fd, 0); assert.strictEqual(encoding, 'utf8'); return input;
+      } };
+      throw new Error(`Unexpected child dependency: ${name}`);
+    };
+    vm.runInNewContext(call.args[2], {
+      require: childRequire, process: childProcess, Buffer, Date: { now: () => now },
+      setTimeout: (callback, delay) => { const timer = { callback, delay, cleared: false }; timers.push(timer); return timer; },
+      clearTimeout: timer => { timer.cleared = true; }
+    }, { filename: 'selftest-vercel-https-child.js', timeout: 2000 });
+    return { requests, checks, timers, process: childProcess,
+      get stdout() { return stdout; }, get stderr() { return stderr; },
+      tick: time => { now = time; for (const timer of timers) if (!timer.cleared) timer.callback(); }
+    };
+  }
+  const child = childProbe();
+  assert.strictEqual(child.stdout, '{"ok":true}\n__VERCEL_HTTP_STATUS__200');
+  assert.strictEqual(child.stderr, '');
+  assert.strictEqual(child.requests.length, 1);
+  const options = child.requests[0].options;
+  assert.strictEqual(options.protocol, 'https:');
+  assert.strictEqual(options.hostname, 'api.vercel.com');
+  assert.strictEqual(options.port, 443);
+  assert.strictEqual(options.servername, 'api.vercel.com');
+  assert.strictEqual(options.path, endpoint);
+  assert.strictEqual(options.method, 'GET');
+  assert.strictEqual(options.rejectUnauthorized, true);
+  assert.strictEqual(options.agent, false);
+  assert.strictEqual(options.headers.Authorization, `Bearer ${fixtureToken}`);
+  assert.deepStrictEqual(Array.from(child.requests[0].endArgs), [], 'GET must never send a body');
+  assert.deepStrictEqual(child.checks, ['api.vercel.com']);
+  assert(options.checkServerIdentity('attacker.test', {}), 'unexpected TLS hostname must be rejected');
+  assert.strictEqual(child.timers.length, 1);
+  assert.strictEqual(child.timers[0].delay, 30000);
+  assert.strictEqual(child.timers[0].cleared, true);
+  for (const fixedEndpoint of [
+    `/v9/projects/${VERCEL_PRODUCTION_CONTRACT.projectId}?teamId=${VERCEL_PRODUCTION_CONTRACT.teamId}`,
+    `/v9/projects/${VERCEL_PRODUCTION_CONTRACT.projectId}/domains/${VERCEL_PRODUCTION_CONTRACT.domain}?teamId=${VERCEL_PRODUCTION_CONTRACT.teamId}`,
+    `/v13/deployments/${SELFTEST_PRODUCTION_DEPLOYMENT_ID}?teamId=${VERCEL_PRODUCTION_CONTRACT.teamId}`
+  ]) assert.strictEqual(childProbe([{}], { endpoint: fixedEndpoint }).process.exitCode, 0);
+  for (const bad of ['https://attacker.test/', '//api.vercel.com/', endpoint + '&extra=1', endpoint.replace('/v4/', '/v5/'), endpoint.replace('teamId=', 'other='), `/v13/deployments/../auth?teamId=${VERCEL_PRODUCTION_CONTRACT.teamId}`]) {
+    const probe = childProbe([{}], { endpoint: bad });
+    assert.strictEqual(probe.requests.length, 0);
+    assert.strictEqual(probe.process.exitCode, 1);
+    assert(!probe.stderr.includes(fixtureToken));
+  }
+  assert.strictEqual(childProbe([{}], { token: fixtureToken + '\n' }).requests.length, 0);
+  for (const status of [302, 401, 500]) {
+    const probe = childProbe([{ status, headers: { location: 'https://attacker.test/' } }]);
+    assert.strictEqual(probe.requests.length, 1, 'HTTP errors and redirects must never retry or follow Location');
+    assert.strictEqual(probe.stdout, `\n__VERCEL_HTTP_STATUS__${status}`);
+  }
+  for (const scenario of [
+    { certificate: { reject: true } }, { error: 'CERT_HAS_EXPIRED' }, { error: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' },
+    { authorized: false }, { complete: false }, { responseError: true }, { aborted: true },
+    { headers: { 'content-length': String(25 * 1024 * 1024 + 1) } },
+    { chunks: [Buffer.alloc(25 * 1024 * 1024), Buffer.from('x')] }
+  ]) {
+    const probe = childProbe([scenario]);
+    assert.strictEqual(probe.process.exitCode, 1);
+    assert.strictEqual(probe.requests.length, 1);
+    assert.strictEqual(probe.stdout, '');
+    assert(!probe.stderr.includes(fixtureToken), 'child failures must not emit raw error or response contents');
+    assert.strictEqual(probe.requests[0].current.destroyed, true);
+  }
+  const retried = childProbe([{ error: 'ECONNRESET' }, {}]);
+  assert.strictEqual(retried.requests.length, 2);
+  assert.strictEqual(retried.process.exitCode, 0);
+  assert.strictEqual(retried.timers.length, 1, 'retry must not create another network deadline');
+  const exhausted = childProbe([{ error: 'ECONNRESET' }, { error: 'ECONNRESET' }]);
+  assert.strictEqual(exhausted.requests.length, 2);
+  assert.strictEqual(exhausted.process.exitCode, 1);
+  const timeout = childProbe([{ error: 'ECONNRESET', now: 29000 }, { wait: true }]);
+  assert.strictEqual(timeout.requests.length, 2);
+  assert.strictEqual(timeout.timers.length, 1);
+  timeout.tick(30000);
+  assert.strictEqual(timeout.process.exitCode, 1);
+  assert.strictEqual(timeout.stdout, '');
+  assert.strictEqual(timeout.stderr, 'VERCEL_LIVE_READ_TIMEOUT\n');
+  assert(timeout.requests.every(entry => entry.current.destroyed));
   console.log('Vercel official HTTPS live-read transport selftest ok');
 }
 
