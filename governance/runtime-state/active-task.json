@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-02T06:51:43Z",
+  "updated_at": "2026-11-02T07:04:04.202001+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -333,24 +333,42 @@
       ],
       "runtime_profile": "application",
       "runtime_contract_version": "f003-fxiaoke-sso-v1",
-      "production_database_mode": "read_only_pending_security_gate_and_final_approval",
+      "production_database_mode": "controlled_write_approved",
       "production_release_authorization": {
-        "status": "pending_security_gate_and_final_write_approval",
+        "status": "approved_for_final_release",
         "micro_fix_approval_id": "IN-20261102-013",
-        "clarification_id": "IN-20261102-013",
+        "clarification_id": "IN-20261102-016",
         "micro_fix_scope": "WP94 IN013 受限既有成员账号过渡入口，与纷享 OAuth 共用 canonical users.id、活动成员/新鲜角色及统一可撤销会话；不恢复注册、重置、改密、bootstrap、自动绑定/合并或数据库迁移。",
-        "final_scope": "IN-20261102-013 仅批准受限账号过渡入口的范围内实现；新产品树、依赖锁、默认关闭服务器开关及真实登录复验须绑定本次可审查候选后取得对应发布批准。IN-20261102-010 只覆盖既有 e5 产品树及其治理记录，不授权本次新产品树；本批不迁移数据库、合并账号、迁移手机历史、删除密码或调用顺丰。",
-        "database_write_authorized": false
+        "final_scope": "发布 WP94 精确候选 c04f001859dedbdc4a64ac7b11c64a2cc2eb1fd4 及不改变产品树的后续治理记录：推送并集成 main/production、部署网站，在 Production 将 LOCAL_ACCOUNT_LOGIN_ENABLED 设置为 true，并由用户现有 Chrome 在 sales.cyanlog.icu 验收受限既有账号登录及纷享 OAuth 安全诊断。Preview 保持 not_passed，仅批准本次 Production-first 顺序例外。数据库写入仅限正常登录的 auth_tokens 会话与 login_attempts 尝试日志；不执行迁移、创建/合并/绑定账号、密码重置/删除、手机历史迁移、角色或成员权限修改，不更新 worker、IP 白名单或企微服务，不调用顺丰。",
+        "database_write_authorized": true,
+        "final_release_approval_id": "IN-20261102-016",
+        "production_write_scope": [
+          "auth_tokens",
+          "login_attempts"
+        ],
+        "database_write_scope_description": "Only ordinary login session creation/revocation in auth_tokens and login-attempt reservation/result logging in login_attempts; no credential/member/role/identity mutations.",
+        "production_migrations_authorized": false,
+        "migration_execution_authorized": false,
+        "account_creation_authorized": false,
+        "account_merge_execution_authorized": false,
+        "identity_binding_authorized": false,
+        "password_reset_authorized": false,
+        "phone_history_migration_authorized": false,
+        "password_removal_authorized": false,
+        "role_modification_authorized": false,
+        "egress_worker_authorized": false,
+        "carrier_calls_authorized": false
       },
       "final_acceptance": {
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
-        "production_database_mode": "read_only_pending_security_gate_and_final_approval"
+        "production_database_mode": "controlled_write_approved"
       },
-      "note": "当前目标包含企业 OAuth 与 IN013 受限既有账号过渡入口。既有发布批准不继承到新产品树；新候选发布与开关启用保持 pending。保持精确 SHA/部署/域名、现有 Chrome、企业登录与拒绝路径等原门禁；新增账号能力必须另有同候选真实路径证据，不能用旧 verifier 宣称覆盖。密码/手机历史迁移、账号合并及真实顺丰操作继续排除。",
+      "note": "IN016 已批准精确受限账号候选的 Production-first 发布、Production 开关启用及现有 Chrome 复验；Preview 仍 not_passed，不把批准当作部署/验收。数据库仅允许正常 auth_tokens/login_attempts 登录写入，所有迁移、账号/身份/角色修改、密码删除、worker/白名单/企微调整及顺丰操作仍排除。旧企业 SSO verifier 不自动证明受限账号；原阻断与最终精确机器/浏览器证据要求保留。",
       "blocking_acceptance_defects": [
         "IN-20261102-003",
         "IN-20261102-007"
-      ]
+      ],
+      "preview_order_exception_approval_id": "IN-20261102-016"
     },
     "micro_fixes": [
       {
