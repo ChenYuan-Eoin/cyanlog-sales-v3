@@ -963,38 +963,72 @@ function writePrivateRuntimeJson(repoRoot, relativePath, rawJson) {
   };
 }
 
-function runVercelApi(repoRoot, endpoint) {
-  const productCodeRoot = path.join(repoRoot, VERCEL_PRODUCTION_CONTRACT.rootDirectory);
-  const result = spawnSync('pnpm', [
-    'exec',
-    'vercel',
-    'api',
-    endpoint,
-    '--raw',
-    '--non-interactive',
-    '--no-color'
-  ], {
-    cwd: productCodeRoot,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 120000,
-    killSignal: 'SIGTERM',
-    maxBuffer: 25 * 1024 * 1024,
-    env: { ...process.env, NO_COLOR: '1' }
-  });
-  if (result.error || result.status !== 0) {
-    const detail = String(result.error?.message || result.stderr || result.stdout || 'unknown Vercel CLI failure')
-      .trim()
-      .slice(0, 500);
-    throw new Error(`Vercel API GET failed for ${endpoint}: ${detail}`);
+// Read only the existing installed CLI credential; never emit/copy it or create one.
+function loadVercelLiveReadToken() {
+  try {
+    const located = spawnSync('which', ['vercel'], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'] });
+    if (located.error || located.status !== 0) throw new Error('unavailable');
+    const binary = String(located.stdout || '').trim();
+    if (!path.isAbsolute(binary) || /[\r\n\0]/.test(binary)) throw new Error('unavailable');
+    const dist = path.dirname(fs.realpathSync(binary));
+    const manifest = JSON.parse(fs.readFileSync(path.join(dist, '..', 'package.json'), 'utf8'));
+    if (manifest.name !== 'vercel') throw new Error('unavailable');
+    const source = fs.readFileSync(path.join(dist, 'index.js'), 'utf8');
+    const imported = source.match(/import\s*\{[^}]*\bgetAuthConfigFilePath\b[^}]*\}\s*from\s*["'](\.\/chunks\/[A-Za-z0-9_-]+\.js)["']/);
+    if (!imported) throw new Error('unavailable');
+    const getter = require(path.resolve(dist, imported[1])).getAuthConfigFilePath;
+    if (typeof getter !== 'function') throw new Error('unavailable');
+    const auth = JSON.parse(fs.readFileSync(getter(), 'utf8'));
+    // Reject config/header injection, including whitespace, quotes and backslashes.
+    if (typeof auth.token !== 'string' || !/^[A-Za-z0-9_.-]{16,4096}$/.test(auth.token)) throw new Error('unavailable');
+    return auth.token;
+  } catch {
+    throw new Error('Existing Vercel CLI authentication is unavailable for the live read');
   }
-  const raw = String(result.stdout || '').trim();
+}
+
+function runVercelApi(repoRoot, endpoint) {
+  const query = `teamId=${encodeURIComponent(VERCEL_PRODUCTION_CONTRACT.teamId)}`;
+  const fixed = new Set([
+    `/v9/projects/${VERCEL_PRODUCTION_CONTRACT.projectId}?${query}`,
+    `/v9/projects/${VERCEL_PRODUCTION_CONTRACT.projectId}/domains/${VERCEL_PRODUCTION_CONTRACT.domain}?${query}`,
+    `/v4/aliases/${VERCEL_PRODUCTION_CONTRACT.domain}?${query}`
+  ]);
+  const deployment = typeof endpoint === 'string' && endpoint.startsWith('/v13/deployments/')
+    && /^dpl_[A-Za-z0-9]+$/.test(endpoint.slice('/v13/deployments/'.length).split('?')[0])
+    && endpoint === `/v13/deployments/${endpoint.slice('/v13/deployments/'.length).split('?')[0]}?${query}`;
+  if (!fixed.has(endpoint) && !deployment) throw new Error('Vercel live read endpoint is outside the fixed Production contract');
+
+  const token = loadVercelLiveReadToken();
+  const input = `url = "https://api.vercel.com${endpoint}"\nrequest = "GET"\nheader = "Accept: application/json"\nheader = "Authorization: Bearer ${token}"\n`;
+  // -q must be first: ~/.curlrc must not enable trace, output files or redirects.
+  const result = spawnSync('/usr/bin/curl', [
+    '-q', '--silent', '--show-error', '--http1.1', '--proto', '=https',
+    '--connect-timeout', '10', '--max-time', '30', '--max-redirs', '0',
+    '--config', '-', '--write-out', '\n__VERCEL_HTTP_STATUS__%{http_code}'
+  ], {
+    cwd: path.join(repoRoot, VERCEL_PRODUCTION_CONTRACT.rootDirectory),
+    input,
+    encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'pipe'],
+    timeout: 35000,
+    killSignal: 'SIGTERM',
+    maxBuffer: 25 * 1024 * 1024
+  });
+  // Never log stderr/error objects: they may echo rejected credential/config text.
+  if (result.error || result.status !== 0) throw new Error(`Vercel live HTTPS GET transport failed for ${endpoint}`);
+  const output = String(result.stdout || '');
+  const marker = '\n__VERCEL_HTTP_STATUS__';
+  const offset = output.lastIndexOf(marker);
+  const status = offset < 0 ? '' : output.slice(offset + marker.length).trim();
+  if (!/^2\d\d$/.test(status)) throw new Error(`Vercel live HTTPS GET returned a non-success status for ${endpoint}`);
+  const raw = output.slice(0, offset).trim();
   if (!raw) throw new Error(`Vercel API GET returned an empty response for ${endpoint}`);
   let parsed;
   try {
     parsed = JSON.parse(raw);
-  } catch (error) {
-    throw new Error(`Vercel API GET returned invalid JSON for ${endpoint}: ${error.message}`);
+  } catch {
+    throw new Error(`Vercel API GET returned invalid JSON for ${endpoint}`);
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error(`Vercel API GET returned a non-object response for ${endpoint}`);
@@ -1341,7 +1375,7 @@ function sealDeliveryAttestation(options = {}) {
       remoteRefs: 'git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery',
       ancestor: 'git merge-base --is-ancestor origin/main HEAD',
       worktree: 'git status --porcelain=v1 --untracked-files=all',
-      vercelProduction: 'pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color'
+      vercelProduction: 'official api.vercel.com live GET via TLS-verified curl; existing CLI credential only through stdin'
     }
   };
   const runtimeUpdate = writeDeliveryRuntime({

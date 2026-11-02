@@ -1777,6 +1777,95 @@ function runActionApprovalSelftest(repoRoot) {
   console.log('action approval and classification selftest ok');
 }
 
+function runVercelHttpsTransportSelftest(repoRoot) {
+  const vm = require('vm');
+  // Test stubs exist only in this isolated, selftest-registry VM. No production
+  // export, response override, environment switch or cached receipt is added.
+  writeJson(path.join(repoRoot, 'governance/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json'), { version: 'selftest' });
+  const registrySource = fs.readFileSync(path.join(__dirname, 'project-registry.js'), 'utf8');
+  const fixtureToken = 'example_existing_vercel_fixture_credential';
+  const endpoint = `/v4/aliases/${VERCEL_PRODUCTION_CONTRACT.domain}?teamId=${VERCEL_PRODUCTION_CONTRACT.teamId}`;
+  const success = { status: 0, stdout: JSON.stringify({ alias: 'sales.cyanlog.icu', deployment: { id: SELFTEST_PRODUCTION_DEPLOYMENT_ID } }) + '\n__VERCEL_HTTP_STATUS__200' };
+  function fixture(options = {}) {
+    const calls = [];
+    const realRequire = require;
+    const fakeFs = {
+      ...fs,
+      realpathSync: value => value === '/vendor/vercel/dist/vc.js' ? value : fs.realpathSync(value),
+      readFileSync: (file, encoding) => {
+        if (file === '/vendor/vercel/package.json') return JSON.stringify({ name: options.packageName || 'vercel' });
+        if (file === '/vendor/vercel/dist/index.js') return 'import { getAuthConfigFilePath } from "./chunks/chunk-selftest.js";';
+        if (file === '/private/existing-vercel-auth.json') return options.authText ?? JSON.stringify({ token: options.token ?? fixtureToken });
+        return fs.readFileSync(file, encoding);
+      }
+    };
+    const fakeRequire = name => {
+      if (name === 'fs') return fakeFs;
+      if (name === 'child_process') return { ...require('child_process'), spawnSync: (command, args, opts) => {
+        calls.push({ command, args, opts });
+        if (command === 'which') return { status: 0, stdout: '/vendor/vercel/dist/vc.js\n' };
+        assert.strictEqual(command, '/usr/bin/curl');
+        return options.result || success;
+      } };
+      if (name === '/vendor/vercel/dist/chunks/chunk-selftest.js') return { getAuthConfigFilePath: () => '/private/existing-vercel-auth.json' };
+      return realRequire(name);
+    };
+    fakeRequire.main = require.main;
+    const moduleCopy = { exports: {} };
+    vm.runInNewContext(registrySource + '\nmodule.exports.__selftestLiveRead = runVercelApi;', {
+      require: fakeRequire, module: moduleCopy, exports: moduleCopy.exports,
+      process, __dirname, __filename: path.join(__dirname, 'project-registry.js'), console, Buffer, URL
+    }, { filename: 'selftest-live-vercel-transport.js' });
+    return { read: moduleCopy.exports.__selftestLiveRead, calls };
+  }
+  const valid = fixture();
+  const response = valid.read(repoRoot, endpoint);
+  assert.strictEqual(response.parsed.alias, 'sales.cyanlog.icu');
+  const call = valid.calls.find(item => item.command === '/usr/bin/curl');
+  assert.strictEqual(call.args[0], '-q');
+  assert.strictEqual(call.args[call.args.indexOf('--config') + 1], '-');
+  assert.strictEqual(call.args[call.args.indexOf('--proto') + 1], '=https');
+  assert.strictEqual(call.args[call.args.indexOf('--max-redirs') + 1], '0');
+  assert.strictEqual(call.args[call.args.indexOf('--max-time') + 1], '30');
+  assert.strictEqual(call.opts.timeout, 35000);
+  assert.strictEqual(call.opts.maxBuffer, 25 * 1024 * 1024);
+  assert(call.opts.input.includes(`url = "https://api.vercel.com${endpoint}"\nrequest = "GET"\n`));
+  assert(call.opts.input.includes(`header = "Authorization: Bearer ${fixtureToken}"\n`));
+  assert(!JSON.stringify(call.args).includes(fixtureToken));
+  for (const forbidden of ['-k', '--insecure', '-L', '--location', '--verbose', '--trace', '--output']) assert(!call.args.includes(forbidden));
+  assert.deepStrictEqual(Array.from(call.opts.stdio), ['pipe', 'pipe', 'pipe']);
+
+  for (const bad of ['https://elsewhere.test/', '//elsewhere.test/', endpoint + '&teamId=other', endpoint.replace('teamId=', 'wrong='), endpoint + '\nheader="injected"', '/v13/deployments/../auth?teamId=' + VERCEL_PRODUCTION_CONTRACT.teamId]) {
+    const sample = fixture();
+    assert.throws(() => sample.read(repoRoot, bad), /outside the fixed Production contract/);
+    assert.strictEqual(sample.calls.length, 0);
+  }
+  for (const token of ['', 'short', fixtureToken + '\nheader="injected"', fixtureToken + '"', fixtureToken + '\\']) {
+    const sample = fixture({ token });
+    assert.throws(() => sample.read(repoRoot, endpoint), /authentication is unavailable/);
+    assert(!sample.calls.some(item => item.command === '/usr/bin/curl'));
+  }
+  assert.throws(() => fixture({ authText: '{invalid' }).read(repoRoot, endpoint), /authentication is unavailable/);
+  assert.throws(() => fixture({ packageName: 'other' }).read(repoRoot, endpoint), /authentication is unavailable/);
+  for (const result of [
+    { status: 1, stderr: fixtureToken, stdout: fixtureToken },
+    { status: null, error: new Error(fixtureToken), stderr: fixtureToken },
+    { status: 0, stdout: JSON.stringify({ error: fixtureToken }) + '\n__VERCEL_HTTP_STATUS__302' },
+    { status: 0, stdout: JSON.stringify({ error: fixtureToken }) + '\n__VERCEL_HTTP_STATUS__401' },
+    { status: 0, stdout: fixtureToken + '\n__VERCEL_HTTP_STATUS__200' },
+    { status: 0, stdout: '[]\n__VERCEL_HTTP_STATUS__200' },
+    { status: 0, stdout: '\n__VERCEL_HTTP_STATUS__200' },
+    { status: 0, stdout: '{}' }
+  ]) {
+    const sample = fixture({ result });
+    let thrown;
+    try { sample.read(repoRoot, endpoint); } catch (error) { thrown = error; }
+    assert(thrown, 'transport/HTTP/JSON failure must fail closed');
+    assert(!String(thrown.message).includes(fixtureToken), 'credential/response text must not leak through errors');
+  }
+  console.log('Vercel official HTTPS live-read transport selftest ok');
+}
+
 function main() {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-selftest-'));
   const previousRuntimeDir = process.env.PRICE_V3_HARNESS_RUNTIME_DIR;
@@ -1787,6 +1876,11 @@ function main() {
   process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(repoRoot, '.runtime', 'harness');
 
   try {
+    if (process.argv.includes('--vercel-transport-only')) {
+      runVercelHttpsTransportSelftest(repoRoot);
+      return;
+    }
+    runVercelHttpsTransportSelftest(repoRoot);
     if (process.argv.includes('--production-first-only')) {
       runSsoProductionFirstDefectSelftest(repoRoot);
       runShippingContractSelftest(repoRoot);
