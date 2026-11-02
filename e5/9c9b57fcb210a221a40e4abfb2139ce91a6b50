@@ -1,0 +1,324 @@
+{
+  "version": 1,
+  "activeId": "WP94",
+  "commit": "e59c9b57fcb210a221a40e4abfb2139ce91a6b50",
+  "evidence": {
+    "code": {
+      "commit": "e59c9b57fcb210a221a40e4abfb2139ce91a6b50",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "full_tests",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh"
+          ],
+          "artifact_path": "check-logs/a13a81eefbc7a84d31cfa080e86e1fe65f15110f/check-03-test.log",
+          "sha256": "eeece0bcd71917c67062915db39a27dbc55410850a846c4b28400f233358691d",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "eeece0bcd71917c67062915db39a27dbc55410850a846c4b28400f233358691d"
+        },
+        {
+          "name": "lint",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-02-lint.sh"
+          ],
+          "artifact_path": "check-logs/a13a81eefbc7a84d31cfa080e86e1fe65f15110f/check-02-lint.log",
+          "sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c"
+        },
+        {
+          "name": "typecheck",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-01-typecheck.sh"
+          ],
+          "artifact_path": "check-logs/a13a81eefbc7a84d31cfa080e86e1fe65f15110f/check-01-typecheck.log",
+          "sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+        },
+        {
+          "name": "target_tests",
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "Fxiaoke callback and egress target suites"
+          ],
+          "artifact_path": "wp94-queue-review-20261102/egress-candidate-target-final.log",
+          "sha256": "93343b2bbe20638419023c8906d1baf084f7dbcbde7305c69e1430718a495304",
+          "log_sha256": "93343b2bbe20638419023c8906d1baf084f7dbcbde7305c69e1430718a495304",
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "name": "build",
+          "command": [
+            "npm",
+            "run",
+            "build"
+          ],
+          "artifact_path": "wp94-queue-review-20261102/egress-candidate-build.log",
+          "sha256": "f358d8508ac24339e9adee6763cf55682109b2ff09c1233aea53ac9dbfc8b493",
+          "log_sha256": "f358d8508ac24339e9adee6763cf55682109b2ff09c1233aea53ac9dbfc8b493",
+          "exit_code": 0,
+          "timeout": false
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "c9b69b3d18e3e80b913612c9501dc105446c7912fc9f6dd5db55d370d88887fe",
+        "entry_sha256": "acdb987dc6fd8c2a4dfcc3c7c91d7b6b732905c45d9ef20d025581c47bd0516a"
+      },
+      "summary": "Approved fixed-egress SSO product tree, with scoped production-first governance and exact-tree strict audit.",
+      "boundary": "Website not yet deployed; cloud worker updated and observed active. Real login remains required."
+    }
+  },
+  "updatedAt": "2026-11-02T06:36:46.222Z",
+  "defects": {
+    "IN-20261102-003": {
+      "verified": false,
+      "production_verified": false,
+      "root_cause": "Provider authorization domain used the wrong host and an obsolete path; corrected domain is saved and reloaded, with fresh Provider callback observed.",
+      "reproduction": {
+        "payload": {
+          "version": 1,
+          "work_package": "WP94",
+          "type": "production_acceptance_defect",
+          "observed_at": "2026-11-02T04:30:00.449Z",
+          "candidate_sha": "70eb575f5cc0594923c417f698f45150988556dd",
+          "deployment_id": "dpl_FE67WwMCgPbZoBB2BE6UjnFmqCDA",
+          "origin": "https://sales.cyanlog.icu",
+          "deployment_url": "https://cyanlog-sales-v3-2laopiih6-eoins-projects-94b17ece.vercel.app",
+          "browser_context": "existing_user_chrome",
+          "existing_tab_id": "1110517622",
+          "new_tabs": 0,
+          "new_browser_contexts": 0,
+          "viewport": {
+            "width": 1674,
+            "height": 929,
+            "devicePixelRatio": 1
+          },
+          "initial_state": "Existing user Chrome tab navigated to production /login; the Fxiaoke SSO link became available.",
+          "actions": [
+            "Open https://sales.cyanlog.icu/login in existing tab",
+            "Click 使用纷享销客登录",
+            "Observe Fxiaoke authorization response"
+          ],
+          "expected": "Provider accepts fixed callback and displays login/authorization or redirects through callback to a valid system session.",
+          "actual": {
+            "errorCode": 10006,
+            "errorMessage": " the parameter redirectUrl is missing or illegal",
+            "state_length": 32,
+            "state_format": "alphanumeric",
+            "redirect_origin": "https://sales.cyanlog.icu",
+            "redirect_path": "/api/auth/fxiaoke/callback",
+            "session_success_observed": false
+          },
+          "evidence": [
+            "oauth-redirect-error-dom.txt",
+            "oauth-redirect-error.png"
+          ],
+          "root_cause_status": "Provider callback domain configuration not yet verified; application management console requires administrator password verification.",
+          "production_result": "blocked_not_pass",
+          "scope_exclusions": [
+            "account_merge",
+            "phone_history_migration",
+            "password_removal",
+            "carrier_calls"
+          ],
+          "trusted_operator_boundary": "Observed existing Chrome through Codex control; this statement is operator-attested, not machine proof of a human session."
+        },
+        "artifact_path": "wp94-queue-review-20261102/reproduction-capsule.json",
+        "sha256": "d45fc8799e9e805cdd654e3fd58bce44b53018f85041cfbd09a146c67a1a087a"
+      }
+    },
+    "IN-20261102-007": {
+      "verified": false,
+      "production_verified": false,
+      "root_cause": "Authorization-code exchange bypassed the approved fixed egress; shared worker protocol lacked authorization_code support and current SSO identity query compatibility.",
+      "reproduction": {
+        "payload": {
+          "version": 1,
+          "work_package": "WP94",
+          "observed_at": "2026-11-02T05:48:59.598Z",
+          "candidate_sha": "70eb575f5cc0594923c417f698f45150988556dd",
+          "deployment_id": "dpl_FE67WwMCgPbZoBB2BE6UjnFmqCDA",
+          "origin": "https://sales.cyanlog.icu",
+          "browser_context": "existing_user_chrome",
+          "existing_tab_id": "1110517622",
+          "new_tabs": 0,
+          "new_browser_contexts": 0,
+          "initial_state": "Fxiaoke application authorization domain corrected and confirmed after full reload; existing Fxiaoke Chrome session retained.",
+          "actions": [
+            "Open production /login",
+            "Click 使用纷享销客登录 to create new one-time state",
+            "Provider returns to production callback",
+            "Observe /login?sso_error=SSO_PROVIDER_FAILED"
+          ],
+          "expected": "Exchange authorization code using the approved fixed outbound host, resolve stable mapped identity, and issue system session.",
+          "actual": {
+            "result": "SSO_PROVIDER_FAILED",
+            "previous_redirect_rejection_absent": true,
+            "oauth_state_consumed": true,
+            "system_session_success_observed": false
+          },
+          "evidence": [
+            "oauth-domain-readback.txt",
+            "oauth-domain-after.png",
+            "oauth-provider-failed-dom.txt",
+            "oauth-provider-failed.png"
+          ],
+          "root_cause_evidence": {
+            "callback": "exchangeFxiaokeAuthorizationCode omits organization transport and defaults to global fetch",
+            "protocol": "egress token allowlist accepts app_secret only; authorization_code request is rejected",
+            "runtime_logs": "No sanitized function logs found; current callback catches errors without logging stage.",
+            "db_metadata": "State creation and consumption observed; egress heartbeat ready. No plaintext request/response data read."
+          },
+          "scope": "code-only SSO fixed outbound correction; no new database, migration, identity merge, password removal or carrier call"
+        },
+        "artifact_path": "wp94-queue-review-20261102/callback-failure-capsule.json",
+        "sha256": "20b0aabcef1919e8111b699dd407b32c0830ab9267e73ced462725210b0853bd"
+      }
+    }
+  },
+  "completionState": "integration_ready",
+  "releaseControl": {
+    "production_branch": "production",
+    "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+    "production_branch_evidence": {
+      "payload": {
+        "project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "branch": "production",
+        "observed_at": "2026-11-02T06:27:30.165480+00:00",
+        "source": "live-vercel-api",
+        "attachments": [
+          {
+            "path": "wp94-queue-review-20261102/vercel-project-live-api.json",
+            "sha256": "57f0ece4616ceca84003715b22c985987f0f786772972f572fb421747955178c"
+          }
+        ]
+      },
+      "artifact_path": "wp94-queue-review-20261102/production-branch-current.json",
+      "sha256": "5d77d25818a1b8d8b16ff87074d92a1b196552be8a022e82cb973c716ef0c95c"
+    },
+    "production_commit_before": "70eb575f5cc0594923c417f698f45150988556dd",
+    "production_deployment_id_before": "dpl_FE67WwMCgPbZoBB2BE6UjnFmqCDA"
+  },
+  "gateSnapshots": {
+    "integration_ready": {
+      "stage": "integration_ready",
+      "checkedAt": "2026-11-02T06:36:46.200Z",
+      "head": "e59c9b57fcb210a221a40e4abfb2139ce91a6b50",
+      "originMain": "70eb575f5cc0594923c417f698f45150988556dd",
+      "remoteMain": "70eb575f5cc0594923c417f698f45150988556dd",
+      "remoteProduction": "70eb575f5cc0594923c417f698f45150988556dd",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "c2a90a5e28efd1dc4961d383eb1c6f15436a8eb1",
+      "remoteAttestationRefOid": "c2a90a5e28efd1dc4961d383eb1c6f15436a8eb1",
+      "remoteSnapshotCheckedAt": "2026-11-02T06:36:36.455Z",
+      "vercelProduction": {
+        "version": 1,
+        "source": "live-vercel-api",
+        "checkedAt": "2026-11-02T06:36:38.915Z",
+        "contract": {
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "projectName": "cyanlog-sales-v3",
+          "rootDirectory": "product-truth/product-code",
+          "domain": "sales.cyanlog.icu",
+          "productionBranch": "production"
+        },
+        "endpoints": {
+          "project": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "domain": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF/domains/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "alias": "/v4/aliases/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "deployment": "/v13/deployments/dpl_FE67WwMCgPbZoBB2BE6UjnFmqCDA?teamId=team_xayPRcgRTNOgdPdNf7bOV017"
+        },
+        "project": {
+          "id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "name": "cyanlog-sales-v3",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "rootDirectory": "product-truth/product-code",
+          "productionBranch": "production",
+          "productionDeploymentId": "dpl_FE67WwMCgPbZoBB2BE6UjnFmqCDA"
+        },
+        "domain": {
+          "name": "sales.cyanlog.icu",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "verified": true
+        },
+        "alias": {
+          "name": "sales.cyanlog.icu",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "deploymentId": "dpl_FE67WwMCgPbZoBB2BE6UjnFmqCDA",
+          "deploymentReferenceId": "dpl_FE67WwMCgPbZoBB2BE6UjnFmqCDA",
+          "redirect": null,
+          "deletedAt": null
+        },
+        "deployment": {
+          "id": "dpl_FE67WwMCgPbZoBB2BE6UjnFmqCDA",
+          "name": "cyanlog-sales-v3",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "target": "production",
+          "readyState": "READY",
+          "readySubstate": "PROMOTED",
+          "status": "READY",
+          "gitCommitSha": "70eb575f5cc0594923c417f698f45150988556dd",
+          "gitCommitSources": [
+            "gitSource.sha",
+            "meta.githubCommitSha"
+          ]
+        },
+        "remoteProduction": "70eb575f5cc0594923c417f698f45150988556dd",
+        "raw": {
+          "project": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-11-02T06-36-38-915Z-9905-project.json",
+            "sha256": "57f0ece4616ceca84003715b22c985987f0f786772972f572fb421747955178c"
+          },
+          "domain": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-11-02T06-36-38-915Z-9905-domain.json",
+            "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+          },
+          "alias": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-11-02T06-36-38-915Z-9905-alias.json",
+            "sha256": "8e05707faf58ab29dff8fc055aea2e1962256e1f5acfa660f968d409b3b7db44"
+          },
+          "deployment": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-11-02T06-36-38-915Z-9905-deployment.json",
+            "sha256": "1f8f5d80dd32970304243d8ae28dde0c62e2b6dac8d7231db05a938219396d6f"
+          }
+        }
+      },
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "64ecb8b0a7b7f11857e88376f468a11f8d1b60c83656fde579a35f3f1f83e8db",
+  "sealedAt": "2026-11-02T06:36:46.223Z",
+  "attestationDigest": "f1bec59cf780b86a3b4ad56e5d898b66f4c751950b5ebc14965bf0adff49ba26"
+}
