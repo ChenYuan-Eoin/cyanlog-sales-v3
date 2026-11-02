@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-02T07:29:12.408089+00:00",
+  "updated_at": "2026-11-02T07:39:34.035586+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -337,11 +337,11 @@
       "runtime_contract_version": "f003-fxiaoke-sso-v1",
       "production_database_mode": "controlled_write_approved",
       "production_release_authorization": {
-        "status": "pending_security_gate_and_final_write_approval",
+        "status": "approved_for_final_release",
         "micro_fix_approval_id": "IN-20261102-013",
-        "clarification_id": "IN-20261102-017",
+        "clarification_id": "IN-20261102-019",
         "micro_fix_scope": "WP94 IN013 受限既有成员账号过渡入口，与纷享 OAuth 共用 canonical users.id、活动成员/新鲜角色及统一可撤销会话；不恢复注册、重置、改密、bootstrap、自动绑定/合并或数据库迁移。",
-        "final_scope": "IN017 批准当前登录四个源码/测试文件内的验收UI反馈修复，复用IN013既有成员账号过渡入口范围。用户已批准的正常auth_tokens/login_attempts会话与日志边界保留，注册/重置/bootstrap、账号/身份/角色修改、迁移、worker/白名单/企微和顺丰仍排除；本记录不扩大数据权限。IN016只绑定其原精确产品树，新UI产品树的最终发布保持pending，须绑定本次可审查候选，不继承旧批准或Preview顺序例外。",
+        "final_scope": "发布 WP94 登录界面修正精确候选 13b6984999003a9cdf785e96e603910bf29d11d4 及不改变产品树的两项治理记录：推送并集成 main/production、部署网站，由用户现有 Chrome 在 sales.cyanlog.icu 验收主次登录按钮、去重文案、表单内必填与两种登录错误归属。认证后端、密码、账号、成员/角色、既有 Production 账号开关均保持原样。Preview 保持 not_passed，沿本次 Production-first 顺序例外；正常 auth_tokens/login_attempts 登录写入延续 IN016，不新增数据权限。禁止数据库迁移、账号创建/合并/身份绑定、密码重置/删除、角色/成员/组织来源变更、组织同步或旧源解绑、worker/IP 白名单/企微服务修改及顺丰调用。",
         "database_write_authorized": true,
         "production_write_scope": [
           "auth_tokens",
@@ -358,18 +358,23 @@
         "password_removal_authorized": false,
         "role_modification_authorized": false,
         "egress_worker_authorized": false,
-        "carrier_calls_authorized": false
+        "carrier_calls_authorized": false,
+        "final_release_approval_id": "IN-20261102-019",
+        "organization_configuration_write_authorized": false,
+        "directory_sync_authorized": false,
+        "source_unbind_authorized": false
       },
       "final_acceptance": {
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
         "production_database_mode": "controlled_write_approved"
       },
-      "note": "受限账号入口的UI验收反馈复用既有微修复；保持最多三胶囊及IN003/007独立验收。双入口可见、原生必填提示或旧SSO错误均不能代替真实账号/企业登录结果。已有用户批准的正常会话/尝试日志范围保留，新UI产品树发布及顺序例外须另行精确绑定，批准不等于生产验收。原最终机器/现有Chrome门禁和旧verifier冲突说明保留，不修改验证器假通过。",
+      "note": "IN019 已批准登录UI精确候选与不改变产品树的治理记录发布；用户现有Chrome正式站验收，Preview仍not_passed。组织来源路径审计单独只读，不修改来源/同步/解绑或任何组织数据。原IN003/007/017与最终真实登录/拒绝矩阵不因发布自动关闭。",
       "blocking_acceptance_defects": [
         "IN-20261102-003",
         "IN-20261102-007",
         "IN-20261102-017"
-      ]
+      ],
+      "preview_order_exception_approval_id": "IN-20261102-019"
     },
     "micro_fixes": [
       {
