@@ -15,6 +15,7 @@ const {
   APPLICATION_PERMISSION_CONTRACT,
   APPLICATION_PERMISSION_ACTIONS,
   APPLICATION_PERMISSION_PRODUCTION_ACTIONS,
+  FXIAOKE_SSO_CONTRACT,
   SHIPPING_COLLABORATION_ACTIONS,
   SHIPPING_CONFIG_UI_ITEMS,
   SHIPPING_CONFIG_UI_ACTIONS,
@@ -345,6 +346,113 @@ function runShippingContractSelftest(repoRoot) {
   assert.deepStrictEqual(unresolvedBlockingDefects(state, defects, head, { defect_replay: replay }, { browser_acceptance: acceptance }, repoRoot, 'production_released'), []);
   fs.appendFileSync(path.join(deliveryRuntimeRoot(repoRoot), acceptance.artifact_path), 'tampered');
   assert.deepStrictEqual(unresolvedBlockingDefects(state, defects, head, { defect_replay: replay }, { browser_acceptance: acceptance }, repoRoot, 'production_released'), ['IN-20261008-001']);
+}
+
+function runSsoProductionFirstDefectSelftest(repoRoot) {
+  runGit(repoRoot, ['init', '--quiet']);
+  runGit(repoRoot, ['config', 'user.name', 'Harness Selftest']);
+  runGit(repoRoot, ['config', 'user.email', 'harness-selftest@example.invalid']);
+  runGit(repoRoot, ['config', 'core.hooksPath', '/dev/null']);
+  makeSettings(repoRoot);
+  makeSchedulerFixture(repoRoot);
+  fs.writeFileSync(path.join(repoRoot, '.gitignore'), '.runtime/\n');
+  fs.mkdirSync(path.join(repoRoot, 'product-truth/product-code'), { recursive: true });
+  fs.writeFileSync(path.join(repoRoot, 'product-truth/product-code/fixture.txt'), 'fixed callback fixture\n');
+  const schedulerPath = path.join(repoRoot, 'governance/runtime-state/active-task.json');
+  const state = JSON.parse(fs.readFileSync(schedulerPath, 'utf8'));
+  const ids = ['IN-SSO-FIRST-ONE', 'IN-SSO-FIRST-TWO'];
+  Object.assign(state.active_task, { id: 'WP94', feature_id: 'F003' });
+  Object.assign(state.active_task.delivery_contract, {
+    runtime_profile: 'application', runtime_contract_version: FXIAOKE_SSO_CONTRACT,
+    required_runtime_evidence: ['fxiaoke_sso'],
+    required_production_runtime_evidence: ['fxiaoke_sso_login', 'fxiaoke_sso_denials'],
+    blocking_acceptance_defects: ids, preview_order_exception_approval_id: 'IN-SSO-FIRST-APPROVAL'
+  });
+  state.execution_queue.active.id = 'WP94';
+  writeJson(schedulerPath, state);
+  runGit(repoRoot, ['add', '-A']);
+  runGit(repoRoot, ['commit', '--quiet', '-m', 'SSO Production-first fixture']);
+  const head = runGit(repoRoot, ['rev-parse', 'HEAD']);
+  const approval = {
+    id: 'IN-SSO-FIRST-APPROVAL', type: 'final_production_release_authorization', source: 'user_explicit', state: 'approved',
+    code_release_authorized: true, production_database_write_authorized: false,
+    carrier_calls_authorized: false, account_merge_execution_authorized: false,
+    phone_history_migration_authorized: false, password_removal_authorized: false,
+    preview_order_exception: true, preview_status: 'not_passed', approved_candidate: head,
+    approved_product_tree: runGit(repoRoot, ['rev-parse', 'HEAD:product-truth/product-code']), rollback_commit: head,
+    authorized_migrations: [{ path: 'supabase/migrations/fixture.sql', sha256: 'e'.repeat(64) }]
+  };
+  const inboxPath = path.join(repoRoot, 'governance/runtime-state/demand-inbox.jsonl');
+  fs.appendFileSync(inboxPath, JSON.stringify(approval) + '\n');
+  const actions = requiredReplayActions(state, 'production');
+  const acceptance = evidenceEnvelope(repoRoot, 'sso-first-production', { commit: head, actions });
+  const proof = {
+    verified: true, root_cause: 'The fixed OAuth callback cannot replay the Provider authorization on a Preview hostname.',
+    reproduction: evidenceEnvelope(repoRoot, 'sso-first-reproduction', { commit: head, actual: 'Provider callback failed' }),
+    production_verified: true, production_commit: head, production_regression_artifact_sha256: acceptance.sha256
+  };
+  const defects = Object.fromEntries(ids.map(id => [id, structuredClone(proof)]));
+  const approved = { approved: true, approval_id: approval.id, preview_status: 'not_passed' };
+  const unresolved = (overrides = {}) => unresolvedBlockingDefects(
+    overrides.state || state, overrides.defects || defects, overrides.head || head,
+    {}, { browser_acceptance: overrides.acceptance || acceptance }, repoRoot,
+    overrides.stage || 'production_released', overrides.exception || approved
+  );
+  assert.deepStrictEqual(unresolved(), [], 'Both exact Production replays can close defects without claiming Preview');
+  assert.deepStrictEqual(unresolved({ stage: 'integration_ready' }), ids, 'Preview defects stay unresolved during integration');
+  assert.deepStrictEqual(unresolved({ exception: { approved: false } }), ids);
+  assert.deepStrictEqual(unresolved({ exception: { preview_status: 'not_passed' } }), ids);
+  for (const patch of [
+    { id: 'WP82' }, { feature_id: 'F054' },
+    { delivery_contract: { ...state.active_task.delivery_contract, runtime_profile: 'ai' } },
+    { delivery_contract: { ...state.active_task.delivery_contract, runtime_contract_version: 'other' } }
+  ]) assert.deepStrictEqual(unresolved({ state: { ...state, active_task: { ...state.active_task, ...patch } } }), ids);
+  assert.deepStrictEqual(unresolved({ defects: { [ids[0]]: proof } }), [ids[1]], 'Every configured defect needs its own proof');
+  for (const patch of [
+    { verified: false }, { root_cause: 'too short' }, { reproduction: null },
+    { production_verified: false }, { production_commit: 'b'.repeat(40) },
+    { production_regression_artifact_sha256: '0'.repeat(64) }
+  ]) {
+    const invalid = Object.fromEntries(ids.map(id => [id, { ...proof, ...patch }]));
+    assert.deepStrictEqual(unresolved({ defects: invalid }), ids);
+  }
+  for (const payload of [{ commit: 'b'.repeat(40), actions }, { commit: head, actions: actions.slice(1) }]) {
+    const invalidAcceptance = evidenceEnvelope(repoRoot, `sso-first-invalid-${payload.commit === head ? 'actions' : 'commit'}`, payload);
+    const invalid = Object.fromEntries(ids.map(id => [id, { ...proof, production_regression_artifact_sha256: invalidAcceptance.sha256 }]));
+    assert.deepStrictEqual(unresolved({ defects: invalid, acceptance: invalidAcceptance }), ids);
+  }
+  const missingAcceptance = { artifact_path: 'missing.json', sha256: 'f'.repeat(64), payload: acceptance.payload };
+  assert.deepStrictEqual(unresolved({ acceptance: missingAcceptance }), ids);
+
+  // Exercise the real status assembly: no Preview journey must not discard
+  // valid Production defects, and must never turn Preview green.
+  writeJson(path.join(deliveryRuntimeRoot(repoRoot), 'delivery-evidence.json'), {
+    version: 1, activeId: 'WP94', commit: head, completionState: 'main_integrated', defects,
+    evidence: { code: { commit: head }, production: { browser_acceptance: acceptance } }
+  });
+  const options = { repoRoot, remoteSnapshot: { main: head, production: head, defaultBranch: 'main', attestation: null } };
+  const status = getDeliveryStatus(options);
+  assert.strictEqual(status.previewOrderException.approved, true);
+  assert.deepStrictEqual(status.previewBlockingDefects, ids);
+  assert.deepStrictEqual(status.blockingDefects, []);
+  const gateOptions = { ...options, status, skipStateCheck: true, skipSealCheck: true, testOnlyVercelApiResponses: makeTestVercelApiResponses(head) };
+  for (const stage of ['integration_ready', 'main_integrated']) {
+    assert.ok(!checkDeliveryStage(stage, gateOptions).blockers.some(item => item.startsWith('blocking defects unresolved in Preview:')));
+  }
+  assert.ok(checkDeliveryStage('clean_preview_green', gateOptions).blockers.some(item => item.includes('preserves Preview as not passed')));
+  for (const patch of [{ activeId: 'WP82' }, { featureId: 'F054' }, { runtimeProfile: 'ai' }, { previewOrderException: { approved: false } }]) {
+    const result = checkDeliveryStage('integration_ready', { ...gateOptions, status: { ...status, ...patch } });
+    assert.ok(result.blockers.some(item => item.startsWith('blocking defects unresolved in Preview:')));
+  }
+  const terminal = checkDeliveryStage('production_released', { ...gateOptions, status: { ...status, blockingDefects: ids } });
+  assert.ok(terminal.blockers.some(item => item.startsWith('blocking defects unresolved:')));
+  fs.writeFileSync(inboxPath, JSON.stringify({ ...approval, state: 'pending' }) + '\n');
+  const unapprovedStatus = getDeliveryStatus(options);
+  assert.strictEqual(unapprovedStatus.previewOrderException.approved, false);
+  assert.deepStrictEqual(unapprovedStatus.blockingDefects, ids);
+  fs.appendFileSync(path.join(deliveryRuntimeRoot(repoRoot), acceptance.artifact_path), 'tampered');
+  assert.deepStrictEqual(unresolved(), ids);
+  console.log('SSO Production-first defect proof selftest ok');
 }
 
 function makeSchedulerFixture(repoRoot) {
@@ -1679,6 +1787,11 @@ function main() {
   process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(repoRoot, '.runtime', 'harness');
 
   try {
+    if (process.argv.includes('--production-first-only')) {
+      runSsoProductionFirstDefectSelftest(repoRoot);
+      runShippingContractSelftest(repoRoot);
+      return;
+    }
     if (process.argv.includes('--application-only')) {
       runApplicationPermissionSelftest(repoRoot);
       return;
@@ -1704,6 +1817,10 @@ function main() {
     fs.mkdirSync(approvalRoot);
     process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(approvalRoot, '.runtime', 'harness');
     runActionApprovalSelftest(approvalRoot);
+    const productionFirstRoot = path.join(repoRoot, 'production-first-fixture');
+    fs.mkdirSync(productionFirstRoot);
+    process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(productionFirstRoot, '.runtime', 'harness');
+    runSsoProductionFirstDefectSelftest(productionFirstRoot);
   } finally {
     if (previousRuntimeDir === undefined) {
       delete process.env.PRICE_V3_HARNESS_RUNTIME_DIR;

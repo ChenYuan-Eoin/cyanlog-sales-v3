@@ -1754,20 +1754,33 @@ function loadBehaviorLogProof(repoRoot, head) {
   };
 }
 
-function unresolvedBlockingDefects(state, runtimeDefects = {}, head = '', previewArtifacts = {}, productionArtifacts = {}, repoRoot = '', stage = 'production_released') {
+function approvedSsoProductionFirst(scope) {
+  return scope.activeId === 'WP94' && scope.featureId === 'F003'
+    && scope.runtimeProfile === 'application' && scope.runtimeContractVersion === FXIAOKE_SSO_CONTRACT
+    && scope.previewOrderException?.approved === true;
+}
+
+function unresolvedBlockingDefects(state, runtimeDefects = {}, head = '', previewArtifacts = {}, productionArtifacts = {}, repoRoot = '', stage = 'production_released', previewOrderException = null) {
   const configured = new Set(state.active_task?.delivery_contract?.blocking_acceptance_defects || []);
   if (!configured.size) return [];
   // Integration consumes current-SHA Preview replay. Production closure still
   // requires a separate replay on the released Production deployment.
   const productionTarget = stage === 'production_released' && state.active_task?.delivery_contract?.target_state === 'production_released';
+  const productionFirst = approvedSsoProductionFirst({
+    activeId: state.active_task?.id, featureId: state.active_task?.feature_id,
+    runtimeProfile: runtimeProfileOf(state), runtimeContractVersion: runtimeContractVersionOf(state), previewOrderException
+  });
   const resolved = new Set();
   for (const [id, proof] of Object.entries(runtimeDefects)) {
-    const previewVerified = (
+    const commonVerified = (
       configured.has(id)
       && proof?.verified === true
       && typeof proof.root_cause === 'string'
       && proof.root_cause.trim().length >= 20
       && evidenceEnvelopeValid(proof.reproduction, repoRoot)
+    );
+    const previewVerified = (
+      commonVerified
       && evidenceEnvelopeValid(previewArtifacts.defect_replay, repoRoot)
       && proof.regression_artifact_sha256 === previewArtifacts.defect_replay.sha256
       && proof.preview_commit === head
@@ -1778,8 +1791,9 @@ function unresolvedBlockingDefects(state, runtimeDefects = {}, head = '', previe
       && JSON.stringify(productionArtifacts.browser_acceptance?.payload?.actions) === JSON.stringify(requiredReplayActions(state, 'production'))
       && proof.production_regression_artifact_sha256 === productionArtifacts.browser_acceptance.sha256
       && proof.production_commit === head
+      && (!productionFirst || productionArtifacts.browser_acceptance?.payload?.commit === head)
     );
-    if (previewVerified && productionVerified) {
+    if (commonVerified && productionVerified && (productionFirst && productionTarget || previewVerified)) {
       resolved.add(id);
     }
   }
@@ -1842,6 +1856,10 @@ function getDeliveryStatus(options = {}) {
   const finalReleaseApprovalId = state.active_task?.delivery_contract?.production_release_authorization?.final_release_approval_id;
   const productionReleaseAuthorizationRecord = inboxRecords.find((record) => record?.id === finalReleaseApprovalId) || null;
   const previewOrderException = getPreviewOrderException(state, repoRoot, inboxRecords);
+  const productionFirstDefectReplay = approvedSsoProductionFirst({
+    activeId: state.active_task?.id, featureId: state.active_task?.feature_id,
+    runtimeProfile: runtimeProfileOf(state), runtimeContractVersion: runtimeContractVersionOf(state), previewOrderException
+  });
   let completionState = attestation.completionState || 'executing';
   if (deliveryStateAtLeast(completionState, 'code_green') && evidence.code?.commit !== head) {
     completionState = 'executing';
@@ -1915,13 +1933,15 @@ function getDeliveryStatus(options = {}) {
     ),
     blockingDefects: unresolvedBlockingDefects(
       state,
-      evidence.preview?.journeys?.blocking_defect_replay === true
+      (productionFirstDefectReplay || evidence.preview?.journeys?.blocking_defect_replay === true)
         ? (attestation.defects || {})
         : {},
       head,
       evidence.preview?.artifacts || {},
       evidence.production || {},
-      repoRoot
+      repoRoot,
+      'production_released',
+      previewOrderException
     )
   };
 }
@@ -2093,7 +2113,9 @@ function checkDeliveryStage(stage, options = {}) {
     status.vercelProduction = liveVercel.snapshot;
     blockers.push(...liveVercel.blockers);
     const previewDefects = status.previewBlockingDefects || status.blockingDefects;
-    if (previewDefects.length) blockers.push(`blocking defects unresolved in Preview: ${previewDefects.join(', ')}`);
+    // A validated WP94 Production-first release defers this replay, but keeps
+    // both defect lists intact and still requires exact Production proof below.
+    if (!approvedSsoProductionFirst(status) && previewDefects.length) blockers.push(`blocking defects unresolved in Preview: ${previewDefects.join(', ')}`);
     if (!status.git.originMainFresh) blockers.push('origin/main is stale; fetch origin before integration');
     if (stage === 'integration_ready' && !status.git.originMainIsAncestor) blockers.push('origin/main is not an ancestor of candidate HEAD');
     if (status.releaseControl.production_branch !== 'production') blockers.push('Production Branch isolation is not recorded as production');
