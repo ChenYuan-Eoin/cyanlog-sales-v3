@@ -24,6 +24,24 @@ it('performs one real-shaped claim, provider request and completion without logg
   expect(JSON.parse(fetcher.mock.calls[3][1].body)).toMatchObject({action:'complete',id:job.id,lease:job.lease})
   expect(JSON.stringify(report.mock.calls)).not.toMatch(/example-secret|private-code|example-returned-token/)
 })
+it('executes the new authorization-code grant using the same constrained protocol without logging OAuth material', async () => {
+  const request = {
+    url: 'https://open.fxiaoke.com/oauth2.0/token?thirdTraceId=11111111-1111-4111-8111-111111111111',
+    headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+      appId: 'FSAID_test', appSecret: 'example-secret', code: 'private-authorization-code',
+      redirectUrl: 'https://sales.cyanlog.icu/api/auth/fxiaoke/callback', grantType: 'authorization_code',
+    }),
+  }
+  const job = { id: '11111111-1111-4111-8111-111111111111', lease: '22222222-2222-4222-8222-222222222222', expiresAt: new Date(Date.now() + 20000).toISOString(), request }
+  const fetcher = vi.fn().mockResolvedValueOnce(new Response('当前 IP：192.0.2.10'))
+    .mockResolvedValueOnce(Response.json({ data: { status: 'ready', job } }))
+    .mockResolvedValueOnce(Response.json({ errorCode: 0, accessToken: 'example-provider-access-token' }))
+    .mockResolvedValueOnce(Response.json({ data: { accepted: true } }))
+  const report = vi.fn()
+  expect(await createWorker({ config, request: fetcher, report }).tick()).toBe(true)
+  expect(fetcher.mock.calls[2]).toEqual([request.url, expect.objectContaining({ method: 'POST', body: request.body })])
+  expect(JSON.stringify(report.mock.calls)).not.toMatch(/example-secret|private-authorization-code|example-provider-access-token/)
+})
 it('does not call Fxiaoke when the server reports changed IP or an expired job',async () => {
   const fetcher=vi.fn().mockResolvedValueOnce(new Response('192.0.2.10')).mockResolvedValueOnce(Response.json({data:{status:'ip_changed',job:null}}))
   expect(await createWorker({config,request:fetcher,report:vi.fn()}).tick()).toBe(false)

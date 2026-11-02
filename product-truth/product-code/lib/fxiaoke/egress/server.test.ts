@@ -39,6 +39,7 @@ vi.mock('@/lib/supabase', () => ({ supabaseAdmin: {
 } }))
 import { authorizeWorker, egressConfig, transportForOrganization, workerClaim, workerComplete } from './server'
 import { discoverEnterprise } from '../client'
+import { exchangeFxiaokeAuthorizationCode } from '../oauth'
 import { POST } from '@/app/api/admin/organization-sources/fxiaoke/egress/route'
 const org = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const token = '12'.repeat(32)
@@ -65,6 +66,37 @@ it('carries enterprise discovery through encrypted jobs and only broadcasts an e
   expect(fake.wake).toHaveBeenCalledWith('wake',{}, {timeout:3000})
   expect(fake.tables.organization_fxiaoke_egress_jobs).toHaveLength(0)
   expect(JSON.stringify(fake.inserts)).not.toContain(credentials.appSecret)
+})
+it('carries an OAuth code through an encrypted, single-use worker job without exposing code or tokens', async () => {
+  const input = { code: 'fixture-authorization-code', redirectUrl: 'https://sales.cyanlog.icu/api/auth/fxiaoke/callback' }
+  fake.wake.mockImplementation(async () => {
+    expect(JSON.stringify(fake.tables)).not.toMatch(/fixture-authorization-code|example-private-secret/)
+    const claim = await workerClaim(egressConfig()!, ip)
+    expect(JSON.parse(claim.job!.request.body)).toEqual({
+      appId: credentials.appId, appSecret: credentials.appSecret, ...input, grantType: 'authorization_code',
+    })
+    await workerComplete(egressConfig()!, { id: claim.job!.id, lease: claim.job!.lease, result: {
+      status: 200, body: JSON.stringify({ errorCode: 0, openUserId: 'employee-fixture', corpId: 'FSCID_fixture', accessToken: 'example-provider-token', expiresIn: 7200 }),
+    } })
+    expect(JSON.stringify(fake.tables)).not.toContain('example-provider-token')
+    return { success: true }
+  })
+  expect(await exchangeFxiaokeAuthorizationCode(credentials, input, transportForOrganization(org))).toEqual({
+    openUserId: 'employee-fixture', corpId: 'FSCID_fixture', expiresIn: 7200,
+  })
+  expect(fake.tables.organization_fxiaoke_egress_jobs).toHaveLength(0)
+  expect(JSON.stringify(fake.inserts)).not.toMatch(/fixture-authorization-code|example-private-secret/)
+})
+it('rejects non-POST OAuth requests before queuing any credentials', async () => {
+  const send = transportForOrganization(org)!
+  await expect(send(`https://open.fxiaoke.com/oauth2.0/token?thirdTraceId=${randomUUID()}`, {
+    method: 'GET', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+      appId: credentials.appId, appSecret: credentials.appSecret, code: 'fixture-code',
+      redirectUrl: 'https://sales.cyanlog.icu/api/auth/fxiaoke/callback', grantType: 'authorization_code',
+    }),
+  })).rejects.toMatchObject({ code: 'EGRESS_REQUEST_DENIED' })
+  expect(fake.inserts).toHaveLength(0)
+  expect(fake.wake).not.toHaveBeenCalled()
 })
 it.each(['ip_changed','unreachable','stale'])('fails before queuing credentials when worker health is %s',async status => {
   Object.assign(fake.tables.organization_fxiaoke_egress[0],status==='stale'?{last_seen_at:'2000-01-01T00:00:00Z'}:{status})

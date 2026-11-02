@@ -3,11 +3,57 @@ import { expect, it, vi } from 'vitest'
 import { executeRequest, MAX_RESPONSE_BYTES, validRequest, validResult } from './protocol.mjs'
 const tokenRequest = () => ({ url: 'https://open.fxiaoke.com/oauth2.0/token?thirdTraceId=11111111-1111-4111-8111-111111111111',
   headers: { 'content-type': 'application/json' }, body: JSON.stringify({ appId: 'FSAID_test', appSecret: 'example-secret', permanentCode: 'fixture-permanent', grantType: 'app_secret' }) })
+const oauthRequest = () => ({ ...tokenRequest(), body: JSON.stringify({
+  appId: 'FSAID_test', appSecret: 'example-secret',
+  redirectUrl: 'https://sales.cyanlog.icu/api/auth/fxiaoke/callback',
+  code: 'fixture-authorization-code', grantType: 'authorization_code',
+}) })
 it('only forwards the exact official token grant', async () => {
   const fetcher = vi.fn().mockResolvedValue(new Response('{"errorCode":0}', { status: 200 }))
   expect(validRequest(tokenRequest())).toBe(true)
   expect(await executeRequest(tokenRequest(), fetcher)).toEqual({ status: 200, body: '{"errorCode":0}' })
   expect(fetcher.mock.calls[0][1]).toMatchObject({ method: 'POST', redirect: 'error', cache: 'no-store' })
+})
+it('forwards the exact authorization-code grant through the shared worker protocol as POST', async () => {
+  const fetcher = vi.fn().mockResolvedValue(Response.json({ errorCode: 0 }))
+  expect(validRequest(oauthRequest())).toBe(true)
+  expect(await executeRequest(oauthRequest(), fetcher)).toEqual({ status: 200, body: '{"errorCode":0}' })
+  expect(fetcher).toHaveBeenCalledWith(oauthRequest().url, expect.objectContaining({
+    method: 'POST', redirect: 'error', cache: 'no-store', body: oauthRequest().body,
+  }))
+})
+it.each([
+  'http://sales.cyanlog.icu/api/auth/fxiaoke/callback',
+  'https://cyanlog.icu/api/auth/fxiaoke/callback',
+  'https://sales.cyanlog.icu.evil.example/api/auth/fxiaoke/callback',
+  'https://sales.cyanlog.icu/api/auth/fxiaoke/start',
+  'https://sales.cyanlog.icu/api/auth/fxiaoke/callback/',
+  'https://sales.cyanlog.icu/api/auth/fxiaoke/callback?next=elsewhere',
+  'https://sales.cyanlog.icu/api/auth/fxiaoke/callback#fragment',
+  'https://user@sales.cyanlog.icu/api/auth/fxiaoke/callback',
+])('rejects authorization-code callbacks outside the exact Production callback: %s', async redirectUrl => {
+  const fetcher = vi.fn()
+  const body = { ...JSON.parse(oauthRequest().body), redirectUrl }
+  expect(await executeRequest({ ...oauthRequest(), body: JSON.stringify(body) }, fetcher)).toEqual({ error: 'INVALID_RESPONSE' })
+  expect(fetcher).not.toHaveBeenCalled()
+})
+it.each([
+  { code: '' }, { code: 'x'.repeat(2049) }, { code: 'code\r\nheader' },
+  { appSecret: '' }, { appId: '' }, { code: 123 },
+  { permanentCode: 'extra-secret' }, { grantType: 'refresh_token' },
+])('rejects malformed or extra authorization-code fields: %o', fields => {
+  expect(validRequest({ ...oauthRequest(), body: JSON.stringify({ ...JSON.parse(oauthRequest().body), ...fields }) })).toBe(false)
+})
+it('requires a fresh-shaped UUID v4 trace, exact query keys, exact headers and bounded code', () => {
+  const input = oauthRequest()
+  expect(validRequest({ ...input, url: input.url.replace('4111-8111', '1111-8111') })).toBe(false)
+  expect(validRequest({ ...input, url: input.url.replace('11111111-1111-4111-8111-111111111111', 'a'.repeat(36)) })).toBe(false)
+  expect(validRequest({ ...input, url: `${input.url}&thirdTraceId=11111111-1111-4111-8111-111111111111` })).toBe(false)
+  expect(validRequest({ ...input, url: `${input.url}&code=leak` })).toBe(false)
+  expect(validRequest({ ...input, headers: { ...input.headers, authorization: 'Bearer unexpected' } })).toBe(false)
+  const { redirectUrl: _missing, ...body } = JSON.parse(input.body)
+  expect(validRequest({ ...input, body: JSON.stringify(body) })).toBe(false)
+  expect(validRequest({ ...input, body: JSON.stringify({ ...JSON.parse(input.body), code: 'x'.repeat(2048) }) })).toBe(true)
 })
 it.each(['http://open.fxiaoke.com/oauth2.0/token', 'https://open.fxiaoke.com.evil.example/oauth2.0/token',
   'https://open.fxiaoke.com/cgi/crm/v2/data/create', 'https://127.0.0.1/oauth2.0/token', 'https://user@open.fxiaoke.com/oauth2.0/token'])('rejects non-allowlisted destination %s without fetching', async url => {

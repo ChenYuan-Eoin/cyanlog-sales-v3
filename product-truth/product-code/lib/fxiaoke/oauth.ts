@@ -61,6 +61,9 @@ export async function exchangeFxiaokeAuthorizationCode(
       }),
     })
   } catch (error) {
+    // The constrained transport already supplies safe internal categories.
+    // Preserve them so a missing/changed egress cannot masquerade as Provider failure.
+    if (error instanceof FxiaokeError) throw error
     const cause = error && typeof error === 'object' && 'cause' in error
       ? (error as { cause?: { code?: unknown } }).cause
       : undefined

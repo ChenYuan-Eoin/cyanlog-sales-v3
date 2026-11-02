@@ -70,6 +70,27 @@ function errorCode(error: unknown) {
   return 'SSO_CALLBACK_FAILED'
 }
 
+type CallbackStage = 'configuration' | 'token_exchange' | 'enterprise_verification' | 'employee_profile' | 'identity_mapping' | 'session_issue'
+const SAFE_DIAGNOSTIC_CODES = new Set([
+  'SSO_CONFIGURATION_UNAVAILABLE', 'CONFIG_STORAGE_UNAVAILABLE',
+  'INVALID_OAUTH_CALLBACK', 'PROVIDER_TIMEOUT', 'PROVIDER_DNS', 'PROVIDER_UNAVAILABLE',
+  'PROVIDER_HTTP_ERROR', 'INVALID_RESPONSE', 'OAUTH_CODE_REJECTED', 'INVALID_TOKEN_RESPONSE',
+  'PROVIDER_TLS', 'PROVIDER_CONNECTION', 'PROVIDER_UNREACHABLE', 'PROVIDER_REJECTED',
+  'TENANT_MISMATCH', 'EMPLOYEE_INACTIVE', 'INVALID_IDENTITY',
+  'EGRESS_UNAVAILABLE', 'EGRESS_REQUEST_DENIED', 'EGRESS_IP_CHANGED', 'EGRESS_PROVIDER_UNREACHABLE',
+])
+
+function reportFailure(stage: CallbackStage, error: unknown) {
+  // Only fixed internal codes and numeric status are safe here. Never log the
+  // exception, message, request URL, OAuth code/state, or provider profile.
+  const code = error instanceof FxiaokeError && SAFE_DIAGNOSTIC_CODES.has(error.code)
+    ? error.code
+    : errorCode(error)
+  const status = error instanceof FxiaokeError && Number.isInteger(error.status)
+    && error.status >= 400 && error.status <= 599 ? error.status : undefined
+  console.warn('fxiaoke_sso_callback_failed', { stage, code, ...(status ? { status } : {}) })
+}
+
 async function verifyEnterprise(
   orgId: string,
   credentials: Awaited<ReturnType<typeof resolveConfiguredOAuthOrganization>>['credentials'],
@@ -111,21 +132,26 @@ export async function GET(request: NextRequest) {
   if (providerError) return loginError(request, 'SSO_PROVIDER_DENIED')
   if (!code || code.length > 2048) return loginError(request, 'SSO_CODE_INVALID')
 
+  let stage: CallbackStage = 'configuration'
   try {
     const { orgId, credentials } = await resolveConfiguredOAuthOrganization()
     if (orgId !== consumed.orgId) {
       throw new FxiaokeError('SSO_ORGANIZATION_INVALID', '企业登录状态与当前配置企业不一致。', 409)
     }
+    stage = 'token_exchange'
     const identity = await exchangeFxiaokeAuthorizationCode(credentials, {
       code,
       redirectUrl: consumed.redirectUrl,
-    })
+    }, transportForOrganization(orgId))
+    stage = 'enterprise_verification'
     await verifyEnterprise(orgId, credentials, identity.corpId)
+    stage = 'employee_profile'
     const profile = await readEmployeeIdentity(
       credentials,
       identity.openUserId,
       transportForOrganization(orgId),
     )
+    stage = 'identity_mapping'
     const mapped = await resolveFxiaokeIdentity({
       orgId,
       corpId: identity.corpId,
@@ -137,11 +163,13 @@ export async function GET(request: NextRequest) {
       lifeStatus: profile.lifeStatus,
       loginDisabled: profile.loginDisabled,
     })
+    stage = 'session_issue'
     const session = await issueSystemSession(mapped.userId, mapped.orgId)
     const response = successHandoff(request)
     applySystemSessionCookies(response, session)
     return clearStateCookie(response)
   } catch (error) {
+    reportFailure(stage, error)
     return loginError(request, errorCode(error))
   }
 }

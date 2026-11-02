@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({
@@ -37,6 +37,7 @@ vi.mock('@/lib/fxiaoke/egress/server', () => ({ transportForOrganization: mocks.
 vi.mock('@/lib/fxiaoke/identity', () => ({ resolveFxiaokeIdentity: mocks.identity }))
 
 import { GET } from './route'
+import { FxiaokeError } from '@/lib/fxiaoke/contracts'
 
 const state = 's'.repeat(43)
 const orgId = '11111111-1111-4111-8111-111111111111'
@@ -55,6 +56,7 @@ function request(query = `state=${state}&code=authorization-code`) {
 
 describe('Fxiaoke OAuth callback', () => {
   beforeEach(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.consume.mockReset().mockResolvedValue({ orgId, redirectUrl })
     mocks.resolve.mockReset().mockResolvedValue({ orgId, credentials })
     mocks.exchange.mockReset().mockResolvedValue({
@@ -81,6 +83,7 @@ describe('Fxiaoke OAuth callback', () => {
       authContextCookie: 'signed-context',
     })
   })
+  afterEach(() => vi.restoreAllMocks())
 
   it('consumes one state, verifies enterprise and stable identity, then issues the system session', async () => {
     const response = await GET(request())
@@ -88,7 +91,7 @@ describe('Fxiaoke OAuth callback', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(response.headers.get('set-cookie')).toContain('token=session-token')
     expect(mocks.consume).toHaveBeenCalledWith(state)
-    expect(mocks.exchange).toHaveBeenCalledWith(credentials, { code: 'authorization-code', redirectUrl })
+    expect(mocks.exchange).toHaveBeenCalledWith(credentials, { code: 'authorization-code', redirectUrl }, undefined)
     expect(mocks.profile).toHaveBeenCalledWith(credentials, 'employee-open-id', undefined)
     expect(mocks.identity).toHaveBeenCalledWith({
       orgId,
@@ -106,6 +109,41 @@ describe('Fxiaoke OAuth callback', () => {
     expect(body).toContain("localStorage.setItem('token'")
     expect(body).not.toContain('session-token')
     expect(body).not.toContain('secret')
+  })
+
+  it('routes the authorization-code exchange and profile read through the configured organization transport', async () => {
+    const transport = vi.fn()
+    mocks.transport.mockReturnValue(transport)
+    const response = await GET(request())
+    expect(response.status).toBe(200)
+    expect(mocks.transport).toHaveBeenCalledWith(orgId)
+    expect(mocks.exchange).toHaveBeenCalledWith(credentials, { code: 'authorization-code', redirectUrl }, transport)
+    expect(mocks.profile).toHaveBeenCalledWith(credentials, 'employee-open-id', transport)
+    expect(console.warn).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['exchange', 'token_exchange'],
+    ['profile', 'employee_profile'],
+  ] as const)('records only safe stage and internal error metadata when %s fails', async (method, stage) => {
+    mocks[method].mockRejectedValue(new FxiaokeError('PROVIDER_TIMEOUT',
+      'secret authorization-code session-token provider-access-token 13900000000 employee-open-id ' + state, 502))
+    const response = await GET(request())
+    expect(response.headers.get('location')).toContain('sso_error=SSO_PROVIDER_FAILED')
+    expect(console.warn).toHaveBeenCalledExactlyOnceWith('fxiaoke_sso_callback_failed', {
+      stage, code: 'PROVIDER_TIMEOUT', status: 502,
+    })
+    expect(mocks.issue).not.toHaveBeenCalled()
+    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toMatch(/secret|authorization-code|session-token|provider-access-token|13900000000|employee-open-id/)
+    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain(state)
+  })
+
+  it('never reflects arbitrary exception messages or unrecognized provider error codes in diagnostics', async () => {
+    mocks.exchange.mockRejectedValue(new FxiaokeError('secret-provider-code', 'sensitive upstream body', 502))
+    await GET(request())
+    expect(console.warn).toHaveBeenCalledExactlyOnceWith('fxiaoke_sso_callback_failed', {
+      stage: 'token_exchange', code: 'SSO_PROVIDER_FAILED', status: 502,
+    })
   })
 
   it('rejects missing state cookies before consuming server state', async () => {

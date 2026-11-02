@@ -17,9 +17,15 @@ export function validRequest(input) {
     if ([...url.searchParams.keys()].join(',') !== 'thirdTraceId' || !/^[0-9a-f-]{36}$/i.test(url.searchParams.get('thirdTraceId') || '')) return false;
     const body = JSON.parse(input.body);
     if (url.pathname === '/oauth2.0/token') {
-      return exactKeys(input.headers, ['content-type']) && input.headers['content-type'] === 'application/json'
-        && exactKeys(body, ['appId','appSecret','permanentCode','grantType'])
-        && identifier(body.appId) && secret(body.appSecret) && secret(body.permanentCode) && body.grantType === 'app_secret';
+      if (!exactKeys(input.headers, ['content-type']) || input.headers['content-type'] !== 'application/json') return false;
+      if (exactKeys(body, ['appId','appSecret','permanentCode','grantType'])) {
+        return identifier(body.appId) && secret(body.appSecret) && secret(body.permanentCode) && body.grantType === 'app_secret';
+      }
+      return exactKeys(body, ['appId','appSecret','redirectUrl','code','grantType'])
+        && identifier(body.appId) && secret(body.appSecret) && secret(body.code)
+        && body.grantType === 'authorization_code'
+        && body.redirectUrl === 'https://sales.cyanlog.icu/api/auth/fxiaoke/callback'
+        && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(url.searchParams.get('thirdTraceId'));
     }
     if (url.pathname !== '/cgi/crm/v2/data/query') return false;
     if (!exactKeys(input.headers, ['content-type','authorization','x-fs-ea','x-fs-userid'])

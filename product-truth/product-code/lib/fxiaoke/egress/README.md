@@ -1,12 +1,14 @@
-# 纷享专用出口程序（WP91 候选）
+# 纷享专用出口程序（WP91 / WP94）
 
 正式站 → 加密短期请求 → 现有主机主动领取 → 纷享官方 API → 加密结果 → 正式站。
 
-当前使用已有云电脑；Mac mini 仅作备用，不切换企微接收进程。运行不依赖远程桌面、浏览器窗口或持续监看屏幕。它不监听公网端口，也不是通用代理。只允许应用鉴权以及 DepartmentObj、PersonnelObj 的固定字段只读查询；不能寄件、修改 CRM、任意抓取 URL 或跨组织领取。
+当前使用已有云电脑；Mac mini 仅作备用，不切换企微接收进程。运行不依赖远程桌面、浏览器窗口或持续监看屏幕。它不监听公网端口，也不是通用代理。只允许应用鉴权、固定正式回调地址的 OAuth 授权码交换，以及 DepartmentObj、PersonnelObj 的固定字段只读查询；不能寄件、修改 CRM、任意抓取 URL 或跨组织领取。
 
 ## 发布边界
 
-这是尚未通过生产验收的实现。原 fa173690/5a8fb888 的发布批准不覆盖它。候选经过测试后，须具体批准新版本部署、在唯一 `cyanlog-sales-v3` 执行本批迁移、给指定主机启用专用凭据，以及在纷享白名单只放行核实的出口 IP。
+WP91 固定出口已按 `IN-20261028-007` 使用既有主机启用；历史连接与目录预览不代表 WP94 员工登录已验收。WP94 本次候选补齐 callback 的企业 transport，并在共享协议中只放行 `authorization_code` 的固定请求结构：精确官方 token URL、UUID v4 trace、JSON headers、五个必需字段及 `https://sales.cyanlog.icu/api/auth/fxiaoke/callback`。保留原 `app_secret` 规则。
+
+网站和主机都使用 `protocol.mjs`，发布时必须核对两端版本兼容。本次不需要新迁移、令牌或白名单变更；复用原受保护运行环境文件。发布授权仍按当前 WP94 的精确候选与范围判断，旧连接验收不得代替真实 OAuth 登录验收。
 
 新增两张服务端专用表：运行心跳一行/企业、短期加密请求表。普通账号和匿名角色无表与 RPC 权限。主机不持有数据库 service-role 密钥或全站加密主密钥。请求最长有效 20 秒，领取采用原子锁和随机租约；完成后立即消费删除，超时/取消清理，主机领取时清理已过期行。异常终止遗留的密文可能保留到下次清理，但过期后不可领取或写回。
 
@@ -34,6 +36,8 @@ SUPABASE_PUBLISHABLE_KEY=<现有 cyanlog-sales-v3 的 publishable key>
 运行仅需 Node.js 22+。将本目录的 `worker.mjs`、`protocol.mjs`、`package.json` 和 `package-lock.json` 放进独立版本目录，执行 `npm ci --ignore-scripts --omit=dev`。通过 `FXIAOKE_RUNTIME_ENV` 指向上述私有文件，再运行 `node worker.mjs`。不复制网站环境变量或使用数据库管理员密钥。
 
 采用独立的 systemd 服务启动，保持现有 `price-v3-wecom.service` 原样。服务的 `WorkingDirectory` 和 `ExecStart` 必须指向已验证版本及实际 Node 路径，`Restart=on-failure`，开机启动；标准输出进 journal。安装、启用和设置白名单属于发布动作，不由此文档自动授权。
+
+更新时使用独立版本目录，保留旧目录和 unit 备份；先验证新包 hash、语法和共享协议，再切换现有 `price-v3-fxiaoke.service`，不并行运行第二个领取者。失败时恢复原 unit 的版本路径并重启原 worker，核对固定出口心跳和企微服务。此版本回滚不等于停用整个固定出口。
 
 ## 检查与失败处理
 

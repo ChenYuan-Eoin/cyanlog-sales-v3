@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
 import { buildFxiaokeAuthorizationUrl, exchangeFxiaokeAuthorizationCode } from './oauth'
+import { FxiaokeError } from './contracts'
 
 const credentials = { appId: 'FSAID_test', appSecret: 'secret' }
 const input = {
@@ -84,5 +85,18 @@ describe('Fxiaoke employee OAuth', () => {
       .rejects.toMatchObject({ code: 'PROVIDER_DNS' })
     await expect(exchangeFxiaokeAuthorizationCode(credentials, input, vi.fn().mockResolvedValue(new Response('secret', { status: 503 }))))
       .rejects.not.toThrow('secret')
+  })
+
+  it('preserves constrained-transport failures without falling back to direct fetch', async () => {
+    const request = vi.fn().mockRejectedValue(new FxiaokeError('EGRESS_IP_CHANGED', 'Safe internal category', 503))
+    const direct = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('must not use direct transport'))
+    try {
+      await expect(exchangeFxiaokeAuthorizationCode(credentials, input, request))
+        .rejects.toMatchObject({ code: 'EGRESS_IP_CHANGED', status: 503 })
+      expect(request).toHaveBeenCalledTimes(1)
+      expect(direct).not.toHaveBeenCalled()
+    } finally {
+      direct.mockRestore()
+    }
   })
 })

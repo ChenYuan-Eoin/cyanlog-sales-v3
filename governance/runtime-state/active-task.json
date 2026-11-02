@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-10-29T07:10:00+00:00",
+  "updated_at": "2026-11-02T05:49:37.887023+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -343,7 +343,11 @@
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
         "production_database_mode": "controlled_write_approved"
       },
-      "note": "Code is green. Production may install only the explicitly authorized non-destructive SSO migrations and deploy the exact attested candidate; real login remains pending until the existing-Chrome operator completes Fxiaoke OAuth. Destructive password and phone-history migrations remain excluded."
+      "note": "Code is green. Production may install only the explicitly authorized non-destructive SSO migrations and deploy the exact attested candidate; real login remains pending until the existing-Chrome operator completes Fxiaoke OAuth. Destructive password and phone-history migrations remain excluded.",
+      "blocking_acceptance_defects": [
+        "IN-20261102-003",
+        "IN-20261102-007"
+      ]
     },
     "micro_fixes": [
       {
@@ -697,7 +701,7 @@
         "reconciliation_source": "IN-20261028-010",
         "depends_on": [
           "WP97",
-          "WP23"
+          "WP99"
         ]
       },
       {
@@ -1347,7 +1351,7 @@
         "scheduling_group": "寄件基础",
         "acceptance_state": "旧形态已替代；保留追溯",
         "remaining_acceptance": "复用台账与安全存储；不恢复与统一成员许可冲突的旧独立白名单",
-        "acceptance_owner": "WP18",
+        "acceptance_owner": "WP99",
         "source_records": [
           "current_queue.parked",
           "/Users/nsss/Documents/ChatGPT/Price-v3:parked",
@@ -1368,7 +1372,7 @@
         "scheduling_group": "寄件交互",
         "acceptance_state": "已有代码；待生产复验",
         "remaining_acceptance": "操作员工作台与销售提报入口可用；桌面/窄屏不遮挡操作",
-        "acceptance_owner": "WP75",
+        "acceptance_owner": "WP78",
         "source_records": [
           "current_queue.completed",
           "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
@@ -1391,7 +1395,7 @@
         "scheduling_group": "寄件交互",
         "acceptance_state": "已有代码；待生产复验",
         "remaining_acceptance": "批量输入逐行纠错、稳定幂等、部分失败不重建成功单",
-        "acceptance_owner": "WP95",
+        "acceptance_owner": "WP99",
         "source_records": [
           "current_queue.completed",
           "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
@@ -1405,7 +1409,8 @@
           "evidence_commit": "b7194f859b6f9e3cb2bea8435c8b6b47e2bfba62",
           "result": "CSV/XLSX/文本解析、逐行纠错、统一参数、稳定幂等批次执行和部分失败恢复达到code_green；Production未更新"
         },
-        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成",
+        "reconciliation_note": "WP95仅关闭解析与地址校验；批量执行幂等和部分失败的剩余真实履约验收归WP99，激活前再拆批。"
       },
       {
         "id": "WP15",
@@ -1460,7 +1465,7 @@
         "scheduling_group": "真实顺丰闭环",
         "acceptance_state": "准备材料已交付；业务未验收",
         "remaining_acceptance": "准备清单不关闭真实生产下单、打印与恢复结果",
-        "acceptance_owner": "WP18",
+        "acceptance_owner": "WP99",
         "source_records": [
           "current_queue.completed",
           "/Users/nsss/Documents/ChatGPT/Price-v3:completed",
@@ -1551,7 +1556,7 @@
         "scheduling_group": "寄件交互",
         "acceptance_state": "本地候选；生产未验收",
         "remaining_acceptance": "筛选内批量选择、参数切换保持选择；资料变更只撤销受影响票核对",
-        "acceptance_owner": "WP75",
+        "acceptance_owner": "WP78",
         "source_records": [
           "current_queue.parked",
           "suspended_tasks",
@@ -1594,7 +1599,7 @@
         "scheduling_group": "寄件交互",
         "acceptance_state": "历史候选；完整验收待对齐",
         "remaining_acceptance": "销售资料预填、草稿保护及错误反馈；本票地址始终由销售确认",
-        "acceptance_owner": "WP94",
+        "acceptance_owner": "WP35",
         "source_records": [
           "suspended_tasks",
           "/Users/nsss/.codex/worktrees/org-source-production-closure/Price-v3:next",
@@ -1607,7 +1612,8 @@
           "name": "销售寄件提报体验",
           "status": "active"
         },
-        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成",
+        "reconciliation_note": "原销售提报体验与当前WP94纷享SSO不属于同一用户任务；保留WP35原承诺于Parked，重新激活前评估，不扩入WP94。"
       },
       {
         "id": "WP40",
