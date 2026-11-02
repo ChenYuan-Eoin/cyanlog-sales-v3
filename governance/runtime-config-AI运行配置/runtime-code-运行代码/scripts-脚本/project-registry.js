@@ -880,7 +880,7 @@ function sealedAttestationDigest(value) {
 
 function readRemoteSnapshot(repoRoot) {
   const checkedAt = new Date().toISOString();
-  const raw = runGit(repoRoot, [
+  const args = [
     'ls-remote',
     '--symref',
     'origin',
@@ -888,14 +888,52 @@ function readRemoteSnapshot(repoRoot) {
     'refs/heads/main',
     'refs/heads/production',
     DELIVERY_ATTESTATION_REF
-  ], { allowFailure: true, timeoutMs: 15000 });
+  ];
+  const env = { ...process.env };
+  for (const name of Object.keys(env)) if (name.startsWith('GIT_')) delete env[name];
+  const diagnostics = { attempts: [], category: 'unavailable' };
+  const deadline = Date.now() + 30000;
+  let raw = null;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const timeout = Math.min(15000, deadline - Date.now());
+    if (timeout <= 0) break;
+    const startedAt = Date.now();
+    const result = spawnSync('git', args, {
+      cwd: repoRoot, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'],
+      timeout, killSignal: 'SIGTERM'
+    });
+    const errorCode = result.error?.code
+      ? (['ETIMEDOUT', 'ENOENT', 'EACCES', 'ENOBUFS'].includes(result.error.code) ? result.error.code : 'OTHER')
+      : null;
+    const stderr = String(result.stderr || '');
+    // Inspect only for fixed categories. Raw Git errors can include URLs or credentials.
+    let category = result.status === 0 ? (String(result.stdout || '').trim() ? 'success' : 'invalid_response')
+      : errorCode === 'ETIMEDOUT' ? 'timeout'
+        : /certificate|SSL peer|TLS.*(?:certificate|alert)|SSL certificate/i.test(stderr) ? 'tls'
+          : /authentication|authorization|permission denied|could not read Username|returned error: (?:401|403)/i.test(stderr) ? 'authentication'
+            : /could not resolve host|failed to connect|couldn't connect|connection (?:reset|timed out|refused|closed)|operation timed out|recv failure|empty reply from server/i.test(stderr) ? 'network'
+              : 'unavailable';
+    if (result.error && category === 'success') category = 'unavailable';
+    diagnostics.attempts.push({
+      attempt,
+      status: Number.isInteger(result.status) ? result.status : null,
+      signal: result.signal ? (['SIGTERM', 'SIGKILL', 'SIGABRT'].includes(result.signal) ? result.signal : 'OTHER') : null,
+      errorCode,
+      elapsedMs: Math.max(0, Date.now() - startedAt),
+      category
+    });
+    diagnostics.category = category;
+    if (category === 'success') { raw = String(result.stdout).trim(); break; }
+    if (!['timeout', 'network'].includes(category)) break;
+  }
   const snapshot = {
     checkedAt,
     available: Boolean(raw),
     defaultBranch: null,
     main: null,
     production: null,
-    attestation: null
+    attestation: null,
+    diagnostics
   };
   if (!raw) return snapshot;
 
@@ -1000,99 +1038,184 @@ function vercelHttpsGetChild(contract) {
   let finished = false;
   let request;
   let response;
-  let attempts = 0;
+  let agent;
+  let cancelConnectionDeadline;
+  let stage = null;
+  let generation = 0;
+  let retryUsed = false;
+  let receivedBytes = 0;
+  const responses = [];
   function stop() {
     clearTimeout(timer);
+    cancelConnectionDeadline?.();
     response?.destroy();
     request?.destroy();
+    agent?.destroy();
   }
   function fail(kind) {
     if (finished) return;
     finished = true;
     stop();
     // Fixed diagnostics only: network errors may contain headers or credentials.
-    process.stderr.write(`VERCEL_LIVE_READ_${kind}\n`);
+    process.stderr.write(`VERCEL_LIVE_READ_${kind}${stage ? `_${stage}` : ''}\n`);
     process.exitCode = 1;
   }
   const timer = setTimeout(() => fail('TIMEOUT'), 30000);
   let input;
+  let endpoints;
+  const query = `teamId=${encodeURIComponent(contract.teamId)}`;
+  const fixed = [
+    `/v9/projects/${contract.projectId}?${query}`,
+    `/v9/projects/${contract.projectId}/domains/${contract.domain}?${query}`,
+    `/v4/aliases/${contract.domain}?${query}`
+  ];
+  function allowedEndpoint(endpoint) {
+    return fixed.includes(endpoint) || (typeof endpoint === 'string' && endpoint.startsWith('/v13/deployments/')
+      && /^dpl_[A-Za-z0-9]+$/.test(endpoint.slice('/v13/deployments/'.length).split('?')[0])
+      && endpoint === `/v13/deployments/${endpoint.slice('/v13/deployments/'.length).split('?')[0]}?${query}`);
+  }
+  function endpointStage(endpoint) {
+    if (endpoint === fixed[0]) return 'PROJECT';
+    if (endpoint === fixed[1]) return 'DOMAIN';
+    if (endpoint === fixed[2]) return 'ALIAS';
+    return allowedEndpoint(endpoint) ? 'DEPLOYMENT' : null;
+  }
   try {
     const raw = fs.readFileSync(0, 'utf8');
     if (Buffer.byteLength(raw) > 8192) throw new Error('input');
     input = JSON.parse(raw);
     if (!input || typeof input !== 'object' || Array.isArray(input)
-      || Object.keys(input).sort().join(',') !== 'endpoint,token'
+      || !['endpoint,token', 'mode,token'].includes(Object.keys(input).sort().join(','))
       || typeof input.token !== 'string' || !/^[A-Za-z0-9_.-]{16,4096}$/.test(input.token)) throw new Error('input');
-    const query = `teamId=${encodeURIComponent(contract.teamId)}`;
-    const fixed = new Set([
-      `/v9/projects/${contract.projectId}?${query}`,
-      `/v9/projects/${contract.projectId}/domains/${contract.domain}?${query}`,
-      `/v4/aliases/${contract.domain}?${query}`
-    ]);
-    const deployment = typeof input.endpoint === 'string' && input.endpoint.startsWith('/v13/deployments/')
-      && /^dpl_[A-Za-z0-9]+$/.test(input.endpoint.slice('/v13/deployments/'.length).split('?')[0])
-      && input.endpoint === `/v13/deployments/${input.endpoint.slice('/v13/deployments/'.length).split('?')[0]}?${query}`;
-    if (!fixed.has(input.endpoint) && !deployment) throw new Error('endpoint');
+    if (Object.hasOwn(input, 'mode')) {
+      if (input.mode !== 'production') throw new Error('mode');
+      endpoints = [...fixed];
+    } else {
+      if (!allowedEndpoint(input.endpoint)) throw new Error('endpoint');
+      endpoints = [input.endpoint];
+    }
+    // A custom hostname check belongs on the Agent so verified sockets can be
+    // reused. No application/global Agent, alternate trust store or key log.
+    agent = new https.Agent({
+      keepAlive: true, maxSockets: 1, maxFreeSockets: 1,
+      servername: 'api.vercel.com', rejectUnauthorized: true,
+      checkServerIdentity: (hostname, certificate) => hostname === 'api.vercel.com'
+        ? tls.checkServerIdentity('api.vercel.com', certificate)
+        : new Error('Unexpected Vercel TLS hostname')
+    });
   } catch {
     fail('INPUT');
     return;
   }
-  function attempt() {
+  function readNext() {
     if (finished) return;
     if (Date.now() >= deadline) return fail('TIMEOUT');
-    const number = ++attempts;
+    if (input.mode === 'production' && responses.length === 3) {
+      stage = 'DEPLOYMENT';
+      let deploymentId;
+      try { deploymentId = JSON.parse(responses[0].raw)?.targets?.production?.id; } catch { return fail('JSON'); }
+      if (typeof deploymentId !== 'string' || !/^dpl_[A-Za-z0-9]+$/.test(deploymentId)) return fail('DEPLOYMENT');
+      endpoints.push(`/v13/deployments/${deploymentId}?${query}`);
+    }
+    if (responses.length === endpoints.length) {
+      const output = JSON.stringify({ responses });
+      if (Buffer.byteLength(output) > maximum) return fail('SIZE');
+      finished = true;
+      // Successful responses have been fully consumed. Keep their sockets alive
+      // between reads, and close the shared Agent only after the entire batch.
+      stop();
+      process.stdout.write(output);
+      return;
+    }
+    attempt(endpoints[responses.length]);
+  }
+  function attempt(endpoint) {
+    if (finished) return;
+    if (Date.now() >= deadline) return fail('TIMEOUT');
+    if (!allowedEndpoint(endpoint)) return fail('INPUT');
+    stage = endpointStage(endpoint);
+    const number = ++generation;
     let receivedHeaders = false;
+    let connectionTimer;
+    const connectionDeadline = Math.min(Date.now() + 10000, deadline);
+    function clearConnectionDeadline() {
+      clearTimeout(connectionTimer);
+      connectionTimer = null;
+    }
+    cancelConnectionDeadline = clearConnectionDeadline;
     try {
       const current = https.request({
         protocol: 'https:', hostname: 'api.vercel.com', port: 443,
-        servername: 'api.vercel.com', path: input.endpoint, method: 'GET',
+        servername: 'api.vercel.com', path: endpoint, method: 'GET',
         rejectUnauthorized: true,
-        checkServerIdentity: (hostname, certificate) => hostname === 'api.vercel.com'
-          ? tls.checkServerIdentity('api.vercel.com', certificate)
-          : new Error('Unexpected Vercel TLS hostname'),
-        agent: false,
+        agent,
         headers: { Accept: 'application/json', Authorization: `Bearer ${input.token}` }
       }, incoming => {
-        if (finished || number !== attempts) { incoming.destroy(); return; }
+        if (finished || number !== generation || current.destroyed) { incoming.destroy(); return; }
         receivedHeaders = true;
+        clearConnectionDeadline();
         response = incoming;
         // Inspect the authorized socket at headers, before end releases it.
         if (incoming.socket?.authorized !== true) return fail('TLS');
         const status = incoming.statusCode;
         if (!Number.isInteger(status) || status < 200 || status >= 300) {
-          finished = true;
-          stop();
-          process.stdout.write(`\n__VERCEL_HTTP_STATUS__${Number.isInteger(status) ? status : 0}`);
-          return;
+          return fail(`HTTP_${String(Number.isInteger(status) && status >= 100 && status <= 599 ? status : 0).padStart(3, '0')}`);
         }
         const declared = incoming.headers['content-length'];
-        if (declared !== undefined && (!/^\d+$/.test(String(declared)) || Number(declared) > maximum)) return fail('SIZE');
+        if (declared !== undefined && (!/^\d+$/.test(String(declared)) || Number(declared) > maximum - receivedBytes)) return fail('SIZE');
         const chunks = [];
-        let size = 0;
         incoming.on('data', chunk => {
           if (finished) return;
-          size += chunk.length;
-          if (size > maximum) return fail('SIZE');
+          receivedBytes += chunk.length;
+          if (receivedBytes > maximum) return fail('SIZE');
           chunks.push(chunk);
         });
         incoming.once('error', () => fail('NETWORK'));
         incoming.once('aborted', () => fail('NETWORK'));
         incoming.once('end', () => {
-          if (finished) return;
+          if (finished || number !== generation) return;
           if (!incoming.complete) return fail('NETWORK');
-          finished = true;
-          stop();
-          process.stdout.write(Buffer.concat(chunks).toString('utf8') + `\n__VERCEL_HTTP_STATUS__${status}`);
+          const raw = Buffer.concat(chunks).toString('utf8');
+          try {
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return fail('JSON');
+          } catch { return fail('JSON'); }
+          responses.push({ endpoint, status, raw });
+          response = null;
+          request = null;
+          readNext();
         });
       });
       request = current;
+      function connectionTimedOut() {
+        if (finished || number !== generation || connectionTimer === null) return;
+        clearConnectionDeadline();
+        // Destroying with ETIMEDOUT uses the existing single pre-header retry.
+        // No timeout message, request options, endpoint or credential is emitted.
+        const error = new Error('Vercel connection deadline');
+        error.code = 'ETIMEDOUT';
+        current.destroy(error);
+      }
+      connectionTimer = setTimeout(connectionTimedOut, Math.max(0, connectionDeadline - Date.now()));
+      current.once('socket', socket => {
+        if (finished || number !== generation) return;
+        const connected = () => {
+          if (finished || number !== generation || connectionTimer === null) return;
+          if (Date.now() >= connectionDeadline) return connectionTimedOut();
+          clearConnectionDeadline();
+        };
+        if (socket.encrypted === true && socket.authorized === true) connected();
+        else socket.once('secureConnect', connected);
+      });
       current.once('error', error => {
-        if (finished || number !== attempts) return;
+        clearConnectionDeadline();
+        if (finished || number !== generation) return;
         // One idempotent retry before headers, under the original total deadline.
         // TLS/certificate errors and HTTP responses are deliberately excluded.
-        if (!receivedHeaders && attempts < 2 && retryable.has(error?.code) && Date.now() < deadline) {
+        if (!receivedHeaders && !retryUsed && retryable.has(error?.code) && Date.now() < deadline) {
+          retryUsed = true;
           current.destroy();
-          attempt();
+          attempt(endpoint);
         } else fail('NETWORK');
       });
       current.end(); // GET has no request body.
@@ -1100,23 +1223,29 @@ function vercelHttpsGetChild(contract) {
       fail('NETWORK');
     }
   }
-  attempt();
+  readNext();
 }
 
-function runVercelApi(repoRoot, endpoint) {
+function vercelReadEndpoints() {
   const query = `teamId=${encodeURIComponent(VERCEL_PRODUCTION_CONTRACT.teamId)}`;
-  const fixed = new Set([
+  return [
     `/v9/projects/${VERCEL_PRODUCTION_CONTRACT.projectId}?${query}`,
     `/v9/projects/${VERCEL_PRODUCTION_CONTRACT.projectId}/domains/${VERCEL_PRODUCTION_CONTRACT.domain}?${query}`,
     `/v4/aliases/${VERCEL_PRODUCTION_CONTRACT.domain}?${query}`
-  ]);
+  ];
+}
+
+function allowedVercelReadEndpoint(endpoint) {
+  const query = `teamId=${encodeURIComponent(VERCEL_PRODUCTION_CONTRACT.teamId)}`;
   const deployment = typeof endpoint === 'string' && endpoint.startsWith('/v13/deployments/')
     && /^dpl_[A-Za-z0-9]+$/.test(endpoint.slice('/v13/deployments/'.length).split('?')[0])
     && endpoint === `/v13/deployments/${endpoint.slice('/v13/deployments/'.length).split('?')[0]}?${query}`;
-  if (!fixed.has(endpoint) && !deployment) throw new Error('Vercel live read endpoint is outside the fixed Production contract');
+  return vercelReadEndpoints().includes(endpoint) || deployment;
+}
 
+function runVercelReadChild(repoRoot, selection) {
   const token = loadVercelLiveReadToken();
-  const input = JSON.stringify({ endpoint, token });
+  const input = JSON.stringify({ ...selection, token });
   const child = `(${vercelHttpsGetChild.toString()})(${JSON.stringify(VERCEL_PRODUCTION_CONTRACT)});`;
   const result = spawnSync(process.execPath, ['--input-type=commonjs', '-e', child], {
     cwd: path.join(repoRoot, VERCEL_PRODUCTION_CONTRACT.rootDirectory),
@@ -1130,25 +1259,64 @@ function runVercelApi(repoRoot, endpoint) {
     killSignal: 'SIGTERM',
     maxBuffer: 25 * 1024 * 1024
   });
-  // Never log stderr/error objects: they may echo rejected credential/config text.
-  if (result.error || result.status !== 0) throw new Error(`Vercel live HTTPS GET transport failed for ${endpoint}`);
-  const output = String(result.stdout || '');
-  const marker = '\n__VERCEL_HTTP_STATUS__';
-  const offset = output.lastIndexOf(marker);
-  const status = offset < 0 ? '' : output.slice(offset + marker.length).trim();
-  if (!/^2\d\d$/.test(status)) throw new Error(`Vercel live HTTPS GET returned a non-success status for ${endpoint}`);
-  const raw = output.slice(0, offset).trim();
-  if (!raw) throw new Error(`Vercel API GET returned an empty response for ${endpoint}`);
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error(`Vercel API GET returned invalid JSON for ${endpoint}`);
+  // Never log stderr/error objects. Accept only the child's fixed category.
+  if (result.error || result.status !== 0) {
+    const safe = String(result.stderr || '').match(/^VERCEL_LIVE_READ_(INPUT|TIMEOUT|NETWORK|TLS|SIZE|JSON|DEPLOYMENT|HTTP_[0-9]{3})(?:_(PROJECT|DOMAIN|ALIAS|DEPLOYMENT))?\n$/);
+    const diagnostic = safe ? `${safe[1]}${safe[2] ? `:${safe[2]}` : ''}` : '';
+    throw new Error(`Vercel live HTTPS GET transport failed${diagnostic ? ` (${diagnostic})` : ''}`);
   }
+  const output = String(result.stdout || '');
+  let envelope;
+  try {
+    envelope = JSON.parse(output);
+  } catch {
+    throw new Error('Vercel API GET returned an invalid batch envelope');
+  }
+  if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)
+    || Object.keys(envelope).join(',') !== 'responses' || !Array.isArray(envelope.responses)) {
+    throw new Error('Vercel API GET returned an invalid batch envelope');
+  }
+  return envelope.responses;
+}
+
+function parseVercelReadResponse(response, endpoint) {
+  if (!response || typeof response !== 'object' || Array.isArray(response)
+    || Object.keys(response).sort().join(',') !== 'endpoint,raw,status'
+    || response.endpoint !== endpoint || !allowedVercelReadEndpoint(endpoint)
+    || !Number.isInteger(response.status) || response.status < 200 || response.status >= 300
+    || typeof response.raw !== 'string' || !response.raw.trim()) {
+    throw new Error('Vercel API GET returned an incomplete or mismatched response');
+  }
+  const raw = response.raw.trim();
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { throw new Error('Vercel API GET returned invalid JSON'); }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error(`Vercel API GET returned a non-object response for ${endpoint}`);
+    throw new Error('Vercel API GET returned a non-object response');
   }
   return { raw: `${raw}\n`, parsed };
+}
+
+function runVercelApi(repoRoot, endpoint) {
+  if (!allowedVercelReadEndpoint(endpoint)) throw new Error('Vercel live read endpoint is outside the fixed Production contract');
+  const responses = runVercelReadChild(repoRoot, { endpoint });
+  if (responses.length !== 1) throw new Error('Vercel API GET returned an incomplete response set');
+  return parseVercelReadResponse(responses[0], endpoint);
+}
+
+function runVercelProductionBatch(repoRoot) {
+  const responses = runVercelReadChild(repoRoot, { mode: 'production' });
+  if (responses.length !== 4) throw new Error('Vercel API GET returned an incomplete Production response set');
+  const fixed = vercelReadEndpoints();
+  const project = parseVercelReadResponse(responses[0], fixed[0]);
+  const domain = parseVercelReadResponse(responses[1], fixed[1]);
+  const alias = parseVercelReadResponse(responses[2], fixed[2]);
+  const deploymentId = project.parsed?.targets?.production?.id;
+  if (typeof deploymentId !== 'string' || !/^dpl_[A-Za-z0-9]+$/.test(deploymentId)) {
+    throw new Error('Vercel project has no valid targets.production deployment ID');
+  }
+  const deploymentEndpoint = `/v13/deployments/${deploymentId}?teamId=${encodeURIComponent(VERCEL_PRODUCTION_CONTRACT.teamId)}`;
+  const deployment = parseVercelReadResponse(responses[3], deploymentEndpoint);
+  return { project, domain, alias, deployment };
 }
 
 function isSelftestVercelInjection(repoRoot, injected) {
@@ -1205,15 +1373,16 @@ function verifyVercelProductionState(repoRoot, remoteProduction, options = {}) {
       aliasResponse = { raw: `${JSON.stringify(injected.alias ?? null)}\n`, parsed: injected.alias };
       deploymentResponse = { raw: `${JSON.stringify(injected.deployment)}\n`, parsed: injected.deployment };
     } else {
-      projectResponse = runVercelApi(repoRoot, endpoints.project);
-      domainResponse = runVercelApi(repoRoot, endpoints.domain);
-      aliasResponse = runVercelApi(repoRoot, endpoints.alias);
+      const batch = runVercelProductionBatch(repoRoot);
+      projectResponse = batch.project;
+      domainResponse = batch.domain;
+      aliasResponse = batch.alias;
       const liveDeploymentId = projectResponse.parsed?.targets?.production?.id;
       if (!/^dpl_[A-Za-z0-9]+$/.test(String(liveDeploymentId || ''))) {
         throw new Error('Vercel project has no valid targets.production deployment ID');
       }
       endpoints.deployment = `/v13/deployments/${liveDeploymentId}?${query}`;
-      deploymentResponse = runVercelApi(repoRoot, endpoints.deployment);
+      deploymentResponse = batch.deployment;
     }
   } catch (error) {
     return {
@@ -1490,7 +1659,7 @@ function sealDeliveryAttestation(options = {}) {
       remoteRefs: 'git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery',
       ancestor: 'git merge-base --is-ancestor origin/main HEAD',
       worktree: 'git status --porcelain=v1 --untracked-files=all',
-      vercelProduction: 'official api.vercel.com live GET via isolated node:https with verified TLS; existing CLI credential only through stdin'
+      vercelProduction: 'official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin'
     }
   };
   const runtimeUpdate = writeDeliveryRuntime({
@@ -2265,7 +2434,9 @@ function checkDeliveryStage(stage, options = {}) {
     // A validated WP94 Production-first release defers this replay, but keeps
     // both defect lists intact and still requires exact Production proof below.
     if (!approvedSsoProductionFirst(status) && previewDefects.length) blockers.push(`blocking defects unresolved in Preview: ${previewDefects.join(', ')}`);
-    if (!status.git.originMainFresh) blockers.push('origin/main is stale; fetch origin before integration');
+    if (!status.git.originMainFresh) blockers.push(status.remoteSnapshot?.available === false
+      ? 'remote Git evidence unavailable; origin/main freshness cannot be verified'
+      : 'origin/main is stale; fetch origin before integration');
     if (stage === 'integration_ready' && !status.git.originMainIsAncestor) blockers.push('origin/main is not an ancestor of candidate HEAD');
     if (status.releaseControl.production_branch !== 'production') blockers.push('Production Branch isolation is not recorded as production');
     if (!/^prj_[A-Za-z0-9]+$/.test(String(status.releaseControl.vercel_project_id || ''))) blockers.push('Vercel project ID is missing');
@@ -2273,7 +2444,9 @@ function checkDeliveryStage(stage, options = {}) {
     if (status.releaseControl.production_branch_evidence?.payload?.branch !== 'production') blockers.push('Vercel Production Branch evidence does not show production');
     if (status.releaseControl.production_branch_evidence?.payload?.project_id !== status.releaseControl.vercel_project_id) blockers.push('Vercel Production Branch evidence project mismatch');
     if (!Number.isFinite(Date.parse(status.releaseControl.production_branch_evidence?.payload?.observed_at || ''))) blockers.push('Vercel Production Branch evidence timestamp is invalid');
-    if (!status.git.remoteProduction) blockers.push('remote production branch is missing');
+    if (!status.git.remoteProduction) blockers.push(status.remoteSnapshot?.available === false
+      ? 'remote Git evidence unavailable; production branch presence cannot be verified'
+      : 'remote production branch is missing');
     if (!status.releaseControl.production_commit_before) blockers.push('Production commit before integration is missing');
     if (status.releaseControl.production_commit_before !== status.git.remoteProduction) blockers.push('Production branch OID does not equal recorded pre-integration anchor');
     if (!/^dpl_[A-Za-z0-9]+$/.test(String(status.releaseControl.production_deployment_id_before || ''))) blockers.push('Production deployment ID before integration is missing');

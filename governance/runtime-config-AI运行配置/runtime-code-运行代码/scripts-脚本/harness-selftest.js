@@ -1784,8 +1784,29 @@ function runVercelHttpsTransportSelftest(repoRoot) {
   writeJson(path.join(repoRoot, 'governance/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json'), { version: 'selftest' });
   const registrySource = fs.readFileSync(path.join(__dirname, 'project-registry.js'), 'utf8');
   const fixtureToken = 'example_existing_vercel_fixture_credential';
-  const endpoint = `/v4/aliases/${VERCEL_PRODUCTION_CONTRACT.domain}?teamId=${VERCEL_PRODUCTION_CONTRACT.teamId}`;
-  const success = { status: 0, stdout: JSON.stringify({ alias: 'sales.cyanlog.icu', deployment: { id: SELFTEST_PRODUCTION_DEPLOYMENT_ID } }) + '\n__VERCEL_HTTP_STATUS__200' };
+  const query = `teamId=${VERCEL_PRODUCTION_CONTRACT.teamId}`;
+  const endpoints = [
+    `/v9/projects/${VERCEL_PRODUCTION_CONTRACT.projectId}?${query}`,
+    `/v9/projects/${VERCEL_PRODUCTION_CONTRACT.projectId}/domains/${VERCEL_PRODUCTION_CONTRACT.domain}?${query}`,
+    `/v4/aliases/${VERCEL_PRODUCTION_CONTRACT.domain}?${query}`,
+    `/v13/deployments/${SELFTEST_PRODUCTION_DEPLOYMENT_ID}?${query}`
+  ];
+  const endpoint = endpoints[2];
+  const fixtureSha = 'a'.repeat(40);
+  const bodies = [
+    { id: VERCEL_PRODUCTION_CONTRACT.projectId, name: VERCEL_PRODUCTION_CONTRACT.projectName,
+      accountId: VERCEL_PRODUCTION_CONTRACT.teamId, rootDirectory: VERCEL_PRODUCTION_CONTRACT.rootDirectory,
+      link: { productionBranch: 'production' }, targets: { production: { id: SELFTEST_PRODUCTION_DEPLOYMENT_ID } } },
+    { name: VERCEL_PRODUCTION_CONTRACT.domain, projectId: VERCEL_PRODUCTION_CONTRACT.projectId, verified: true },
+    { alias: VERCEL_PRODUCTION_CONTRACT.domain, projectId: VERCEL_PRODUCTION_CONTRACT.projectId,
+      deploymentId: SELFTEST_PRODUCTION_DEPLOYMENT_ID, deployment: { id: SELFTEST_PRODUCTION_DEPLOYMENT_ID } },
+    { id: SELFTEST_PRODUCTION_DEPLOYMENT_ID, name: VERCEL_PRODUCTION_CONTRACT.projectName,
+      project: { id: VERCEL_PRODUCTION_CONTRACT.projectId, name: VERCEL_PRODUCTION_CONTRACT.projectName },
+      team: { id: VERCEL_PRODUCTION_CONTRACT.teamId }, target: 'production', readyState: 'READY',
+      status: 'READY', readySubstate: 'PROMOTED', gitSource: { sha: fixtureSha } }
+  ];
+  const envelope = indices => ({ responses: indices.map(index => ({ endpoint: endpoints[index], status: 200, raw: JSON.stringify(bodies[index]) })) });
+  const success = indices => ({ status: 0, stdout: JSON.stringify(envelope(indices)) });
   function fixture(options = {}) {
     const calls = [];
     const realRequire = require;
@@ -1804,19 +1825,23 @@ function runVercelHttpsTransportSelftest(repoRoot) {
       if (name === 'child_process') return { ...require('child_process'), spawnSync: (command, args, opts) => {
         calls.push({ command, args, opts });
         if (command === 'which') return { status: 0, stdout: '/vendor/vercel/dist/vc.js\n' };
+        if (command === 'git') {
+          assert.deepStrictEqual(Array.from(args), ['rev-parse', '--path-format=absolute', '--git-path', 'codex-runtime']);
+          return { status: 0, stdout: path.join(repoRoot, '.runtime', 'delivery') + '\n' };
+        }
         assert.strictEqual(command, process.execPath);
-        return options.result || success;
+        return options.result || success(JSON.parse(opts.input).mode === 'production' ? [0, 1, 2, 3] : [endpoints.indexOf(JSON.parse(opts.input).endpoint)]);
       } };
       if (name === '/vendor/vercel/dist/chunks/chunk-selftest.js') return { getAuthConfigFilePath: () => '/private/existing-vercel-auth.json' };
       return realRequire(name);
     };
     fakeRequire.main = require.main;
     const moduleCopy = { exports: {} };
-    vm.runInNewContext(registrySource + '\nmodule.exports.__selftestLiveRead = runVercelApi;', {
+    vm.runInNewContext(registrySource + '\nmodule.exports.__selftestLiveRead = runVercelApi; module.exports.__selftestBatch = runVercelProductionBatch; module.exports.__selftestVerify = verifyVercelProductionState;', {
       require: fakeRequire, module: moduleCopy, exports: moduleCopy.exports,
       process, __dirname, __filename: path.join(__dirname, 'project-registry.js'), console, Buffer, URL
     }, { filename: 'selftest-live-vercel-transport.js' });
-    return { read: moduleCopy.exports.__selftestLiveRead, calls };
+    return { read: moduleCopy.exports.__selftestLiveRead, batch: moduleCopy.exports.__selftestBatch, verify: moduleCopy.exports.__selftestVerify, calls };
   }
   const valid = fixture();
   const response = valid.read(repoRoot, endpoint);
@@ -1831,6 +1856,15 @@ function runVercelHttpsTransportSelftest(repoRoot) {
   assert(!JSON.stringify(call.args).includes(fixtureToken));
   assert.strictEqual(call.args.length, 3);
   assert.deepStrictEqual(Array.from(call.opts.stdio), ['pipe', 'pipe', 'pipe']);
+  const batchFixture = fixture();
+  const batchResponse = batchFixture.batch(repoRoot);
+  assert.deepStrictEqual(Object.keys(batchResponse), ['project', 'domain', 'alias', 'deployment']);
+  assert.strictEqual(batchResponse.deployment.parsed.id, SELFTEST_PRODUCTION_DEPLOYMENT_ID);
+  assert.strictEqual(batchFixture.calls.filter(item => item.command === process.execPath).length, 1);
+  assert.deepStrictEqual(JSON.parse(batchFixture.calls.find(item => item.command === process.execPath).opts.input), { token: fixtureToken, mode: 'production' });
+  const verifierFixture = fixture();
+  assert.strictEqual(verifierFixture.verify(repoRoot, fixtureSha).ok, true);
+  assert.strictEqual(verifierFixture.calls.filter(item => item.command === process.execPath).length, 1, 'formal verifier must collect all four reads in one child');
 
   for (const bad of ['https://elsewhere.test/', '//elsewhere.test/', endpoint + '&teamId=other', endpoint.replace('teamId=', 'wrong='), endpoint + '\nheader="injected"', '/v13/deployments/../auth?teamId=' + VERCEL_PRODUCTION_CONTRACT.teamId]) {
     const sample = fixture();
@@ -1847,11 +1881,10 @@ function runVercelHttpsTransportSelftest(repoRoot) {
   for (const result of [
     { status: 1, stderr: fixtureToken, stdout: fixtureToken },
     { status: null, error: new Error(fixtureToken), stderr: fixtureToken },
-    { status: 0, stdout: JSON.stringify({ error: fixtureToken }) + '\n__VERCEL_HTTP_STATUS__302' },
-    { status: 0, stdout: JSON.stringify({ error: fixtureToken }) + '\n__VERCEL_HTTP_STATUS__401' },
-    { status: 0, stdout: fixtureToken + '\n__VERCEL_HTTP_STATUS__200' },
-    { status: 0, stdout: '[]\n__VERCEL_HTTP_STATUS__200' },
-    { status: 0, stdout: '\n__VERCEL_HTTP_STATUS__200' },
+    { status: 0, stdout: JSON.stringify({ error: fixtureToken }) + '\n__VERCEL_HTTP_STATUS__200' },
+    { status: 0, stdout: fixtureToken },
+    { status: 0, stdout: '[]' },
+    { status: 0, stdout: '' },
     { status: 0, stdout: '{}' }
   ]) {
     const sample = fixture({ result });
@@ -1860,55 +1893,122 @@ function runVercelHttpsTransportSelftest(repoRoot) {
     assert(thrown, 'transport/HTTP/JSON failure must fail closed');
     assert(!String(thrown.message).includes(fixtureToken), 'credential/response text must not leak through errors');
   }
+  for (const safe of ['VERCEL_LIVE_READ_NETWORK_PROJECT\n', 'VERCEL_LIVE_READ_HTTP_401_ALIAS\n', 'VERCEL_LIVE_READ_INPUT\n']) {
+    assert.throws(() => fixture({ result: { status: 1, stderr: safe } }).batch(repoRoot), error => {
+      assert(String(error.message).includes(safe.trim().replace('VERCEL_LIVE_READ_', '').replace(/_(PROJECT|DOMAIN|ALIAS|DEPLOYMENT)$/, ':$1')));
+      return true;
+    });
+  }
+  for (const stderr of [
+    `VERCEL_LIVE_READ_NETWORK_PROJECT\n${fixtureToken}`,
+    `before VERCEL_LIVE_READ_NETWORK_PROJECT\n`,
+    `VERCEL_LIVE_READ_NETWORK_${fixtureToken}\n`,
+    'VERCEL_LIVE_READ_HTTP_401_ALIAS\nVERCEL_LIVE_READ_NETWORK_PROJECT\n',
+    'VERCEL_LIVE_READ_NETWORK_PROJECT'
+  ]) {
+    assert.throws(() => fixture({ result: { status: 1, stderr } }).batch(repoRoot), error => {
+      assert(!String(error.message).includes(fixtureToken));
+      assert(!/NETWORK[:_]PROJECT|HTTP_401[:_]ALIAS/.test(error.message), 'only the exact complete allowlisted stderr line may be forwarded');
+      return true;
+    });
+  }
+  for (const change of [
+    value => { value.responses.pop(); },
+    value => { value.responses.push(value.responses[0]); },
+    value => { [value.responses[0], value.responses[1]] = [value.responses[1], value.responses[0]]; },
+    value => { value.responses[3].endpoint = endpoints[3].replace(SELFTEST_PRODUCTION_DEPLOYMENT_ID, 'dpl_OtherDeployment'); },
+    value => { value.responses[0].raw = JSON.stringify({ targets: { production: { id: '../auth' } } }); },
+    value => { value.responses[1].raw = '[]'; },
+    value => { value.responses[2].raw = fixtureToken; },
+    value => { value.responses[3].raw = ''; },
+    ...[0, 1, 2, 3].flatMap(index => [302, 401, 500].map(status => value => { value.responses[index].status = status; }))
+  ]) {
+    const value = envelope([0, 1, 2, 3]); change(value);
+    const sample = fixture({ result: { status: 0, stdout: JSON.stringify(value) } });
+    assert.throws(() => sample.batch(repoRoot), error => !String(error.message).includes(fixtureToken), 'tampered, partial or non-success batch envelope must fail closed');
+  }
 
   // Execute the exact serialized child with built-in transport doubles. This
   // exercises request options, response streaming, deadlines and failure paths;
   // no real credential, endpoint override or network request is involved.
   function childProbe(plan = [{}], inputOverrides = {}) {
     const { EventEmitter } = require('node:events');
-    const requests = [], checks = [], timers = [];
+    const requests = [], checks = [], timers = [], agents = [], events = [];
     let stdout = '', stderr = '', now = 0;
+    const drain = () => { while (events.length) events.shift()(); };
     const childProcess = { exitCode: 0, stdout: { write: text => { stdout += text; } }, stderr: { write: text => { stderr += text; } } };
     const tls = { checkServerIdentity: (host, certificate) => {
       checks.push(host);
       return certificate.reject ? Object.assign(new Error(fixtureToken), { code: 'ERR_TLS_CERT_ALTNAME_INVALID' }) : undefined;
     } };
-    const https = { request: (options, callback) => {
+    const https = { Agent: class {
+      constructor(options) { this.options = options; this.destroyed = false; agents.push(this); }
+      destroy() { this.destroyed = true; }
+    }, request: (options, callback) => {
       const scenario = plan[requests.length] || {};
       const current = new EventEmitter();
-      const entry = { options, current, endArgs: null, response: null };
+      const entry = { options, current, endArgs: null, response: null, socket: null, secureConnectEmitted: false, destroyError: null };
       requests.push(entry);
-      current.destroy = () => { current.destroyed = true; return current; };
+      current.destroy = error => {
+        current.destroyed = true;
+        if (error && !entry.destroyError) {
+          entry.destroyError = error;
+          events.push(() => current.emit('error', error));
+        }
+        return current;
+      };
       current.end = (...args) => {
         entry.endArgs = args;
-        if (scenario.wait) return;
-        if (scenario.now !== undefined) now = scenario.now;
-        if (scenario.error) {
-          current.emit('error', Object.assign(new Error(fixtureToken), { code: scenario.error }));
-          return;
-        }
-        const identityError = options.checkServerIdentity(options.servername, scenario.certificate || {});
-        if (identityError) { current.emit('error', identityError); return; }
-        const incoming = new EventEmitter();
-        entry.response = incoming;
-        incoming.socket = { authorized: scenario.authorized !== false };
-        incoming.statusCode = scenario.status ?? 200;
-        incoming.headers = scenario.headers || {};
-        incoming.complete = scenario.complete !== false;
-        incoming.destroy = () => { incoming.destroyed = true; return incoming; };
-        callback(incoming);
-        if (incoming.destroyed) return;
-        for (const chunk of scenario.chunks || [Buffer.from('{"ok":true}')]) {
-          incoming.emit('data', chunk);
-          if (incoming.destroyed) return;
-        }
-        if (scenario.responseError) incoming.emit('error', new Error(fixtureToken));
-        else if (scenario.aborted) incoming.emit('aborted');
-        else incoming.emit('end');
+        events.push(() => {
+          if (scenario.noSocket) return;
+          const socket = new EventEmitter();
+          entry.socket = socket;
+          socket.encrypted = true;
+          socket.authorized = !(scenario.freshSocket || scenario.connectWait || scenario.certificate);
+          current.emit('socket', socket);
+          if (current.destroyed) return;
+          if (scenario.connectWait || scenario.wait) return;
+          const identityError = options.agent.options.checkServerIdentity(options.servername, scenario.certificate || {});
+          if (identityError) { current.emit('error', identityError); return; }
+          if (!socket.authorized) {
+            socket.authorized = true;
+            entry.secureConnectEmitted = true;
+            socket.emit('secureConnect');
+            if (current.destroyed) return;
+          }
+          // Existing delayed-response scenarios start after a valid connection.
+          // Pending DNS/TCP/TLS time is advanced only through the fake timers.
+          if (scenario.now !== undefined) now = scenario.now;
+          if (scenario.error) {
+            current.emit('error', Object.assign(new Error(fixtureToken), { code: scenario.error }));
+            return;
+          }
+          const incoming = new EventEmitter();
+          entry.response = incoming;
+          incoming.socket = socket;
+          socket.authorized = scenario.authorized !== false;
+          incoming.statusCode = scenario.status ?? 200;
+          incoming.headers = scenario.headers || {};
+          incoming.complete = scenario.complete !== false;
+          incoming.destroy = () => { incoming.destroyed = true; return incoming; };
+          callback(incoming);
+          entry.finishBody = () => {
+            if (incoming.destroyed) return;
+            const body = scenario.body ?? bodies[endpoints.indexOf(options.path)] ?? { ok: true };
+            for (const chunk of scenario.chunks || [Buffer.from(JSON.stringify(body))]) {
+              incoming.emit('data', chunk);
+              if (incoming.destroyed) return;
+            }
+            if (scenario.responseError) incoming.emit('error', new Error(fixtureToken));
+            else if (scenario.aborted) incoming.emit('aborted');
+            else incoming.emit('end');
+          };
+          if (!scenario.bodyWait) entry.finishBody();
+        });
       };
       return current;
     } };
-    const input = JSON.stringify({ endpoint, token: fixtureToken, ...inputOverrides });
+    const input = JSON.stringify({ ...(inputOverrides.mode === 'production' ? {} : { endpoint }), token: fixtureToken, ...inputOverrides });
     const childRequire = name => {
       if (name === 'node:https') return https;
       if (name === 'node:tls') return tls;
@@ -1919,16 +2019,30 @@ function runVercelHttpsTransportSelftest(repoRoot) {
     };
     vm.runInNewContext(call.args[2], {
       require: childRequire, process: childProcess, Buffer, Date: { now: () => now },
-      setTimeout: (callback, delay) => { const timer = { callback, delay, cleared: false }; timers.push(timer); return timer; },
-      clearTimeout: timer => { timer.cleared = true; }
+      setTimeout: (callback, delay) => { const timer = { callback, delay, due: now + delay, cleared: false, fired: false }; timers.push(timer); return timer; },
+      clearTimeout: timer => { if (timer) timer.cleared = true; }
     }, { filename: 'selftest-vercel-https-child.js', timeout: 2000 });
-    return { requests, checks, timers, process: childProcess,
+    drain();
+    return { requests, checks, timers, agents, process: childProcess,
       get stdout() { return stdout; }, get stderr() { return stderr; },
-      tick: time => { now = time; for (const timer of timers) if (!timer.cleared) timer.callback(); }
+      finish: index => { requests[index].finishBody(); drain(); },
+      fire: timer => { timer.callback(); drain(); },
+      tick: time => {
+        while (true) {
+          const next = timers.filter(timer => !timer.cleared && !timer.fired && timer.due <= time).sort((left, right) => left.due - right.due)[0];
+          if (!next) break;
+          now = next.due;
+          next.fired = true;
+          next.callback();
+          drain();
+        }
+        now = time;
+        drain();
+      }
     };
   }
   const child = childProbe();
-  assert.strictEqual(child.stdout, '{"ok":true}\n__VERCEL_HTTP_STATUS__200');
+  assert.deepStrictEqual(JSON.parse(child.stdout), envelope([2]));
   assert.strictEqual(child.stderr, '');
   assert.strictEqual(child.requests.length, 1);
   const options = child.requests[0].options;
@@ -1939,14 +2053,84 @@ function runVercelHttpsTransportSelftest(repoRoot) {
   assert.strictEqual(options.path, endpoint);
   assert.strictEqual(options.method, 'GET');
   assert.strictEqual(options.rejectUnauthorized, true);
-  assert.strictEqual(options.agent, false);
+  assert.strictEqual(options.agent, child.agents[0]);
+  assert.strictEqual(child.agents[0].options.keepAlive, true);
+  assert.strictEqual(child.agents[0].options.maxSockets, 1);
+  assert.strictEqual(child.agents[0].options.maxFreeSockets, 1);
+  assert.strictEqual(child.agents[0].options.servername, 'api.vercel.com');
+  assert.strictEqual(child.agents[0].options.rejectUnauthorized, true);
   assert.strictEqual(options.headers.Authorization, `Bearer ${fixtureToken}`);
   assert.deepStrictEqual(Array.from(child.requests[0].endArgs), [], 'GET must never send a body');
   assert.deepStrictEqual(child.checks, ['api.vercel.com']);
-  assert(options.checkServerIdentity('attacker.test', {}), 'unexpected TLS hostname must be rejected');
-  assert.strictEqual(child.timers.length, 1);
+  assert(options.agent.options.checkServerIdentity('attacker.test', {}), 'unexpected TLS hostname must be rejected');
+  assert.strictEqual(child.agents[0].destroyed, true, 'the shared Agent closes only after the complete result');
+  assert(!child.requests[0].current.destroyed && !child.requests[0].response.destroyed, 'successful end must release the socket naturally for Agent reuse');
+  assert.strictEqual(child.timers.length, 2);
   assert.strictEqual(child.timers[0].delay, 30000);
   assert.strictEqual(child.timers[0].cleared, true);
+  assert.strictEqual(child.timers[1].delay, 10000);
+  assert.strictEqual(child.timers[1].cleared, true, 'an already-authorized reused socket clears the connection timer immediately');
+  assert.strictEqual(child.requests[0].secureConnectEmitted, false, 'a reused authorized socket need not emit secureConnect again');
+  const connectionRetry = childProbe([{ connectWait: true }, {}]);
+  assert.strictEqual(connectionRetry.requests.length, 1);
+  connectionRetry.tick(9999);
+  assert.strictEqual(connectionRetry.requests.length, 1);
+  connectionRetry.tick(10000);
+  assert.strictEqual(connectionRetry.requests.length, 2, 'a 10-second unfinished connection triggers the existing single pre-header retry');
+  assert.strictEqual(connectionRetry.requests[0].destroyError.code, 'ETIMEDOUT');
+  assert.strictEqual(connectionRetry.timers[1].cleared, true, 'the retired attempt timer is cleared before retry');
+  assert.deepStrictEqual(JSON.parse(connectionRetry.stdout), envelope([2]));
+  assert.strictEqual(connectionRetry.timers[0].due, 30000, 'connection retry must not extend the batch deadline');
+  const noSocketRetry = childProbe([{ noSocket: true }, {}]);
+  noSocketRetry.tick(10000);
+  assert.strictEqual(noSocketRetry.requests.length, 2, 'the same 10-second deadline also bounds DNS/TCP before socket assignment');
+  assert.deepStrictEqual(JSON.parse(noSocketRetry.stdout), envelope([2]));
+  const connectionExhausted = childProbe([{ connectWait: true }, { connectWait: true }]);
+  connectionExhausted.tick(10000);
+  assert.strictEqual(connectionExhausted.requests.length, 2);
+  connectionExhausted.fire(connectionExhausted.timers[1]);
+  assert.strictEqual(connectionExhausted.requests.length, 2, 'a retired attempt timer must not act on the next generation');
+  assert.strictEqual(connectionExhausted.requests[1].current.destroyed, undefined);
+  connectionExhausted.tick(20000);
+  assert.strictEqual(connectionExhausted.requests.length, 2, 'connection timeouts share the entire batch retry allowance');
+  assert.strictEqual(connectionExhausted.process.exitCode, 1);
+  assert.strictEqual(connectionExhausted.stdout, '');
+  assert.strictEqual(connectionExhausted.stderr, 'VERCEL_LIVE_READ_NETWORK_ALIAS\n');
+  const reusedWaiting = childProbe([{ wait: true }]);
+  assert.strictEqual(reusedWaiting.timers[1].cleared, true, 'socket authorization clears the connection timer before headers');
+  reusedWaiting.tick(11000);
+  assert.strictEqual(reusedWaiting.process.exitCode, 0);
+  assert.strictEqual(reusedWaiting.requests[0].current.destroyed, undefined);
+  reusedWaiting.tick(30000);
+  assert.strictEqual(reusedWaiting.stderr, 'VERCEL_LIVE_READ_TIMEOUT_ALIAS\n');
+  const slowBody = childProbe([{ freshSocket: true, bodyWait: true }]);
+  assert.strictEqual(slowBody.requests[0].secureConnectEmitted, true);
+  assert.strictEqual(slowBody.timers[1].cleared, true, 'fresh TLS secureConnect clears the handshake timer');
+  slowBody.tick(11000);
+  assert.strictEqual(slowBody.process.exitCode, 0, 'body streaming after a completed handshake retains the 30-second batch budget');
+  assert.strictEqual(slowBody.requests[0].current.destroyed, undefined);
+  slowBody.finish(0);
+  assert.deepStrictEqual(JSON.parse(slowBody.stdout), envelope([2]));
+  const batchChild = childProbe([{}, {}, {}, {}], { mode: 'production' });
+  assert.deepStrictEqual(JSON.parse(batchChild.stdout), envelope([0, 1, 2, 3]));
+  assert.deepStrictEqual(batchChild.requests.map(item => item.options.path), endpoints, 'project/domain/alias must precede the project-derived deployment read');
+  assert.strictEqual(batchChild.agents.length, 1);
+  assert(batchChild.requests.every(item => item.options.agent === batchChild.agents[0]));
+  assert(batchChild.requests.every(item => !item.current.destroyed && !item.response.destroyed));
+  assert.strictEqual(batchChild.agents[0].destroyed, true);
+  assert.strictEqual(batchChild.timers.filter(timer => timer.delay === 30000).length, 1, 'all four requests share one total network deadline');
+  assert.strictEqual(batchChild.timers.length, 5);
+  assert(batchChild.timers.slice(1).every(timer => timer.delay === 10000 && timer.cleared));
+  assert(!batchChild.stdout.includes(fixtureToken) && !batchChild.stderr.includes(fixtureToken));
+  const derivedId = 'dpl_ProjectDerived';
+  const derived = childProbe([{ body: { targets: { production: { id: derivedId } } } }, {}, {}, { body: {} }], { mode: 'production' });
+  assert.strictEqual(derived.requests[3].options.path, `/v13/deployments/${derivedId}?${query}`);
+  const lateLastResponse = childProbe([{}, {}, {}, { now: 30000 }], { mode: 'production' });
+  assert.strictEqual(lateLastResponse.process.exitCode, 1);
+  assert.strictEqual(lateLastResponse.stdout, '', 'a final 200 at the expired batch deadline must not release earlier responses');
+  assert.strictEqual(lateLastResponse.stderr, 'VERCEL_LIVE_READ_TIMEOUT_DEPLOYMENT\n');
+  assert.strictEqual(childProbe([{}], { mode: 'production', endpoint }).requests.length, 0, 'batch input may not smuggle a single endpoint');
+  assert.strictEqual(childProbe([{}], { stage: 'PROJECT' }).requests.length, 0, 'diagnostic stage must be derived from fixed endpoints, never supplied by the caller');
   for (const fixedEndpoint of [
     `/v9/projects/${VERCEL_PRODUCTION_CONTRACT.projectId}?teamId=${VERCEL_PRODUCTION_CONTRACT.teamId}`,
     `/v9/projects/${VERCEL_PRODUCTION_CONTRACT.projectId}/domains/${VERCEL_PRODUCTION_CONTRACT.domain}?teamId=${VERCEL_PRODUCTION_CONTRACT.teamId}`,
@@ -1962,11 +2146,14 @@ function runVercelHttpsTransportSelftest(repoRoot) {
   for (const status of [302, 401, 500]) {
     const probe = childProbe([{ status, headers: { location: 'https://attacker.test/' } }]);
     assert.strictEqual(probe.requests.length, 1, 'HTTP errors and redirects must never retry or follow Location');
-    assert.strictEqual(probe.stdout, `\n__VERCEL_HTTP_STATUS__${status}`);
+    assert.strictEqual(probe.stdout, '');
+    assert.strictEqual(probe.process.exitCode, 1);
+    assert.strictEqual(probe.stderr, `VERCEL_LIVE_READ_HTTP_${status}_ALIAS\n`);
   }
   for (const scenario of [
     { certificate: { reject: true } }, { error: 'CERT_HAS_EXPIRED' }, { error: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' },
     { authorized: false }, { complete: false }, { responseError: true }, { aborted: true },
+    { body: [] }, { chunks: [Buffer.from(fixtureToken)] },
     { headers: { 'content-length': String(25 * 1024 * 1024 + 1) } },
     { chunks: [Buffer.alloc(25 * 1024 * 1024), Buffer.from('x')] }
   ]) {
@@ -1975,24 +2162,151 @@ function runVercelHttpsTransportSelftest(repoRoot) {
     assert.strictEqual(probe.requests.length, 1);
     assert.strictEqual(probe.stdout, '');
     assert(!probe.stderr.includes(fixtureToken), 'child failures must not emit raw error or response contents');
+    assert(/^VERCEL_LIVE_READ_(?:INPUT|TIMEOUT|NETWORK|TLS|SIZE|JSON|DEPLOYMENT|HTTP_[0-9]{3})_ALIAS\n$/.test(probe.stderr), 'only one fixed error category and endpoint-derived stage may be emitted');
     assert.strictEqual(probe.requests[0].current.destroyed, true);
   }
+  for (const failureIndex of [0, 1, 2, 3]) {
+    const plan = [{}, {}, {}, {}]; plan[failureIndex] = { status: 401 };
+    const partial = childProbe(plan, { mode: 'production' });
+    assert.strictEqual(partial.requests.length, failureIndex + 1);
+    assert.strictEqual(partial.stdout, '', 'earlier 200 responses must not produce a partial receipt');
+    assert.strictEqual(partial.process.exitCode, 1);
+    assert.strictEqual(partial.stderr, `VERCEL_LIVE_READ_HTTP_401_${['PROJECT', 'DOMAIN', 'ALIAS', 'DEPLOYMENT'][failureIndex]}\n`);
+  }
+  const oversizedBatch = childProbe(bodies.map(body => ({ body: { ...body, padding: 'x'.repeat(7 * 1024 * 1024) } })), { mode: 'production' });
+  assert.strictEqual(oversizedBatch.process.exitCode, 1, '25 MiB limit applies to the whole batch, not separately to each response');
+  assert.strictEqual(oversizedBatch.stdout, '');
+  assert.strictEqual(oversizedBatch.stderr, 'VERCEL_LIVE_READ_SIZE_DEPLOYMENT\n');
+  const invalidProject = childProbe([{ body: { targets: { production: { id: '../auth' } } } }, {}, {}], { mode: 'production' });
+  assert.strictEqual(invalidProject.process.exitCode, 1);
+  assert.strictEqual(invalidProject.stdout, '');
+  assert(invalidProject.requests.length <= 3, 'invalid project deployment must never become a request path');
   const retried = childProbe([{ error: 'ECONNRESET' }, {}]);
   assert.strictEqual(retried.requests.length, 2);
   assert.strictEqual(retried.process.exitCode, 0);
-  assert.strictEqual(retried.timers.length, 1, 'retry must not create another network deadline');
+  assert.strictEqual(retried.timers.filter(timer => timer.delay === 30000).length, 1, 'retry must not create another total network deadline');
+  assert.strictEqual(retried.timers.length, 3);
+  assert(retried.timers.slice(1).every(timer => timer.cleared));
+  const batchRetry = childProbe([{}, { error: 'ECONNRESET', now: 29000 }, {}, {}, {}], { mode: 'production' });
+  assert.strictEqual(batchRetry.requests.length, 5);
+  assert.strictEqual(batchRetry.process.exitCode, 0);
+  assert.strictEqual(batchRetry.timers.filter(timer => timer.delay === 30000).length, 1);
+  assert.deepStrictEqual(batchRetry.requests.map(item => item.options.path), [endpoints[0], endpoints[1], endpoints[1], endpoints[2], endpoints[3]]);
+  const batchRetryExhausted = childProbe([{ error: 'ECONNRESET' }, {}, { error: 'ECONNRESET' }, {}], { mode: 'production' });
+  assert.strictEqual(batchRetryExhausted.requests.length, 3, 'the batch has at most one retry across all endpoints');
+  assert.strictEqual(batchRetryExhausted.stdout, '');
+  assert.strictEqual(batchRetryExhausted.process.exitCode, 1);
   const exhausted = childProbe([{ error: 'ECONNRESET' }, { error: 'ECONNRESET' }]);
   assert.strictEqual(exhausted.requests.length, 2);
   assert.strictEqual(exhausted.process.exitCode, 1);
   const timeout = childProbe([{ error: 'ECONNRESET', now: 29000 }, { wait: true }]);
   assert.strictEqual(timeout.requests.length, 2);
-  assert.strictEqual(timeout.timers.length, 1);
+  assert.strictEqual(timeout.timers.filter(timer => timer.delay === 30000).length, 1);
   timeout.tick(30000);
   assert.strictEqual(timeout.process.exitCode, 1);
   assert.strictEqual(timeout.stdout, '');
-  assert.strictEqual(timeout.stderr, 'VERCEL_LIVE_READ_TIMEOUT\n');
+  assert.strictEqual(timeout.stderr, 'VERCEL_LIVE_READ_TIMEOUT_ALIAS\n');
   assert(timeout.requests.every(entry => entry.current.destroyed));
   console.log('Vercel official HTTPS live-read transport selftest ok');
+}
+
+function runRemoteSnapshotTransportSelftest(repoRoot) {
+  const vm = require('vm');
+  const registrySource = fs.readFileSync(path.join(__dirname, 'project-registry.js'), 'utf8');
+  const privateText = 'example_git_stderr_must_never_be_reported';
+  const main = 'a'.repeat(40), production = 'b'.repeat(40), attestation = 'c'.repeat(40);
+  const raw = `ref: refs/heads/main\tHEAD\n${main}\tHEAD\n${main}\trefs/heads/main\n${production}\trefs/heads/production\n${attestation}\t${DELIVERY_ATTESTATION_REF}\n`;
+  function fixture(plan) {
+    const calls = [];
+    let now = 0;
+    const fakeProcess = Object.create(process);
+    fakeProcess.env = { ...process.env, GIT_DIR: privateText, GIT_TRACE: privateText, GIT_CONFIG_COUNT: '1' };
+    const fakeRequire = name => {
+      if (name === 'child_process') return { ...require('child_process'), spawnSync: (command, args, opts) => {
+        const scenario = plan[calls.length] || {};
+        calls.push({ command, args, opts });
+        assert.strictEqual(command, 'git');
+        assert.deepStrictEqual(Array.from(args), ['ls-remote', '--symref', 'origin', 'HEAD', 'refs/heads/main', 'refs/heads/production', DELIVERY_ATTESTATION_REF]);
+        assert.strictEqual(opts.cwd, repoRoot);
+        assert(opts.timeout > 0 && opts.timeout <= 15000, 'each read is bounded by 15 seconds and remaining total time');
+        assert.strictEqual(opts.killSignal, 'SIGTERM');
+        assert(!Object.keys(opts.env).some(key => key.startsWith('GIT_')), 'hook-local and debug Git variables must not redirect the read or expose credentials');
+        now = scenario.now ?? now;
+        return { status: 0, stdout: raw, stderr: '', ...scenario.result };
+      } };
+      return require(name);
+    };
+    fakeRequire.main = require.main;
+    const moduleCopy = { exports: {} };
+    class ClockDate extends Date {
+      constructor(...args) { super(...(args.length ? args : [now])); }
+      static now() { return now; }
+    }
+    vm.runInNewContext(registrySource + '\nmodule.exports.__selftestRemote = readRemoteSnapshot;', {
+      require: fakeRequire, module: moduleCopy, exports: moduleCopy.exports, process: fakeProcess,
+      __dirname, __filename: path.join(__dirname, 'project-registry.js'), console, Buffer, URL, Date: ClockDate
+    }, { filename: 'selftest-remote-snapshot-transport.js' });
+    return { snapshot: moduleCopy.exports.__selftestRemote(repoRoot), calls };
+  }
+  const good = fixture([{}]);
+  assert.strictEqual(good.snapshot.available, true);
+  assert.strictEqual(good.snapshot.defaultBranch, 'main');
+  assert.strictEqual(good.snapshot.main, main);
+  assert.strictEqual(good.snapshot.production, production);
+  assert.strictEqual(good.snapshot.attestation, attestation);
+  assert.strictEqual(good.snapshot.diagnostics.category, 'success');
+  assert.strictEqual(good.calls.length, 1);
+  const timeoutResult = { status: null, signal: 'SIGTERM', error: Object.assign(new Error(privateText), { code: 'ETIMEDOUT' }), stderr: privateText };
+  const recovered = fixture([{ now: 15000, result: timeoutResult }, { now: 20000 }]);
+  assert.strictEqual(recovered.snapshot.available, true);
+  assert.strictEqual(recovered.calls.length, 2);
+  assert.strictEqual(recovered.snapshot.diagnostics.attempts[0].category, 'timeout');
+  assert.strictEqual(recovered.snapshot.diagnostics.category, 'success');
+  const networkResult = { status: 128, stderr: `fatal: unable to access '${privateText}': Failed to connect to github.com port 443: Couldn't connect to server` };
+  const networkRecovered = fixture([{ now: 29000, result: networkResult }, { now: 30000 }]);
+  assert.strictEqual(networkRecovered.calls.length, 2);
+  assert.strictEqual(networkRecovered.calls[1].opts.timeout, 1000, 'retry must consume the remaining original 30-second deadline');
+  assert.strictEqual(networkRecovered.snapshot.available, true);
+  const exhausted = fixture([{ now: 15000, result: timeoutResult }, { now: 30000, result: timeoutResult }]);
+  assert.strictEqual(exhausted.calls.length, 2);
+  assert.strictEqual(exhausted.snapshot.available, false);
+  assert.strictEqual(exhausted.snapshot.diagnostics.category, 'timeout');
+  for (const [category, result] of [
+    ['authentication', { status: 128, stdout: raw, stderr: `fatal: Authentication failed for '${privateText}'` }],
+    ['tls', { status: 128, stderr: `SSL certificate problem: ${privateText}` }],
+    ['unavailable', { status: null, error: Object.assign(new Error(privateText), { code: 'ENOENT' }), stderr: privateText }],
+    ['unavailable', { status: 128, stderr: privateText }],
+    ['invalid_response', { status: 0, stdout: '', stderr: privateText }]
+  ]) {
+    const sample = fixture([{ result }]);
+    assert.strictEqual(sample.calls.length, 1, 'non-transient failures must never retry');
+    assert.strictEqual(sample.snapshot.available, false);
+    assert.strictEqual(sample.snapshot.diagnostics.category, category);
+    assert.strictEqual(sample.snapshot.defaultBranch, null);
+    assert.strictEqual(sample.snapshot.main, null);
+    assert.strictEqual(sample.snapshot.production, null);
+    assert.strictEqual(sample.snapshot.attestation, null);
+    assert(!JSON.stringify(sample.snapshot).includes(privateText), 'diagnostics may contain only fixed categories and normalized process metadata');
+  }
+  for (const sample of [good, recovered, networkRecovered, exhausted]) {
+    assert(!JSON.stringify(sample.snapshot).includes(privateText));
+    assert.deepStrictEqual(Object.keys(sample.snapshot.diagnostics).sort(), ['attempts', 'category']);
+    for (const attempt of sample.snapshot.diagnostics.attempts) {
+      assert.deepStrictEqual(Object.keys(attempt).sort(), ['attempt', 'category', 'elapsedMs', 'errorCode', 'signal', 'status']);
+      assert(['success', 'timeout', 'network', 'authentication', 'tls', 'invalid_response', 'unavailable'].includes(attempt.category));
+      assert([null, 'ETIMEDOUT', 'ENOENT', 'EACCES', 'ENOBUFS', 'OTHER'].includes(attempt.errorCode));
+      assert([null, 'SIGTERM', 'SIGKILL', 'SIGABRT', 'OTHER'].includes(attempt.signal));
+      assert(Number.isFinite(attempt.elapsedMs) && attempt.elapsedMs >= 0);
+      assert(attempt.attempt >= 1 && attempt.attempt <= 2);
+    }
+  }
+  const missing = fixture([{ result: { status: 0, stdout: `ref: refs/heads/other\tHEAD\n${main}\trefs/heads/main\n` } }]);
+  assert.strictEqual(missing.snapshot.available, true, 'a completed read must retain missing refs as null for the ordinary gates');
+  assert.strictEqual(missing.snapshot.defaultBranch, 'other');
+  assert.strictEqual(missing.snapshot.main, main);
+  assert.strictEqual(missing.snapshot.production, null);
+  assert.strictEqual(missing.snapshot.attestation, null);
+  console.log('Git read-only remote snapshot transport selftest ok');
 }
 
 function main() {
@@ -2005,10 +2319,16 @@ function main() {
   process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(repoRoot, '.runtime', 'harness');
 
   try {
+    if (process.argv.includes('--remote-snapshot-only')) {
+      runRemoteSnapshotTransportSelftest(repoRoot);
+      return;
+    }
     if (process.argv.includes('--vercel-transport-only')) {
+      runRemoteSnapshotTransportSelftest(repoRoot);
       runVercelHttpsTransportSelftest(repoRoot);
       return;
     }
+    runRemoteSnapshotTransportSelftest(repoRoot);
     runVercelHttpsTransportSelftest(repoRoot);
     if (process.argv.includes('--production-first-only')) {
       runSsoProductionFirstDefectSelftest(repoRoot);
