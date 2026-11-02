@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-02T06:16:13.382Z",
+  "updated_at": "2026-11-02T06:51:43Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -202,7 +202,7 @@
     "name": "纷享 SSO 与联合身份门禁",
     "kind": "product",
     "status": "active",
-    "objective": "真实员工从纷享 OAuth 进入系统，服务端校验一次性 state、企业归属和稳定外部 subject；登录只接受 external_identities 中已建立且与 canonical users.id 一致的稳定映射。provider 返回手机号不得触发静默 JIT 自动绑定或账号接管；未映射时失败关闭，等待受审计的管理员预绑定或后续 step-up 验证。所有主体统一使用 users.id，超级管理员不使用 employee_number 或特殊身份匹配。未映射、停用、冲突或跨企业身份拒绝；本地密码列、RPC、入口和影子管理员后门最终物理删除。零租户系统 bootstrap、创建人 Owner、短信 step-up 与角色授予矩阵另列后续责任包，不在本批夹带。",
+    "objective": "真实员工通过纷享 OAuth 或 IN-20261102-013 批准的受限既有账号过渡入口进入同一系统主体、组织和权限；所有权限、审计和业务关系只引用 canonical users.id。企业 OAuth 校验一次性 state、企业 corpId 和 external_identities 稳定 subject，无映射或冲突时失败关闭，provider 手机号不得触发静默 JIT 绑定。受限账号只验证唯一既有邮箱/手机号候选及现有凭据，要求用户、默认成员、在职与组织均有效、未强制改密且有新鲜组织角色，再复用统一可撤销会话；默认关闭的服务器开关与页面能力发现一致，具备共享限流和失败清理。不恢复注册、改密、密码重置、环境变量 bootstrap 或影子管理员，不创建/绑定/合并账号。密码列与旧 RPC 的物理删除仍是后置安全目标，须明确退出过渡入口、替代登录与恢复证据及独立写入授权满足后执行，本批不做。零租户 bootstrap、创建人 Owner、短信 step-up 与角色授予矩阵仍归后续责任包。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
     "activation_basis": "IN-20261029-004：用户批准 Project Charter，并以 WIP=1 先推进 WP94；保留受审计恢复通道直到 SSO 生产验证通过。",
     "started_at": "2026-10-29T06:14:13.111308+00:00",
@@ -273,6 +273,7 @@
       "product-truth/product-code/lib/tech-architecture/data.ts",
       "product-truth/product-code/lib/validation.ts",
       "product-truth/product-code/middleware.ts",
+      "product-truth/product-code/middleware.test.ts",
       "product-truth/product-code/package.json",
       "product-truth/product-code/pnpm-lock.yaml",
       "product-truth/product-code/scripts",
@@ -281,21 +282,25 @@
     ],
     "reproduction_capsule": "codex-runtime/wp94-sso/reproduction.json",
     "acceptance_checks": [
-      "登录页只在纷享 SSO 已启用时显示可用入口，不显示“联系管理员开通”的死按钮",
+      "登录页诚实显示已配置的纷享入口；只有服务器受限账号开关启用时显示既有账号表单。企业提供方故障不能隐藏已启用的账号能力，不显示死按钮或后门入口",
       "开始授权使用随机一次性 state、HttpOnly cookie、短有效期和固定回调地址",
       "回调校验 state、授权码、企业 corpId 和稳定员工ID后才签发系统会话",
       "未映射、停用、跨组织或跨企业身份返回明确 403，不按姓名合并",
       "稳定员工映射复用现有 organization_sources / external_identities 台账，不建立平行身份真相表",
       "公开 SSO start 不接受浏览器指定的组织 ID，配置组织不唯一时失败关闭",
       "同一外部身份后续登录复用稳定映射；映射冲突阻断登录",
-      "认证层最终只按已建立的 external_identities 稳定映射解析主体；provider 返回手机号不得静默 JIT 绑定；解析成功后权限、审计和业务关系只引用 users.id",
+      "企业 OAuth 只按已建立的 external_identities 稳定映射解析主体；provider 返回手机号不得静默 JIT 绑定。受限既有账号仅验证已有凭据而不写外部映射，两种入口后续权限、审计和业务关系只引用同一 users.id",
       "外部映射以 source_id + external_user_id 为稳定键，同一来源下同一 canonical user 至多一条；姓名永不参与匹配",
-      "users.phone 只用于展示和受审计的后续绑定核验；当前值与历史归属分离，同一企业当前手机号唯一，phone_history 保留有效期",
+      "users.phone 可用于 IN013 受限既有账号凭据查找、展示和受审计的绑定核验；不得作为企业 OAuth 静默绑定依据。当前值与历史归属分离，同一企业当前手机号唯一，phone_history 保留有效期",
       "超级管理员不经过特殊身份匹配路径；解析出 users.id 后只核验其既有系统角色，禁止用 employee_number 或部署配置绕过统一映射链",
       "零租户系统 bootstrap、租户创建者自动超管、Owner 硬保护和角色授予矩阵归 WP82，不得在 WP94 建按租户授予超管的临时入口",
-      "没有稳定映射时登录必须失败关闭；只允许当前组织超级管理员通过受审计预绑定接口显式选择现有成员并写入稳定映射；已有 canonical user 的稳定映射被另一个 provider subject 占用时必须拒绝并转人工，不得按手机号覆盖或重新绑定",
+      "企业 OAuth 没有稳定映射时必须失败关闭；只允许当前组织超级管理员通过受审计预绑定显式选择现有成员。已有 canonical user 被另一 provider subject 占用时拒绝转人工，不按手机号覆盖；受限账号入口不得创建或改变该映射",
       "phone_history 同一企业的同一手机号时间区间必须由 PostgreSQL 排他约束禁止重叠，不能只依赖应用检查或普通触发器",
-      "本地密码列、密码 RPC、登录/注册/改密/重置密码入口在 SSO 生产验证和恢复证据满足后由前进迁移物理删除；代码候选不得保留可用后门"
+      "IN-20261102-013 批准保留受限既有账号过渡入口及已有凭据；注册、改密、重置、bootstrap 和管理员后门继续禁止。密码列与旧 RPC 物理删除保持后置，须过渡退出、替代登录/恢复证据及独立写入授权满足，本批不执行删除",
+      "受限账号只接受唯一既有邮箱或手机号候选；歧义、空凭据、must_change_password、非 active/login_enabled、非唯一默认活动在职成员、组织无效或零有效角色均拒绝，不创建用户/成员/角色",
+      "受限账号以 canonical users.id 共用邮箱/手机限额；共享 login_attempts 先预留后检查账号/IP窗口，读写失败关闭；生产 Origin、JSON、实际字节、密码截断和可信部署 IP 边界明确",
+      "受限账号复用 issueSystemSession；签发前后凭据/成员变更或审计失败不返回 token/cookie并清理新会话；成功仅持久化当前客户端会话并整页进入固定首页",
+      "新增受限账号的真实管理员/普通成员登录及拒绝证据须独立绑定同一候选；现有纷享 SSO verifier 结果不能冒充账号入口验收，也不关闭其他 WP 的全域授权欠账"
     ],
     "delivery_contract": {
       "target_state": "production_released",
@@ -328,22 +333,20 @@
       ],
       "runtime_profile": "application",
       "runtime_contract_version": "f003-fxiaoke-sso-v1",
-      "production_database_mode": "controlled_write_approved",
-      "preview_order_exception_approval_id": "IN-20261102-010",
+      "production_database_mode": "read_only_pending_security_gate_and_final_approval",
       "production_release_authorization": {
-        "status": "approved_for_final_release",
-        "micro_fix_approval_id": "IN-20261029-005",
-        "clarification_id": "IN-20261102-010",
-        "final_release_approval_id": "IN-20261102-010",
-        "micro_fix_scope": "WP94 F003 authoritative-source SSO, one-time OAuth state, audited explicit pre-binding, stable subject resolution and local password entry removal.",
-        "final_scope": "发布WP94候选e5bae49c及不改变产品树的授权记录：推送并集成main/production、部署网站、更新现有纷享固定出口worker共享协议（固定授权码交换、现有orders空数组目录契约和单员工身份状态查询），随后用现有Chrome全新state重放真实SSO；保留IP白名单与企微服务，不执行数据库迁移、账号合并、手机历史、密码删除或顺丰调用。",
+        "status": "pending_security_gate_and_final_write_approval",
+        "micro_fix_approval_id": "IN-20261102-013",
+        "clarification_id": "IN-20261102-013",
+        "micro_fix_scope": "WP94 IN013 受限既有成员账号过渡入口，与纷享 OAuth 共用 canonical users.id、活动成员/新鲜角色及统一可撤销会话；不恢复注册、重置、改密、bootstrap、自动绑定/合并或数据库迁移。",
+        "final_scope": "IN-20261102-013 仅批准受限账号过渡入口的范围内实现；新产品树、依赖锁、默认关闭服务器开关及真实登录复验须绑定本次可审查候选后取得对应发布批准。IN-20261102-010 只覆盖既有 e5 产品树及其治理记录，不授权本次新产品树；本批不迁移数据库、合并账号、迁移手机历史、删除密码或调用顺丰。",
         "database_write_authorized": false
       },
       "final_acceptance": {
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
-        "production_database_mode": "controlled_write_approved"
+        "production_database_mode": "read_only_pending_security_gate_and_final_approval"
       },
-      "note": "Code is green. Production may install only the explicitly authorized non-destructive SSO migrations and deploy the exact attested candidate; real login remains pending until the existing-Chrome operator completes Fxiaoke OAuth. Destructive password and phone-history migrations remain excluded.",
+      "note": "当前目标包含企业 OAuth 与 IN013 受限既有账号过渡入口。既有发布批准不继承到新产品树；新候选发布与开关启用保持 pending。保持精确 SHA/部署/域名、现有 Chrome、企业登录与拒绝路径等原门禁；新增账号能力必须另有同候选真实路径证据，不能用旧 verifier 宣称覆盖。密码/手机历史迁移、账号合并及真实顺丰操作继续排除。",
       "blocking_acceptance_defects": [
         "IN-20261102-003",
         "IN-20261102-007"
@@ -359,8 +362,8 @@
         "objective": "落实唯一业务库红线：生产远端只允许 cyanlog-sales-v3，测试仅允许本地临时存储；拒绝旧隔离 Supabase 项目或任意其他远端库。"
       },
       {
-        "id": "WP94-remove-local-password-backdoor",
-        "objective": "移除环境变量超管 bootstrap 和所有用户本地密码认证路径；代码中不再提供登录、注册、改密、管理员重置密码入口，前进迁移在确认稳定外部映射齐全后删除 password_hash、must_change_password、密码 RPC 和恢复后门。"
+        "id": "WP94-restricted-existing-account-transition",
+        "objective": "依 IN-20261102-013，在统一 UUID、活动默认成员/在职/组织、新鲜角色及统一会话约束下恢复默认关闭的受限既有账号入口；共享限流、凭据竞态和签发失败清理必须验收。注册、重置、改密、bootstrap、影子管理员继续禁止；原密码物理删除目标后置且本批不执行。"
       }
     ]
   },

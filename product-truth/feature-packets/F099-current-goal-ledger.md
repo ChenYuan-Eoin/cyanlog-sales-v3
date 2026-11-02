@@ -2,10 +2,18 @@
 
 **Status**: active_business_delivery_contract
 **Updated**: 2026-11-02
-**Goal Version**: v2026-11-02.1
+**Goal Version**: v2026-11-02.2
 **Authorization**: IN-20261029-004；以 `governance/runtime-state/main-chain-governance-charter.md` 为治理基线。每个新候选的生产发布、数据库迁移、真实资费下单和不可逆写入继续遵守独立授权边界。
 
-## 2026-11-02 队列与真实交付复盘
+## 2026-11-02 发布及登录策略最新进展
+
+Active 仍为 **WP94**，Next 仍为 **WP82**。用户 IN013 已批准恢复受限既有成员账号登录作为过渡，纷享继续作为企业入口；两者使用同一 `users.id`、活动成员、组织、新鲜角色与可撤销会话。注册、改密、重置、bootstrap、影子管理员、自动绑定/合并继续禁止；密码物理删除后置到过渡入口退出且替代登录/恢复证据及独立写入授权满足后，本批不执行。后文早期“仅 SSO/入口最终删除”快照须按这一最新批准解释，当前真相详见 F003。
+
+已批准的固定出口版本 `e59c9b57fcb210a221a40e4abfb2139ce91a6b50` 已同时进入远端 main/production；正式域名指向 READY Production `dpl_Che3JojBLgyASD3A7WS6krFurPV9`，现有云 worker 已同步协议。用户现有 Chrome 在正式域名以新 state 重放后已越过 Provider 参数和授权码交换故障，但在 `employee_profile` 阶段返回 `SSO_IDENTITY_REJECTED / 403`，**未取得成功登录证据，也不能关闭 WP94**。仍须区分员工资料缺少合法数组、零条和多条，不能把通用错误归咎于用户绑定或停用。原两条阻断沿 IN003/IN007 继续追踪；机器部署与既有 Chrome 证据位于 worktree runtime 的 `wp94-queue-review-20261102/production-oauth-replay-e59.json`。
+
+受限入口与无人员数据的 profile 分类诊断构成下一可审候选，当前是实现/验证阶段。服务器开关默认关闭；新产品树、依赖锁、Production 开关启用及实际重放尚未获得对应发布批准，IN010 不跨产品树继承。旧企业 SSO verifier 的 password-login 404 条款与开启过渡入口存在显式合同冲突，不能用它代替新增账号入口验收，也不能因此宣称本批或 WP94 已 production_released。
+
+## 2026-11-02 本轮开始时的队列复盘快照（历史）
 
 本轮沿用唯一 **Active WP94**、**Next WP82**，继续打通真实纷享 SSO。权威执行工作树为 `/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3`；根目录保留的 WP34 是旧快照，不作为当前执行入口，不清理或覆盖其 dirty 状态。
 
@@ -66,7 +74,7 @@ WP94 当前正式交付阶段保持 **`main_integrated`**，另列上述生产�
 | 里程碑 | 批次 | 唯一用户结果 | 准出 |
 |---|---|---|---|
 | M0 | WP95 | 复杂文本正确拆成寄件行，村庄无门牌可提交 | 已完成限定范围生产验收并归档；禁止重复开发 |
-| M1 | WP94 | 管理员和员工通过纷享 OAuth 进入正确系统身份 | 真实管理员/员工登录、跨企业与冲突拒绝、角色正确、密码后门移除 |
+| M1 | WP94 | 管理员和员工通过纷享 OAuth 或已批准受限账号入口进入同一正确系统身份 | 两种入口分别真实复验；企业跨企业与冲突拒绝、角色正确；注册/重置/bootstrap 后门禁止，过渡入口不扩大账号与权限 |
 | M2 | WP82 → WP77 | 新模块默认拒绝，关键切换小于 500ms | 菜单不可见、直链/API/跨租户拒绝；正式站 P50/P95 指标通过 |
 | M3 | WP92 → WP93 | 纷享主来源规则明确且寄件许可统一 | 手工数据不丢失、失败可回滚；撤权下一请求立即拒绝 |
 | M4 | WP80 → WP78 | 顺丰生效主体明确，员工可完成工单生命周期 | 历史连接不漂移；五条折叠、退回原因、重提和取消、A/B 隔离 |

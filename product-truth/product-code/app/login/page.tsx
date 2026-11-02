@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { BrandMark } from '@/components/branding/BrandMark'
 import { useBranding } from '@/components/branding/BrandingProvider'
+import LoginForm from './LoginForm'
 
 type EnterpriseProviderState =
   | { status: 'loading' }
@@ -33,14 +34,20 @@ function initialSsoError() {
 export default function LoginPage() {
   const branding = useBranding()
   const [error] = useState(initialSsoError)
+  const [localAccountEnabled, setLocalAccountEnabled] = useState(false)
   const [enterpriseProvider, setEnterpriseProvider] = useState<EnterpriseProviderState>({ status: 'loading' })
 
   useEffect(() => {
     const controller = new AbortController()
     void fetch('/api/auth/providers', { cache: 'no-store', signal: controller.signal })
       .then(async response => {
-        if (!response.ok) throw new Error('provider discovery failed')
-        const data = await response.json() as { providers?: Array<{ id?: unknown; label?: unknown; startUrl?: unknown }> }
+        const data = await response.json() as { localAccountEnabled?: unknown; providers?: Array<{ id?: unknown; label?: unknown; startUrl?: unknown }> }
+        // Local admission has its own server switch, including when SSO is unavailable.
+        setLocalAccountEnabled(data.localAccountEnabled === true)
+        if (!response.ok) {
+          setEnterpriseProvider({ status: 'unavailable' })
+          return
+        }
         const provider = data.providers?.find(item => item.id === 'fxiaoke')
         if (
           typeof provider?.label !== 'string'
@@ -134,6 +141,12 @@ export default function LoginPage() {
           <p className="subtitle">{branding.loginSubtitle}</p>
 
           <div style={{ marginTop: 32 }}>
+            {localAccountEnabled ? (
+              <div style={{ marginBottom: 24 }}>
+                <LoginForm />
+                <div className="subtitle" style={{ textAlign: 'center', margin: '24px 0 16px' }}>企业登录</div>
+              </div>
+            ) : null}
             {enterpriseProvider.status === 'available' ? (
               <a
                 className="btn btn-primary"

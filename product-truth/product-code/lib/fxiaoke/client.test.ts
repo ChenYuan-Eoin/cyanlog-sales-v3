@@ -98,9 +98,13 @@ describe('Fxiaoke direct directory preview', () => {
   })
   it('fails closed for missing, ambiguous, mismatched or inactive provider profiles', async () => {
     const profile = { _id: 'record1', user_id: 'employee-open-id', name: '测试员工', phone: '13900000000', employee_number: 'E1001', status: '启用', is_pause_login: false, life_status: '正常', is_deleted: false }
-    await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(token, page([])))).rejects.toMatchObject({ code: 'IDENTITY_PROFILE_UNAVAILABLE', status: 403 })
-    await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(token, page([profile, { ...profile, _id: 'record2' }])))).rejects.toMatchObject({ code: 'IDENTITY_PROFILE_UNAVAILABLE', status: 403 })
+    await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(token, page([])))).rejects.toMatchObject({ code: 'IDENTITY_PROFILE_NOT_FOUND', status: 403 })
+    await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(token, page([profile, { ...profile, _id: 'record2' }])))).rejects.toMatchObject({ code: 'IDENTITY_PROFILE_AMBIGUOUS', status: 403 })
     await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(token, page([{ ...profile, user_id: 'other-user' }])))).rejects.toMatchObject({ code: 'IDENTITY_PROFILE_MISMATCH', status: 409 })
     await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(token, page([{ ...profile, is_pause_login: true }])))).rejects.toMatchObject({ code: 'EMPLOYEE_INACTIVE', status: 403 })
+  })
+  it.each([undefined, null, [], {}, { dataList: null }, { dataList: {} }])('rejects an unverifiable profile response using a fixed safe category: %o', async data => {
+    await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(token, { errorCode: 0, data })))
+      .rejects.toMatchObject({ code: 'IDENTITY_PROFILE_RESPONSE_INVALID', status: 403 })
   })
 })

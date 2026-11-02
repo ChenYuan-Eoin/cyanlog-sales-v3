@@ -146,6 +146,23 @@ describe('Fxiaoke OAuth callback', () => {
     })
   })
 
+  it.each(['IDENTITY_PROFILE_RESPONSE_INVALID', 'IDENTITY_PROFILE_NOT_FOUND', 'IDENTITY_PROFILE_AMBIGUOUS'])(
+    'keeps %s as safe server metadata while returning the same public identity rejection', async code => {
+      mocks.profile.mockRejectedValue(new FxiaokeError(code,
+        'secret employee-open-id 13900000000 provider-access-token authorization-code ' + state, 403))
+      const response = await GET(request())
+      expect(response.status).toBe(302)
+      expect(response.headers.get('location')).toBe('https://sales.cyanlog.icu/login?sso_error=SSO_IDENTITY_REJECTED')
+      expect(console.warn).toHaveBeenCalledExactlyOnceWith('fxiaoke_sso_callback_failed', {
+        stage: 'employee_profile', code, status: 403,
+      })
+      expect(mocks.identity).not.toHaveBeenCalled()
+      expect(mocks.issue).not.toHaveBeenCalled()
+      expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toMatch(/secret|employee-open-id|13900000000|provider-access-token|authorization-code/)
+      expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain(state)
+    },
+  )
+
   it('rejects missing state cookies before consuming server state', async () => {
     const response = await GET(new NextRequest(`${redirectUrl}?state=${state}&code=code`))
     expect(response.status).toBe(302)

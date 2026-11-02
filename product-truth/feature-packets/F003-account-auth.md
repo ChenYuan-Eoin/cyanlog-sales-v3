@@ -6,7 +6,7 @@
 - **名称**: Account (认证与权限)
 - **模块**: Account
 - **优先级**: P0
-- **状态**: in_progress（WP94 纷享 SSO 与稳定身份门禁）
+- **状态**: in_progress（WP94 统一身份与受限过渡登录门禁）
 - **来源**: Account.md (已归档)
 
 ---
@@ -18,7 +18,7 @@
 - `users.id` UUID 是唯一主体根；权限、审计和业务关系只引用 UUID
 - 外部身份以 `external_identities` 稳定映射到 UUID；姓名和手机号只做展示与受限检索
 - 纷享为主入口，企微/飞书辅入口统一服从同一主体映射，不建立权限孤岛
-- 不保留本地密码登录、注册、改密或管理员重置密码后门
+- IN-20261102-013 批准受限既有账号密码过渡入口，默认关闭且服从同一 UUID/成员/角色/会话；注册、改密、重置、环境变量 bootstrap 与管理员后门仍禁止。密码物理删除保持后置，本批不做。
 - 部门树来源：纷享为主，飞书等旧来源保留过渡和停同步边界
 - 权限可配置：当前组织根超管维护组织级权限覆盖；`roles.permissions` 保留为全局模板，不能由组织配置直接改写。
 
@@ -28,14 +28,15 @@
 ### 1. 用户认证
 - 纷享 OAuth 授权码登录，服务端校验一次性 state、企业 corpId 和稳定 subject
 - 企微/飞书后续作为辅助 OIDC/授权码入口，不另建权限真相
-- `external_identities → users.id` 是唯一登录解析链路
+- 企业 OAuth 只经 `external_identities → users.id`；受限既有账号只验证现有凭据解析到同一 `users.id`，不写入或绕过外部映射合同。
 - Token 会话使用随机系统 token + PostgreSQL `auth_tokens`，可撤销、可过期
-- 无稳定映射、映射冲突、停用、跨企业或零有效角色时拒绝登录
+- 企业 OAuth 无稳定映射、映射冲突、停用、跨企业或零有效角色时拒绝；受限账号无唯一凭据候选、强制改密、无活动默认在职成员/有效组织或无角色时拒绝。
 
 **登录方式优先级**：
 | 方式 | 优先级 | 说明 |
 |------|--------|------|
-| 纷享 OAuth（PC 扫码/授权码） | P0 | 当前主入口 |
+| 纷享 OAuth（PC 扫码/授权码） | P0 | 企业主入口，真实登录仍待验收 |
+| 受限既有账号密码 | 过渡 | IN-20261102-013 已批准范围内实现；默认关闭，不注册/重置，不创建或合并主体 |
 | 企微 OAuth | P1 | 后续辅助入口，共用主体和权限 |
 | 飞书 OAuth | P1 | 后续辅助入口，共用主体和权限 |
 | 一次性绑定码 | P1 | 仅用于受审计首次绑定，不产生长期密码 |
@@ -145,7 +146,8 @@ CREATE TABLE phone_history (
 | 用户登出 | POST | /api/auth/logout | 需 token |
 | 获取当前用户 | GET | /api/auth/me | 需 token |
 | 成员激活 | POST | /api/auth/invitations/accept | 一次性激活码 |
-| 本地密码入口 | * | /api/auth/login 等 | 已删除，目标 404 |
+| 受限既有账号登录 | POST | /api/auth/login | IN013 过渡入口，服务器开关默认关闭；已有唯一活跃成员/凭据/新鲜角色 |
+| 注册、改密、重置与bootstrap | * | /api/auth/register 等退休入口 | 继续 404，不恢复 |
 
 ### 用户管理接口
 | 接口 | 方法 | 路径 | 权限要求 |
@@ -274,15 +276,15 @@ WP92：切换前展示新增/保留/冲突/停同步清单；旧飞书组织保�
 
 ## 2026-10-29 身份安全与权限拓扑收口（IN-20261029-010/011）
 
-- provider 返回手机号不宣称独立验证，也不允许触发静默 JIT 绑定。无 `external_identities` 稳定映射时，WP94 登录 fail-closed。
+- provider 返回手机号不宣称独立验证，也不允许触发静默 JIT 绑定。无 `external_identities` 稳定映射时，WP94 企业 OAuth 登录 fail-closed。
 - 首次绑定后续采用管理员预绑定或一次性绑定码等强 step-up；短信验证码如需接入，单独评估供应商、费用和隐私，不作为默认依赖。
 - `external_identities` 同时约束稳定 subject 和 canonical `users.id`；已有主体被另一个 subject 占用时拒绝并转人工。
 - `phone_history` 使用 PostgreSQL 排他约束禁止同一组织内手机号时间区间重叠；历史业务只按当时 `user_id` 追溯。
 - 超级管理员与其他成员共用 `external_identities → users.id` 链路，不按 `employee_number`、姓名或手机号做特殊匹配。
-- 本地密码列、密码 RPC、登录/注册/改密/重置密码入口由前进迁移物理删除；删除迁移只有在全部活跃超管已有稳定映射后才能执行。
+- 原本地密码物理删除目标由 IN-20261102-013 延后：保留批准的受限既有账号过渡入口，注册/改密/重置/bootstrap仍退休；退出过渡方案、真实替代登录、恢复证据和独立写入授权满足后才评估前进删除，本批不执行。
 - 零租户系统 bootstrap、企业创建人 Owner、默认 `employee` 角色、平台/租户角色拆分、权限子集委托和拒绝审计归 WP82。
 - 完整目标设计见 `governance/runtime-state/identity-authorization-blueprint.md`；当前 F003 只承载 WP94 可执行合同。
-- 生产只读核验：`cyanlog-sales-v3` 当前有 43 个用户、31 个活跃用户、5 个组织超管、1 条纷享连接，但 `organization_sources=0`、`external_identities=0`，`phone_history` 与 OAuth state 表尚不存在。删除密码迁移当前必须保持阻断。
+- 2026-10-29 生产只读历史快照：`cyanlog-sales-v3` 当时有 43 个用户、31 个活跃用户、5 个组织超管、1 条纷享连接，但 `organization_sources=0`、`external_identities=0`，`phone_history` 与 OAuth state 表尚不存在。删除密码迁移当前必须保持阻断。
 - WP94 增加受审计的超级管理员预绑定：只允许当前组织 SUPER_ADMIN 选择现有活跃成员，输入纷享 `openUserId`；服务端自动读取并校验企业 `corpId`，原子写入 `organization_sources` 与 `external_identities`，记录 `bind_external_identity` 生命周期事件，不按手机号或姓名猜测。
 
 ## 2026-10-30 重复账号统一合并规则（IN-20261030-003/004）
@@ -297,3 +299,22 @@ WP92：切换前展示新增/保留/冲突/停同步清单；旧飞书组织保�
 - 来源用户行、来源组织关系、历史生命周期事件和停用原因永久保留，并记录 `merge_duplicate_identity_primary` 与 `merge_duplicate_identity_source` 审计事件。
 - 当前 `系统超管` 与 `PANG 源` 的真主账号归属，以纷享权威绑定源的显式稳定映射为准；映射确认前不执行合并。E2E 测试管理员不在本规则本次执行范围内。
 - RBAC/权限角色（`roles`、`user_roles`）回答“能否操作平台能力”。未来的“系统角色”若指业务对象“系统”上的责任人/参与者角色，则属于独立业务域对象，必须使用独立实体与授权合同，不得塞进 RBAC `roles.code`、`user_roles` 或权限点；该业务角色模型不在 WP94 实现。
+
+
+## 2026-11-02 受限既有账号过渡入口（IN-20261102-013）
+
+用户明确选择“恢复受限账号登录（推荐）”。当前 Active 仍为 WP94，Next 仍为 WP82；同一登录用户任务内完成入口纠偏，不扩展为注册/找回/重置/账号迁移项目。长期统一主体、企业身份和组织权限方向不变。
+
+- 账号入口只验证唯一既有邮箱或手机号候选及已有有效 bcrypt 凭据；歧义、空 hash、强制改密、非 active/login_enabled 均拒绝。当前 email 只在 org 内唯一且 phone 无唯一索引；不能用 OR/LIMIT 1 猜测命中者，不新增租户选择或自动关联。
+- 要求唯一默认成员关系、成员和在职均 active、组织有效及当前组织有新鲜角色；主体、权限、审计和业务仍使用同一 `users.id`，复用 `issueSystemSession` 和可撤销 `auth_tokens`，不给默认角色或额外寄件权限。
+- 服务器开关默认关闭，提供方读取与账号 API 使用同一开关；纷享配置故障不隐藏已启用的账号能力。表单只展示已有账号登录和原纷享入口，不增加注册、重置、改密或 bootstrap。
+- 共享 `login_attempts` 先持久预留再检查账号/IP窗口，邮箱/手机别名按 UUID 共用限额；存储失败关闭。Origin、JSON、实际 body 字节、密码 UTF-8 截断、可信部署 IP 均有边界；不记录密码/hash。
+- bcrypt 后及会话签发前后重新校验凭据/强制改密与活动成员/组织；变化、成功审计或签发失败时清理新会话，不交付 token/cookie。无跨请求原子事务的路径不得宣称数据库不可达时撤销已获机器证明。
+- 唯一库只读元数据已确认所需 users、user_organizations、login_attempts、auth_tokens 列和索引存在，服务端权限可用；没有读取任何账号或 hash 值，没有调用登录 RPC，没有 DDL。现有 schema 足以实现，本批不新增迁移或恢复已删除凭据。
+- 密码列、旧 RPC 和过渡入口的物理删除保持后置，须退出过渡入口、替代登录/恢复证据和独立写入授权满足；本批不执行删除。注册/改密/重置/bootstrap/影子管理员始终禁止。
+
+本轮现状：旧固定出口发布 `e59c9b57fcb210a221a40e4abfb2139ce91a6b50` 的 Production deployment `dpl_Che3JojBLgyASD3A7WS6krFurPV9` 已 READY，sales 域名精确指向。用户现有 Chrome 到 `employee_profile` 阶段返回 `SSO_IDENTITY_REJECTED` 403；缺数组、零条、多条等具体原因仍待分类，active 来源/映射计数不能证明当前 OAuth 身份就是该映射，不归咎用户。沿 IN007 原胶囊定位，真实 SSO 未通过，不能宣称 `production_released`。证据见 `codex-runtime/wp94-queue-review-20261102/production-oauth-replay-e59.json` 及 `oauth-identity-rejected-dom.txt/.png`。
+
+IN013 是产品方向与范围内实现批准。IN010 的最终发布批准只绑定旧 e5 产品树及其治理记录，不能授权本次受限入口、依赖锁或开关启用的新产品树；新候选发布保持 pending，候选可审查后再绑定相应批准。既有精确 SHA、部署/域名、现有 Chrome 与企业 OAuth/拒绝路径门禁保留；现有纷享 SSO verifier 不自动证明账号入口，账号登录/拒绝及同 UUID/组织/角色还需独立真实证据，不修改旧验证器来假通过。其他 API 的在职/组织停用即时授权收口仍属对应责任 WP。
+
+门禁冲突明确保留：旧纷享 SSO verifier 仍把 `/api/auth/login` 返回 404 作为原密码入口退休断言，与 IN013 启用受限既有账号时该路径可登录的当前合同不一致。本轮不修改该验证器或伪造通过；本候选只承载受限入口与安全诊断的独立验收，不能代表 WP94 最终闭环。密码物理删除和长期门禁须在过渡退出决策后另行对齐。

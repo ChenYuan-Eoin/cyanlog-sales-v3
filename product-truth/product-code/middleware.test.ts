@@ -164,6 +164,17 @@ describe('middleware public API routing', () => {
     expect(adminNeighbor.status).toBe(401)
   })
 
+  it('allows exactly the account admission API while its handler owns the enable switch', async () => {
+    const response = await middleware(makeRequest(
+      'https://sales.cyanlog.icu/api/auth/login', { host: 'sales.cyanlog.icu' },
+    ))
+    const neighbor = await middleware(makeRequest(
+      'https://sales.cyanlog.icu/api/auth/login-extra', { host: 'sales.cyanlog.icu' },
+    ))
+    expect(response.status).toBe(200)
+    expect(neighbor.status).toBe(401)
+  })
+
   it('returns explicit 404s for retired local password entrypoints', async () => {
     const legacyRegister = await middleware(
       makeRequest('https://sales.cyanlog.icu/api/auth', { host: 'sales.cyanlog.icu' }),

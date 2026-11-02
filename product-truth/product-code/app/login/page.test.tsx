@@ -25,7 +25,7 @@ describe('LoginPage enterprise identity', () => {
     vi.unstubAllGlobals()
   })
 
-  it('shows only the configured enterprise login with no local password fallback', async () => {
+  it('keeps account login hidden while the server switch is off', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       providers: [{ id: 'fxiaoke', label: '纷享销客', startUrl: '/api/auth/fxiaoke/start' }],
     }), { status: 200, headers: { 'content-type': 'application/json' } })))
@@ -52,4 +52,26 @@ describe('LoginPage enterprise identity', () => {
     render(<LoginPage />)
     expect(await screen.findByRole('alert')).toHaveTextContent('企业登录状态已失效，请重新发起登录。')
   })
+
+  it('shows a usable account form alongside the existing enterprise link when enabled', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      localAccountEnabled: true,
+      providers: [{ id: 'fxiaoke', label: '纷享销客', startUrl: '/api/auth/fxiaoke/start' }],
+    })))
+    render(<LoginPage />)
+    expect(await screen.findByLabelText('密码')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '使用账号登录' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '使用纷享销客登录' })).toBeInTheDocument()
+  })
+
+  it('keeps enabled account admission available when Fxiaoke discovery returns 503', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      providers: [], localAccountEnabled: true, error: 'private provider diagnostic',
+    }, { status: 503 })))
+    render(<LoginPage />)
+    expect(await screen.findByRole('button', { name: '使用账号登录' })).toBeInTheDocument()
+    expect(screen.queryByText('private provider diagnostic')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /纷享销客登录/ })).not.toBeInTheDocument()
+  })
+
 })

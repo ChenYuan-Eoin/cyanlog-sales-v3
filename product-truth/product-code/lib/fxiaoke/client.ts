@@ -210,17 +210,22 @@ export async function readEmployeeIdentity(
     'x-fs-userid': credentials.apiUserId,
   })
 
-  const page = object(response.data)
-  if (!Array.isArray(page.dataList) || page.dataList.length !== 1) {
+  const page = response.data
+  if (!page || typeof page !== 'object' || Array.isArray(page) || !Array.isArray((page as Row).dataList)) {
     throw new FxiaokeError(
-      'IDENTITY_PROFILE_UNAVAILABLE',
-      page.dataList && Array.isArray(page.dataList) && page.dataList.length === 0
-        ? '未找到当前纷享员工的唯一企业资料，登录已拒绝。'
-        : '当前纷享员工的企业资料不唯一，登录已拒绝。',
+      'IDENTITY_PROFILE_RESPONSE_INVALID',
+      '当前纷享员工资料返回格式无法验证，登录已拒绝。',
       403,
     )
   }
-  const row = object(page.dataList[0])
+  const rows = (page as Row).dataList as unknown[]
+  if (rows.length === 0) {
+    throw new FxiaokeError('IDENTITY_PROFILE_NOT_FOUND', '未找到当前纷享员工的唯一企业资料，登录已拒绝。', 403)
+  }
+  if (rows.length !== 1) {
+    throw new FxiaokeError('IDENTITY_PROFILE_AMBIGUOUS', '当前纷享员工的企业资料不唯一，登录已拒绝。', 403)
+  }
+  const row = object(rows[0])
   if (id(row.user_id) !== externalSubject) {
     throw new FxiaokeError('IDENTITY_PROFILE_MISMATCH', '纷享员工资料与登录身份不一致。', 409)
   }

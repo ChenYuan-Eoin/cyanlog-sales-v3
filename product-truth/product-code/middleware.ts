@@ -40,7 +40,6 @@ const RETIRED_EXACT_PATHS = new Set([
   '/register',
   '/change-password',
   '/api/auth',
-  '/api/auth/login',
   '/api/auth/register',
   '/api/auth/prewarm',
   '/api/auth/change-password',
@@ -54,6 +53,7 @@ const HOST_REDIRECTS: Record<string, { rootPath: string; preservePath: boolean }
 }
 const PUBLIC_API_PATHS = new Set([
   '/api/auth/providers',
+  '/api/auth/login',
   '/api/auth/fxiaoke/start',
   '/api/auth/fxiaoke/callback',
   '/api/auth/invitations/accept',

@@ -9,8 +9,8 @@
 #   - 代码位置由 AI 在开发时回填
 #   - 代码中的 REQ 标记必须与之一致
 
-version: "2026-10-29.1"
-last_updated: "2026-10-29T06:10:00+00:00"
+version: "2026-11-02.1"
+last_updated: "2026-11-02T06:51:43Z"
 
 goal_governance:
   status: active
@@ -30,7 +30,16 @@ goal_governance:
     sequence: [WP91, WP94, WP92, WP93]
     contract: product-truth/feature-packets/F003-account-auth.md
     shared_configuration: "目录读取与员工SSO复用企业应用连接；ea后台获取；目录读取员工ID不代替登录身份。"
-    final_acceptance: "WP94先以真实A/B管理员和员工完成纷享SSO、稳定身份映射、跨企业拒绝及角色正确；随后WP92/93完成组织主来源和寄件许可。仅配置保存不算接通。"
+    final_acceptance: "WP94以真实管理员/普通员工完成纷享SSO、稳定映射/拒绝路径及角色正确，并按IN013独立验收受限既有账号过渡入口；两种入口使用同一users.id/组织/新鲜角色/会话。随后WP92/93完成主来源与寄件许可。仅配置保存或机器部署不算接通。"
+    login_transition:
+      authority: IN-20261102-013
+      implementation_authorized: true
+      new_candidate_release: pending
+      server_switch_default: disabled
+      scope: "仅唯一既有活跃成员及现有凭据；默认活动在职成员、有效组织、新鲜角色及统一会话；共享失败关闭限流与签发清理。"
+      prohibited: [registration, password_reset, password_change, environment_bootstrap, shadow_admin, automatic_identity_binding, account_merge, database_migration]
+      password_physical_removal: "后置；过渡退出、替代登录/恢复证据与独立写入批准满足后执行，本批不做。"
+      release_boundary: "IN010只绑定旧固定出口产品树；不得继承为新增受限入口/依赖锁/开关启用的发布授权。"
   delivery_outcome_contract:
     version: "2026-10-28.2"
     source: IN-20261028-010
@@ -262,7 +271,12 @@ requirements:
     feature_packet: product-truth/feature-packets/F003-account-auth.md
     code_locations:
       - app/api/auth/login/route.ts
-      - app/api/auth/route.ts
+      - app/api/auth/providers/route.ts
+      - app/api/auth/fxiaoke/start/route.ts
+      - app/api/auth/fxiaoke/callback/route.ts
+      - app/login/page.tsx
+      - lib/auth/local-account.ts
+      - lib/auth/session-response.ts
       - lib/auth.ts
       - lib/supabase.ts
       - middleware.ts
@@ -273,9 +287,9 @@ requirements:
       - lib/scoped-access.ts
       - app/api/access/feishu/sync/route.ts
       - app/configs/page.tsx
-    description: 登录认证、角色权限、用户管理（自主可控 + 可配置 RBAC）
+    description: 统一 UUID 的纷享 OAuth 与受限既有账号过渡登录、角色权限和用户管理（自主可控 + 可配置 RBAC）
     audit_supplement:
-      status_caveat: "WP43 正在修复角色权限全量只读；历史认证实现保留，本轮权限修复未声明 Production 发布。既有会话、默认组织、权限解析和错误呈现验收仍保留。"
+      status_caveat: "WP94保持Active、WP82为Next；真实SSO与受限账号均须正式站证据，机器部署不等于登录通过。IN013已批准过渡入口实现，新产品树发布pending；角色权限和全域授权收口仍由各责任WP独立验收。"
       supplemental_requirements:
         - "登录成功用户必须解析到稳定 org context；缺默认组织时要返回可诊断错误或自动修复路径。"
         - "认证、鉴权、组织上下文失败必须有统一错误码，不得被消费页面吞掉。"
