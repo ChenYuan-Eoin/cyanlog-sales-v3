@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), prefetch: vi.fn() }) }))
@@ -60,7 +60,7 @@ describe('LoginPage enterprise identity', () => {
     })))
     render(<LoginPage />)
     expect(await screen.findByLabelText('密码')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '使用账号登录' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '使用纷享销客登录' })).toBeInTheDocument()
   })
 
@@ -69,9 +69,26 @@ describe('LoginPage enterprise identity', () => {
       providers: [], localAccountEnabled: true, error: 'private provider diagnostic',
     }, { status: 503 })))
     render(<LoginPage />)
-    expect(await screen.findByRole('button', { name: '使用账号登录' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '登录' })).toBeInTheDocument()
     expect(screen.queryByText('private provider diagnostic')).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /纷享销客登录/ })).not.toBeInTheDocument()
+  })
+
+  it('dismisses a previous enterprise failure when entering the account form without submitting credentials', async () => {
+    window.history.replaceState({}, '', '/login?sso_error=SSO_IDENTITY_REJECTED')
+    const fetcher = vi.fn(async () => Response.json({
+      localAccountEnabled: true,
+      providers: [{ id: 'fxiaoke', label: '纷享销客', startUrl: '/api/auth/fxiaoke/start' }],
+    }))
+    vi.stubGlobal('fetch', fetcher)
+    render(<LoginPage />)
+    expect(screen.getByRole('alert')).toHaveTextContent('企业登录提示')
+    fireEvent.focus(await screen.findByLabelText('邮箱或手机号'))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(window.location.search).toBe('')
+    expect(fetcher).toHaveBeenCalledOnce()
+    expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '使用纷享销客登录' })).toBeInTheDocument()
   })
 
 })

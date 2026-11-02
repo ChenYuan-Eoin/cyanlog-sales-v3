@@ -11,6 +11,35 @@ function fill() {
 beforeEach(() => complete.mockReset())
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 describe('existing account login form', () => {
+  it('shows inline required feedback and focuses the account without submitting an empty form', () => {
+    const fetcher = vi.fn()
+    vi.stubGlobal('fetch', fetcher)
+    render(<LoginForm />)
+    const form = screen.getByRole('form', { name: '账号登录' })
+    expect(form).toHaveAttribute('novalidate')
+    fireEvent.submit(form)
+    expect(screen.getByLabelText('邮箱或手机号')).toHaveFocus()
+    expect(screen.getByLabelText('邮箱或手机号')).toHaveAccessibleDescription('请输入邮箱或手机号。')
+    expect(screen.getByLabelText('密码')).toHaveAccessibleDescription('请输入密码。')
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(complete).not.toHaveBeenCalled()
+  })
+
+  it('focuses a missing password and clears its field error while editing', () => {
+    const fetcher = vi.fn()
+    vi.stubGlobal('fetch', fetcher)
+    render(<LoginForm />)
+    fireEvent.change(screen.getByLabelText('邮箱或手机号'), { target: { value: 'member@example.test' } })
+    fireEvent.submit(screen.getByRole('form', { name: '账号登录' }))
+    const password = screen.getByLabelText('密码')
+    expect(password).toHaveFocus()
+    expect(password).toHaveAttribute('aria-invalid', 'true')
+    fireEvent.change(password, { target: { value: 'example-password' } })
+    expect(password).not.toHaveAttribute('aria-invalid')
+    expect(screen.queryByText('请输入密码。')).not.toBeInTheDocument()
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
   it('uses the current-password form and completes only a successful server session', async () => {
     const fetcher = vi.fn().mockResolvedValue(Response.json({ token: 'example-local-session' }))
     vi.stubGlobal('fetch', fetcher)

@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-02T07:04:04.202001+00:00",
+  "updated_at": "2026-11-02T07:29:12.408089+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -300,7 +300,9 @@
       "受限账号只接受唯一既有邮箱或手机号候选；歧义、空凭据、must_change_password、非 active/login_enabled、非唯一默认活动在职成员、组织无效或零有效角色均拒绝，不创建用户/成员/角色",
       "受限账号以 canonical users.id 共用邮箱/手机限额；共享 login_attempts 先预留后检查账号/IP窗口，读写失败关闭；生产 Origin、JSON、实际字节、密码截断和可信部署 IP 边界明确",
       "受限账号复用 issueSystemSession；签发前后凭据/成员变更或审计失败不返回 token/cookie并清理新会话；成功仅持久化当前客户端会话并整页进入固定首页",
-      "新增受限账号的真实管理员/普通成员登录及拒绝证据须独立绑定同一候选；现有纷享 SSO verifier 结果不能冒充账号入口验收，也不关闭其他 WP 的全域授权欠账"
+      "新增受限账号的真实管理员/普通成员登录及拒绝证据须独立绑定同一候选；现有纷享 SSO verifier 结果不能冒充账号入口验收，也不关闭其他 WP 的全域授权欠账",
+      "账号与企业SSO同时可用时主次清楚，重复标题/副标题不重复展示；空账号/密码以内联字段提示并正确聚焦，不依赖原生tooltip且不发送空凭据",
+      "账号必填/密码API反馈与前次企业SSO错误有明确归属；UI通过不能代替真实凭据和企业身份验收，第三胶囊只能凭精确候选正式站现有Chrome证据关闭"
     ],
     "delivery_contract": {
       "target_state": "production_released",
@@ -335,13 +337,12 @@
       "runtime_contract_version": "f003-fxiaoke-sso-v1",
       "production_database_mode": "controlled_write_approved",
       "production_release_authorization": {
-        "status": "approved_for_final_release",
+        "status": "pending_security_gate_and_final_write_approval",
         "micro_fix_approval_id": "IN-20261102-013",
-        "clarification_id": "IN-20261102-016",
+        "clarification_id": "IN-20261102-017",
         "micro_fix_scope": "WP94 IN013 受限既有成员账号过渡入口，与纷享 OAuth 共用 canonical users.id、活动成员/新鲜角色及统一可撤销会话；不恢复注册、重置、改密、bootstrap、自动绑定/合并或数据库迁移。",
-        "final_scope": "发布 WP94 精确候选 c04f001859dedbdc4a64ac7b11c64a2cc2eb1fd4 及不改变产品树的后续治理记录：推送并集成 main/production、部署网站，在 Production 将 LOCAL_ACCOUNT_LOGIN_ENABLED 设置为 true，并由用户现有 Chrome 在 sales.cyanlog.icu 验收受限既有账号登录及纷享 OAuth 安全诊断。Preview 保持 not_passed，仅批准本次 Production-first 顺序例外。数据库写入仅限正常登录的 auth_tokens 会话与 login_attempts 尝试日志；不执行迁移、创建/合并/绑定账号、密码重置/删除、手机历史迁移、角色或成员权限修改，不更新 worker、IP 白名单或企微服务，不调用顺丰。",
+        "final_scope": "IN017 批准当前登录四个源码/测试文件内的验收UI反馈修复，复用IN013既有成员账号过渡入口范围。用户已批准的正常auth_tokens/login_attempts会话与日志边界保留，注册/重置/bootstrap、账号/身份/角色修改、迁移、worker/白名单/企微和顺丰仍排除；本记录不扩大数据权限。IN016只绑定其原精确产品树，新UI产品树的最终发布保持pending，须绑定本次可审查候选，不继承旧批准或Preview顺序例外。",
         "database_write_authorized": true,
-        "final_release_approval_id": "IN-20261102-016",
         "production_write_scope": [
           "auth_tokens",
           "login_attempts"
@@ -363,12 +364,12 @@
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
         "production_database_mode": "controlled_write_approved"
       },
-      "note": "IN016 已批准精确受限账号候选的 Production-first 发布、Production 开关启用及现有 Chrome 复验；Preview 仍 not_passed，不把批准当作部署/验收。数据库仅允许正常 auth_tokens/login_attempts 登录写入，所有迁移、账号/身份/角色修改、密码删除、worker/白名单/企微调整及顺丰操作仍排除。旧企业 SSO verifier 不自动证明受限账号；原阻断与最终精确机器/浏览器证据要求保留。",
+      "note": "受限账号入口的UI验收反馈复用既有微修复；保持最多三胶囊及IN003/007独立验收。双入口可见、原生必填提示或旧SSO错误均不能代替真实账号/企业登录结果。已有用户批准的正常会话/尝试日志范围保留，新UI产品树发布及顺序例外须另行精确绑定，批准不等于生产验收。原最终机器/现有Chrome门禁和旧verifier冲突说明保留，不修改验证器假通过。",
       "blocking_acceptance_defects": [
         "IN-20261102-003",
-        "IN-20261102-007"
-      ],
-      "preview_order_exception_approval_id": "IN-20261102-016"
+        "IN-20261102-007",
+        "IN-20261102-017"
+      ]
     },
     "micro_fixes": [
       {
@@ -381,7 +382,7 @@
       },
       {
         "id": "WP94-restricted-existing-account-transition",
-        "objective": "依 IN-20261102-013，在统一 UUID、活动默认成员/在职/组织、新鲜角色及统一会话约束下恢复默认关闭的受限既有账号入口；共享限流、凭据竞态和签发失败清理必须验收。注册、重置、改密、bootstrap、影子管理员继续禁止；原密码物理删除目标后置且本批不执行。"
+        "objective": "依 IN-20261102-013，在统一 UUID、活动默认成员/在职/组织、新鲜角色及统一会话约束下恢复默认关闭的受限既有账号入口；共享限流、凭据竞态和签发失败清理必须验收。注册、重置、改密、bootstrap、影子管理员继续禁止；原密码物理删除目标后置且本批不执行。 当前登录验收UI反馈限定账号主操作、SSO次操作、重复副标题、inline必填与入口错误归属，复用本微修复，不新增业务范围。"
       }
     ]
   },

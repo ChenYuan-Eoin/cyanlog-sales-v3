@@ -19,7 +19,7 @@ const SSO_ERROR_MESSAGES: Record<string, string> = {
   SSO_PROVIDER_DENIED: '纷享登录授权未完成，请重新登录。',
   SSO_PROVIDER_FAILED: '纷享登录服务暂时不可用，请稍后重试。',
   SSO_ENTERPRISE_MISMATCH: '当前纷享员工不属于系统绑定企业，登录已拒绝。',
-  SSO_IDENTITY_REJECTED: '当前员工尚未绑定、已停用或存在身份冲突，请联系管理员。',
+  SSO_IDENTITY_REJECTED: '纷享身份验证未通过，请联系管理员核对企业账号及授权。',
   SSO_SESSION_FAILED: '系统会话创建失败，请稍后重试。',
   SSO_START_FAILED: '企业登录暂时无法启动，请稍后重试。',
   SSO_CALLBACK_FAILED: '企业登录未完成，请重新登录。',
@@ -33,9 +33,17 @@ function initialSsoError() {
 
 export default function LoginPage() {
   const branding = useBranding()
-  const [error] = useState(initialSsoError)
+  const [error, setError] = useState(initialSsoError)
   const [localAccountEnabled, setLocalAccountEnabled] = useState(false)
   const [enterpriseProvider, setEnterpriseProvider] = useState<EnterpriseProviderState>({ status: 'loading' })
+
+  function clearEnterpriseError() {
+    if (!error) return
+    setError('')
+    const url = new URL(window.location.href)
+    url.searchParams.delete('sso_error')
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -138,18 +146,25 @@ export default function LoginPage() {
           <div className="tag">企业工作空间</div>
 
           <h1>{branding.loginTitle}</h1>
-          <p className="subtitle">{branding.loginSubtitle}</p>
+          {branding.loginSubtitle.trim() && branding.loginSubtitle.trim() !== branding.loginTitle.trim()
+            ? <p className="subtitle">{branding.loginSubtitle}</p> : null}
 
           <div style={{ marginTop: 32 }}>
             {localAccountEnabled ? (
-              <div style={{ marginBottom: 24 }}>
-                <LoginForm />
-                <div className="subtitle" style={{ textAlign: 'center', margin: '24px 0 16px' }}>企业登录</div>
+              <div>
+                <LoginForm onInteract={clearEnterpriseError} />
+                {enterpriseProvider.status === 'available' ? (
+                  <div aria-hidden="true" style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '24px 0', color: 'var(--fg-3)', fontSize: 'var(--text-body-sm)' }}>
+                    <span style={{ flex: 1, height: 1, background: 'var(--border-1)' }} />
+                    或
+                    <span style={{ flex: 1, height: 1, background: 'var(--border-1)' }} />
+                  </div>
+                ) : null}
               </div>
             ) : null}
             {enterpriseProvider.status === 'available' ? (
               <a
-                className="btn btn-primary"
+                className={localAccountEnabled ? 'btn btn-secondary' : 'btn btn-primary'}
                 href={enterpriseProvider.startUrl}
                 style={{ display: 'flex', justifyContent: 'center', textDecoration: 'none' }}
               >
@@ -171,6 +186,7 @@ export default function LoginPage() {
                 marginTop: 16,
                 marginBottom: 8,
               }}>
+                <strong style={{ display: 'block', marginBottom: 4 }}>企业登录提示</strong>
                 {error}
               </div>
             )}
