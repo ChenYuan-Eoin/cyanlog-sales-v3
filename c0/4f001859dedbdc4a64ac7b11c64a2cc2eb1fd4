@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "activeId": "WP94",
+  "commit": "c04f001859dedbdc4a64ac7b11c64a2cc2eb1fd4",
+  "evidence": {
+    "code": {
+      "commit": "c04f001859dedbdc4a64ac7b11c64a2cc2eb1fd4",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "full_tests",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh"
+          ],
+          "artifact_path": "check-logs/3e839d8a0d713f5427ae5ce77da3edcd313a2772/check-03-test.log",
+          "sha256": "25937bf46c1fbc00eb620875333ba3a33ed81c40366172cda4a443653cb84549",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "25937bf46c1fbc00eb620875333ba3a33ed81c40366172cda4a443653cb84549"
+        },
+        {
+          "name": "lint",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-02-lint.sh"
+          ],
+          "artifact_path": "check-logs/3e839d8a0d713f5427ae5ce77da3edcd313a2772/check-02-lint.log",
+          "sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c"
+        },
+        {
+          "name": "typecheck",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-01-typecheck.sh"
+          ],
+          "artifact_path": "check-logs/3e839d8a0d713f5427ae5ce77da3edcd313a2772/check-01-typecheck.log",
+          "sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+        },
+        {
+          "name": "target_tests",
+          "command": [
+            "pnpm",
+            "test:run",
+            "lib/auth/local-account.test.ts",
+            "lib/auth/local-account-client.test.ts",
+            "app/api/auth/login/route.test.ts",
+            "app/api/auth/providers/route.test.ts",
+            "app/login/LoginForm.test.tsx",
+            "app/login/page.test.tsx",
+            "middleware.test.ts",
+            "lib/fxiaoke/client.test.ts",
+            "app/api/auth/fxiaoke/callback/route.test.ts"
+          ],
+          "artifact_path": "wp94-queue-review-20261102/restricted-login-final-target.log",
+          "sha256": "e4a0e38e39ac7defee724d72eefb98382edae7d3ca91c6d93be6d46258a861e2",
+          "log_sha256": "e4a0e38e39ac7defee724d72eefb98382edae7d3ca91c6d93be6d46258a861e2",
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "name": "build",
+          "command": [
+            "pnpm",
+            "build"
+          ],
+          "artifact_path": "wp94-queue-review-20261102/restricted-login-final-build.log",
+          "sha256": "14a2d0577e0f27e46711a5047085c9b8aa18fc65ba403d63433527b26b42a05a",
+          "log_sha256": "14a2d0577e0f27e46711a5047085c9b8aa18fc65ba403d63433527b26b42a05a",
+          "exit_code": 0,
+          "timeout": false
+        }
+      ],
+      "summary": "IN013 restricted existing-member account login and safe profile-result diagnostics; exact-tree strict 10/10 and 106 target / 3082 full tests passed.",
+      "boundary": "Local candidate only; no push, no Preview or Production release, server switch default false. Real login and full WP94 acceptance remain unproven.",
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "2128017f4d48b257e5710de32300ece337f91c56d02b81394303ee986b356a17",
+        "entry_sha256": "d36554e558622f421239113b7c7640dc3cf9ad587feb731423e9237e83d01381"
+      }
+    }
+  },
+  "updatedAt": "2026-11-02T07:02:06.439Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-11-02T07:02:06.420Z",
+      "head": "c04f001859dedbdc4a64ac7b11c64a2cc2eb1fd4",
+      "originMain": "e59c9b57fcb210a221a40e4abfb2139ce91a6b50",
+      "remoteMain": "e59c9b57fcb210a221a40e4abfb2139ce91a6b50",
+      "remoteProduction": "e59c9b57fcb210a221a40e4abfb2139ce91a6b50",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "9470f64af45ea213c4516b686e1fd251aa73e9ba",
+      "remoteAttestationRefOid": "9470f64af45ea213c4516b686e1fd251aa73e9ba",
+      "remoteSnapshotCheckedAt": "2026-11-02T07:02:01.146Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "pnpm exec vercel api <project|project-domain|production-deployment endpoint> --raw --non-interactive --no-color"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "a8a49d177880e84c4810338dac59068e983ada71e913317dfe24f033b151ab0b",
+  "sealedAt": "2026-11-02T07:02:06.439Z",
+  "attestationDigest": "a41bf0acc27fe230de9db8615242d2ea785cf80456e760ef454d872fd72034ac"
+}
