@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-03T05:00:21.595489Z",
+  "updated_at": "2026-11-03T05:01:31.520Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -213,38 +213,43 @@
     }
   },
   "active_task": {
-    "id": "WP52",
-    "slug": "shipping-per-order-service-confirmation",
-    "name": "逐票时效核对与确认参数隔离",
+    "id": "WP50",
+    "slug": "unified-organization-connection-config",
+    "name": "统一组织连接配置与生命周期",
     "kind": "product",
     "status": "active",
-    "objective": "操作员在批量确认前分别选择并核对每票服务产品；只改A票不影响B票；批量设置仅在明确应用时更新所选票；每票摘要和冻结后的确认请求使用同一解析结果。无效产品阻止发送，切连接或刷新配置重新核对，保留防重、结果未知查回和已成功票的真实服务展示。不扩展下单后改产品或其他参数逐票化。",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
+    "objective": "管理员在组织来源页通过一张统一连接记录和各提供方的薄适配器完成组织接入配置：飞书与纷享等提供方只差异于凭据 schema、验证和目录协议；连接记录统一保存加密 payload、版本、能力状态、草稿/验证/预览/启用/停用/回滚与审计。保存或验证不得隐式启用、同步、切主来源或复活停用来源；页面仅在当前组织真实存在可执行能力时显示操作。保留 organization_sources 的 source_id、external_identities、历史来源和手工数据；旧飞书环境变量及纷享独立配置表只作为一次性显式迁移输入，不得作为运行时真相，不执行 Production 迁移、目录同步、切源、外部写入或发布。",
+    "feature_id": "F003",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/feature-packets/F054-sf-self-service-order.md",
+      "governance/runtime-state/main-chain-governance-charter.md",
+      "governance/runtime-state/identity-authorization-blueprint.md",
+      "product-truth/feature-packets/F003-account-auth.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "product-truth/product-code/app/shipping/workbench.tsx",
-      "product-truth/product-code/app/shipping/workbench.test.tsx",
-      "product-truth/product-code/app/shipping/workbench-service-selection.test.tsx",
-      "product-truth/product-code/lib/shipping/simulation.ts",
-      "product-truth/product-code/lib/shipping/simulation.test.ts",
+      "product-truth/product-code/lib/organization-sources.ts",
+      "product-truth/product-code/lib/organization-sources.test.ts",
+      "product-truth/product-code/lib/organization-sources-migration.test.ts",
+      "product-truth/product-code/lib/organization-source-identity.ts",
+      "product-truth/product-code/lib/organization-source-identity.test.ts",
+      "product-truth/product-code/lib/organization-connections",
+      "product-truth/product-code/lib/fxiaoke",
+      "product-truth/product-code/lib/schema-check.ts",
+      "product-truth/product-code/app/api/admin/organization-sources",
+      "product-truth/product-code/app/api/access/feishu/sync",
+      "product-truth/product-code/app/configs",
+      "product-truth/product-code/app/admin/org",
+      "product-truth/product-code/supabase/migrations/20261103090000_unified_organization_connections.sql",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-service-selection-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-service-selection-verifier.test.js"
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-connections-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-connections-verifier.test.js"
     ],
-    "feature_id": "F054",
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "code_green",
       "allowed_states": [
         "executing",
-        "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -259,57 +264,32 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "shipping_service_selection",
-        "shipping_access"
+        "role_edit_save",
+        "role_access_enforcement"
       ],
-      "runtime_profile": "shipping_workspace",
-      "runtime_contract_version": "f054-service-selection-v1",
+      "runtime_profile": "application",
+      "runtime_contract_version": "f003-role-permissions-v1",
       "production_database_mode": "read_only",
-      "note": "IN003批准同一产品树代码发布及Production-first顺序，Preview明确未通过；仍须通过精确Git/Vercel/domain与现有Chrome两票最终见证。只读验收，不授权任何业务写入/迁移/真实顺丰或worker/白名单修改。",
-      "blocking_acceptance_defects": [
-        "IN-20261102-032"
-      ],
-      "required_production_runtime_evidence": [
-        "shipping_service_selection",
-        "shipping_access"
-      ],
-      "production_release_authorization": {
-        "status": "approved_code_only",
-        "micro_fix_approval_id": "IN-20261103-001",
-        "clarification_id": "IN-20261103-003",
-        "final_release_approval_id": "IN-20261103-003",
-        "micro_fix_scope": "操作员在批量确认前分别选择并核对每票服务产品；只改A票不影响B票；批量设置仅在明确应用时更新所选票；每票摘要和冻结后的确认请求使用同一解析结果。无效产品阻止发送，切连接或刷新配置重新核对，保留防重、结果未知查回和已成功票的真实服务展示。不扩展下单后改产品或其他参数逐票化。",
-        "final_scope": "发布WP52逐票时效修复的已批准产品树cd15150df7f35ea344798affc8fae7640bc4bb3a，沿用已批准登录UI；允许推送并集成main/production、部署现有网站和必要发布治理记录；本次Preview保持未通过并按已批准Production-first顺序，在现有Chrome正式域名用两张真实待审核票只核对选择/批量应用/恢复，不点击真实下单，不改产品代码，不迁移或写入业务数据，不改worker或白名单。",
-        "database_write_authorized": false,
-        "production_database_write_authorized": false,
-        "carrier_calls_authorized": false,
-        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
-        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
-      },
-      "final_acceptance": {
-        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
-        "production_database_mode": "read_only"
-      },
-      "preview_order_exception_approval_id": "IN-20261103-003"
+      "note": "IN021/025/028统一接入候选准备。本批只形成代码、迁移候选与验证证据，不执行Production迁移、目录同步、主来源切换、凭据搬运、人员或角色写入，也不发布。专用组织连接运行时合同在实现和验证器就位后按实际证据推进。"
     },
     "acceptance_checks": [
-      "旧组件的两票独立选择与payload用例真实失败，保存复现胶囊",
-      "A票特快B票标快；两票逐票摘要/radio/确认URL与serviceId一致",
-      "批量服务先选后明确应用；单票修改只更新自己的ID；重勾/切票不串",
-      "产品失效阻止整批发送；配置刷新/切连接/修订变化不得继续使用旧覆盖",
-      "成功回执后本地和台账服务一致；明确失败与未知结果保持现有防重/查回语义",
-      "目标、受影响回归、typecheck/build和全量严格门禁通过，精确Production与既有Chrome验收仍独立保留"
+      "organization_sources是唯一运行时连接真相；飞书不再读取FEISHU_APP_ID/FEISHU_APP_SECRET，纷享不再读取独立连接表作为双真相",
+      "提供方差异只存在于凭据schema、验证器和目录协议适配器；共享保存、加密、版本、状态、预览、停用和回滚走同一服务",
+      "保存/验证/预览不自动激活、不改主来源、不写组织骨架、不复活disabled来源；失败保留上一生效配置",
+      "迁移保留source_id、external_identities和手工组织数据；旧环境变量/旧表无静默回读，冲突或不可解密配置失败关闭",
+      "组织来源页以真实连接能力显示操作，无环境变量伪状态和无入口的同步按钮；未配置、未启用和停用状态可区分",
+      "目标测试、受影响回归、typecheck/build和全量代码门禁通过；本批不声称目录同步、切源、Production或用户页面已交付"
     ],
-    "micro_fixes": [],
-    "started_at": "2026-11-03T01:39:02.242Z",
-    "activation_basis": "IN-20261103-001",
-    "reason": "按用户批准，先修逐票时效，再回统一接入主链。"
+    "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
+    "started_at": "2026-11-03T05:01:31.520Z",
+    "activation_basis": "IN-20261103-004",
+    "reason": "WP52 production scope closed; activate the bounded predecessor that unifies connection truth before WP92 directory cutover."
   },
   "execution_queue": {
     "active": {
-      "id": "WP52",
-      "slug": "shipping-per-order-service-confirmation",
-      "name": "逐票时效核对与确认参数隔离"
+      "id": "WP50",
+      "slug": "unified-organization-connection-config",
+      "name": "统一组织连接配置与生命周期"
     },
     "next": {
       "id": "WP92",
@@ -1894,6 +1874,17 @@
         "closed_scope": "复杂文本字段拆分、村庄无门牌地址提交与缺项校验；真实顺丰履约移交顺丰履约责任包。",
         "source_record": "IN-20261029-004",
         "completed_at": "2026-10-29T06:14:13.111308+00:00"
+      },
+      {
+        "id": "WP52",
+        "slug": "shipping-per-order-service-confirmation",
+        "name": "逐票时效核对与确认参数隔离",
+        "status": "Production_Released",
+        "production_sha": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+        "deployment_id": "dpl_9vjCEGGoD23kMqLVS3XLYo4mewtG",
+        "source_record": "IN-20261103-005",
+        "closed_scope": "两票逐票服务选择、显式批量应用与只读Production验收；真实批量下单及承运商调用不在授权范围。",
+        "completed_at": "2026-11-03T05:01:31.520Z"
       }
     ],
     "release_blockers": [
@@ -5001,6 +4992,100 @@
         "组织来源页以真实连接能力显示操作，无环境变量伪状态和无入口的同步按钮；未配置、未启用和停用状态可区分",
         "目标测试、受影响回归、typecheck/build和全量代码门禁通过；本批不声称目录同步、切源、Production或用户页面已交付"
       ]
+    },
+    "WP52": {
+      "id": "WP52",
+      "slug": "shipping-per-order-service-confirmation",
+      "name": "逐票时效核对与确认参数隔离",
+      "kind": "product",
+      "status": "completed",
+      "objective": "操作员在批量确认前分别选择并核对每票服务产品；只改A票不影响B票；批量设置仅在明确应用时更新所选票；每票摘要和冻结后的确认请求使用同一解析结果。无效产品阻止发送，切连接或刷新配置重新核对，保留防重、结果未知查回和已成功票的真实服务展示。不扩展下单后改产品或其他参数逐票化。",
+      "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
+      "allowed_paths": [
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "product-truth/feature-packets/F054-sf-self-service-order.md",
+        "product-truth/feature-packets/F099-current-goal-ledger.md",
+        "product-truth/product-code/app/shipping/workbench.tsx",
+        "product-truth/product-code/app/shipping/workbench.test.tsx",
+        "product-truth/product-code/app/shipping/workbench-service-selection.test.tsx",
+        "product-truth/product-code/lib/shipping/simulation.ts",
+        "product-truth/product-code/lib/shipping/simulation.test.ts",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-service-selection-verifier.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-service-selection-verifier.test.js"
+      ],
+      "feature_id": "F054",
+      "delivery_contract": {
+        "target_state": "production_released",
+        "allowed_states": [
+          "executing",
+          "code_green",
+          "clean_preview_green",
+          "integration_ready",
+          "main_integrated",
+          "production_released"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "shipping_service_selection",
+          "shipping_access"
+        ],
+        "runtime_profile": "shipping_workspace",
+        "runtime_contract_version": "f054-service-selection-v1",
+        "production_database_mode": "read_only",
+        "note": "IN003批准同一产品树代码发布及Production-first顺序，Preview明确未通过；仍须通过精确Git/Vercel/domain与现有Chrome两票最终见证。只读验收，不授权任何业务写入/迁移/真实顺丰或worker/白名单修改。",
+        "blocking_acceptance_defects": [
+          "IN-20261102-032"
+        ],
+        "required_production_runtime_evidence": [
+          "shipping_service_selection",
+          "shipping_access"
+        ],
+        "production_release_authorization": {
+          "status": "approved_code_only",
+          "micro_fix_approval_id": "IN-20261103-001",
+          "clarification_id": "IN-20261103-003",
+          "final_release_approval_id": "IN-20261103-003",
+          "micro_fix_scope": "操作员在批量确认前分别选择并核对每票服务产品；只改A票不影响B票；批量设置仅在明确应用时更新所选票；每票摘要和冻结后的确认请求使用同一解析结果。无效产品阻止发送，切连接或刷新配置重新核对，保留防重、结果未知查回和已成功票的真实服务展示。不扩展下单后改产品或其他参数逐票化。",
+          "final_scope": "发布WP52逐票时效修复的已批准产品树cd15150df7f35ea344798affc8fae7640bc4bb3a，沿用已批准登录UI；允许推送并集成main/production、部署现有网站和必要发布治理记录；本次Preview保持未通过并按已批准Production-first顺序，在现有Chrome正式域名用两张真实待审核票只核对选择/批量应用/恢复，不点击真实下单，不改产品代码，不迁移或写入业务数据，不改worker或白名单。",
+          "database_write_authorized": false,
+          "production_database_write_authorized": false,
+          "carrier_calls_authorized": false,
+          "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
+        },
+        "final_acceptance": {
+          "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+          "production_database_mode": "read_only"
+        },
+        "preview_order_exception_approval_id": "IN-20261103-003"
+      },
+      "acceptance_checks": [
+        "旧组件的两票独立选择与payload用例真实失败，保存复现胶囊",
+        "A票特快B票标快；两票逐票摘要/radio/确认URL与serviceId一致",
+        "批量服务先选后明确应用；单票修改只更新自己的ID；重勾/切票不串",
+        "产品失效阻止整批发送；配置刷新/切连接/修订变化不得继续使用旧覆盖",
+        "成功回执后本地和台账服务一致；明确失败与未知结果保持现有防重/查回语义",
+        "目标、受影响回归、typecheck/build和全量严格门禁通过，精确Production与既有Chrome验收仍独立保留"
+      ],
+      "micro_fixes": [],
+      "started_at": "2026-11-03T01:39:02.242Z",
+      "activation_basis": "IN-20261103-001",
+      "reason": "Production code and existing-Chrome two-order service-selection acceptance completed; actual orders and carrier calls were not authorized or performed.",
+      "completed_at": "2026-11-03T05:01:31.520Z"
     }
   },
   "suspended_wp77": {
