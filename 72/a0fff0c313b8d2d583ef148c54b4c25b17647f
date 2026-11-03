@@ -91,10 +91,852 @@
       "summary": "WP52 approved product tree cd15150df7f35ea344798affc8fae7640bc4bb3a:150 target tests;3110 full passed/5 skipped;lint,typecheck,build; strict10/10; 9/9 service-selection and Production-first tests; scheduler and syntax checks green.",
       "artifact_reuse": "Product files are byte-identical to approved candidate 672844bf (product tree cd15150df7f35ea344798affc8fae7640bc4bb3a). Commit 72a0fff0 changes only the user-approved release authorization and scoped evidence gates.",
       "boundary": "User-approved code-only Production-first release. Preview remains not passed under the preserved one-database isolation. No database write or migration, carrier call, worker/IP allowlist change, or password/account mutation."
+    },
+    "production_runtime": {
+      "shipping_service_selection": {
+        "artifact_path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/selection.json",
+        "sha256": "39eab0b50eec651742d851ad98af783c55ca24f418001947bbbad911476469ef",
+        "payload": {
+          "contract_version": "f054-service-selection-v1",
+          "environment": "production",
+          "origin": "https://sales.cyanlog.icu",
+          "commit": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+          "deployment_id": "dpl_9vjCEGGoD23kMqLVS3XLYo4mewtG",
+          "source": "trusted_existing_chrome_operator",
+          "read_only": true,
+          "result": "pass",
+          "source_operator_sha256": "df1c8c477a430088696413671b0bf7622d7a89df562fc5208b6d91811d646b30",
+          "operator_attestation": {
+            "contract_version": "f054-service-selection-v1",
+            "source": "trusted_existing_chrome_operator",
+            "environment": "production",
+            "origin": "https://sales.cyanlog.icu",
+            "url": "https://sales.cyanlog.icu/shipping",
+            "commit": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+            "deployment_id": "dpl_9vjCEGGoD23kMqLVS3XLYo4mewtG",
+            "browser_context": "existing_user_chrome",
+            "existing_tab_id": "1110517622",
+            "new_tabs": 0,
+            "new_browser_contexts": 0,
+            "attestation_type": "trusted_operator_browser",
+            "trust_boundary": "operator_attestation_not_machine_proof",
+            "attestation_method": "codex_chrome_control_existing_session",
+            "attested_by": "CodexRootExistingChrome",
+            "attested_at": "2026-11-03T03:39:58.320Z",
+            "viewport": {
+              "width": 1920,
+              "height": 873
+            },
+            "org_id": "00000001-0000-0000-0000-000000000000",
+            "operator_id": "30000001-0000-0000-0000-000000000000",
+            "actions": [
+              "open_shipping_workspace",
+              "select_two_existing_pending_orders",
+              "change_service_for_order_a",
+              "verify_order_b_unchanged",
+              "choose_batch_service_without_apply",
+              "verify_pending_batch_choice_no_change",
+              "apply_batch_service_to_selected_orders",
+              "restore_original_services_explicitly",
+              "review_per_order_service_summary",
+              "leave_confirmation_unsubmitted"
+            ],
+            "orders": [
+              {
+                "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                "revision": 1,
+                "original_service_id": 2,
+                "original_input_service_id": null,
+                "source": "existing_production_ledger",
+                "demo": false,
+                "status": "awaiting_confirmation"
+              },
+              {
+                "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                "revision": 1,
+                "original_service_id": 2,
+                "original_input_service_id": null,
+                "source": "existing_production_ledger",
+                "demo": false,
+                "status": "awaiting_confirmation"
+              }
+            ],
+            "original_service_basis": "initial_ui_resolution",
+            "observations": [
+              {
+                "action": "open_shipping_workspace",
+                "observed_at": "2026-11-03T03:36:46.216Z",
+                "services": [
+                  {
+                    "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                    "service_id": 2
+                  },
+                  {
+                    "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                    "service_id": 2
+                  }
+                ],
+                "selected_order_ids": [],
+                "batch_service_id": null
+              },
+              {
+                "action": "select_two_existing_pending_orders",
+                "observed_at": "2026-11-03T03:36:47.194Z",
+                "services": [
+                  {
+                    "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                    "service_id": 2
+                  },
+                  {
+                    "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                    "service_id": 2
+                  }
+                ],
+                "selected_order_ids": [
+                  "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "e8359596-24c8-439f-bf61-9a3720910107"
+                ],
+                "batch_service_id": null
+              },
+              {
+                "action": "change_service_for_order_a",
+                "observed_at": "2026-11-03T03:37:02.845Z",
+                "services": [
+                  {
+                    "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                    "service_id": 1
+                  },
+                  {
+                    "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                    "service_id": 2
+                  }
+                ],
+                "selected_order_ids": [
+                  "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "e8359596-24c8-439f-bf61-9a3720910107"
+                ],
+                "batch_service_id": null
+              },
+              {
+                "action": "verify_order_b_unchanged",
+                "observed_at": "2026-11-03T03:37:16.127Z",
+                "services": [
+                  {
+                    "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                    "service_id": 1
+                  },
+                  {
+                    "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                    "service_id": 2
+                  }
+                ],
+                "selected_order_ids": [
+                  "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "e8359596-24c8-439f-bf61-9a3720910107"
+                ],
+                "batch_service_id": null
+              },
+              {
+                "action": "choose_batch_service_without_apply",
+                "observed_at": "2026-11-03T03:38:54.533Z",
+                "services": [
+                  {
+                    "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                    "service_id": 1
+                  },
+                  {
+                    "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                    "service_id": 2
+                  }
+                ],
+                "selected_order_ids": [
+                  "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "e8359596-24c8-439f-bf61-9a3720910107"
+                ],
+                "batch_service_id": 1
+              },
+              {
+                "action": "verify_pending_batch_choice_no_change",
+                "observed_at": "2026-11-03T03:39:10.416Z",
+                "services": [
+                  {
+                    "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                    "service_id": 1
+                  },
+                  {
+                    "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                    "service_id": 2
+                  }
+                ],
+                "selected_order_ids": [
+                  "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "e8359596-24c8-439f-bf61-9a3720910107"
+                ],
+                "batch_service_id": 1
+              },
+              {
+                "action": "apply_batch_service_to_selected_orders",
+                "observed_at": "2026-11-03T03:39:11.099Z",
+                "services": [
+                  {
+                    "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                    "service_id": 1
+                  },
+                  {
+                    "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                    "service_id": 1
+                  }
+                ],
+                "selected_order_ids": [
+                  "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "e8359596-24c8-439f-bf61-9a3720910107"
+                ],
+                "batch_service_id": 1
+              },
+              {
+                "action": "restore_original_services_explicitly",
+                "observed_at": "2026-11-03T03:39:24.915Z",
+                "services": [
+                  {
+                    "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                    "service_id": 2
+                  },
+                  {
+                    "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                    "service_id": 2
+                  }
+                ],
+                "selected_order_ids": [
+                  "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "e8359596-24c8-439f-bf61-9a3720910107"
+                ],
+                "batch_service_id": null
+              },
+              {
+                "action": "review_per_order_service_summary",
+                "observed_at": "2026-11-03T03:39:57.783Z",
+                "services": [
+                  {
+                    "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                    "service_id": 2
+                  },
+                  {
+                    "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                    "service_id": 2
+                  }
+                ],
+                "selected_order_ids": [
+                  "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "e8359596-24c8-439f-bf61-9a3720910107"
+                ],
+                "batch_service_id": null
+              },
+              {
+                "action": "leave_confirmation_unsubmitted",
+                "observed_at": "2026-11-03T03:39:58.320Z",
+                "services": [
+                  {
+                    "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                    "service_id": 2
+                  },
+                  {
+                    "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                    "service_id": 2
+                  }
+                ],
+                "selected_order_ids": [
+                  "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "e8359596-24c8-439f-bf61-9a3720910107"
+                ],
+                "batch_service_id": null
+              }
+            ],
+            "confirmation_clicked": false,
+            "business_write_requests_observed": [],
+            "result": "pass",
+            "attachments": [
+              {
+                "path": "wp52-production-release-20261103/operator/observation-0.json",
+                "sha256": "a0fad34cb6417d0a14625763ee4847b99c7712d32e9cd9dcc33e830f4e6a5289"
+              },
+              {
+                "path": "wp52-production-release-20261103/operator/observation-1.json",
+                "sha256": "9b33f84c0a4aa211a7f31fa802f1af52b444a364e58987db5e32555bd8a34d0e"
+              },
+              {
+                "path": "wp52-production-release-20261103/operator/observation-2.json",
+                "sha256": "308093508eb0b2a9324af5821614896261b47edf50fd8d5d68e21cee81c1659a"
+              },
+              {
+                "path": "wp52-production-release-20261103/operator/observation-3.json",
+                "sha256": "76626534143bdf61ad700875b3bd6d935c183213416741e9c9bd4eb05a549206"
+              },
+              {
+                "path": "wp52-production-release-20261103/operator/observation-4.json",
+                "sha256": "d7f23d6ea51daae52b32c3c75b16e5fa01f3c0a418f542e5b11cd8d2db5911b3"
+              },
+              {
+                "path": "wp52-production-release-20261103/operator/observation-5.json",
+                "sha256": "63b13880c134424d8d2998b9b0441913e61db859cc01318950dcbded8bc33c14"
+              },
+              {
+                "path": "wp52-production-release-20261103/operator/observation-6.json",
+                "sha256": "b4283de850990ba6f8e4f5645112c3abaa77de3897ae69684d11e1bc0a746971"
+              },
+              {
+                "path": "wp52-production-release-20261103/operator/observation-7.json",
+                "sha256": "0fac52fafde288e5a0ef223c52eb3e5703f1a3ec2bfb313924aaa29410c75407"
+              },
+              {
+                "path": "wp52-production-release-20261103/operator/observation-8.json",
+                "sha256": "3a93b82ccf65215f91e0b28278dc77898d9ae7a9a44b50a7df33b92d0db7aa7b"
+              },
+              {
+                "path": "wp52-production-release-20261103/operator/observation-9.json",
+                "sha256": "65be76bd8372d6da40af07b86de169fd520cfc835f024bc7d9aab7c0835f915f"
+              }
+            ],
+            "payload_regression": {
+              "path": "wp52-production-release-20261103/operator/local-payload-regression.json",
+              "sha256": "0c978a37aa3f70d937a825be29a0bd1d068a170b9e90e645063626ab5cd66785"
+            }
+          },
+          "attachments": [
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-0.json",
+              "sha256": "a0fad34cb6417d0a14625763ee4847b99c7712d32e9cd9dcc33e830f4e6a5289"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-1.json",
+              "sha256": "9b33f84c0a4aa211a7f31fa802f1af52b444a364e58987db5e32555bd8a34d0e"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-2.json",
+              "sha256": "308093508eb0b2a9324af5821614896261b47edf50fd8d5d68e21cee81c1659a"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-3.json",
+              "sha256": "76626534143bdf61ad700875b3bd6d935c183213416741e9c9bd4eb05a549206"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-4.json",
+              "sha256": "d7f23d6ea51daae52b32c3c75b16e5fa01f3c0a418f542e5b11cd8d2db5911b3"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-5.json",
+              "sha256": "63b13880c134424d8d2998b9b0441913e61db859cc01318950dcbded8bc33c14"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-6.json",
+              "sha256": "b4283de850990ba6f8e4f5645112c3abaa77de3897ae69684d11e1bc0a746971"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-7.json",
+              "sha256": "0fac52fafde288e5a0ef223c52eb3e5703f1a3ec2bfb313924aaa29410c75407"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-8.json",
+              "sha256": "3a93b82ccf65215f91e0b28278dc77898d9ae7a9a44b50a7df33b92d0db7aa7b"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-9.json",
+              "sha256": "65be76bd8372d6da40af07b86de169fd520cfc835f024bc7d9aab7c0835f915f"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/local-payload-regression.json",
+              "sha256": "0c978a37aa3f70d937a825be29a0bd1d068a170b9e90e645063626ab5cd66785"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/target-tests.log",
+              "sha256": "d2182f612fcf341d3b584bd15903dcf051b5e34e00763d703d571bf4ff6d4fe6"
+            }
+          ],
+          "payload_regression": {
+            "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/local-payload-regression.json",
+            "sha256": "0c978a37aa3f70d937a825be29a0bd1d068a170b9e90e645063626ab5cd66785"
+          },
+          "payload_regression_test_log": {
+            "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/target-tests.log",
+            "sha256": "d2182f612fcf341d3b584bd15903dcf051b5e34e00763d703d571bf4ff6d4fe6"
+          }
+        }
+      },
+      "shipping_access": {
+        "artifact_path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/access.json",
+        "sha256": "192624953b982577ebdabcc2bd51c4caf9209bf44a6455be4a82da6c32d94bd3",
+        "payload": {
+          "contract_version": "f054-service-selection-v1",
+          "environment": "production",
+          "origin": "https://sales.cyanlog.icu",
+          "commit": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+          "deployment_id": "dpl_9vjCEGGoD23kMqLVS3XLYo4mewtG",
+          "source": "live_shipping_service_selection_verifier",
+          "read_only": true,
+          "anonymous_access_denied": true,
+          "result": "pass",
+          "source_operator_sha256": "df1c8c477a430088696413671b0bf7622d7a89df562fc5208b6d91811d646b30",
+          "probes": [
+            {
+              "method": "GET",
+              "path": "/api/shipping/ledger?limit=1",
+              "credentials": "omit",
+              "status": 401,
+              "content_type": "application/json",
+              "error": "Unauthorized",
+              "observed_at": "2026-11-03T03:49:15.834Z",
+              "response_body_sha256": "3be5b8e53fdc8b0a2996590589456db33504977f3d1ce9bb75016c8a707e1a71",
+              "response_artifact": {
+                "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/anonymous-0.json",
+                "sha256": "a03a3745e9c14debbc791b28c9fedbda8de2cbd931a135c2902abdbf5e160833"
+              }
+            },
+            {
+              "method": "GET",
+              "path": "/api/shipping/settings",
+              "credentials": "omit",
+              "status": 401,
+              "content_type": "application/json",
+              "error": "Unauthorized",
+              "observed_at": "2026-11-03T03:49:18.089Z",
+              "response_body_sha256": "3be5b8e53fdc8b0a2996590589456db33504977f3d1ce9bb75016c8a707e1a71",
+              "response_artifact": {
+                "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/anonymous-1.json",
+                "sha256": "93016d57cf6160d2b51e3f6cdf24b88803ac780c8ad8848ce549385ea12a6c90"
+              }
+            }
+          ],
+          "attachments": [
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/anonymous-0.json",
+              "sha256": "a03a3745e9c14debbc791b28c9fedbda8de2cbd931a135c2902abdbf5e160833"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/anonymous-1.json",
+              "sha256": "93016d57cf6160d2b51e3f6cdf24b88803ac780c8ad8848ce549385ea12a6c90"
+            }
+          ]
+        }
+      },
+      "verifier": {
+        "artifact_path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/verifier.json",
+        "sha256": "c850614005614ad227df6f1dc9f2bfd275a512ca54d4236425a80d042f228d05",
+        "payload": {
+          "contract_version": "f054-service-selection-v1",
+          "environment": "production",
+          "origin": "https://sales.cyanlog.icu",
+          "commit": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+          "deployment_id": "dpl_9vjCEGGoD23kMqLVS3XLYo4mewtG",
+          "source": "live_shipping_service_selection_verifier",
+          "read_only": true,
+          "result": "pass",
+          "source_operator_sha256": "df1c8c477a430088696413671b0bf7622d7a89df562fc5208b6d91811d646b30",
+          "observed_at": "2026-11-03T03:49:18.098Z",
+          "source_operator_artifact": {
+            "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/source-operator.json",
+            "sha256": "df1c8c477a430088696413671b0bf7622d7a89df562fc5208b6d91811d646b30"
+          },
+          "probes": [
+            {
+              "method": "GET",
+              "path": "/api/shipping/ledger?limit=1",
+              "credentials": "omit",
+              "status": 401,
+              "content_type": "application/json",
+              "error": "Unauthorized",
+              "observed_at": "2026-11-03T03:49:15.834Z",
+              "response_body_sha256": "3be5b8e53fdc8b0a2996590589456db33504977f3d1ce9bb75016c8a707e1a71",
+              "response_artifact": {
+                "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/anonymous-0.json",
+                "sha256": "a03a3745e9c14debbc791b28c9fedbda8de2cbd931a135c2902abdbf5e160833"
+              }
+            },
+            {
+              "method": "GET",
+              "path": "/api/shipping/settings",
+              "credentials": "omit",
+              "status": 401,
+              "content_type": "application/json",
+              "error": "Unauthorized",
+              "observed_at": "2026-11-03T03:49:18.089Z",
+              "response_body_sha256": "3be5b8e53fdc8b0a2996590589456db33504977f3d1ce9bb75016c8a707e1a71",
+              "response_artifact": {
+                "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/anonymous-1.json",
+                "sha256": "93016d57cf6160d2b51e3f6cdf24b88803ac780c8ad8848ce549385ea12a6c90"
+              }
+            }
+          ],
+          "attachments": [
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/source-operator.json",
+              "sha256": "df1c8c477a430088696413671b0bf7622d7a89df562fc5208b6d91811d646b30"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-0.json",
+              "sha256": "a0fad34cb6417d0a14625763ee4847b99c7712d32e9cd9dcc33e830f4e6a5289"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-1.json",
+              "sha256": "9b33f84c0a4aa211a7f31fa802f1af52b444a364e58987db5e32555bd8a34d0e"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-2.json",
+              "sha256": "308093508eb0b2a9324af5821614896261b47edf50fd8d5d68e21cee81c1659a"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-3.json",
+              "sha256": "76626534143bdf61ad700875b3bd6d935c183213416741e9c9bd4eb05a549206"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-4.json",
+              "sha256": "d7f23d6ea51daae52b32c3c75b16e5fa01f3c0a418f542e5b11cd8d2db5911b3"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-5.json",
+              "sha256": "63b13880c134424d8d2998b9b0441913e61db859cc01318950dcbded8bc33c14"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-6.json",
+              "sha256": "b4283de850990ba6f8e4f5645112c3abaa77de3897ae69684d11e1bc0a746971"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-7.json",
+              "sha256": "0fac52fafde288e5a0ef223c52eb3e5703f1a3ec2bfb313924aaa29410c75407"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-8.json",
+              "sha256": "3a93b82ccf65215f91e0b28278dc77898d9ae7a9a44b50a7df33b92d0db7aa7b"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/observation-9.json",
+              "sha256": "65be76bd8372d6da40af07b86de169fd520cfc835f024bc7d9aab7c0835f915f"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/local-payload-regression.json",
+              "sha256": "0c978a37aa3f70d937a825be29a0bd1d068a170b9e90e645063626ab5cd66785"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/target-tests.log",
+              "sha256": "d2182f612fcf341d3b584bd15903dcf051b5e34e00763d703d571bf4ff6d4fe6"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/anonymous-0.json",
+              "sha256": "a03a3745e9c14debbc791b28c9fedbda8de2cbd931a135c2902abdbf5e160833"
+            },
+            {
+              "path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/anonymous-1.json",
+              "sha256": "93016d57cf6160d2b51e3f6cdf24b88803ac780c8ad8848ce549385ea12a6c90"
+            }
+          ]
+        }
+      }
+    },
+    "production": {
+      "commit": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+      "deployment_id": "dpl_9vjCEGGoD23kMqLVS3XLYo4mewtG",
+      "domain": "sales.cyanlog.icu",
+      "browser_acceptance": {
+        "artifact_path": "production-runtime-verifier/shipping-service-selection-72a0fff0c313-f34sBf/source-operator.json",
+        "sha256": "df1c8c477a430088696413671b0bf7622d7a89df562fc5208b6d91811d646b30",
+        "payload": {
+          "contract_version": "f054-service-selection-v1",
+          "source": "trusted_existing_chrome_operator",
+          "environment": "production",
+          "origin": "https://sales.cyanlog.icu",
+          "url": "https://sales.cyanlog.icu/shipping",
+          "commit": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+          "deployment_id": "dpl_9vjCEGGoD23kMqLVS3XLYo4mewtG",
+          "browser_context": "existing_user_chrome",
+          "existing_tab_id": "1110517622",
+          "new_tabs": 0,
+          "new_browser_contexts": 0,
+          "attestation_type": "trusted_operator_browser",
+          "trust_boundary": "operator_attestation_not_machine_proof",
+          "attestation_method": "codex_chrome_control_existing_session",
+          "attested_by": "CodexRootExistingChrome",
+          "attested_at": "2026-11-03T03:39:58.320Z",
+          "viewport": {
+            "width": 1920,
+            "height": 873
+          },
+          "org_id": "00000001-0000-0000-0000-000000000000",
+          "operator_id": "30000001-0000-0000-0000-000000000000",
+          "actions": [
+            "open_shipping_workspace",
+            "select_two_existing_pending_orders",
+            "change_service_for_order_a",
+            "verify_order_b_unchanged",
+            "choose_batch_service_without_apply",
+            "verify_pending_batch_choice_no_change",
+            "apply_batch_service_to_selected_orders",
+            "restore_original_services_explicitly",
+            "review_per_order_service_summary",
+            "leave_confirmation_unsubmitted"
+          ],
+          "orders": [
+            {
+              "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+              "revision": 1,
+              "original_service_id": 2,
+              "original_input_service_id": null,
+              "source": "existing_production_ledger",
+              "demo": false,
+              "status": "awaiting_confirmation"
+            },
+            {
+              "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+              "revision": 1,
+              "original_service_id": 2,
+              "original_input_service_id": null,
+              "source": "existing_production_ledger",
+              "demo": false,
+              "status": "awaiting_confirmation"
+            }
+          ],
+          "original_service_basis": "initial_ui_resolution",
+          "observations": [
+            {
+              "action": "open_shipping_workspace",
+              "observed_at": "2026-11-03T03:36:46.216Z",
+              "services": [
+                {
+                  "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "service_id": 2
+                },
+                {
+                  "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                  "service_id": 2
+                }
+              ],
+              "selected_order_ids": [],
+              "batch_service_id": null
+            },
+            {
+              "action": "select_two_existing_pending_orders",
+              "observed_at": "2026-11-03T03:36:47.194Z",
+              "services": [
+                {
+                  "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "service_id": 2
+                },
+                {
+                  "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                  "service_id": 2
+                }
+              ],
+              "selected_order_ids": [
+                "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                "e8359596-24c8-439f-bf61-9a3720910107"
+              ],
+              "batch_service_id": null
+            },
+            {
+              "action": "change_service_for_order_a",
+              "observed_at": "2026-11-03T03:37:02.845Z",
+              "services": [
+                {
+                  "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "service_id": 1
+                },
+                {
+                  "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                  "service_id": 2
+                }
+              ],
+              "selected_order_ids": [
+                "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                "e8359596-24c8-439f-bf61-9a3720910107"
+              ],
+              "batch_service_id": null
+            },
+            {
+              "action": "verify_order_b_unchanged",
+              "observed_at": "2026-11-03T03:37:16.127Z",
+              "services": [
+                {
+                  "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "service_id": 1
+                },
+                {
+                  "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                  "service_id": 2
+                }
+              ],
+              "selected_order_ids": [
+                "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                "e8359596-24c8-439f-bf61-9a3720910107"
+              ],
+              "batch_service_id": null
+            },
+            {
+              "action": "choose_batch_service_without_apply",
+              "observed_at": "2026-11-03T03:38:54.533Z",
+              "services": [
+                {
+                  "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "service_id": 1
+                },
+                {
+                  "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                  "service_id": 2
+                }
+              ],
+              "selected_order_ids": [
+                "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                "e8359596-24c8-439f-bf61-9a3720910107"
+              ],
+              "batch_service_id": 1
+            },
+            {
+              "action": "verify_pending_batch_choice_no_change",
+              "observed_at": "2026-11-03T03:39:10.416Z",
+              "services": [
+                {
+                  "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "service_id": 1
+                },
+                {
+                  "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                  "service_id": 2
+                }
+              ],
+              "selected_order_ids": [
+                "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                "e8359596-24c8-439f-bf61-9a3720910107"
+              ],
+              "batch_service_id": 1
+            },
+            {
+              "action": "apply_batch_service_to_selected_orders",
+              "observed_at": "2026-11-03T03:39:11.099Z",
+              "services": [
+                {
+                  "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "service_id": 1
+                },
+                {
+                  "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                  "service_id": 1
+                }
+              ],
+              "selected_order_ids": [
+                "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                "e8359596-24c8-439f-bf61-9a3720910107"
+              ],
+              "batch_service_id": 1
+            },
+            {
+              "action": "restore_original_services_explicitly",
+              "observed_at": "2026-11-03T03:39:24.915Z",
+              "services": [
+                {
+                  "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "service_id": 2
+                },
+                {
+                  "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                  "service_id": 2
+                }
+              ],
+              "selected_order_ids": [
+                "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                "e8359596-24c8-439f-bf61-9a3720910107"
+              ],
+              "batch_service_id": null
+            },
+            {
+              "action": "review_per_order_service_summary",
+              "observed_at": "2026-11-03T03:39:57.783Z",
+              "services": [
+                {
+                  "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "service_id": 2
+                },
+                {
+                  "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                  "service_id": 2
+                }
+              ],
+              "selected_order_ids": [
+                "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                "e8359596-24c8-439f-bf61-9a3720910107"
+              ],
+              "batch_service_id": null
+            },
+            {
+              "action": "leave_confirmation_unsubmitted",
+              "observed_at": "2026-11-03T03:39:58.320Z",
+              "services": [
+                {
+                  "order_id": "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                  "service_id": 2
+                },
+                {
+                  "order_id": "e8359596-24c8-439f-bf61-9a3720910107",
+                  "service_id": 2
+                }
+              ],
+              "selected_order_ids": [
+                "f5c1f0fa-cffd-4058-9a96-c07b0b7c5b8c",
+                "e8359596-24c8-439f-bf61-9a3720910107"
+              ],
+              "batch_service_id": null
+            }
+          ],
+          "confirmation_clicked": false,
+          "business_write_requests_observed": [],
+          "result": "pass",
+          "attachments": [
+            {
+              "path": "wp52-production-release-20261103/operator/observation-0.json",
+              "sha256": "a0fad34cb6417d0a14625763ee4847b99c7712d32e9cd9dcc33e830f4e6a5289"
+            },
+            {
+              "path": "wp52-production-release-20261103/operator/observation-1.json",
+              "sha256": "9b33f84c0a4aa211a7f31fa802f1af52b444a364e58987db5e32555bd8a34d0e"
+            },
+            {
+              "path": "wp52-production-release-20261103/operator/observation-2.json",
+              "sha256": "308093508eb0b2a9324af5821614896261b47edf50fd8d5d68e21cee81c1659a"
+            },
+            {
+              "path": "wp52-production-release-20261103/operator/observation-3.json",
+              "sha256": "76626534143bdf61ad700875b3bd6d935c183213416741e9c9bd4eb05a549206"
+            },
+            {
+              "path": "wp52-production-release-20261103/operator/observation-4.json",
+              "sha256": "d7f23d6ea51daae52b32c3c75b16e5fa01f3c0a418f542e5b11cd8d2db5911b3"
+            },
+            {
+              "path": "wp52-production-release-20261103/operator/observation-5.json",
+              "sha256": "63b13880c134424d8d2998b9b0441913e61db859cc01318950dcbded8bc33c14"
+            },
+            {
+              "path": "wp52-production-release-20261103/operator/observation-6.json",
+              "sha256": "b4283de850990ba6f8e4f5645112c3abaa77de3897ae69684d11e1bc0a746971"
+            },
+            {
+              "path": "wp52-production-release-20261103/operator/observation-7.json",
+              "sha256": "0fac52fafde288e5a0ef223c52eb3e5703f1a3ec2bfb313924aaa29410c75407"
+            },
+            {
+              "path": "wp52-production-release-20261103/operator/observation-8.json",
+              "sha256": "3a93b82ccf65215f91e0b28278dc77898d9ae7a9a44b50a7df33b92d0db7aa7b"
+            },
+            {
+              "path": "wp52-production-release-20261103/operator/observation-9.json",
+              "sha256": "65be76bd8372d6da40af07b86de169fd520cfc835f024bc7d9aab7c0835f915f"
+            }
+          ],
+          "payload_regression": {
+            "path": "wp52-production-release-20261103/operator/local-payload-regression.json",
+            "sha256": "0c978a37aa3f70d937a825be29a0bd1d068a170b9e90e645063626ab5cd66785"
+          }
+        }
+      }
     }
   },
-  "updatedAt": "2026-11-03T03:23:59.022Z",
-  "completionState": "main_integrated",
+  "updatedAt": "2026-11-03T03:58:50.147Z",
+  "completionState": "production_released",
   "releaseControl": {
     "production_branch": "production",
     "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
@@ -130,7 +972,16 @@
     "production_deployment_id_before": "dpl_E9Ym5RiYQijdBoeiEN99us1j4886",
     "production_commit_after": "9f375839b9c64c48302e2d88e8d51536c900864f",
     "production_deployment_id_after": "dpl_E9Ym5RiYQijdBoeiEN99us1j4886",
-    "main_integrated_observed_at": "2026-11-03T03:20:29.398Z"
+    "main_integrated_observed_at": "2026-11-03T03:20:29.398Z",
+    "production_commit_released": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+    "production_deployment_id_released": "dpl_9vjCEGGoD23kMqLVS3XLYo4mewtG",
+    "production_domain_released": "sales.cyanlog.icu",
+    "production_release_approval_id": "IN-20261103-003",
+    "production_release_clarification_id": "IN-20261103-003",
+    "production_release_scope": "发布WP52逐票时效修复的已批准产品树cd15150df7f35ea344798affc8fae7640bc4bb3a，沿用已批准登录UI；允许推送并集成main/production、部署现有网站和必要发布治理记录；本次Preview保持未通过并按已批准Production-first顺序，在现有Chrome正式域名用两张真实待审核票只核对选择/批量应用/恢复，不点击真实下单，不改产品代码，不迁移或写入业务数据，不改worker或白名单。",
+    "production_release_commit_authorized": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+    "production_release_method": "vercel_git_production_branch",
+    "production_released_at": "2026-11-03T03:31:27.493Z"
   },
   "gateSnapshots": {
     "integration_ready": {
@@ -322,9 +1173,149 @@
         "worktree": "git status --porcelain=v1 --untracked-files=all",
         "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
       }
+    },
+    "production_released": {
+      "stage": "production_released",
+      "checkedAt": "2026-11-03T03:58:50.129Z",
+      "head": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+      "originMain": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+      "remoteMain": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+      "remoteProduction": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": true,
+      "localAttestationRefOid": "d647e97a9f2342d65cf22cbebbc6e1b29fa8e426",
+      "remoteAttestationRefOid": "d647e97a9f2342d65cf22cbebbc6e1b29fa8e426",
+      "remoteSnapshotCheckedAt": "2026-11-03T03:31:27.493Z",
+      "vercelProduction": {
+        "version": 1,
+        "source": "live-vercel-api",
+        "checkedAt": "2026-11-03T03:58:44.491Z",
+        "contract": {
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "projectName": "cyanlog-sales-v3",
+          "rootDirectory": "product-truth/product-code",
+          "domain": "sales.cyanlog.icu",
+          "productionBranch": "production"
+        },
+        "endpoints": {
+          "project": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "domain": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF/domains/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "alias": "/v4/aliases/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "deployment": "/v13/deployments/dpl_9vjCEGGoD23kMqLVS3XLYo4mewtG?teamId=team_xayPRcgRTNOgdPdNf7bOV017"
+        },
+        "project": {
+          "id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "name": "cyanlog-sales-v3",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "rootDirectory": "product-truth/product-code",
+          "productionBranch": "production",
+          "productionDeploymentId": "dpl_9vjCEGGoD23kMqLVS3XLYo4mewtG"
+        },
+        "domain": {
+          "name": "sales.cyanlog.icu",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "verified": true
+        },
+        "alias": {
+          "name": "sales.cyanlog.icu",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "deploymentId": "dpl_9vjCEGGoD23kMqLVS3XLYo4mewtG",
+          "deploymentReferenceId": "dpl_9vjCEGGoD23kMqLVS3XLYo4mewtG",
+          "redirect": null,
+          "deletedAt": null
+        },
+        "deployment": {
+          "id": "dpl_9vjCEGGoD23kMqLVS3XLYo4mewtG",
+          "name": "cyanlog-sales-v3",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "target": "production",
+          "readyState": "READY",
+          "readySubstate": "PROMOTED",
+          "status": "READY",
+          "gitCommitSha": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+          "gitCommitSources": [
+            "gitSource.sha",
+            "meta.githubCommitSha"
+          ]
+        },
+        "remoteProduction": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+        "raw": {
+          "project": {
+            "artifact_path": "vercel-production-verifier/production_released/2026-11-03T03-58-44-491Z-9692-project.json",
+            "sha256": "f968cb6211b3e034db1aa54b0f78eb91ffb98ec74bedcea65f6a92f19014ca3e"
+          },
+          "domain": {
+            "artifact_path": "vercel-production-verifier/production_released/2026-11-03T03-58-44-491Z-9692-domain.json",
+            "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+          },
+          "alias": {
+            "artifact_path": "vercel-production-verifier/production_released/2026-11-03T03-58-44-491Z-9692-alias.json",
+            "sha256": "af416a5be1831bd7ddcb46ff0afe6c3332ac5669a9e101d16b7927fb3f30ac4a"
+          },
+          "deployment": {
+            "artifact_path": "vercel-production-verifier/production_released/2026-11-03T03-58-44-491Z-9692-deployment.json",
+            "sha256": "a9c34be68a947064494a36539fb4a83630d0dcb97a0cc05f07d27e865de78eb0"
+          }
+        }
+      },
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+      }
     }
   },
-  "previousAttestationDigest": "dd94add0a57a4a2090071b908a224bfc5a59434bd4d5a631d05503471ef9e099",
+  "defects": {
+    "IN-20261102-032": {
+      "verified": true,
+      "root_cause": "批量选择状态由单一全局 serviceId 驱动，各工单缺少独立草稿；确认摘要和冻结请求复用该全局值，导致未操作的 B 票继承 A 票产品。修复改为逐票解析、批量选择仅显式应用、显式恢复原产品，并用目标回归绑定请求 payload 与服务端回读。",
+      "reproduction": {
+        "artifact_path": "wp52-per-order-service-20261103/production-reproduction-20261103.json",
+        "sha256": "d5f345ffebf9979436464e8bdff8f84e8ae0aac25c49568063375748da69437a",
+        "payload": {
+          "at": "2026-11-03T01:45:33.019Z",
+          "url": "https://sales.cyanlog.icu/shipping",
+          "orders": [
+            "SO-20261103-57C7EDCB",
+            "SO-20261103-E7E5A47E"
+          ],
+          "beforeB": [
+            {
+              "checked": "false",
+              "text": "顺丰标快标准"
+            },
+            {
+              "checked": "false",
+              "text": "顺丰特快加急"
+            }
+          ],
+          "operation": "select express only in A then expand untouched B",
+          "afterB": [
+            {
+              "checked": "false",
+              "text": "顺丰标快标准"
+            },
+            {
+              "checked": "true",
+              "text": "顺丰特快加急"
+            }
+          ],
+          "confirmClicked": false,
+          "providerCalls": 0,
+          "newTabs": 0
+        }
+      },
+      "production_verified": true,
+      "production_regression_artifact_sha256": "df1c8c477a430088696413671b0bf7622d7a89df562fc5208b6d91811d646b30",
+      "production_commit": "72a0fff0c313b8d2d583ef148c54b4c25b17647f"
+    }
+  },
+  "previousAttestationDigest": "3010acec9a8176c269f1a14f4b6950c2e26d3ad9a2f2c3aa86386d2f3d6d4e49",
   "previousAttestation": {
     "version": 1,
     "activeId": "WP52",
@@ -420,8 +1411,8 @@
         "boundary": "User-approved code-only Production-first release. Preview remains not passed under the preserved one-database isolation. No database write or migration, carrier call, worker/IP allowlist change, or password/account mutation."
       }
     },
-    "updatedAt": "2026-11-03T03:13:20.791Z",
-    "completionState": "integration_ready",
+    "updatedAt": "2026-11-03T03:23:59.022Z",
+    "completionState": "main_integrated",
     "releaseControl": {
       "production_branch": "production",
       "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
@@ -454,7 +1445,10 @@
         }
       },
       "production_commit_before": "9f375839b9c64c48302e2d88e8d51536c900864f",
-      "production_deployment_id_before": "dpl_E9Ym5RiYQijdBoeiEN99us1j4886"
+      "production_deployment_id_before": "dpl_E9Ym5RiYQijdBoeiEN99us1j4886",
+      "production_commit_after": "9f375839b9c64c48302e2d88e8d51536c900864f",
+      "production_deployment_id_after": "dpl_E9Ym5RiYQijdBoeiEN99us1j4886",
+      "main_integrated_observed_at": "2026-11-03T03:20:29.398Z"
     },
     "gateSnapshots": {
       "integration_ready": {
@@ -551,17 +1545,346 @@
           "worktree": "git status --porcelain=v1 --untracked-files=all",
           "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
         }
+      },
+      "main_integrated": {
+        "stage": "main_integrated",
+        "checkedAt": "2026-11-03T03:23:58.991Z",
+        "head": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+        "originMain": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+        "remoteMain": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+        "remoteProduction": "9f375839b9c64c48302e2d88e8d51536c900864f",
+        "defaultBranch": "main",
+        "originMainFresh": true,
+        "originMainIsAncestor": true,
+        "mainIntegrated": true,
+        "localAttestationRefOid": "391576a6ea8a61a6bcc549e5b9cb50e99c5632a5",
+        "remoteAttestationRefOid": "391576a6ea8a61a6bcc549e5b9cb50e99c5632a5",
+        "remoteSnapshotCheckedAt": "2026-11-03T03:23:49.698Z",
+        "vercelProduction": {
+          "version": 1,
+          "source": "live-vercel-api",
+          "checkedAt": "2026-11-03T03:23:50.184Z",
+          "contract": {
+            "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+            "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+            "projectName": "cyanlog-sales-v3",
+            "rootDirectory": "product-truth/product-code",
+            "domain": "sales.cyanlog.icu",
+            "productionBranch": "production"
+          },
+          "endpoints": {
+            "project": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+            "domain": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF/domains/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+            "alias": "/v4/aliases/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+            "deployment": "/v13/deployments/dpl_E9Ym5RiYQijdBoeiEN99us1j4886?teamId=team_xayPRcgRTNOgdPdNf7bOV017"
+          },
+          "project": {
+            "id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+            "name": "cyanlog-sales-v3",
+            "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+            "rootDirectory": "product-truth/product-code",
+            "productionBranch": "production",
+            "productionDeploymentId": "dpl_E9Ym5RiYQijdBoeiEN99us1j4886"
+          },
+          "domain": {
+            "name": "sales.cyanlog.icu",
+            "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+            "verified": true
+          },
+          "alias": {
+            "name": "sales.cyanlog.icu",
+            "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+            "deploymentId": "dpl_E9Ym5RiYQijdBoeiEN99us1j4886",
+            "deploymentReferenceId": "dpl_E9Ym5RiYQijdBoeiEN99us1j4886",
+            "redirect": null,
+            "deletedAt": null
+          },
+          "deployment": {
+            "id": "dpl_E9Ym5RiYQijdBoeiEN99us1j4886",
+            "name": "cyanlog-sales-v3",
+            "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+            "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+            "target": "production",
+            "readyState": "READY",
+            "readySubstate": "PROMOTED",
+            "status": "READY",
+            "gitCommitSha": "9f375839b9c64c48302e2d88e8d51536c900864f",
+            "gitCommitSources": [
+              "gitSource.sha",
+              "meta.githubCommitSha"
+            ]
+          },
+          "remoteProduction": "9f375839b9c64c48302e2d88e8d51536c900864f",
+          "raw": {
+            "project": {
+              "artifact_path": "vercel-production-verifier/main_integrated/2026-11-03T03-23-50-184Z-94996-project.json",
+              "sha256": "833f08efa2670a5bf0abf2fa10fc9a141a11e149a1c899687f37a6d5ce123f73"
+            },
+            "domain": {
+              "artifact_path": "vercel-production-verifier/main_integrated/2026-11-03T03-23-50-184Z-94996-domain.json",
+              "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+            },
+            "alias": {
+              "artifact_path": "vercel-production-verifier/main_integrated/2026-11-03T03-23-50-184Z-94996-alias.json",
+              "sha256": "61e1c67075f69d7b263f18121e79d9dedf8bccb4c6b12cfc2643a82f4cc7cf72"
+            },
+            "deployment": {
+              "artifact_path": "vercel-production-verifier/main_integrated/2026-11-03T03-23-50-184Z-94996-deployment.json",
+              "sha256": "0288d79b862357034da191a10416f886949f589383432fe5ed49eef974a24389"
+            }
+          }
+        },
+        "verifier": {
+          "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+          "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+          "worktree": "git status --porcelain=v1 --untracked-files=all",
+          "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+        }
       }
     },
-    "previousAttestationDigest": null,
-    "previousAttestation": null,
-    "revision": 1,
-    "contentDigest": "bf39402200cfcee4473bd2183c281674723d5feab4ba5184e9407b23b3a5ee32",
-    "sealedAt": "2026-11-03T03:13:20.791Z",
-    "attestationDigest": "dd94add0a57a4a2090071b908a224bfc5a59434bd4d5a631d05503471ef9e099"
+    "previousAttestationDigest": "dd94add0a57a4a2090071b908a224bfc5a59434bd4d5a631d05503471ef9e099",
+    "previousAttestation": {
+      "version": 1,
+      "activeId": "WP52",
+      "commit": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+      "evidence": {
+        "code": {
+          "commit": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+          "checks": {
+            "target_tests": true,
+            "full_tests": true,
+            "lint": true,
+            "typecheck": true,
+            "build": true
+          },
+          "commands": [
+            {
+              "name": "target_tests",
+              "command": [
+                "pnpm",
+                "test:run",
+                "app/shipping/workbench.test.tsx",
+                "app/shipping/workbench-service-selection.test.tsx",
+                "app/shipping/workbench.responsive.test.ts",
+                "app/shipping/demo/shipping-demo.test.tsx",
+                "app/api/shipping/ledger/ledger-actions.test.ts",
+                "lib/shipping/workflow.test.ts",
+                "lib/shipping/simulation.test.ts"
+              ],
+              "artifact_path": "wp52-per-order-service-20261103/isolated-target.log",
+              "sha256": "d2182f612fcf341d3b584bd15903dcf051b5e34e00763d703d571bf4ff6d4fe6",
+              "log_sha256": "d2182f612fcf341d3b584bd15903dcf051b5e34e00763d703d571bf4ff6d4fe6",
+              "exit_code": 0,
+              "timeout": false,
+              "validated_product_tree": "cd15150df7f35ea344798affc8fae7640bc4bb3a"
+            },
+            {
+              "name": "full_tests",
+              "artifact_path": "check-logs/10604df252045b9c13f96e69d3a8dd1f91a128b8/check-03-test.log",
+              "sha256": "24593de4226bdafb1a5fffda9bb4ed8fffc91660c255cc1b167c7b9f0ef85645",
+              "log_sha256": "24593de4226bdafb1a5fffda9bb4ed8fffc91660c255cc1b167c7b9f0ef85645",
+              "exit_code": 0,
+              "timeout": false,
+              "command": [
+                "bash",
+                "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh"
+              ]
+            },
+            {
+              "name": "lint",
+              "artifact_path": "check-logs/10604df252045b9c13f96e69d3a8dd1f91a128b8/check-02-lint.log",
+              "sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c",
+              "log_sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c",
+              "exit_code": 0,
+              "timeout": false,
+              "command": [
+                "bash",
+                "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-02-lint.sh"
+              ]
+            },
+            {
+              "name": "typecheck",
+              "artifact_path": "check-logs/10604df252045b9c13f96e69d3a8dd1f91a128b8/check-01-typecheck.log",
+              "sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+              "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+              "exit_code": 0,
+              "timeout": false,
+              "command": [
+                "bash",
+                "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-01-typecheck.sh"
+              ]
+            },
+            {
+              "name": "build",
+              "command": [
+                "pnpm",
+                "build"
+              ],
+              "artifact_path": "wp52-per-order-service-20261103/isolated-build.log",
+              "sha256": "5cddba4a7b8b71a9746551bf0b6cc96e8376a7a7a871d4cd53d2ed93e3fd7ebc",
+              "log_sha256": "5cddba4a7b8b71a9746551bf0b6cc96e8376a7a7a871d4cd53d2ed93e3fd7ebc",
+              "exit_code": 0,
+              "timeout": false,
+              "validated_product_tree": "cd15150df7f35ea344798affc8fae7640bc4bb3a"
+            }
+          ],
+          "behavior_log": {
+            "artifact_path": "behavior-log.jsonl",
+            "sha256": "1e6fa40934a0417d83b25566b688d61a2b75e43a416fc9602d89287b5a5d2237",
+            "entry_sha256": "ffe6326377f4227ef13f3f9e468189d05963bf65e7cedd95ecf2f98d9331846a"
+          },
+          "summary": "WP52 approved product tree cd15150df7f35ea344798affc8fae7640bc4bb3a:150 target tests;3110 full passed/5 skipped;lint,typecheck,build; strict10/10; 9/9 service-selection and Production-first tests; scheduler and syntax checks green.",
+          "artifact_reuse": "Product files are byte-identical to approved candidate 672844bf (product tree cd15150df7f35ea344798affc8fae7640bc4bb3a). Commit 72a0fff0 changes only the user-approved release authorization and scoped evidence gates.",
+          "boundary": "User-approved code-only Production-first release. Preview remains not passed under the preserved one-database isolation. No database write or migration, carrier call, worker/IP allowlist change, or password/account mutation."
+        }
+      },
+      "updatedAt": "2026-11-03T03:13:20.791Z",
+      "completionState": "integration_ready",
+      "releaseControl": {
+        "production_branch": "production",
+        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "production_branch_evidence": {
+          "artifact_path": "wp52-production-release-20261103/vercel-production-branch-evidence.json",
+          "sha256": "f9a65f73af2682ae5621b7169d2af3c0b8dcf0ae37fb513edb216420467d648d",
+          "payload": {
+            "project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+            "branch": "production",
+            "observed_at": "2026-11-03T02:59:53.399Z",
+            "source": "live-vercel-api",
+            "attachments": [
+              {
+                "path": "vercel-production-verifier/integration_ready/2026-11-03T02-59-53-399Z-project.json",
+                "sha256": "51b521720fbeffd57dd3059d18c5f39b564d8b7d44cacf853d5db1b0ee8dbe02"
+              },
+              {
+                "path": "vercel-production-verifier/integration_ready/2026-11-03T02-59-53-399Z-domain.json",
+                "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+              },
+              {
+                "path": "vercel-production-verifier/integration_ready/2026-11-03T02-59-53-399Z-alias.json",
+                "sha256": "61e1c67075f69d7b263f18121e79d9dedf8bccb4c6b12cfc2643a82f4cc7cf72"
+              },
+              {
+                "path": "vercel-production-verifier/integration_ready/2026-11-03T02-59-53-399Z-deployment.json",
+                "sha256": "0288d79b862357034da191a10416f886949f589383432fe5ed49eef974a24389"
+              }
+            ]
+          }
+        },
+        "production_commit_before": "9f375839b9c64c48302e2d88e8d51536c900864f",
+        "production_deployment_id_before": "dpl_E9Ym5RiYQijdBoeiEN99us1j4886"
+      },
+      "gateSnapshots": {
+        "integration_ready": {
+          "stage": "integration_ready",
+          "checkedAt": "2026-11-03T03:13:20.771Z",
+          "head": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+          "originMain": "bbd88a9ae1018ba83adc7361bf27a5e279ae608f",
+          "remoteMain": "bbd88a9ae1018ba83adc7361bf27a5e279ae608f",
+          "remoteProduction": "9f375839b9c64c48302e2d88e8d51536c900864f",
+          "defaultBranch": "main",
+          "originMainFresh": true,
+          "originMainIsAncestor": true,
+          "mainIntegrated": false,
+          "localAttestationRefOid": "379fd3a8d5ab409c8b87f188701cb63ab11faa3a",
+          "remoteAttestationRefOid": "379fd3a8d5ab409c8b87f188701cb63ab11faa3a",
+          "remoteSnapshotCheckedAt": "2026-11-03T03:13:08.753Z",
+          "vercelProduction": {
+            "version": 1,
+            "source": "live-vercel-api",
+            "checkedAt": "2026-11-03T03:13:09.203Z",
+            "contract": {
+              "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+              "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+              "projectName": "cyanlog-sales-v3",
+              "rootDirectory": "product-truth/product-code",
+              "domain": "sales.cyanlog.icu",
+              "productionBranch": "production"
+            },
+            "endpoints": {
+              "project": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+              "domain": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF/domains/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+              "alias": "/v4/aliases/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+              "deployment": "/v13/deployments/dpl_E9Ym5RiYQijdBoeiEN99us1j4886?teamId=team_xayPRcgRTNOgdPdNf7bOV017"
+            },
+            "project": {
+              "id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+              "name": "cyanlog-sales-v3",
+              "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+              "rootDirectory": "product-truth/product-code",
+              "productionBranch": "production",
+              "productionDeploymentId": "dpl_E9Ym5RiYQijdBoeiEN99us1j4886"
+            },
+            "domain": {
+              "name": "sales.cyanlog.icu",
+              "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+              "verified": true
+            },
+            "alias": {
+              "name": "sales.cyanlog.icu",
+              "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+              "deploymentId": "dpl_E9Ym5RiYQijdBoeiEN99us1j4886",
+              "deploymentReferenceId": "dpl_E9Ym5RiYQijdBoeiEN99us1j4886",
+              "redirect": null,
+              "deletedAt": null
+            },
+            "deployment": {
+              "id": "dpl_E9Ym5RiYQijdBoeiEN99us1j4886",
+              "name": "cyanlog-sales-v3",
+              "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+              "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+              "target": "production",
+              "readyState": "READY",
+              "readySubstate": "PROMOTED",
+              "status": "READY",
+              "gitCommitSha": "9f375839b9c64c48302e2d88e8d51536c900864f",
+              "gitCommitSources": [
+                "gitSource.sha",
+                "meta.githubCommitSha"
+              ]
+            },
+            "remoteProduction": "9f375839b9c64c48302e2d88e8d51536c900864f",
+            "raw": {
+              "project": {
+                "artifact_path": "vercel-production-verifier/integration_ready/2026-11-03T03-13-09-203Z-91349-project.json",
+                "sha256": "51b521720fbeffd57dd3059d18c5f39b564d8b7d44cacf853d5db1b0ee8dbe02"
+              },
+              "domain": {
+                "artifact_path": "vercel-production-verifier/integration_ready/2026-11-03T03-13-09-203Z-91349-domain.json",
+                "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+              },
+              "alias": {
+                "artifact_path": "vercel-production-verifier/integration_ready/2026-11-03T03-13-09-203Z-91349-alias.json",
+                "sha256": "61e1c67075f69d7b263f18121e79d9dedf8bccb4c6b12cfc2643a82f4cc7cf72"
+              },
+              "deployment": {
+                "artifact_path": "vercel-production-verifier/integration_ready/2026-11-03T03-13-09-203Z-91349-deployment.json",
+                "sha256": "0288d79b862357034da191a10416f886949f589383432fe5ed49eef974a24389"
+              }
+            }
+          },
+          "verifier": {
+            "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+            "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+            "worktree": "git status --porcelain=v1 --untracked-files=all",
+            "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+          }
+        }
+      },
+      "previousAttestationDigest": null,
+      "previousAttestation": null,
+      "revision": 1,
+      "contentDigest": "bf39402200cfcee4473bd2183c281674723d5feab4ba5184e9407b23b3a5ee32",
+      "sealedAt": "2026-11-03T03:13:20.791Z",
+      "attestationDigest": "dd94add0a57a4a2090071b908a224bfc5a59434bd4d5a631d05503471ef9e099"
+    },
+    "revision": 2,
+    "contentDigest": "5f2ac90bafbb79baef3be24009da5e98a370405ec2d62a35b5b208eb86d02744",
+    "sealedAt": "2026-11-03T03:23:59.022Z",
+    "attestationDigest": "3010acec9a8176c269f1a14f4b6950c2e26d3ad9a2f2c3aa86386d2f3d6d4e49"
   },
-  "revision": 2,
-  "contentDigest": "5f2ac90bafbb79baef3be24009da5e98a370405ec2d62a35b5b208eb86d02744",
-  "sealedAt": "2026-11-03T03:23:59.022Z",
-  "attestationDigest": "3010acec9a8176c269f1a14f4b6950c2e26d3ad9a2f2c3aa86386d2f3d6d4e49"
+  "revision": 3,
+  "contentDigest": "5e4b402014ac7de536d8dcc6020c34be3150d5a28443489a23b8485a4a83f790",
+  "sealedAt": "2026-11-03T03:58:50.149Z",
+  "attestationDigest": "a2f0acde0be7e54f562ec23bd2c7826eaef9ae7fa3c68ac42e2501fd4a670d3a"
 }
