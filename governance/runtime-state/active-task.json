@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-03T02:13:27.614Z",
+  "updated_at": "2026-11-03T05:00:21.595489Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -333,6 +333,7 @@
         ]
       },
       "depends_on": [
+        "WP50",
         "WP91",
         "WP65"
       ]
@@ -4931,6 +4932,75 @@
         "目标/受影响回归、typecheck、build及代码门禁通过；仅候选准备，不以此声称Production已验收"
       ],
       "parked_at": "2026-11-03T01:39:02.242Z"
+    },
+    "WP50": {
+      "id": "WP50",
+      "slug": "unified-organization-connection-config",
+      "name": "统一组织连接配置与生命周期",
+      "kind": "product",
+      "status": "parked",
+      "objective": "管理员在组织来源页通过一张统一连接记录和各提供方的薄适配器完成组织接入配置：飞书与纷享等提供方只差异于凭据 schema、验证和目录协议；连接记录统一保存加密 payload、版本、能力状态、草稿/验证/预览/启用/停用/回滚与审计。保存或验证不得隐式启用、同步、切主来源或复活停用来源；页面仅在当前组织真实存在可执行能力时显示操作。保留 organization_sources 的 source_id、external_identities、历史来源和手工数据；旧飞书环境变量及纷享独立配置表只作为一次性显式迁移输入，不得作为运行时真相，不执行 Production 迁移、目录同步、切源、外部写入或发布。",
+      "feature_id": "F003",
+      "allowed_paths": [
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "governance/runtime-state/main-chain-governance-charter.md",
+        "governance/runtime-state/identity-authorization-blueprint.md",
+        "product-truth/feature-packets/F003-account-auth.md",
+        "product-truth/feature-packets/F099-current-goal-ledger.md",
+        "product-truth/product-code/lib/organization-sources.ts",
+        "product-truth/product-code/lib/organization-sources.test.ts",
+        "product-truth/product-code/lib/organization-sources-migration.test.ts",
+        "product-truth/product-code/lib/organization-source-identity.ts",
+        "product-truth/product-code/lib/organization-source-identity.test.ts",
+        "product-truth/product-code/lib/organization-connections",
+        "product-truth/product-code/lib/fxiaoke",
+        "product-truth/product-code/lib/schema-check.ts",
+        "product-truth/product-code/app/api/admin/organization-sources",
+        "product-truth/product-code/app/api/access/feishu/sync",
+        "product-truth/product-code/app/configs",
+        "product-truth/product-code/app/admin/org",
+        "product-truth/product-code/supabase/migrations/20261103090000_unified_organization_connections.sql",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-connections-verifier.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-connections-verifier.test.js"
+      ],
+      "delivery_contract": {
+        "target_state": "code_green",
+        "allowed_states": [
+          "executing",
+          "code_green"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "role_edit_save",
+          "role_access_enforcement"
+        ],
+        "runtime_profile": "application",
+        "runtime_contract_version": "f003-role-permissions-v1",
+        "production_database_mode": "read_only",
+        "note": "IN021/025/028统一接入候选准备。本批只形成代码、迁移候选与验证证据，不执行Production迁移、目录同步、主来源切换、凭据搬运、人员或角色写入，也不发布。专用组织连接运行时合同在实现和验证器就位后按实际证据推进。"
+      },
+      "acceptance_checks": [
+        "organization_sources是唯一运行时连接真相；飞书不再读取FEISHU_APP_ID/FEISHU_APP_SECRET，纷享不再读取独立连接表作为双真相",
+        "提供方差异只存在于凭据schema、验证器和目录协议适配器；共享保存、加密、版本、状态、预览、停用和回滚走同一服务",
+        "保存/验证/预览不自动激活、不改主来源、不写组织骨架、不复活disabled来源；失败保留上一生效配置",
+        "迁移保留source_id、external_identities和手工组织数据；旧环境变量/旧表无静默回读，冲突或不可解密配置失败关闭",
+        "组织来源页以真实连接能力显示操作，无环境变量伪状态和无入口的同步按钮；未配置、未启用和停用状态可区分",
+        "目标测试、受影响回归、typecheck/build和全量代码门禁通过；本批不声称目录同步、切源、Production或用户页面已交付"
+      ]
     }
   },
   "suspended_wp77": {
