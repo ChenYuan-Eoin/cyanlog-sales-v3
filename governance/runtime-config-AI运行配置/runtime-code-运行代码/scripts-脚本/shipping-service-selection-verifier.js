@@ -18,6 +18,25 @@ const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const json = value => JSON.stringify(value, null, 2) + '\n';
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 const same = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+const RELEASE_RULE_PATHS = new Set([
+  'governance/runtime-state/active-task.json', 'governance/runtime-state/demand-inbox.jsonl',
+  'product-truth/feature-packets/F054-sf-self-service-order.md', 'product-truth/feature-packets/F099-current-goal-ledger.md',
+  ...['project-registry.js', 'harness-selftest.js', 'shipping-service-selection-verifier.js', 'shipping-service-selection-verifier.test.js']
+    .map(name => `governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/${name}`),
+]);
+
+/** The exception changes release ordering only; it cannot authorize a new product tree. */
+function productionFirstExceptionBlockers({ approval, activeId, featureId, runtimeProfile, contractVersion, productTree, changedPaths, candidateIsAncestor } = {}) {
+  const errors = [];
+  if (activeId !== 'WP52' || featureId !== 'F054' || runtimeProfile !== 'shipping_workspace' || contractVersion !== CONTRACT) errors.push('Service-selection release ordering is limited to WP52/F054/shipping_workspace');
+  if (approval?.type !== 'final_production_release_authorization' || approval.source !== 'user_explicit' || approval.state !== 'approved' || approval.preview_order_exception !== true || approval.preview_status !== 'not_passed') errors.push('Explicit service-selection release authority must preserve Preview as not passed');
+  if (approval?.code_release_authorized !== true || approval.production_database_write_authorized !== false || approval.carrier_calls_authorized !== false) errors.push('Service-selection release permits no business writes or carrier calls');
+  if (typeof approval?.approved_candidate !== 'string' || !COMMIT.test(approval.approved_candidate) || candidateIsAncestor !== true || typeof approval?.approved_product_tree !== 'string' || !COMMIT.test(approval.approved_product_tree) || productTree !== approval.approved_product_tree) errors.push('Service-selection release must retain the approved product tree and candidate ancestry');
+  if (!Array.isArray(changedPaths) || changedPaths.some(file => !RELEASE_RULE_PATHS.has(file))) errors.push('Only eight scoped delivery-rule and truth paths may follow the approved service-selection candidate');
+  if (typeof approval?.rollback_commit !== 'string' || !COMMIT.test(approval.rollback_commit)) errors.push('Concrete rollback commit required');
+  return errors;
+}
+
 function check(ok, message) { if (!ok) throw Error(message); }
 function keys(value, allowed, label) {
   check(value && typeof value === 'object' && !Array.isArray(value), 'Invalid ' + label);
@@ -234,4 +253,4 @@ async function verify(options) {
   check(blockers.length === 0, blockers.join('; '));
   return result;
 }
-module.exports = { CONTRACT, ITEMS, ACTIONS, runtimeEvidenceBlockers, productionEvidenceBlockers, verify };
+module.exports = { CONTRACT, ITEMS, ACTIONS, productionFirstExceptionBlockers, runtimeEvidenceBlockers, productionEvidenceBlockers, verify };

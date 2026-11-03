@@ -474,13 +474,17 @@ function getPreviewOrderException(state, repoRoot, inboxRecords) {
   const approval = inboxRecords.find(record => record?.id === approvalId);
   const base = /^[a-f0-9]{40}$/.test(approval?.approved_candidate || '') ? approval.approved_candidate : null;
   const changed = base ? runGit(repoRoot, ['diff', '--name-only', '-z', base, 'HEAD'], { allowFailure: true }) : null;
-  const verifier = runtimeContractVersionOf(state) === SHIPPING_PARSER_CONTRACT
-    ? './shipping-parser-verifier'
-    : runtimeContractVersionOf(state) === FXIAOKE_SSO_CONTRACT
-      ? './fxiaoke-sso-verifier'
-      : './fxiaoke-connection-verifier';
+  const contractVersion = runtimeContractVersionOf(state);
+  const verifier = contractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT
+    ? './shipping-service-selection-verifier'
+    : contractVersion === SHIPPING_PARSER_CONTRACT
+      ? './shipping-parser-verifier'
+      : contractVersion === FXIAOKE_SSO_CONTRACT
+        ? './fxiaoke-sso-verifier'
+        : './fxiaoke-connection-verifier';
   const blockers = require(verifier).productionFirstExceptionBlockers({
-    approval, activeId: state.active_task?.id, contractVersion: runtimeContractVersionOf(state),
+    approval, activeId: state.active_task?.id, contractVersion,
+    ...(contractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT ? { featureId: state.active_task?.feature_id, runtimeProfile: runtimeProfileOf(state) } : {}),
     productTree: runGit(repoRoot, ['rev-parse', 'HEAD:product-truth/product-code'], { allowFailure: true }),
     candidateIsAncestor: Boolean(base && runGit(repoRoot, ['merge-base', '--is-ancestor', base, 'HEAD'], { allowFailure: true }) !== null),
     changedPaths: changed === null ? null : changed.split('\0').filter(Boolean),
@@ -2102,9 +2106,13 @@ function loadBehaviorLogProof(repoRoot, head) {
 }
 
 function approvedSsoProductionFirst(scope) {
-  return scope.activeId === 'WP94' && scope.featureId === 'F003'
+  const sso = scope.activeId === 'WP94' && scope.featureId === 'F003'
     && scope.runtimeProfile === 'application' && scope.runtimeContractVersion === FXIAOKE_SSO_CONTRACT
     && scope.previewOrderException?.approved === true;
+  const serviceSelection = scope.activeId === 'WP52' && scope.featureId === 'F054'
+    && scope.runtimeProfile === 'shipping_workspace' && scope.runtimeContractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT
+    && scope.previewOrderException?.approved === true;
+  return sso || serviceSelection;
 }
 
 function unresolvedBlockingDefects(state, runtimeDefects = {}, head = '', previewArtifacts = {}, productionArtifacts = {}, repoRoot = '', stage = 'production_released', previewOrderException = null) {
@@ -2460,7 +2468,7 @@ function checkDeliveryStage(stage, options = {}) {
     status.vercelProduction = liveVercel.snapshot;
     blockers.push(...liveVercel.blockers);
     const previewDefects = status.previewBlockingDefects || status.blockingDefects;
-    // A validated WP94 Production-first release defers this replay, but keeps
+    // Validated WP94 or WP52 Production-first releases defer this replay, but keep
     // both defect lists intact and still requires exact Production proof below.
     if (!approvedSsoProductionFirst(status) && previewDefects.length) blockers.push(`blocking defects unresolved in Preview: ${previewDefects.join(', ')}`);
     if (!status.git.originMainFresh) blockers.push(status.remoteSnapshot?.available === false

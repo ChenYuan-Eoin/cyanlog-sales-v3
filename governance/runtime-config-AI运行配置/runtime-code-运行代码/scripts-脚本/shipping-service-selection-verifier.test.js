@@ -194,3 +194,37 @@ test('freshness blocks stale collection but historical sealed evidence remains v
   future.verifier.payload.observed_at = '2026-02-30T10:00:00Z'; refreshEnvelope(future.verifier);
   assert.ok(v.productionEvidenceBlockers(future, expected).length);
 });
+
+test('Production-first exception preserves exact approved product tree and only eight follow-up governance paths', () => {
+  const approval = {
+    type: 'final_production_release_authorization', source: 'user_explicit', state: 'approved',
+    preview_order_exception: true, preview_status: 'not_passed', code_release_authorized: true,
+    production_database_write_authorized: false, carrier_calls_authorized: false,
+    approved_candidate: 'a'.repeat(40), approved_product_tree: 'cd15150df7f35ea344798affc8fae7640bc4bb3a', rollback_commit: 'c'.repeat(40),
+  };
+  const files = [
+    'governance/runtime-state/active-task.json', 'governance/runtime-state/demand-inbox.jsonl',
+    'product-truth/feature-packets/F054-sf-self-service-order.md', 'product-truth/feature-packets/F099-current-goal-ledger.md',
+    ...['project-registry.js', 'harness-selftest.js', 'shipping-service-selection-verifier.js', 'shipping-service-selection-verifier.test.js']
+      .map(name => `governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/${name}`),
+  ];
+  const input = { approval, activeId: 'WP52', featureId: 'F054', runtimeProfile: 'shipping_workspace', contractVersion: v.CONTRACT, productTree: approval.approved_product_tree, candidateIsAncestor: true, changedPaths: files };
+  assert.deepEqual(v.productionFirstExceptionBlockers(input), []);
+  assert.equal(files.length, 8);
+  for (const patch of [
+    { activeId: 'WP65' }, { featureId: 'F003' }, { runtimeProfile: 'application' }, { contractVersion: 'f054-ui-v1' },
+    { productTree: 'd'.repeat(40) }, { candidateIsAncestor: false }, { changedPaths: null },
+    { changedPaths: ['product-truth/product-code/app/shipping/workbench.tsx'] },
+    { changedPaths: ['product-truth/product-code/supabase/migrations/20261103000000_change.sql'] },
+    { changedPaths: ['product-truth/product-code/lib/fxiaoke/egress/worker.mjs'] },
+    { changedPaths: ['product-truth/product-code/.env.production'] }, { changedPaths: ['AGENTS.md'] },
+    { changedPaths: ['product-truth/feature-packets/F003-account-auth.md'] },
+    { changedPaths: ['governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js'] },
+  ]) assert.ok(v.productionFirstExceptionBlockers({ ...input, ...patch }).length, JSON.stringify(patch));
+  for (const patch of [
+    { type: 'ordinary_approval' }, { source: 'agent' }, { state: 'pending' },
+    { preview_order_exception: false }, { preview_status: 'passed' }, { code_release_authorized: false },
+    { production_database_write_authorized: true }, { carrier_calls_authorized: true },
+    { approved_candidate: '672844bf' }, { approved_product_tree: 'wrong' }, { rollback_commit: '' },
+  ]) assert.ok(v.productionFirstExceptionBlockers({ ...input, approval: { ...approval, ...patch } }).length, JSON.stringify(patch));
+});

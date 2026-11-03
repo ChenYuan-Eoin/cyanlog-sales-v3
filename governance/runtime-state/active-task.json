@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-03T02:03:58.846Z",
+  "updated_at": "2026-11-03T02:13:27.614Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -237,11 +237,14 @@
     ],
     "feature_id": "F054",
     "delivery_contract": {
-      "target_state": "clean_preview_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
         "code_green",
-        "clean_preview_green"
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -262,10 +265,32 @@
       "runtime_profile": "shipping_workspace",
       "runtime_contract_version": "f054-service-selection-v1",
       "production_database_mode": "read_only",
-      "note": "IN001批准先修逐票时效，IN002补匹配本任务的独立只读验收合同。允许既有技术授权内的Preview候选与现有Chrome操作；不push/PR/Production发布、不写生产数据库、不真实顺丰操作。Preview不替代Production，未获本候选正式发布授权前不能前进至主干/Production。",
+      "note": "IN003批准同一产品树代码发布及Production-first顺序，Preview明确未通过；仍须通过精确Git/Vercel/domain与现有Chrome两票最终见证。只读验收，不授权任何业务写入/迁移/真实顺丰或worker/白名单修改。",
       "blocking_acceptance_defects": [
         "IN-20261102-032"
-      ]
+      ],
+      "required_production_runtime_evidence": [
+        "shipping_service_selection",
+        "shipping_access"
+      ],
+      "production_release_authorization": {
+        "status": "approved_code_only",
+        "micro_fix_approval_id": "IN-20261103-001",
+        "clarification_id": "IN-20261103-003",
+        "final_release_approval_id": "IN-20261103-003",
+        "micro_fix_scope": "操作员在批量确认前分别选择并核对每票服务产品；只改A票不影响B票；批量设置仅在明确应用时更新所选票；每票摘要和冻结后的确认请求使用同一解析结果。无效产品阻止发送，切连接或刷新配置重新核对，保留防重、结果未知查回和已成功票的真实服务展示。不扩展下单后改产品或其他参数逐票化。",
+        "final_scope": "发布WP52逐票时效修复的已批准产品树cd15150df7f35ea344798affc8fae7640bc4bb3a，沿用已批准登录UI；允许推送并集成main/production、部署现有网站和必要发布治理记录；本次Preview保持未通过并按已批准Production-first顺序，在现有Chrome正式域名用两张真实待审核票只核对选择/批量应用/恢复，不点击真实下单，不改产品代码，不迁移或写入业务数据，不改worker或白名单。",
+        "database_write_authorized": false,
+        "production_database_write_authorized": false,
+        "carrier_calls_authorized": false,
+        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
+      },
+      "final_acceptance": {
+        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+        "production_database_mode": "read_only"
+      },
+      "preview_order_exception_approval_id": "IN-20261103-003"
     },
     "acceptance_checks": [
       "旧组件的两票独立选择与payload用例真实失败，保存复现胶囊",

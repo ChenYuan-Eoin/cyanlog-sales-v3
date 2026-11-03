@@ -456,6 +456,122 @@ function runSsoProductionFirstDefectSelftest(repoRoot) {
   console.log('SSO Production-first defect proof selftest ok');
 }
 
+function runServiceSelectionProductionFirstSelftest(repoRoot) {
+  const verifier = require('./shipping-service-selection-verifier');
+  runGit(repoRoot, ['init', '--quiet']);
+  runGit(repoRoot, ['config', 'user.name', 'Harness Selftest']);
+  runGit(repoRoot, ['config', 'user.email', 'harness-selftest@example.invalid']);
+  runGit(repoRoot, ['config', 'core.hooksPath', '/dev/null']);
+  makeSettings(repoRoot);
+  makeSchedulerFixture(repoRoot);
+  fs.writeFileSync(path.join(repoRoot, '.gitignore'), '.runtime/\n');
+  fs.mkdirSync(path.join(repoRoot, 'product-truth/product-code'), { recursive: true });
+  fs.writeFileSync(path.join(repoRoot, 'product-truth/product-code/fixture.txt'), 'approved shipping product fixture\n');
+  const schedulerPath = path.join(repoRoot, 'governance/runtime-state/active-task.json');
+  const state = JSON.parse(fs.readFileSync(schedulerPath, 'utf8'));
+  const defectId = 'IN-20261102-032', approvalId = 'IN-SERVICE-FIRST-APPROVAL';
+  Object.assign(state.active_task, { id: 'WP52', feature_id: 'F054' });
+  state.execution_queue.active.id = 'WP52';
+  Object.assign(state.active_task.delivery_contract, {
+    runtime_profile: 'shipping_workspace', runtime_contract_version: verifier.CONTRACT,
+    required_runtime_evidence: [...verifier.ITEMS], required_production_runtime_evidence: [...verifier.ITEMS],
+    production_database_mode: 'read_only', blocking_acceptance_defects: [defectId], preview_order_exception_approval_id: approvalId,
+    production_release_authorization: { status: 'approved_code_only', micro_fix_approval_id: 'IN-SELFTEST-MICROFIX-APPROVAL',
+      clarification_id: 'IN-SELFTEST-CLARIFICATION', final_release_approval_id: approvalId, micro_fix_scope: 'per_order_service_selection',
+      final_scope: 'selftest approved shipping UI Production-first release', database_write_authorized: false,
+      production_database_write_authorized: false, carrier_calls_authorized: false },
+    final_acceptance: { browser: 'trusted_operator_attestation_from_user_existing_chrome_only', production_database_mode: 'read_only' }
+  });
+  writeJson(schedulerPath, state);
+  core.startGoal(repoRoot, 'Verify the approved service selection Production-first exception', { level: 'A1', workPackageId: 'WP52', scopes: 'app', success: 'exact code-only release accepted' });
+  core.approveContract(repoRoot, { level: 'A1', by: 'selftest' }); core.setPhase(repoRoot, 'verify');
+  runGit(repoRoot, ['add', '-A']); runGit(repoRoot, ['commit', '--quiet', '-m', 'Approved selection candidate fixture']);
+  const candidate = runGit(repoRoot, ['rev-parse', 'HEAD']);
+  const productTree = runGit(repoRoot, ['rev-parse', 'HEAD:product-truth/product-code']);
+  const approval = { id: approvalId, type: 'final_production_release_authorization', source: 'user_explicit', state: 'approved',
+    scope: state.active_task.delivery_contract.production_release_authorization.final_scope,
+    code_release_authorized: true, production_database_write_authorized: false, carrier_calls_authorized: false,
+    preview_order_exception: true, preview_status: 'not_passed', approved_candidate: candidate, approved_product_tree: productTree,
+    rollback_commit: candidate, authorized_commit_binding: 'delivery_attestation_current_head' };
+  const inboxPath = path.join(repoRoot, 'governance/runtime-state/demand-inbox.jsonl');
+  fs.appendFileSync(inboxPath, JSON.stringify(approval) + '\n');
+  runGit(repoRoot, ['add', '-A']); runGit(repoRoot, ['commit', '--quiet', '-m', 'Selection release authority fixture']);
+  const head = runGit(repoRoot, ['rev-parse', 'HEAD']);
+  runGit(repoRoot, ['update-ref', 'refs/remotes/origin/main', candidate]);
+  const options = { repoRoot, remoteSnapshot: { main: candidate, production: candidate, defaultBranch: 'main', attestation: null },
+    testOnlyVercelApiResponses: makeTestVercelApiResponses(candidate) };
+  const behavior = writeBehaviorEvidence(repoRoot, makeBehaviorEntry(repoRoot, head));
+  const checks = state.active_task.delivery_contract.required_code_checks;
+  recordDeliveryEvidence('code', { commit: head, checks: Object.fromEntries(checks.map(name => [name, true])), behavior_log: behavior.behavior_log,
+    commands: checks.map(name => ({ name, exit_code: 0, ...behavior.commandArtifact })) }, options);
+  const proof = { verified: true, root_cause: 'A shared service selector made the visible product and each ticket confirmation payload disagree.',
+    reproduction: evidenceEnvelope(repoRoot, 'selection-first-reproduction', { commit: candidate, actual: 'A changed B service' }) };
+  recordDeliveryEvidence(`defect.${defectId}`, proof, options);
+  recordDeliveryEvidence('release_control', { production_branch: 'production', vercel_project_id: VERCEL_PRODUCTION_CONTRACT.projectId,
+    production_commit_before: candidate, production_deployment_id_before: SELFTEST_PRODUCTION_DEPLOYMENT_ID,
+    production_branch_evidence: evidenceEnvelope(repoRoot, 'selection-first-branch', { branch: 'production', project_id: VERCEL_PRODUCTION_CONTRACT.projectId, observed_at: new Date().toISOString() }) }, options);
+  assert.strictEqual(transitionDeliveryState('code_green', options).ok, true);
+  const codeStatus = getDeliveryStatus(options);
+  assert.deepStrictEqual(codeStatus.previewOrderException, { approved: true, approval_id: approvalId, preview_status: 'not_passed', blockers: [] });
+  assert.deepStrictEqual(codeStatus.previewBlockingDefects, [defectId]);
+  assert.deepStrictEqual(codeStatus.blockingDefects, [defectId]);
+  const integration = transitionDeliveryState('integration_ready', options);
+  assert.deepStrictEqual(integration.blockers || [], [], 'The approved narrow exception must permit the real code_green to integration_ready transition');
+  assert.strictEqual(integration.ok, true);
+  const status = getDeliveryStatus(options);
+  assert.strictEqual(status.completionState, 'integration_ready');
+  assert.strictEqual(status.evidence.preview, undefined, 'No Preview result may be manufactured by the exception');
+  assert.deepStrictEqual(status.previewBlockingDefects, [defectId]);
+  assert.deepStrictEqual(status.blockingDefects, [defectId]);
+  const gateOptions = { ...options, status, skipStateCheck: true, skipSealCheck: true };
+  assert.ok(checkDeliveryStage('clean_preview_green', gateOptions).blockers.some(message => message.includes('preserves Preview as not passed')));
+  for (const patch of [
+    { activeId: 'WP53' }, { featureId: 'F003' }, { runtimeProfile: 'application' },
+    { runtimeContractVersion: 'f054-ui-v1' }, { previewOrderException: { approved: false } }
+  ]) assert.ok(checkDeliveryStage('integration_ready', { ...gateOptions, status: { ...status, ...patch } }).blockers.some(message => message.startsWith('blocking defects unresolved in Preview:')));
+  const terminal = checkDeliveryStage('production_released', gateOptions);
+  assert.strictEqual(terminal.ok, false);
+  assert.ok(terminal.blockers.some(message => message.startsWith('blocking defects unresolved:')));
+  assert.ok(terminal.blockers.some(message => message.includes('controlled evidence missing or invalid')));
+  const acceptance = evidenceEnvelope(repoRoot, 'selection-first-operator', { commit: head, actions: [...verifier.ACTIONS] });
+  const verifiedProof = { ...proof, production_verified: true, production_commit: head, production_regression_artifact_sha256: acceptance.sha256 };
+  const unresolved = (overrides = {}) => unresolvedBlockingDefects(state, { [defectId]: { ...verifiedProof, ...overrides.proof } }, overrides.head || head,
+    {}, { browser_acceptance: overrides.acceptance || acceptance }, repoRoot, 'production_released', overrides.exception || status.previewOrderException);
+  assert.deepStrictEqual(unresolved(), []);
+  for (const invalid of [
+    { proof: { verified: false } }, { proof: { reproduction: null } }, { proof: { root_cause: 'short' } },
+    { proof: { production_verified: false } }, { proof: { production_commit: candidate } },
+    { proof: { production_regression_artifact_sha256: '0'.repeat(64) } }, { exception: { approved: false } }
+  ]) assert.deepStrictEqual(unresolved(invalid), [defectId]);
+  for (const payload of [{ commit: candidate, actions: [...verifier.ACTIONS] }, { commit: head, actions: verifier.ACTIONS.slice(1) }]) {
+    const invalid = evidenceEnvelope(repoRoot, `selection-first-invalid-${payload.commit === head ? 'actions' : 'sha'}`, payload);
+    assert.deepStrictEqual(unresolved({ acceptance: invalid, proof: { production_regression_artifact_sha256: invalid.sha256 } }), [defectId]);
+  }
+  const spoofedTerminal = structuredClone(status);
+  spoofedTerminal.blockingDefects = [];
+  spoofedTerminal.evidence.production = { browser_acceptance: acceptance };
+  assert.strictEqual(checkDeliveryStage('production_released', { ...gateOptions, status: spoofedTerminal }).ok, false, 'A linked defect declaration cannot replace the real Production operator/runtime/payload proof');
+  const scope = { approval, activeId: 'WP52', featureId: 'F054', runtimeProfile: 'shipping_workspace', contractVersion: verifier.CONTRACT,
+    productTree, changedPaths: ['governance/runtime-state/demand-inbox.jsonl'], candidateIsAncestor: true };
+  assert.deepStrictEqual(verifier.productionFirstExceptionBlockers(scope), []);
+  for (const patch of [
+    { approval: { ...approval, state: 'pending' } }, { activeId: 'WP53' }, { featureId: 'F003' },
+    { runtimeProfile: 'application' }, { contractVersion: 'f054-ui-v1' }, { productTree: 'f'.repeat(40) },
+    { candidateIsAncestor: false }, { changedPaths: ['product-truth/product-code/supabase/migrations/mixed.sql'] }
+  ]) assert.ok(verifier.productionFirstExceptionBlockers({ ...scope, ...patch }).length);
+  const originalInbox = fs.readFileSync(inboxPath, 'utf8');
+  fs.writeFileSync(inboxPath, originalInbox.replace(JSON.stringify(approval), JSON.stringify({ ...approval, preview_order_exception: false })));
+  assert.strictEqual(getDeliveryStatus(options).previewOrderException.approved, false);
+  fs.writeFileSync(inboxPath, originalInbox);
+  const changedState = structuredClone(state); changedState.active_task.feature_id = 'F003'; writeJson(schedulerPath, changedState);
+  assert.strictEqual(getDeliveryStatus(options).previewOrderException.approved, false, 'Real dispatch must pass the feature binding into the verifier');
+  writeJson(schedulerPath, state);
+  fs.appendFileSync(path.join(repoRoot, 'product-truth/product-code/fixture.txt'), 'unapproved product change\n');
+  runGit(repoRoot, ['add', '-A']); runGit(repoRoot, ['commit', '--quiet', '-m', 'Unapproved product mutation fixture']);
+  assert.strictEqual(getDeliveryStatus(options).previewOrderException.approved, false);
+  console.log('service selection Production-first transition and final-proof boundary selftest ok');
+}
+
 function makeSchedulerFixture(repoRoot) {
   writeJson(path.join(repoRoot, 'governance/runtime-state/active-task.json'), {
     product_baseline: { status: 'active' },
@@ -2489,6 +2605,13 @@ function main() {
   process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(repoRoot, '.runtime', 'harness');
 
   try {
+    if (process.argv.includes('--service-selection-production-first-only')) {
+      runServiceSelectionProductionFirstSelftest(repoRoot);
+      const legacyRoot = path.join(repoRoot, 'legacy-sso-fixture'); fs.mkdirSync(legacyRoot);
+      process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(legacyRoot, '.runtime', 'harness');
+      runSsoProductionFirstDefectSelftest(legacyRoot);
+      return;
+    }
     if (process.argv.includes('--service-selection-only')) {
       runServiceSelectionContractSelftest(repoRoot);
       return;
@@ -2534,6 +2657,10 @@ function main() {
     fs.mkdirSync(selectionRoot);
     process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(selectionRoot, '.runtime', 'harness');
     runServiceSelectionContractSelftest(selectionRoot);
+    const selectionFirstRoot = path.join(repoRoot, 'selection-first-fixture');
+    fs.mkdirSync(selectionFirstRoot);
+    process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(selectionFirstRoot, '.runtime', 'harness');
+    runServiceSelectionProductionFirstSelftest(selectionFirstRoot);
     const approvalRoot = path.join(repoRoot, 'approval-fixture');
     fs.mkdirSync(approvalRoot);
     process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(approvalRoot, '.runtime', 'harness');
