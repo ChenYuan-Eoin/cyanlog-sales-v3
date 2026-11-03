@@ -17,13 +17,16 @@ import {
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
 import {
-  ensureOrganizationSource,
   loadOrganizationSources,
   OrganizationSourceError,
   recordOrganizationSourceSyncResult,
   selectPrimaryOrganizationSource,
   upsertExternalIdentity,
 } from '@/lib/organization-sources'
+import {
+  loadVerifiedConnection,
+  OrganizationConnectionError,
+} from '@/lib/organization-connections'
 import {
   addIdentityCandidate,
   buildIdentityIndex,
@@ -88,7 +91,7 @@ type SyncWarning = {
 
 const FEISHU_CONNECTOR = 'feishu'
 const FEISHU_SYNC_SCOPE = 'departments_and_members'
-const FEISHU_CONFIG_HINT = '请在配置中心组织架构页绑定来源1；FEISHU_APP_ID、FEISHU_APP_SECRET 仍由部署环境保护。FEISHU_ORG_ID 仅作为旧绑定迁移回退。飞书应用需要通讯录部门和成员读取权限。'
+const FEISHU_CONFIG_HINT = '请先在配置中心完成飞书连接草稿、通讯录预览验证，并显式确认主来源切换。飞书应用需要通讯录部门和成员读取权限。'
 
 function externalDepartmentId(department: FeishuDepartment) {
   return department.department_id || department.open_department_id || ''
@@ -908,145 +911,72 @@ export async function POST(req: NextRequest) {
   const canWriteUsers = canMutateOrgUsers(assignments, orgId)
   const canWriteDepartments = canMutateOrgDepartments(assignments, orgId)
 
-  const appId = process.env.FEISHU_APP_ID
-  const appSecret = process.env.FEISHU_APP_SECRET
-  if (!appId || !appSecret) {
-    const missing = [
-      !appId ? 'FEISHU_APP_ID' : null,
-      !appSecret ? 'FEISHU_APP_SECRET' : null,
-    ].filter(Boolean)
-
-    return NextResponse.json(
-      {
-        code: 'FEISHU_NOT_CONFIGURED',
-        connector: FEISHU_CONNECTOR,
-        scope: FEISHU_SYNC_SCOPE,
-        missing,
-        error: `飞书同步未配置：缺少 ${missing.join(' / ')} 环境变量`,
-        hint: FEISHU_CONFIG_HINT,
-      },
-      { status: 503 }
-    )
-  }
-
   let primarySource
   try {
     primarySource = selectPrimaryOrganizationSource(await loadOrganizationSources(orgId))
   } catch (error) {
-    if (!(error instanceof OrganizationSourceError) || error.code !== 'SOURCE_REQUIRED') {
-      return NextResponse.json(
-        {
-          code: 'FEISHU_SOURCE_UNAVAILABLE',
-          connector: FEISHU_CONNECTOR,
-          scope: FEISHU_SYNC_SCOPE,
-          error: error instanceof Error ? error.message : '飞书组织来源不可用',
-          hint: '请先在配置中心的组织架构页绑定来源1。',
-        },
-        { status: 503 },
-      )
-    }
-  }
-
-  if (primarySource && (primarySource.provider !== 'feishu' || primarySource.syncMode !== 'authoritative')) {
-    return NextResponse.json(
-      {
-        code: 'FEISHU_SOURCE_INVALID',
-        connector: FEISHU_CONNECTOR,
-        scope: FEISHU_SYNC_SCOPE,
-        error: '当前主组织来源不是可执行的飞书权威来源',
-        hint: FEISHU_CONFIG_HINT,
-      },
-      { status: 503 }
-    )
-  }
-
-  const configuredOrgId = primarySource?.externalTenantId || process.env.FEISHU_ORG_ID
-  if (!configuredOrgId) {
     return NextResponse.json(
       {
         code: 'FEISHU_SOURCE_REQUIRED',
         connector: FEISHU_CONNECTOR,
         scope: FEISHU_SYNC_SCOPE,
-        error: '当前组织没有已启用的飞书组织来源',
+        error: error instanceof OrganizationSourceError ? error.message : '飞书组织来源不可用',
         hint: FEISHU_CONFIG_HINT,
       },
-      { status: 503 }
-    )
-  }
-  const sourcePriorityText = primarySource?.priority ?? process.env.FEISHU_SOURCE_PRIORITY ?? '1'
-  const sourcePriority = Number(sourcePriorityText)
-  if (!Number.isInteger(sourcePriority) || sourcePriority < 1 || sourcePriority > 100) {
-    return NextResponse.json(
-      {
-        code: 'FEISHU_SOURCE_PRIORITY_INVALID',
-        connector: FEISHU_CONNECTOR,
-        error: '组织来源优先级必须是1-100的整数',
-      },
-      { status: 503 },
+      { status: error instanceof OrganizationSourceError && error.status === 503 ? 503 : 409 },
     )
   }
 
-  if (!primarySource && configuredOrgId !== orgId) {
+  if (primarySource.provider !== 'feishu' || primarySource.syncMode !== 'authoritative') {
     return NextResponse.json(
       {
-        code: 'FEISHU_ORG_MISMATCH',
+        code: 'FEISHU_SOURCE_INVALID',
         connector: FEISHU_CONNECTOR,
         scope: FEISHU_SYNC_SCOPE,
-        error: '飞书连接器未绑定当前组织',
+        error: '当前主组织来源不是已验证的飞书权威来源',
         hint: FEISHU_CONFIG_HINT,
       },
-      { status: 503 }
+      { status: 409 },
     )
   }
 
-  if (!canWriteUsers || (sourcePriority === 1 && !canWriteDepartments)) {
+  const sourcePriority = primarySource.priority
+  const writesDepartments = sourcePriority === 1
+  if (!canWriteUsers || (writesDepartments && !canWriteDepartments)) {
     return NextResponse.json(
       {
         code: 'FORBIDDEN',
-        error: sourcePriority === 1
+        error: writesDepartments
           ? '需要当前组织的用户写和部门写权限'
-          : '补充组织来源需要当前组织的用户写权限；不会写入部门层级',
+          : '需要当前组织的用户写权限',
       },
       { status: 403 }
     )
   }
 
-  let sourceId: string
+  const sourceId = primarySource.id
+  let verifiedConnection
   try {
-    const source = primarySource?.priority === sourcePriority
-      ? primarySource
-      : await ensureOrganizationSource({
-          systemOrgId: orgId,
-          provider: 'feishu',
-          externalTenantId: configuredOrgId,
-          priority: sourcePriority,
-          status: 'active',
-          authorityScope: sourcePriority === 1
-            ? {
-                departments: 'authoritative',
-                department_order: 'authoritative',
-                primary_department: 'authoritative',
-                employment_state: 'authoritative',
-                identity: 'evidence',
-              }
-            : {
-                departments: 'enrichment',
-                identity: 'evidence',
-              },
-          syncMode: sourcePriority === 1 ? 'authoritative' : 'enrichment',
-          actorId: user.id,
-        })
-    sourceId = source.id
+    verifiedConnection = await loadVerifiedConnection({
+      orgId,
+      provider: 'feishu',
+      sourceId,
+    })
   } catch (error) {
     return NextResponse.json(
       {
-        code: 'FEISHU_SOURCE_UNAVAILABLE',
+        code: error instanceof OrganizationConnectionError ? error.code : 'FEISHU_CONNECTION_NOT_VERIFIED',
         connector: FEISHU_CONNECTOR,
-        error: error instanceof Error ? error.message : '飞书组织来源不可用',
+        scope: FEISHU_SYNC_SCOPE,
+        error: error instanceof Error ? error.message : '飞书连接尚未验证',
+        hint: FEISHU_CONFIG_HINT,
       },
-      { status: 503 },
+      { status: error instanceof OrganizationConnectionError ? error.status : 409 },
     )
   }
+  const connectionCredentials = verifiedConnection.credentials as { appId: string; appSecret: string }
+  const appId = connectionCredentials.appId
+  const appSecret = connectionCredentials.appSecret
 
   let token: string
   let departmentResult: Awaited<ReturnType<typeof fetchFeishuDepartments>>

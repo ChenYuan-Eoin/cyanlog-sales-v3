@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({
@@ -7,8 +7,6 @@ const mocks = vi.hoisted(() => ({
   assignments: vi.fn(),
   canManage: vi.fn(),
   load: vi.fn(),
-  bind: vi.fn(),
-  unbind: vi.fn(),
   providers: vi.fn(),
 }))
 
@@ -21,8 +19,6 @@ vi.mock('@/lib/scoped-access', () => ({
 vi.mock('@/lib/organization-sources', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/organization-sources')>()),
   loadOrganizationSources: mocks.load,
-  bindOrganizationSource: mocks.bind,
-  unbindOrganizationSource: mocks.unbind,
   listOrganizationSourceProviders: mocks.providers,
 }))
 
@@ -35,6 +31,7 @@ const source = {
   externalTenantId: 'tenant-1',
   priority: 1,
   status: 'active' as const,
+  connectionState: 'verified' as const,
   authorityScope: {},
   syncMode: 'authoritative' as const,
   lastSuccessfulSyncAt: null,
@@ -61,12 +58,14 @@ beforeEach(() => {
   mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1' }])
   mocks.canManage.mockReturnValue(true)
   mocks.load.mockResolvedValue([source])
-  mocks.bind.mockResolvedValue(source)
-  mocks.unbind.mockResolvedValue({ ...source, status: 'disabled' })
   mocks.providers.mockReturnValue([
     { key: 'feishu', label: '飞书', syncAvailable: true, unavailableReason: null },
     { key: 'wecom', label: '企业微信', syncAvailable: false, unavailableReason: '未接入' },
   ])
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
 describe('/api/admin/organization-sources', () => {
@@ -93,10 +92,9 @@ describe('/api/admin/organization-sources', () => {
       [{ scopeType: 'org', scopeId: 'org-1' }],
       'org-2',
     )
-    expect(mocks.bind).not.toHaveBeenCalled()
   })
 
-  it('binds a source through the atomic lifecycle service', async () => {
+  it('keeps the legacy bind endpoint closed while shared lifecycle writes are pending', async () => {
     const response = await POST(request('POST', {
       provider: 'feishu',
       external_tenant_id: 'tenant-2',
@@ -105,25 +103,30 @@ describe('/api/admin/organization-sources', () => {
       sync_mode: 'authoritative',
       authority_scope: { departments: 'authoritative' },
     }))
-    expect(response.status).toBe(200)
-    expect(mocks.bind).toHaveBeenCalledWith(expect.objectContaining({
-      systemOrgId: 'org-1',
-      provider: 'feishu',
-      externalTenantId: 'tenant-2',
-      priority: 1,
-      status: 'active',
-      syncMode: 'authoritative',
-      actorId: 'user-1',
-    }))
+    expect(response.status).toBe(409)
+    expect((await response.json()).error.message).toContain('只保存共享连接草稿')
   })
 
-  it('unbinds by source id without deleting the source record', async () => {
+  it('keeps the legacy unbind endpoint closed', async () => {
     const response = await DELETE(request('DELETE', { source_id: source.id }))
+    expect(response.status).toBe(409)
+    expect((await response.json()).error.message).toContain('启用、主来源切换、同步和停用')
+  })
+
+  it('does not offer a second legacy Feishu import after a shared draft exists', async () => {
+    vi.stubEnv('FEISHU_APP_ID', 'legacy-app')
+    vi.stubEnv('FEISHU_APP_SECRET', 'legacy-secret')
+    vi.stubEnv('FEISHU_ORG_ID', 'org-1')
+    mocks.load.mockResolvedValue([{
+      ...source,
+      priority: 100,
+      status: 'draft',
+      connectionState: 'configured',
+      syncMode: 'read_only',
+    }])
+
+    const response = await GET(request())
     expect(response.status).toBe(200)
-    expect(mocks.unbind).toHaveBeenCalledWith({
-      systemOrgId: 'org-1',
-      sourceId: source.id,
-      actorId: 'user-1',
-    })
+    expect((await response.json()).data.legacy_feishu_binding).toBeNull()
   })
 })

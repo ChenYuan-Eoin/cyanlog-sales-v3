@@ -50,6 +50,27 @@ vi.mock('@/lib/supabase', () => ({
 
 vi.mock('@/lib/organization-sources', () => organizationSourceMocks)
 
+const connectionMocks = vi.hoisted(() => {
+  class OrganizationConnectionError extends Error {
+    code: string
+    status: number
+
+    constructor(code: string, message: string, status = 409) {
+      super(message)
+      this.name = 'OrganizationConnectionError'
+      this.code = code
+      this.status = status
+    }
+  }
+
+  return {
+    loadVerifiedConnection: vi.fn(),
+    OrganizationConnectionError,
+  }
+})
+
+vi.mock('@/lib/organization-connections', () => connectionMocks)
+
 import { requireAuth } from '@/lib/auth'
 import {
   canMutateOrgDepartments,
@@ -63,6 +84,7 @@ import {
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
 import { supabaseAdmin } from '@/lib/supabase'
+import { loadVerifiedConnection } from '@/lib/organization-connections'
 import {
   ensureOrganizationSource,
   loadOrganizationSources,
@@ -76,11 +98,6 @@ const orgId = 'org-1'
 const assignments = [{ scopeType: 'org', scopeId: orgId, roleCode: 'ADMIN' }]
 const databaseDepartmentId = 'department-db-1'
 const existingUserId = 'user-db-1'
-
-const originalFeishuAppId = process.env.FEISHU_APP_ID
-const originalFeishuAppSecret = process.env.FEISHU_APP_SECRET
-const originalFeishuOrgId = process.env.FEISHU_ORG_ID
-const originalFeishuSourcePriority = process.env.FEISHU_SOURCE_PRIORITY
 
 function makeRequest(): any {
   return new Request('https://example.test/api/access/feishu/sync', { method: 'POST' })
@@ -119,18 +136,35 @@ function jsonResponse(body: unknown) {
   })
 }
 
-function configureFeishuEnv(boundOrgId = orgId) {
-  process.env.FEISHU_APP_ID = 'app-id'
-  process.env.FEISHU_APP_SECRET = 'app-secret'
-  process.env.FEISHU_ORG_ID = boundOrgId
+const primarySource = {
+  id: 'source-1',
+  systemOrgId: orgId,
+  provider: 'feishu',
+  externalTenantId: 'tenant-1',
+  priority: 1,
+  status: 'active',
+  connectionState: 'verified',
+  connectionRevision: 'configuration-revision-1',
+  draftCheckStatus: 'preview_ready',
+  authorityScope: {},
+  syncMode: 'authoritative',
+  lastSuccessfulSyncAt: null,
+  lastError: null,
+  createdAt: '',
+  updatedAt: '',
 }
 
-function restoreEnv(name: string, value: string | undefined) {
-  if (value === undefined) {
-    delete process.env[name]
-  } else {
-    process.env[name] = value
-  }
+function configureVerifiedFeishuConnection(priority = 1) {
+  const configuredSource = { ...primarySource, priority }
+  ;(loadOrganizationSources as any).mockResolvedValue([configuredSource])
+  ;(selectPrimaryOrganizationSource as any).mockReturnValue(configuredSource)
+  ;(loadVerifiedConnection as any).mockResolvedValue({
+    sourceId: primarySource.id,
+    provider: 'feishu',
+    revision: primarySource.connectionRevision,
+    credentials: { appId: 'app-id', appSecret: 'example-app-secret' },
+    summary: {},
+  })
 }
 
 function feishuUser(): {
@@ -219,10 +253,6 @@ function existingUserLookup(status: 'inactive' | 'suspended' = 'inactive') {
 describe('POST /api/access/feishu/sync', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    delete process.env.FEISHU_APP_ID
-    delete process.env.FEISHU_APP_SECRET
-    delete process.env.FEISHU_ORG_ID
-    delete process.env.FEISHU_SOURCE_PRIORITY
     vi.stubGlobal('fetch', vi.fn())
     ;(requireAuth as any).mockResolvedValue({ id: 'u-1' })
     ;(getFreshDefaultOrgId as any).mockResolvedValue(orgId)
@@ -232,23 +262,10 @@ describe('POST /api/access/feishu/sync', () => {
     ;(ensureDefaultOrganizationMembership as any).mockResolvedValue(undefined)
     ;(syncPrimaryDepartmentMembership as any).mockResolvedValue(undefined)
     ;(syncUserSalesSpaces as any).mockResolvedValue(undefined)
-    ;(loadOrganizationSources as any).mockResolvedValue([])
-    ;(ensureOrganizationSource as any).mockResolvedValue({
-      id: 'source-1',
-      systemOrgId: orgId,
-      provider: 'feishu',
-      externalTenantId: orgId,
-      priority: 1,
-      status: 'active',
-      authorityScope: {},
-      syncMode: 'authoritative',
-      lastSuccessfulSyncAt: null,
-      lastError: null,
-      createdAt: '',
-      updatedAt: '',
-    })
+    configureVerifiedFeishuConnection()
+    ;(ensureOrganizationSource as any).mockResolvedValue(primarySource)
     ;(upsertExternalIdentity as any).mockResolvedValue(undefined)
-    ;(selectPrimaryOrganizationSource as any).mockImplementation((sources: Array<any>) => {
+      ;(selectPrimaryOrganizationSource as any).mockImplementation((sources: Array<any>) => {
       const primary = sources.filter((source) => (
         source.status === 'active' && source.priority === 1
       ))
@@ -265,10 +282,7 @@ describe('POST /api/access/feishu/sync', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
-    restoreEnv('FEISHU_APP_ID', originalFeishuAppId)
-    restoreEnv('FEISHU_APP_SECRET', originalFeishuAppSecret)
-    restoreEnv('FEISHU_ORG_ID', originalFeishuOrgId)
-    restoreEnv('FEISHU_SOURCE_PRIORITY', originalFeishuSourcePriority)
+    vi.unstubAllEnvs()
   })
 
   it('未登录时零副作用返回标准鉴权错误', async () => {
@@ -291,7 +305,7 @@ describe('POST /api/access/feishu/sync', () => {
     ['用户写权限只来自其他组织', false, true],
     ['部门写权限只来自其他组织', true, false],
   ])('%s 时在环境、外部请求和业务表前拒绝', async (_label, userWrite, departmentWrite) => {
-    configureFeishuEnv()
+    configureVerifiedFeishuConnection()
     ;(canMutateOrgUsers as any).mockReturnValue(userWrite)
     ;(canMutateOrgDepartments as any).mockReturnValue(departmentWrite)
 
@@ -309,63 +323,77 @@ describe('POST /api/access/feishu/sync', () => {
     expect(ensureDefaultOrganizationMembership).not.toHaveBeenCalled()
   })
 
-  it('缺少组织绑定时 fail closed 且不访问外部或业务表', async () => {
-    process.env.FEISHU_APP_ID = 'app-id'
-    process.env.FEISHU_APP_SECRET = 'app-secret'
+  it('缺少已启用主来源时 fail closed 且不访问外部或业务表', async () => {
+    ;(loadOrganizationSources as any).mockResolvedValue([])
 
     const res = await POST(makeRequest())
     const body = await res.json()
 
-    expect(res.status).toBe(503)
+    expect(res.status).toBe(409)
     expect(body.code).toBe('FEISHU_SOURCE_REQUIRED')
+    expect(loadVerifiedConnection).not.toHaveBeenCalled()
     expect(fetch).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
-  it('组织绑定与当前组织不一致时 503 fail closed', async () => {
-    configureFeishuEnv('org-2')
+  it('主来源连接未验证时 fail closed 且不读取飞书目录', async () => {
+    ;(loadVerifiedConnection as any).mockRejectedValue(new connectionMocks.OrganizationConnectionError(
+      'CONFIGURATION_REQUIRED',
+      '当前组织连接尚无已验证的生效配置。',
+      409,
+    ))
 
     const res = await POST(makeRequest())
     const body = await res.json()
 
-    expect(res.status).toBe(503)
-    expect(body.code).toBe('FEISHU_ORG_MISMATCH')
+    expect(res.status).toBe(409)
+    expect(body.code).toBe('CONFIGURATION_REQUIRED')
+    expect(loadVerifiedConnection).toHaveBeenCalledWith({
+      orgId,
+      provider: 'feishu',
+      sourceId: primarySource.id,
+    })
     expect(fetch).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
-  it('三项飞书配置均缺失时返回完整缺失项', async () => {
-    const res = await POST(makeRequest())
-    const body = await res.json()
+  it('uses the verified shared connection instead of legacy Feishu environment credentials', async () => {
+    vi.stubEnv('FEISHU_APP_ID', 'legacy-wrong-app')
+    vi.stubEnv('FEISHU_APP_SECRET', 'legacy-wrong-secret')
+    const fetchMock = vi.mocked(fetch as any).mockResolvedValueOnce(jsonResponse({ code: 999, msg: 'invalid app' }))
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
-    expect(res.status).toBe(503)
-    expect(body.code).toBe('FEISHU_NOT_CONFIGURED')
-    expect(body.missing).toEqual(['FEISHU_APP_ID', 'FEISHU_APP_SECRET'])
-    expect(body.hint).toContain('配置中心')
+    await POST(makeRequest())
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({
+      app_id: 'app-id',
+      app_secret: 'example-app-secret',
+    })
+    expect(loadVerifiedConnection).toHaveBeenCalledWith({
+      orgId,
+      provider: 'feishu',
+      sourceId: primarySource.id,
+    })
+    consoleError.mockRestore()
   })
 
-  it('持久化主来源不是飞书权威来源时 fail closed', async () => {
-    configureFeishuEnv()
+  it('persisted primary source must be an authoritative Feishu source', async () => {
     ;(loadOrganizationSources as any).mockResolvedValue([{
-      id: 'source-1',
+      ...primarySource,
       provider: 'wecom',
-      externalTenantId: orgId,
-      priority: 1,
-      status: 'active',
-      syncMode: 'authoritative',
+      connectionState: 'verified',
     }])
 
     const res = await POST(makeRequest())
     const body = await res.json()
 
-    expect(res.status).toBe(503)
+    expect(res.status).toBe(409)
     expect(body.code).toBe('FEISHU_SOURCE_INVALID')
+    expect(loadVerifiedConnection).not.toHaveBeenCalled()
     expect(fetch).not.toHaveBeenCalled()
   })
 
   it('飞书上游失败时保留同步域上下文', async () => {
-    process.env.FEISHU_APP_ID = 'app-id'
-    process.env.FEISHU_APP_SECRET = 'app-secret'
     ;(loadOrganizationSources as any).mockResolvedValue([{
       id: 'source-1',
       provider: 'feishu',
@@ -395,7 +423,7 @@ describe('POST /api/access/feishu/sync', () => {
   })
 
   it('请求飞书部门列表时使用不超过上游限制的 page_size', async () => {
-    configureFeishuEnv()
+    configureVerifiedFeishuConnection()
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const fetchMock = vi.mocked(fetch as any)
       .mockResolvedValueOnce(jsonResponse({
@@ -413,7 +441,7 @@ describe('POST /api/access/feishu/sync', () => {
   })
 
   it('飞书只返回 root 或 0 个部门时保留 partial 语义', async () => {
-    configureFeishuEnv()
+    configureVerifiedFeishuConnection()
     mockTableQueues({
       departments: [makeQuery({ data: [], error: null })],
       users: [makeQuery({ data: [], error: null })],
@@ -448,7 +476,7 @@ describe('POST /api/access/feishu/sync', () => {
   })
 
   it('部门已提交但已有用户查询失败时返回可识别 partial 和真实部门计数', async () => {
-    configureFeishuEnv()
+    configureVerifiedFeishuConnection()
     mockDirectoryFetch()
     const committedDepartmentQueries = departmentQueries()
     mockTableQueues({
@@ -479,7 +507,7 @@ describe('POST /api/access/feishu/sync', () => {
   })
 
   it('部门已提交但 SUPER_ADMIN 保护查询失败时不编造成员成功计数', async () => {
-    configureFeishuEnv()
+    configureVerifiedFeishuConnection()
     mockDirectoryFetch()
     mockTableQueues({
       departments: departmentQueries(),
@@ -507,7 +535,7 @@ describe('POST /api/access/feishu/sync', () => {
   it.each(['inactive', 'suspended'] as const)(
     '更新已有 %s 用户时不覆盖其账号状态',
     async (status) => {
-      configureFeishuEnv()
+      configureVerifiedFeishuConnection()
       mockDirectoryFetch()
       const userUpdate = makeQuery({ data: null, error: null })
       mockTableQueues({
@@ -535,7 +563,7 @@ describe('POST /api/access/feishu/sync', () => {
   )
 
   it('新飞书用户仅在 insert 时初始化 active 状态', async () => {
-    configureFeishuEnv()
+    configureVerifiedFeishuConnection()
     mockDirectoryFetch()
     const userInsert = makeQuery({ data: { id: 'new-user-db-1' }, error: null })
     mockTableQueues({
@@ -568,8 +596,7 @@ describe('POST /api/access/feishu/sync', () => {
   })
 
   it('补充来源只填充缺失资料，不写部门层级、主部门、任职或角色', async () => {
-    configureFeishuEnv()
-    process.env.FEISHU_SOURCE_PRIORITY = '2'
+    configureVerifiedFeishuConnection(2)
     ;(canMutateOrgDepartments as any).mockReturnValue(false)
     mockDirectoryFetch({
       ...feishuUser(),
@@ -627,8 +654,7 @@ describe('POST /api/access/feishu/sync', () => {
   })
 
   it('补充来源同一标识命中多个账号时保留冲突且不合并成员', async () => {
-    configureFeishuEnv()
-    process.env.FEISHU_SOURCE_PRIORITY = '2'
+    configureVerifiedFeishuConnection(2)
     mockDirectoryFetch()
     mockTableQueues({
       users: [makeQuery({
@@ -680,8 +706,7 @@ describe('POST /api/access/feishu/sync', () => {
   })
 
   it('补充来源未命中既有成员时不创建账号或成员关系', async () => {
-    configureFeishuEnv()
-    process.env.FEISHU_SOURCE_PRIORITY = '2'
+    configureVerifiedFeishuConnection(2)
     mockDirectoryFetch()
     const usersLookup = makeQuery({ data: [], error: null })
     mockTableQueues({
@@ -707,7 +732,7 @@ describe('POST /api/access/feishu/sync', () => {
   })
 
   it('authoritative source offboards identities absent from a complete snapshot but protects root admins', async () => {
-    configureFeishuEnv()
+    configureVerifiedFeishuConnection()
     mockDirectoryFetch()
     mockTableQueues({
       departments: departmentQueries(),
@@ -750,7 +775,7 @@ describe('POST /api/access/feishu/sync', () => {
   })
 
   it('匹配当前组织 SUPER_ADMIN 时跳过所有用户及关系写入', async () => {
-    configureFeishuEnv()
+    configureVerifiedFeishuConnection()
     mockDirectoryFetch()
     mockTableQueues({
       departments: departmentQueries(),

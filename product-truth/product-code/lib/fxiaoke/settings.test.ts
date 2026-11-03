@@ -1,98 +1,136 @@
 // @vitest-environment node
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-const db = vi.hoisted(() => ({ rows: [] as Record<string, unknown>[], projections: [] as string[] }))
-const upstream = vi.hoisted(() => ({ preview: vi.fn(), discover: vi.fn() }))
-vi.mock('./client', () => ({ previewDirectory: upstream.preview, discoverEnterprise: upstream.discover }))
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: (table: string) => {
-  if (table !== 'organization_fxiaoke_connections') throw new Error('Unexpected table write')
-  let operation = 'read'; let payload: Record<string, unknown> = {}; let columns = '*'
-  const filters: Array<[string, unknown]> = []
-  let leaseCutoff: string | null = null
-  const query = {
-    select(value: string) { columns = value; db.projections.push(value); return query },
-    eq(key: string, value: unknown) { filters.push([key, value]); return query },
-    or(value: string) { leaseCutoff = value.split('preview_started_at.lt.')[1]; return query },
-    update(value: Record<string, unknown>) { operation = 'update'; payload = value; return query },
-    insert(value: Record<string, unknown>) { operation = 'insert'; payload = value; return query },
-    async maybeSingle() {
-      let row = db.rows.find(item => filters.every(([key, value]) => item[key] === value))
-      if (row && leaseCutoff && row.preview_started_at && String(row.preview_started_at) >= leaseCutoff) row = undefined
-      if (operation === 'insert') {
-        if (db.rows.some(item => item.system_org_id === payload.system_org_id)) return { data: null, error: { code: '23505' } }
-        row = { ...payload }; db.rows.push(row)
-      } else if (operation === 'update' && row) Object.assign(row, payload)
-      return { data: row ? Object.fromEntries(columns.split(',').map(key => [key, row![key]])) : null, error: null }
-    },
-  }; return query
-} } }))
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const shared = vi.hoisted(() => ({
+  load: vi.fn(),
+  save: vi.fn(),
+  credentials: vi.fn(),
+  preview: vi.fn(),
+}))
+
+vi.mock('@/lib/organization-connections', () => ({
+  loadOrganizationConnection: shared.load,
+  saveOrganizationConnection: shared.save,
+  loadVerifiedConnection: shared.credentials,
+  previewOrganizationConnection: shared.preview,
+}))
+
 import { loadConnection, loadOAuthCredentials, previewSavedConnection, saveConnection } from './settings'
-import { decryptCredentials } from './crypto'
-const input = { appId: 'FSAID_test', expectedEa: 'example', apiUserId: '123', appSecret: 'test-secret', permanentCode: 'test-code', revision: null }
-beforeEach(() => { db.rows.length = 0; db.projections.length = 0; upstream.preview.mockReset(); upstream.discover.mockReset().mockResolvedValue({ ea: "example", corpId: 'FSCID_example' }); vi.stubEnv('ORGANIZATION_CREDENTIALS_ENCRYPTION_KEY', 'ab'.repeat(32)) })
-afterEach(() => vi.unstubAllEnvs())
-it('encrypts on save, reads public metadata back, and never returns secrets', async () => {
-  const result = await saveConnection('org-a', 'admin', input)
-  expect(result).toMatchObject({ configured: true, lastCheckStatus: 'not_checked' })
-  expect(JSON.stringify(result)).not.toContain('test-secret')
-  expect(JSON.stringify(db.rows)).not.toContain('test-secret')
-  expect(JSON.parse(decryptCredentials('org-a', String(db.rows[0].credentials_ciphertext)))).toMatchObject({ appSecret: input.appSecret, expectedCorpId: 'FSCID_example' })
-  db.projections.length = 0
-  expect(await loadConnection('org-b')).toBeNull()
-  expect(db.projections.some(value => value.includes('ciphertext'))).toBe(false)
-})
-it('loads OAuth credentials only through the server-side encrypted row', async () => {
-  await saveConnection('org-a', 'admin', input)
-  await expect(loadOAuthCredentials('org-a')).resolves.toMatchObject({
-    appId: input.appId,
-    appSecret: input.appSecret,
-    expectedEa: input.expectedEa,
-    expectedCorpId: 'FSCID_example',
+
+const summary = {
+  sourceId: 'source-1',
+  provider: 'fxiaoke' as const,
+  externalTenantId: 'FSCID_primary',
+  revision: 'revision-1',
+  state: 'verified' as const,
+  draftCheckStatus: 'preview_ready' as const,
+  configured: true,
+  effectiveVerified: true,
+  metadata: { appId: 'FSAID_test', expectedEa: 'FSCID_primary', apiUserId: '10001' },
+  lastCheckedAt: '2026-11-03T05:00:00.000Z',
+  lastVerifiedAt: '2026-11-03T05:00:00.000Z',
+  lastError: null,
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  shared.load.mockResolvedValue(summary)
+  shared.save.mockResolvedValue(summary)
+  shared.credentials.mockResolvedValue({
+    sourceId: 'source-1',
+    provider: 'fxiaoke',
+    revision: 'effective-revision',
+    credentials: {
+      appId: 'FSAID_test',
+      appSecret: 'secret',
+      permanentCode: 'permanent',
+      expectedEa: 'FSCID_primary',
+      apiUserId: '10001',
+    },
+    summary,
   })
-  expect(JSON.stringify(await loadConnection('org-a'))).not.toContain(input.appSecret)
-})
-it('preserves blank-edit secrets only within the same app and enterprise', async () => {
-  const saved = await saveConnection('org-a', 'admin', input)
-  const next = await saveConnection('org-a', 'admin', { appId: input.appId, expectedEa: input.expectedEa, apiUserId: '456', revision: saved!.revision })
-  expect(next!.revision).not.toBe(saved!.revision)
-  expect(db.rows).toHaveLength(1)
-  expect(JSON.parse(decryptCredentials('org-a', String(db.rows[0].credentials_ciphertext))).appSecret).toBe(input.appSecret)
-  await expect(saveConnection('org-a', 'admin', { appId: 'another-app', expectedEa: input.expectedEa, apiUserId: '456', revision: next!.revision })).rejects.toMatchObject({ code: 'CREDENTIALS_REQUIRED' })
-})
-it('rejects stale updates and duplicate first saves instead of overwriting configuration', async () => {
-  await saveConnection('org-a', 'admin', input)
-  await expect(saveConnection('org-a', 'admin', input)).rejects.toMatchObject({ code: 'CONFIG_CHANGED' })
-  expect(db.rows).toHaveLength(1)
-})
-it('leases previews and refuses concurrent provider calls', async () => {
-  const saved = await saveConnection('org-a', 'admin', input)
-  upstream.preview.mockResolvedValue({ checkedAt: '2026-10-27T00:00:00Z', applied: false })
-  await previewSavedConnection('org-a', saved!.revision)
-  expect((await loadConnection('org-a'))?.lastCheckStatus).toBe('preview_ready')
-  await expect(previewSavedConnection('org-a', saved!.revision)).rejects.toMatchObject({ code: 'PREVIEW_BUSY' })
-  expect(upstream.preview).toHaveBeenCalledTimes(1)
-})
-it('does not record success for credentials changed during preview', async () => {
-  const saved = await saveConnection('org-a', 'admin', input)
-  upstream.preview.mockImplementation(async () => {
-    db.rows[0].revision = 'another-revision'
-    return { checkedAt: '2026-10-27T00:00:00Z', applied: false }
+  shared.preview.mockResolvedValue({
+    connection: summary,
+    preview: {
+      checkedAt: '2026-11-03T05:00:00.000Z',
+      provider: 'fxiaoke',
+      externalTenantId: 'FSCID_primary',
+      departments: [{ id: 'dept-1', name: '销售部', parentId: null, status: 'active' }],
+      employees: [{ id: 'employee-1', name: '张三', departmentIds: ['dept-1'], status: 'active', loginDisabled: false }],
+      warnings: ['仅包含当前员工可访问范围'],
+      applied: false,
+    },
   })
-  await expect(previewSavedConnection('org-a', saved!.revision)).rejects.toMatchObject({ code: 'CONFIG_CHANGED' })
-  expect(db.rows[0].last_check_status).toBe('not_checked')
 })
 
-it('discovers the enterprise on the server and does not persist on provider failure', async () => {
-  const { expectedEa: _legacy, ...automatic } = input
-  await saveConnection('org-a', 'admin', automatic)
-  expect(upstream.discover).toHaveBeenCalledWith({ appId: input.appId, appSecret: input.appSecret, permanentCode: input.permanentCode }, undefined)
-  expect(db.rows[0].expected_ea).toBe('example')
-  upstream.discover.mockRejectedValueOnce(new Error('connection failed'))
-  await expect(saveConnection('org-b', 'admin', automatic)).rejects.toThrow('connection failed')
-  expect(db.rows).toHaveLength(1)
-})
-it('refuses a provider enterprise mismatch without changing saved credentials', async () => {
-  const saved = await saveConnection('org-a', 'admin', input)
-  upstream.discover.mockResolvedValueOnce({ ea: 'another' })
-  await expect(saveConnection('org-a', 'admin', { ...input, expectedEa: undefined, revision: saved!.revision })).rejects.toMatchObject({ code: 'ENTERPRISE_MISMATCH' })
-  expect(db.rows[0].revision).toBe(saved!.revision)
+describe('Fxiaoke shared connection wrapper', () => {
+  it('reads only public metadata from the unified organization source record', async () => {
+    await expect(loadConnection('org-1')).resolves.toEqual({
+      appId: 'FSAID_test',
+      expectedEa: 'FSCID_primary',
+      apiUserId: '10001',
+      revision: 'revision-1',
+      configured: true,
+      lastCheckedAt: '2026-11-03T05:00:00.000Z',
+      lastCheckStatus: 'preview_ready',
+      lastError: null,
+    })
+    expect(shared.load).toHaveBeenCalledWith('org-1', 'fxiaoke')
+  })
+
+  it('saves the provider-specific value through the shared service', async () => {
+    const value = {
+      appId: 'FSAID_test',
+      appSecret: 'secret',
+      permanentCode: 'permanent',
+      expectedEa: 'FSCID_primary',
+      apiUserId: '10001',
+      revision: null,
+    }
+    await saveConnection('org-1', 'admin-1', value)
+    expect(shared.save).toHaveBeenCalledWith({
+      orgId: 'org-1',
+      actorId: 'admin-1',
+      provider: 'fxiaoke',
+      value,
+    })
+  })
+
+  it('uses only a verified effective connection for OAuth credentials', async () => {
+    await expect(loadOAuthCredentials('org-1')).resolves.toMatchObject({
+      appId: 'FSAID_test',
+      appSecret: 'secret',
+      expectedEa: 'FSCID_primary',
+    })
+    expect(shared.credentials).toHaveBeenCalledWith({ orgId: 'org-1', provider: 'fxiaoke' })
+    expect(shared.load).not.toHaveBeenCalled()
+  })
+
+  it('previews a saved revision through the same lifecycle without applying the directory', async () => {
+    await expect(previewSavedConnection('org-1', 'revision-1', 'admin-1')).resolves.toMatchObject({
+      ea: 'FSCID_primary',
+      checkedAt: '2026-11-03T05:00:00.000Z',
+      departments: [{ id: 'dept-1', name: '销售部', parentId: null, status: 'active' }],
+      employees: [{ id: 'employee-1', name: '张三', departmentIds: ['dept-1'], status: 'active', loginDisabled: false }],
+      warnings: ['仅包含当前员工可访问范围'],
+      applied: false,
+    })
+    expect(shared.preview).toHaveBeenCalledWith({
+      orgId: 'org-1',
+      actorId: 'admin-1',
+      provider: 'fxiaoke',
+      revision: 'revision-1',
+    })
+  })
+
+  it('preserves shared lifecycle errors as Fxiaoke contract errors', async () => {
+    shared.credentials.mockRejectedValue(Object.assign(new Error('尚未验证'), {
+      code: 'CONNECTION_NOT_VERIFIED',
+      status: 409,
+    }))
+    await expect(loadOAuthCredentials('org-1')).rejects.toMatchObject({
+      code: 'CONNECTION_NOT_VERIFIED',
+      status: 409,
+    })
+  })
 })

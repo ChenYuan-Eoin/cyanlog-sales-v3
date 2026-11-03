@@ -1,117 +1,103 @@
-// REQ: F003 / WP91-WP94. Tenant-scoped credentials with optimistic concurrency.
-import { randomUUID } from 'node:crypto'
-import { supabaseAdmin } from '@/lib/supabase'
+// REQ: F003 / WP50. Fxiaoke is a thin provider adapter over the shared connection service.
+import {
+  loadOrganizationConnection,
+  loadVerifiedConnection,
+  previewOrganizationConnection,
+  saveOrganizationConnection,
+  type ConnectionSummary as SharedConnectionSummary,
+} from '@/lib/organization-connections'
 import { connectionInput, FxiaokeError, type ConnectionSummary, type Credentials } from './contracts'
-import { decryptCredentials, encryptCredentials } from './crypto'
-import { discoverEnterprise, previewDirectory } from './client'
-import { transportForOrganization } from './egress/server'
 
-const PUBLIC_COLUMNS = 'app_id,expected_ea,api_user_id,revision,last_checked_at,last_check_status,last_error'
-function failure() { return new FxiaokeError('CONFIG_STORAGE_UNAVAILABLE', '纷享配置存储暂不可用，请确认数据库迁移已部署。', 503) }
+function toConnectionSummary(row: SharedConnectionSummary | null): ConnectionSummary | null {
+  if (!row) return null
+  const appId = typeof row.metadata.appId === 'string' ? row.metadata.appId : ''
+  const expectedEa = typeof row.metadata.expectedEa === 'string' ? row.metadata.expectedEa : row.externalTenantId
+  const apiUserId = typeof row.metadata.apiUserId === 'string' ? row.metadata.apiUserId : ''
+  return {
+    appId,
+    expectedEa: expectedEa.startsWith('pending-') ? '' : expectedEa,
+    apiUserId,
+    revision: row.revision,
+    configured: row.configured,
+    lastCheckedAt: row.lastCheckedAt,
+    lastCheckStatus: row.draftCheckStatus,
+    lastError: row.lastError,
+  }
+}
+
+function translate(error: unknown): never {
+  if (error instanceof FxiaokeError) throw error
+  if (error && typeof error === 'object' && 'code' in error && 'message' in error && 'status' in error) {
+    const typed = error as { code: unknown; message: unknown; status: unknown }
+    throw new FxiaokeError(
+      String(typed.code),
+      String(typed.message),
+      typeof typed.status === 'number' ? typed.status : 400,
+    )
+  }
+  throw new FxiaokeError('CONFIG_STORAGE_UNAVAILABLE', '组织连接存储暂时不可用，请稍后重试。', 503)
+}
+
 export async function loadConnection(orgId: string): Promise<ConnectionSummary | null> {
-  const { data, error } = await supabaseAdmin.from('organization_fxiaoke_connections').select(PUBLIC_COLUMNS).eq('system_org_id', orgId).maybeSingle()
-  if (error) throw failure()
-  if (!data) return null
-  return { appId: data.app_id, expectedEa: data.expected_ea, apiUserId: data.api_user_id, revision: data.revision, configured: true, lastCheckedAt: data.last_checked_at, lastCheckStatus: data.last_check_status, lastError: data.last_error }
+  try {
+    return toConnectionSummary(await loadOrganizationConnection(orgId, 'fxiaoke'))
+  } catch (error) {
+    return translate(error)
+  }
 }
-async function secretRow(orgId: string) {
-  const { data, error } = await supabaseAdmin.from('organization_fxiaoke_connections').select('app_id,expected_ea,api_user_id,revision,credentials_ciphertext').eq('system_org_id', orgId).maybeSingle()
-  if (error) throw failure()
-  return data
-}
+
 export async function saveConnection(orgId: string, actorId: string, raw: unknown) {
   const parsed = connectionInput.safeParse(raw)
   if (!parsed.success) throw new FxiaokeError('INVALID_CONFIGURATION', '请填写有效的 AppID 和员工 ID；密钥不可填写空白。')
-  const input = parsed.data; const existing = await secretRow(orgId)
-  if ((existing?.revision || null) !== input.revision) throw new FxiaokeError('CONFIG_CHANGED', '配置已被其他管理员更新，请重新读取后再保存。', 409)
-  let previous: Partial<Credentials> = {}
-  if (existing && input.appId === existing.app_id) {
-    try { previous = JSON.parse(decryptCredentials(orgId, existing.credentials_ciphertext)) as Credentials } catch (err) {
-      if (!input.appSecret || !input.permanentCode) throw err
+  try {
+    return toConnectionSummary(await saveOrganizationConnection({
+      orgId,
+      actorId,
+      provider: 'fxiaoke',
+      value: parsed.data,
+    }))
+  } catch (error) {
+    return translate(error)
+  }
+}
+
+// Server-only credential source. Draft values never enter an OAuth flow.
+export async function loadOAuthCredentials(orgId: string): Promise<Credentials> {
+  try {
+    const connection = await loadVerifiedConnection({ orgId, provider: 'fxiaoke' })
+    return connection.credentials as unknown as Credentials
+  } catch (error) {
+    return translate(error)
+  }
+}
+
+export async function previewSavedConnection(orgId: string, revision: string, actorId = 'system') {
+  try {
+    const result = await previewOrganizationConnection({ orgId, actorId, provider: 'fxiaoke', revision })
+    const toPublic = (item: { id: string; name: string; parentId: string | null; status: string }) => ({
+      id: item.id,
+      name: item.name,
+      parentId: item.parentId,
+      status: item.status,
+    })
+    const toEmployee = (item: { id: string; name: string; departmentIds: string[]; status: string; loginDisabled: boolean | null }) => ({
+      id: item.id,
+      name: item.name,
+      departmentIds: item.departmentIds,
+      status: item.status,
+      loginDisabled: item.loginDisabled,
+    })
+    return {
+      ea: result.preview.externalTenantId,
+      corpId: '',
+      checkedAt: result.preview.checkedAt,
+      departments: result.preview.departments.map(toPublic),
+      employees: result.preview.employees.map(toEmployee),
+      warnings: result.preview.warnings,
+      visibility: 'authorized_scope' as const,
+      applied: false as const,
     }
+  } catch (error) {
+    return translate(error)
   }
-  const appSecret = input.appSecret || previous.appSecret || ''
-  const permanentCode = input.permanentCode || previous.permanentCode || ''
-  if (!appSecret || !permanentCode) throw new FxiaokeError('CREDENTIALS_REQUIRED', '首次配置或更换应用时，请填写 APPSecret 和永久授权码。')
-  // Never trust a browser-supplied enterprise identifier; obtain it from the provider.
-  const shouldDiscover = !existing || input.appId !== existing.app_id || !!input.appSecret || !!input.permanentCode
-  const enterprise = shouldDiscover
-    ? await discoverEnterprise({ appId: input.appId, appSecret, permanentCode }, transportForOrganization(orgId))
-    : null
-  const expectedEa = enterprise?.ea || existing?.expected_ea || ''
-  const expectedCorpId = enterprise?.corpId || previous.expectedCorpId
-  if ((input.expectedEa && input.expectedEa !== expectedEa) || (existing && existing.expected_ea !== expectedEa)) {
-    throw new FxiaokeError('ENTERPRISE_MISMATCH', '应用所属企业与现有配置不一致，请核对应用凭据。', 409)
-  }
-  const credentials: Credentials = { appId: input.appId, expectedEa, apiUserId: input.apiUserId, appSecret, permanentCode, ...(expectedCorpId ? { expectedCorpId } : {}) }
-  const row = { system_org_id: orgId, app_id: input.appId, expected_ea: expectedEa, api_user_id: input.apiUserId,
-    revision: randomUUID(), credentials_ciphertext: encryptCredentials(orgId, JSON.stringify(credentials)), updated_by: actorId,
-    updated_at: new Date().toISOString(), last_checked_at: null, last_check_status: 'not_checked', last_error: null }
-  const query = existing
-    ? supabaseAdmin.from('organization_fxiaoke_connections').update(row).eq('system_org_id', orgId).eq('revision', existing.revision)
-    : supabaseAdmin.from('organization_fxiaoke_connections').insert(row)
-  const result = await query.select('revision').maybeSingle()
-  if (result.error?.code === '23505' || (!result.error && !result.data)) throw new FxiaokeError('CONFIG_CHANGED', '配置已发生变化，请重新读取后再保存。', 409)
-  if (result.error) throw failure()
-  const saved = await loadConnection(orgId)
-  if (!saved || saved.revision !== row.revision) throw new FxiaokeError('READBACK_CHANGED', '保存后配置发生变化，请重新读取核对。', 409)
-  return saved
-}
-
-// Server-only credential source for the employee OAuth callback. No caller may
-// return this object to a browser or include its secret values in logs.
-export async function loadOAuthCredentials(orgId: string) {
-  const row = await secretRow(orgId)
-  if (!row) throw new FxiaokeError('CONFIGURATION_REQUIRED', '尚未配置纷享自建应用，请先由管理员完成配置。', 409)
-
-  let decoded: Credentials
-  try {
-    decoded = JSON.parse(decryptCredentials(orgId, row.credentials_ciphertext)) as Credentials
-  } catch {
-    throw new FxiaokeError('CREDENTIALS_UNREADABLE', '已保存的纷享凭据无法解密，请管理员重新配置。', 503)
-  }
-
-  if (
-    !decoded
-    || decoded.appId !== row.app_id
-    || decoded.expectedEa !== row.expected_ea
-    || decoded.apiUserId !== row.api_user_id
-    || typeof decoded.appSecret !== 'string'
-    || !decoded.appSecret
-    || typeof decoded.permanentCode !== 'string'
-    || !decoded.permanentCode
-  ) {
-    throw new FxiaokeError('CREDENTIALS_UNREADABLE', '已保存的纷享凭据与配置不一致，请管理员重新配置。', 503)
-  }
-
-  return decoded
-}
-
-export async function previewSavedConnection(orgId: string, revision: string) {
-  const row = await secretRow(orgId)
-  if (!row || row.revision !== revision) throw new FxiaokeError('CONFIG_CHANGED', '配置不存在或已修改，请重新读取后再预览。', 409)
-  // Atomic cross-instance lease: do not overlap provider token requests.
-  const now = new Date()
-  const cutoff = new Date(now.getTime() - 60_000).toISOString()
-  const lease = await supabaseAdmin.from('organization_fxiaoke_connections')
-    .update({ preview_started_at: now.toISOString() }).eq('system_org_id', orgId).eq('revision', revision)
-    .or(`preview_started_at.is.null,preview_started_at.lt.${cutoff}`).select('revision').maybeSingle()
-  if (lease.error) throw failure()
-  if (!lease.data) throw new FxiaokeError('PREVIEW_BUSY', '正在预览或刚刚读取过通讯录，请一分钟后再试。', 429)
-  let preview
-  try {
-    const decoded = JSON.parse(decryptCredentials(orgId, row.credentials_ciphertext)) as Credentials
-    const { expectedCorpId: _serverOnlyCorpId, ...connectionFields } = decoded
-    const parsed = connectionInput.safeParse({ ...connectionFields, revision })
-    if (!parsed.success || !decoded.appSecret || !decoded.permanentCode || decoded.appId !== row.app_id || decoded.expectedEa !== row.expected_ea || decoded.apiUserId !== row.api_user_id) throw new FxiaokeError('CREDENTIALS_UNREADABLE', '已保存凭据与配置不一致，请重新配置。', 503)
-    preview = await previewDirectory(decoded, transportForOrganization(orgId))
-  } catch (err) {
-    const safe = err instanceof FxiaokeError ? err : new FxiaokeError('PREVIEW_FAILED', '通讯录预览失败，请重新检查配置。', 502)
-    await supabaseAdmin.from('organization_fxiaoke_connections').update({ last_checked_at: new Date().toISOString(), last_check_status: 'failed', last_error: safe.message }).eq('system_org_id', orgId).eq('revision', revision)
-    throw safe
-  }
-  const result = await supabaseAdmin.from('organization_fxiaoke_connections').update({ last_checked_at: preview.checkedAt, last_check_status: 'preview_ready', last_error: null }).eq('system_org_id', orgId).eq('revision', revision).select('revision').maybeSingle()
-  if (result.error) throw failure()
-  if (!result.data) throw new FxiaokeError('CONFIG_CHANGED', '预览期间配置已改变，请重新预览。', 409)
-  return preview
 }

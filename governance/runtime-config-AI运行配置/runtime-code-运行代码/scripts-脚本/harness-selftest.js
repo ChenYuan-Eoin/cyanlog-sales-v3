@@ -15,6 +15,8 @@ const {
   APPLICATION_PERMISSION_CONTRACT,
   APPLICATION_PERMISSION_ACTIONS,
   APPLICATION_PERMISSION_PRODUCTION_ACTIONS,
+  ORGANIZATION_CONNECTIONS_CONTRACT,
+  ORGANIZATION_CONNECTIONS_ITEMS,
   FXIAOKE_SSO_CONTRACT,
   SHIPPING_SERVICE_SELECTION_CONTRACT,
   SHIPPING_COLLABORATION_ACTIONS,
@@ -676,6 +678,42 @@ function runApplicationPermissionSelftest(repoRoot) {
     const invalid = structuredClone(scheduler); change(invalid); writeJson(schedulerPath, invalid);
     assert.strictEqual(validateSchedulerState({ repoRoot }).ok, false);
   }
+  // WP50 has a dedicated code-only contract; role-permission evidence and any
+  // activation/sync action namespace cannot satisfy the connection lifecycle.
+  const organizationConnections = structuredClone(scheduler);
+  organizationConnections.active_task.id = 'WP50';
+  organizationConnections.execution_queue.active.id = 'WP50';
+  organizationConnections.active_task.feature_id = 'F003';
+  Object.assign(organizationConnections.active_task.delivery_contract, {
+    target_state: 'code_green',
+    allowed_states: ['executing', 'code_green'],
+    runtime_profile: 'application',
+    runtime_contract_version: ORGANIZATION_CONNECTIONS_CONTRACT,
+    required_runtime_evidence: [...ORGANIZATION_CONNECTIONS_ITEMS],
+    production_database_mode: 'read_only'
+  });
+  core.startGoal(repoRoot, 'Verify unified organization connection configuration', { level: 'A1', workPackageId: 'WP50', scopes: 'app', success: 'connection lifecycle code verified' });
+  core.approveContract(repoRoot, { level: 'A1', by: 'selftest' });
+  core.setPhase(repoRoot, 'verify');
+  writeJson(schedulerPath, organizationConnections);
+  assert.deepStrictEqual(validateSchedulerState({ repoRoot }).errors, []);
+  assert.deepStrictEqual(requiredReplayActions(organizationConnections), require('./organization-connections-verifier').CANDIDATE_ACTIONS);
+  for (const change of [
+    value => { value.active_task.id = 'WP92'; value.execution_queue.active.id = 'WP92'; },
+    value => { value.active_task.feature_id = 'F054'; },
+    value => { value.active_task.delivery_contract.target_state = 'clean_preview_green'; value.active_task.delivery_contract.allowed_states.push('clean_preview_green'); },
+    value => { value.active_task.delivery_contract.production_database_mode = 'controlled_write_approved'; },
+    value => { value.active_task.delivery_contract.runtime_contract_version = APPLICATION_PERMISSION_CONTRACT; },
+    value => { value.active_task.delivery_contract.required_runtime_evidence = [...APPLICATION_PERMISSION_ITEMS]; },
+    value => { value.active_task.delivery_contract.required_runtime_evidence.push('extra_item'); },
+  ]) {
+    const invalid = structuredClone(organizationConnections); change(invalid); writeJson(schedulerPath, invalid);
+    assert.strictEqual(validateSchedulerState({ repoRoot }).ok, false);
+  }
+  core.startGoal(repoRoot, 'Verify organization role permissions', { level: 'A1', workPackageId: 'WP99', scopes: 'app', success: 'permission code verified' });
+  core.approveContract(repoRoot, { level: 'A1', by: 'selftest' });
+  core.setPhase(repoRoot, 'verify');
+  writeJson(schedulerPath, scheduler);
   // WP91 has its own connection journey; role-permission evidence cannot satisfy it.
   const fx = structuredClone(scheduler);
   fx.active_task.delivery_contract.target_state = 'clean_preview_green';

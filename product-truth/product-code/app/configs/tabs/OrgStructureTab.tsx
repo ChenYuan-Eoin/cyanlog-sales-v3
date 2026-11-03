@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, PowerOffIcon, PowerIcon, LockIcon, UnlockIcon, RefreshCwIcon, MailIcon, BanIcon, FingerprintIcon } from 'lucide-react'
+import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, PowerOffIcon, PowerIcon, LockIcon, UnlockIcon, MailIcon, BanIcon, FingerprintIcon } from 'lucide-react'
 import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment, FeishuSyncFeedback } from '../types'
 import Fuse from 'fuse.js'
 import { success, error, confirmAction } from '@/lib/toast'
@@ -952,7 +952,11 @@ export default function OrgStructureTab({
         </div>
 
         <div className="min-w-0 space-y-4">
-          <OrganizationSourcePanel />
+          <OrganizationSourcePanel
+            feishuSyncing={feishuSyncing}
+            onFeishuSync={onFeishuSync}
+            onRefresh={onRefresh}
+          />
           <div className="rounded-lg border bg-white p-4">
             <h3 className="font-medium text-slate-900">组织操作</h3>
             <div className="mt-4 grid gap-2">
@@ -1012,18 +1016,6 @@ export default function OrgStructureTab({
               </Button>
             }
           />
-          <Button
-            onClick={onFeishuSync}
-            disabled={feishuSyncing}
-            variant="outline"
-            size="sm"
-            title="从飞书通讯录同步部门、成员和主部门关系"
-            aria-busy={feishuSyncing}
-            className="w-full justify-center"
-          >
-            <RefreshCwIcon className={`mr-1 h-4 w-4 ${feishuSyncing ? 'animate-spin' : ''}`} />
-            {feishuSyncing ? '同步中...' : '同步飞书组织'}
-          </Button>
             </div>
           </div>
 

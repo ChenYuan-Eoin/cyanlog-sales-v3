@@ -16,6 +16,9 @@ function source(priority: number, overrides: Partial<OrganizationSource> = {}): 
     externalTenantId: `external-${priority}`,
     priority,
     status: 'active',
+    connectionState: 'verified',
+    connectionRevision: `revision-${priority}`,
+    draftCheckStatus: 'preview_ready',
     authorityScope: {},
     syncMode: priority === 1 ? 'authoritative' : 'enrichment',
     lastSuccessfulSyncAt: null,
@@ -59,14 +62,13 @@ describe('organization source priority', () => {
       code: 'SOURCE_INVALID',
     })
   })
-  it('marks Feishu availability from credentials and keeps unimplemented providers inactive', () => {
-    expect(listOrganizationSourceProviders({})).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: 'feishu', syncAvailable: false }),
-      expect.objectContaining({ key: 'wecom', syncAvailable: false }),
-      expect.objectContaining({ key: 'dingtalk', syncAvailable: false }),
+  it('describes provider adapters without treating capability as a connected tenant', () => {
+    expect(listOrganizationSourceProviders()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'feishu', configurable: true, previewAvailable: true, syncAvailable: true }),
+      expect.objectContaining({ key: 'fxiaoke', configurable: true, previewAvailable: true }),
+      expect.objectContaining({ key: 'wecom', configurable: false, syncAvailable: false }),
+      expect.objectContaining({ key: 'dingtalk', configurable: false, syncAvailable: false }),
     ]))
-    expect(listOrganizationSourceProviders({ FEISHU_APP_ID: 'id', FEISHU_APP_SECRET: 'secret' }))
-      .toEqual(expect.arrayContaining([expect.objectContaining({ key: 'feishu', syncAvailable: true })]))
   })
   it('only allows an available provider to become active and keeps source 1 authoritative', () => {
     expect(() => validateOrganizationSourceBinding({

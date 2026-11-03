@@ -264,13 +264,13 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "role_edit_save",
-        "role_access_enforcement"
+        "organization_connection_lifecycle",
+        "organization_directory_preview"
       ],
       "runtime_profile": "application",
-      "runtime_contract_version": "f003-role-permissions-v1",
+      "runtime_contract_version": "f003-organization-connections-v1",
       "production_database_mode": "read_only",
-      "note": "IN021/025/028统一接入候选准备。本批只形成代码、迁移候选与验证证据，不执行Production迁移、目录同步、主来源切换、凭据搬运、人员或角色写入，也不发布。专用组织连接运行时合同在实现和验证器就位后按实际证据推进。"
+      "note": "IN-20261103-004统一接入代码候选。专用f003-organization-connections-v1仅证明共享连接生命周期和只读目录预览；本批不执行Production迁移、目录同步、来源启用或停用、主来源切换、凭据搬运、人员或角色写入，也不发布。"
     },
     "acceptance_checks": [
       "organization_sources是唯一运行时连接真相；飞书不再读取FEISHU_APP_ID/FEISHU_APP_SECRET，纷享不再读取独立连接表作为双真相",
@@ -4976,13 +4976,13 @@
           "build"
         ],
         "required_runtime_evidence": [
-          "role_edit_save",
-          "role_access_enforcement"
+          "organization_connection_lifecycle",
+          "organization_directory_preview"
         ],
         "runtime_profile": "application",
-        "runtime_contract_version": "f003-role-permissions-v1",
+        "runtime_contract_version": "f003-organization-connections-v1",
         "production_database_mode": "read_only",
-        "note": "IN021/025/028统一接入候选准备。本批只形成代码、迁移候选与验证证据，不执行Production迁移、目录同步、主来源切换、凭据搬运、人员或角色写入，也不发布。专用组织连接运行时合同在实现和验证器就位后按实际证据推进。"
+        "note": "IN-20261103-004统一接入代码候选。专用f003-organization-connections-v1仅证明共享连接生命周期和只读目录预览；本批不执行Production迁移、目录同步、来源启用或停用、主来源切换、凭据搬运、人员或角色写入，也不发布。"
       },
       "acceptance_checks": [
         "organization_sources是唯一运行时连接真相；飞书不再读取FEISHU_APP_ID/FEISHU_APP_SECRET，纷享不再读取独立连接表作为双真相",

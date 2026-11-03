@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase'
+import { listOrganizationConnectionProviders, type ProviderCapability } from '@/lib/organization-connections'
 
 export type OrganizationSourceStatus = 'draft' | 'active' | 'disabled'
 export type OrganizationSource = {
@@ -8,6 +9,9 @@ export type OrganizationSource = {
   externalTenantId: string
   priority: number
   status: OrganizationSourceStatus
+  connectionState: 'unconfigured' | 'configured' | 'verified' | 'failed' | 'disabled'
+  connectionRevision: string
+  draftCheckStatus: 'not_checked' | 'preview_ready' | 'failed'
   authorityScope: Record<string, unknown>
   syncMode: 'read_only' | 'authoritative' | 'enrichment'
   lastSuccessfulSyncAt: string | null
@@ -16,12 +20,7 @@ export type OrganizationSource = {
   updatedAt: string
 }
 
-export type OrganizationSourceProvider = {
-  key: 'feishu' | 'wecom' | 'dingtalk' | 'fxiaoke'
-  label: string
-  syncAvailable: boolean
-  unavailableReason: string | null
-}
+export type OrganizationSourceProvider = ProviderCapability
 
 export class OrganizationSourceError extends Error {
   readonly code:
@@ -64,6 +63,13 @@ function normalizeSource(value: unknown): OrganizationSource | null {
     externalTenantId: row.external_tenant_id,
     priority: row.priority as number,
     status: row.status as OrganizationSourceStatus,
+    connectionState: ['unconfigured', 'configured', 'verified', 'failed', 'disabled'].includes(String(row.connection_state))
+      ? row.connection_state as OrganizationSource['connectionState']
+      : 'unconfigured',
+    connectionRevision: typeof row.configuration_revision === 'string' ? row.configuration_revision : '',
+    draftCheckStatus: ['not_checked', 'preview_ready', 'failed'].includes(String(row.draft_check_status))
+      ? row.draft_check_status as OrganizationSource['draftCheckStatus']
+      : 'not_checked',
     authorityScope: row.authority_scope && typeof row.authority_scope === 'object'
       ? row.authority_scope as Record<string, unknown>
       : {},
@@ -75,36 +81,8 @@ function normalizeSource(value: unknown): OrganizationSource | null {
   }
 }
 
-export function listOrganizationSourceProviders(
-  env: Record<string, string | undefined> = process.env,
-): OrganizationSourceProvider[] {
-  const feishuConfigured = Boolean(env.FEISHU_APP_ID && env.FEISHU_APP_SECRET)
-  return [
-    {
-      key: 'fxiaoke',
-      label: '纷享销客',
-      syncAvailable: false,
-      unavailableReason: '可配置自建应用并预览通讯录；确认同步与主来源切换尚未启用。',
-    },
-    {
-      key: 'feishu',
-      label: '飞书',
-      syncAvailable: feishuConfigured,
-      unavailableReason: feishuConfigured ? null : '飞书应用凭据尚未配置，只能保存草稿或停用绑定。',
-    },
-    {
-      key: 'wecom',
-      label: '企业微信',
-      syncAvailable: false,
-      unavailableReason: '企业微信通讯录连接器尚未接入组织来源同步。',
-    },
-    {
-      key: 'dingtalk',
-      label: '钉钉',
-      syncAvailable: false,
-      unavailableReason: '钉钉通讯录连接器尚未接入组织来源同步。',
-    },
-  ]
+export function listOrganizationSourceProviders(): OrganizationSourceProvider[] {
+  return listOrganizationConnectionProviders()
 }
 
 export function sortActiveOrganizationSources(sources: OrganizationSource[]): OrganizationSource[] {
@@ -135,7 +113,7 @@ export function selectPrimaryOrganizationSource(
 export async function loadOrganizationSources(orgId: string): Promise<OrganizationSource[]> {
   const { data, error } = await supabaseAdmin
     .from('organization_sources')
-    .select('id, system_org_id, provider, external_tenant_id, priority, status, authority_scope, sync_mode, last_successful_sync_at, last_error, created_at, updated_at')
+    .select('id, system_org_id, provider, external_tenant_id, priority, status, connection_state, configuration_revision, draft_check_status, authority_scope, sync_mode, last_successful_sync_at, last_error, created_at, updated_at')
     .eq('system_org_id', orgId)
     .order('priority', { ascending: true })
 
@@ -169,14 +147,8 @@ export function validateOrganizationSourceBinding(input: {
   if (!Number.isInteger(input.priority) || input.priority < 1 || input.priority > 100) {
     throw new OrganizationSourceError('SOURCE_INVALID', '组织来源优先级必须是1-100的整数。', 400)
   }
-  if (input.status === 'active' && !provider.syncAvailable) {
-    throw new OrganizationSourceError('SOURCE_INVALID', provider.unavailableReason || '该组织来源连接器尚未接入。', 409)
-  }
-  if (input.status === 'active' && input.priority === 1 && input.syncMode !== 'authoritative') {
-    throw new OrganizationSourceError('SOURCE_INVALID', '来源1必须是权威组织来源。', 400)
-  }
-  if (input.status === 'active' && input.priority > 1 && input.syncMode === 'authoritative') {
-    throw new OrganizationSourceError('SOURCE_INVALID', '只有来源1可以成为权威组织来源。', 400)
+  if (input.status === 'active') {
+    throw new OrganizationSourceError('SOURCE_INVALID', '保存连接不会启用或切换组织主来源；请先保存草稿并验证通讯录。', 409)
   }
 }
 
@@ -194,15 +166,7 @@ export async function bindOrganizationSource(input: {
   validateOrganizationSourceBinding(input)
   const authorityScope = input.authorityScope && Object.keys(input.authorityScope).length
     ? input.authorityScope
-    : input.priority === 1 && input.status === 'active'
-      ? {
-          departments: 'authoritative',
-          department_order: 'authoritative',
-          primary_department: 'authoritative',
-          employment_state: 'authoritative',
-          identity: 'evidence',
-        }
-      : { identity: 'evidence' }
+    : { identity: 'evidence' }
   const { data, error } = await supabaseAdmin.rpc('bind_organization_source', {
     p_system_org_id: input.systemOrgId,
     p_provider: input.provider,
@@ -287,7 +251,7 @@ export async function ensureOrganizationSource(input: {
       provider: input.provider.trim(),
       external_tenant_id: input.externalTenantId.trim(),
       priority: input.priority,
-      status: input.status || 'active',
+      status: input.status || 'draft',
       authority_scope: input.authorityScope || {},
       sync_mode: input.syncMode || 'read_only',
       updated_by: input.actorId || null,
@@ -295,7 +259,7 @@ export async function ensureOrganizationSource(input: {
     }, {
       onConflict: 'system_org_id,provider,external_tenant_id',
     })
-    .select('id, system_org_id, provider, external_tenant_id, priority, status, authority_scope, sync_mode')
+    .select('id, system_org_id, provider, external_tenant_id, priority, status, connection_state, configuration_revision, draft_check_status, authority_scope, sync_mode')
     .single()
 
   if (error || !data) {

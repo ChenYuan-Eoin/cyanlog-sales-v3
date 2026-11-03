@@ -2,22 +2,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  rows: [] as Array<{ system_org_id: string }>,
-  queryError: null as null | { message: string },
+  organizations: vi.fn(),
   credentials: vi.fn(),
 }))
 
-vi.mock('@/lib/supabase', () => ({
-  supabaseAdmin: {
-    from: vi.fn(() => {
-      const query = {
-        select: vi.fn(() => query),
-        order: vi.fn(() => query),
-        limit: vi.fn(async () => ({ data: mocks.rows, error: mocks.queryError })),
-      }
-      return query
-    }),
-  },
+vi.mock('@/lib/organization-connections', () => ({
+  listVerifiedConnectionOrganizationIds: mocks.organizations,
 }))
 vi.mock('./settings', () => ({ loadOAuthCredentials: mocks.credentials }))
 
@@ -29,27 +19,47 @@ const credentials = { appId: 'FSAID_test', expectedEa: 'example' }
 
 describe('Fxiaoke SSO organization resolution', () => {
   beforeEach(() => {
-    mocks.rows.length = 0
-    mocks.queryError = null
-    mocks.credentials.mockReset().mockResolvedValue(credentials)
+    vi.clearAllMocks()
+    mocks.organizations.mockResolvedValue([first])
+    mocks.credentials.mockResolvedValue(credentials)
   })
 
-  it('resolves exactly one configured organization and refuses to guess across tenants', async () => {
-    mocks.rows.push({ system_org_id: first })
+  it('resolves exactly one verified organization and refuses to guess across tenants', async () => {
     await expect(resolveConfiguredOAuthOrganization()).resolves.toEqual({ orgId: first, credentials })
+    expect(mocks.organizations).toHaveBeenCalledWith('fxiaoke', 2)
+    expect(mocks.credentials).toHaveBeenCalledWith(first)
 
-    mocks.rows.push({ system_org_id: second })
-    await expect(resolveConfiguredOAuthOrganization()).rejects.toMatchObject({ code: 'SSO_ORGANIZATION_AMBIGUOUS', status: 409 })
+    mocks.organizations.mockResolvedValue([first, second])
+    await expect(resolveConfiguredOAuthOrganization()).rejects.toMatchObject({
+      code: 'SSO_ORGANIZATION_AMBIGUOUS',
+      status: 409,
+    })
   })
 
-  it('accepts database seed UUIDs that do not carry RFC version bits', async () => {
-    mocks.rows.push({ system_org_id: first })
-    await expect(resolveConfiguredOAuthOrganization()).resolves.toEqual({ orgId: first, credentials })
+  it('reports missing verified connections instead of reading environment credentials', async () => {
+    mocks.organizations.mockResolvedValue([])
+    await expect(resolveConfiguredOAuthOrganization()).rejects.toMatchObject({
+      code: 'CONFIGURATION_REQUIRED',
+      status: 409,
+    })
+    expect(mocks.credentials).not.toHaveBeenCalled()
   })
 
-  it('does not accept a browser-selected organization and fails closed when discovery is unavailable', async () => {
-    mocks.queryError = { message: 'database unavailable' }
-    await expect(resolveConfiguredOAuthOrganization()).rejects.toMatchObject({ code: 'SSO_CONFIGURATION_UNAVAILABLE', status: 503 })
+  it('rejects non-UUID organization ids returned by malformed storage', async () => {
+    mocks.organizations.mockResolvedValue(['not-an-organization'])
+    await expect(resolveConfiguredOAuthOrganization()).rejects.toMatchObject({
+      code: 'SSO_CONFIGURATION_UNAVAILABLE',
+      status: 503,
+    })
+    expect(mocks.credentials).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when verified connection discovery is unavailable', async () => {
+    mocks.organizations.mockRejectedValue(new Error('database unavailable'))
+    await expect(resolveConfiguredOAuthOrganization()).rejects.toMatchObject({
+      code: 'SSO_CONFIGURATION_UNAVAILABLE',
+      status: 503,
+    })
     expect(mocks.credentials).not.toHaveBeenCalled()
   })
 })
