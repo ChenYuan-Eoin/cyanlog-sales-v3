@@ -21,9 +21,13 @@ const maySubmitRow = (row: BatchRow) => !row.result || row.result === 'failed'
 
 function cityOf(order: ShipmentOrder) { return order.input.recipient.city || order.input.recipient.province }
 function customerOf(order: ShipmentOrder) { return order.input.customerName || order.relation.customerRef || '未填写客户' }
-function serviceNameOf(order: ShipmentOrder, selectedServiceId: string, services: ShippingSettings['services']) {
-  const selected = services.find(service => String(service.id) === selectedServiceId)
-  return selected?.name || order.input.serviceName || (order.input.servicePreference === 'urgent' ? '加急偏好' : '标准偏好')
+type ServiceOverride = { serviceId: number; revision: number; source: '本票选择' | '批量应用' }
+function serviceForReview(order: ShipmentOrder, override: ServiceOverride | undefined, services: ShippingSettings['services']) {
+  const current = override?.revision === (order.revision || 1) ? override : undefined
+  const id = current?.serviceId ?? order.input.serviceId
+  return id !== undefined
+    ? services.find(service => service.id === id) || null
+    : services.find(service => (service.preference || 'standard') === (order.input.servicePreference || 'standard')) || null
 }
 
 function senderForReview(order: ShipmentOrder, companySender: Contact): { contact: Contact | null; source: string } {
@@ -62,7 +66,9 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   const [batchBusy, setBatchBusy] = useState(false)
   const [templateBusy, setTemplateBusy] = useState(false)
   const [connectionId, setConnectionId] = useState(settings.connectionId || '')
-  const [serviceId, setServiceId] = useState('')
+  const [batchServiceId, setBatchServiceId] = useState('')
+  const [serviceOverrides, setServiceOverrides] = useState<Record<string, ServiceOverride>>({})
+  const submittedServices = useRef(new Map<string, { id: number; name: string }>())
   const [billingAccountId, setBillingAccountId] = useState(settings.defaultBillingAccountId || '')
   const [payment, setPayment] = useState<ShippingPayment>('sender_monthly')
   const [senderOverride, setSenderOverride] = useState<Contact | null>(null)
@@ -179,12 +185,13 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   const availableAccounts = (settings.billingAccounts || []).filter(account => account.connectionId === connectionId && account.environment === (selectedConnection?.environment || settings.environment) && account.status === 'active')
   const selectedAccount = availableAccounts.find(account => account.id === billingAccountId)
   const canSubmitCurrent = settings.carrierConnections?.length
-    ? Boolean(selectedConnection?.status === 'connected' && (payment !== 'sender_monthly' || availableAccounts.some(account => account.id === billingAccountId)) && selectedServices.length > 0 && (!serviceId || selectedServices.some(service => String(service.id) === serviceId)) && (selectedConnection.environment !== 'production' || selectedConnection.orderCapability !== 'unavailable'))
+    ? Boolean(selectedConnection?.status === 'connected' && (payment !== 'sender_monthly' || availableAccounts.some(account => account.id === billingAccountId)) && selectedServices.length > 0 && (selectedConnection.environment !== 'production' || selectedConnection.orderCapability !== 'unavailable'))
     : settings.canSubmit
   const reviewedOrders = filtered.filter(order => reviewIds.includes(order.id) && order.status === 'awaiting_confirmation')
   const expandedReviewOrder = expandedOrderId ? filtered.find(order => order.id === expandedOrderId) : null
   const expandedSingleReview = Boolean(expandedReviewOrder && !orderHasDispatch(expandedReviewOrder))
   const reviewedSendersReady = reviewedOrders.every(order => senderForReview(order, settings.sender).contact !== null)
+  const reviewedServicesReady = reviewedOrders.every(order => serviceForReview(order, serviceOverrides[order.id], selectedServices) !== null)
   const productionOrderUnverified = selectedConnection?.environment === 'production' && selectedConnection.orderCapability === 'not_tested'
 
   async function copySelectedNumber() {
@@ -212,6 +219,22 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     if (successfulSubmission(order)) return order
     return { ...order, status: result.status === 'ordering' ? 'ordering' : result.status === 'order_failed' ? 'order_failed' : 'order_unknown', waybill: null }
   }
+  function acceptServiceReadback(records: ShipmentOrder[], results: Map<string, SubmissionResult>) {
+    for (const order of records) {
+      const result = results.get(order.id)
+      if (result && successfulSubmission(result)
+        && ['waybill_created', 'in_transit', 'delivered', 'cancelled'].includes(order.status)
+        && order.waybill === result.waybill
+        && Number.isInteger(order.input.serviceId) && Number(order.input.serviceId) > 0) {
+        submittedServices.current.delete(order.id)
+      }
+    }
+  }
+  function actualServiceLabel(order: ShipmentOrder) {
+    const requested = submittedServices.current.get(order.id)
+    if (requested) return `产品待回读（本次请求：${requested.name}）`
+    return order.input.serviceName || (order.input.serviceId ? `产品编号 ${order.input.serviceId}（名称待回读）` : order.input.servicePreference === 'urgent' ? '加急偏好' : '标准偏好')
+  }
   async function reopenFailed(order: ShipmentOrder) {
     if (busy || confirmationBusy || batchBusy) return
     setBusy(order.id)
@@ -236,13 +259,16 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     setBusy('configuration'); setMessage('')
     try {
       const result = await request<{ settings: ShippingSettings }>('/api/shipping/settings?workspace=1')
-      setSettings(current => ({ ...current, ...result.settings })); setConnectionId(result.settings.connectionId || ''); setBillingAccountId(result.settings.defaultBillingAccountId || ''); setServiceId(''); setReviewIds([])
+      setSettings(current => ({ ...current, ...result.settings })); setConnectionId(result.settings.connectionId || ''); setBillingAccountId(result.settings.defaultBillingAccountId || ''); setBatchServiceId(''); setServiceOverrides({}); setReviewIds([])
       setMessage('寄件配置已刷新，草稿保留；请重新核对下单参数。')
     } catch (error) { setMessage((error as Error).message) } finally { setBusy('') }
   }
   function changeConnection(nextId: string) {
     setConnectionId(nextId)
-    setServiceId('')
+    setBatchServiceId('')
+    setServiceOverrides({})
+    setReviewIds([])
+    setMessage('快递连接已切换，请重新核对各票产品与下单参数。')
     const accounts = (settings.billingAccounts || []).filter(account => account.connectionId === nextId && account.status === 'active')
     setBillingAccountId(accounts.find(account => account.isDefault)?.id || accounts[0]?.id || '')
   }
@@ -339,6 +365,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
       let refreshError = ''
       try {
         const refreshed = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
+        acceptServiceReadback(refreshed.records, new Map([[orderId, result]]))
         setOrders(refreshed.records.map(order => order.id === orderId ? applySubmission(order, result) : order))
       } catch (error) { refreshError = ` 台账刷新失败：${(error as Error).message}` }
       setSelectedId(orderId)
@@ -351,17 +378,39 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     if (confirmationRunning.current || order.status !== 'awaiting_confirmation') return
     setReviewIds(ids => ids.includes(order.id) ? ids.filter(id => id !== order.id) : [...ids, order.id])
   }
+  function applyBatchService() {
+    if (confirmationRunning.current || batchRunning.current || !reviewedOrders.length) return
+    const service = batchServiceId ? selectedServices.find(item => String(item.id) === batchServiceId) : null
+    if (batchServiceId && !service) return
+    setServiceOverrides(current => {
+      const next = { ...current }
+      for (const order of reviewedOrders) {
+        if (service) next[order.id] = { serviceId: service.id, revision: order.revision || 1, source: '批量应用' }
+        else delete next[order.id]
+      }
+      return next
+    })
+    setMessage(service ? `已将${service.name}应用到已选 ${reviewedOrders.length} 票，请逐票核对。` : `已恢复已选 ${reviewedOrders.length} 票的原产品，请逐票核对。`)
+  }
   async function confirmReviewed() {
-    if (confirmationRunning.current || batchRunning.current || !reviewedOrders.length || !canSubmitCurrent || !reviewedSendersReady) return
+    if (confirmationRunning.current || batchRunning.current || !reviewedOrders.length || !canSubmitCurrent || !reviewedSendersReady || !reviewedServicesReady) return
     if (productionOrderUnverified && reviewedOrders.length !== 1) { setMessage('生产下单权限尚未实测，请先核对并确认一票工单。'); return }
+    const plan: Array<{ order: ShipmentOrder; service: ShippingSettings['services'][number] }> = []
+    for (const order of reviewedOrders) {
+      const service = serviceForReview(order, serviceOverrides[order.id], selectedServices)
+      if (!service) return
+      plan.push({ order, service })
+    }
+    const selection = { connectionId: connectionId || undefined, payment, billingAccountId: payment === 'sender_monthly' ? billingAccountId || undefined : undefined }
     confirmationRunning.current = true; setConfirmationBusy(true); setMessage('')
     let succeeded = 0, uncertain = 0, failed = 0
     const results = new Map<string, SubmissionResult>()
     const errors: string[] = []
-    for (const order of reviewedOrders) {
+    for (const { order, service } of plan) {
       setBusy(order.id)
+      submittedServices.current.set(order.id, { id: service.id, name: service.name })
       try {
-        const result = await request<SubmissionResult>(`/api/shipping/ledger/${encodeURIComponent(order.id)}/confirm`, { method: 'POST', body: JSON.stringify({ connectionId: connectionId || undefined, payment, billingAccountId: payment === 'sender_monthly' ? billingAccountId || undefined : undefined, serviceId: Number(serviceId) || undefined }) })
+        const result = await request<SubmissionResult>(`/api/shipping/ledger/${encodeURIComponent(order.id)}/confirm`, { method: 'POST', body: JSON.stringify({ ...selection, serviceId: service.id }) })
         if ((result.id && result.id !== order.id) || (result.orderId && result.orderId !== order.id)) throw new ShippingWorkbenchRequestError('下单回执工单编号不一致，请查回原单。', 200, 'client_invalid_response')
         results.set(order.id, result)
         if (successfulSubmission(result)) succeeded += 1
@@ -382,6 +431,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     let refreshError = ''
     try {
       const refreshed = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
+      acceptServiceReadback(refreshed.records, results)
       setOrders(refreshed.records.map(item => results.has(item.id) ? applySubmission(item, results.get(item.id)!) : item))
     } catch (error) { refreshError = ` 台账刷新失败：${(error as Error).message}` }
     setReviewIds(ids => ids.filter(id => !results.has(id)))
@@ -615,6 +665,15 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
           <label className={styles.search}><Search size={14}/><input aria-label="搜索台账" value={search} onChange={event => setSearch(event.target.value)} placeholder="销售、客户、收件人、工单号、运单号"/></label>
         </div>
         <div className={styles.orderList}>
+          {reviewedOrders.length > 0 && <section className={styles.bulkSettings} aria-label="逐票下单产品核对">
+            <h3>本次下单产品</h3>
+            <ul>{reviewedOrders.map(order => {
+              const service = serviceForReview(order, serviceOverrides[order.id], selectedServices)
+              const override = serviceOverrides[order.id]
+              return <li key={order.id}><span>{order.orderNo}</span> · <strong>{service?.name || '产品不可用，请重新选择'}</strong> · {override?.revision === (order.revision || 1) ? override.source : '工单原选'}</li>
+            })}</ul>
+            {!reviewedServicesReady && <p role="alert" className={styles.bad}>存在不可用的寄件产品，请逐票重新选择后再确认。</p>}
+          </section>}
           {reviewedOrders.length > 0 && !expandedSingleReview && <section className={`${styles.bulkSettings} ${styles.orderParameterPanel}`} aria-label="正式下单参数">
             <div className={styles.parameterHead}>
               <div><h3>正式下单参数</h3><small>已选 {reviewedOrders.length} 票 · 默认取自当前寄件配置</small></div>
@@ -624,13 +683,15 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
               <div><small>连接</small><b>{selectedConnection ? `顺丰 · ${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'} · ${selectedConnection.status === 'connected' ? '已连接' : '待验证'}` : '顺丰 · 待配置接口'}</b></div>
               <div><small>付款</small><b>{payment === 'sender_monthly' ? '公司月结' : payment === 'sender_cash' ? '寄方现结' : '收方到付'}</b></div>
               <div><small>月结账号</small><b>{payment === 'sender_monthly' ? (selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '尚未配置') : '无需月结账号'}</b></div>
-              <div><small>服务产品</small><b>{serviceId ? selectedServices.find(service => String(service.id) === serviceId)?.name || '已选服务' : '按每票工单所选产品'}</b></div>
+              <div><small>服务产品</small><b>逐票核对，以本次下单产品清单为准</b></div>
             </div>
             <div className={styles.parameterGrid} hidden={!orderParamsExpanded}>
               <label>承运商连接<select disabled={confirmationBusy} value={connectionId} onChange={event => changeConnection(event.target.value)}>{!settings.carrierConnections?.length && <option value="">顺丰 · 生产 · 待配置接口</option>}{(settings.carrierConnections || []).map(connection => <option key={connection.id} value={connection.id}>顺丰 · {connection.environment === 'sandbox' ? '沙盒' : '生产'} · {connection.status === 'connected' ? '已连接' : '待验证'}</option>)}</select></label>
               <label>本批付款方式<select disabled={confirmationBusy} value={payment} onChange={event => setPayment(event.target.value as ShippingPayment)}><option value="sender_monthly">公司月结</option><option value="sender_cash">寄方现结</option><option value="recipient">收方到付</option></select></label>
               {payment === 'sender_monthly' && <label>月结账号<select disabled={confirmationBusy} value={billingAccountId} onChange={event => setBillingAccountId(event.target.value)}>{!availableAccounts.length && <option value="">当前承运商环境暂无月结账号</option>}{availableAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName} · 尾号 {account.tail}{account.isDefault ? ' · 默认' : ''}</option>)}</select></label>}
-              <label>寄件服务<select disabled={confirmationBusy} value={serviceId} onChange={event => setServiceId(event.target.value)}><option value="">按每票工单所选产品</option>{selectedServices.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
+              <label>寄件服务<select disabled={confirmationBusy} value={batchServiceId} onChange={event => setBatchServiceId(event.target.value)}><option value="">恢复各票原产品</option>{selectedServices.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
+              <button type="button" className={styles.secondaryButton} disabled={confirmationBusy || !reviewedOrders.length || Boolean(batchServiceId && !selectedServices.some(service => String(service.id) === batchServiceId))} onClick={applyBatchService}>应用到已选工单</button>
+              <small>选择后需点击应用，才会修改当前已选工单。</small>
             </div>
             <p className={styles.intakeHint}>确认后才向承运商发单；实际寄件人按各工单保存资料使用。{productionOrderUnverified ? '生产首票需单独确认。' : ''}</p>
             {!canSubmitCurrent && <p className={styles.bad}>{payment === 'sender_monthly' ? '连接、月结账号或寄件服务未就绪，请在配置中心处理后正式下单。' : '快递连接或寄件服务未就绪，请在配置中心处理后正式下单。'}</p>}
@@ -638,6 +699,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
           {ledgerLoading ? <p className={styles.listHint}>正在读取台账…</p> : !filtered.length && <p className={styles.listHint}>暂无匹配单据</p>}
           {filtered.map(order => {
             const senderReview = senderForReview(order, settings.sender)
+            const reviewService = serviceForReview(order, serviceOverrides[order.id], selectedServices)
             return <article key={order.id} className={`${styles.orderCard} ${order.id === selected?.id ? styles.selectedCard : ''}`}>
             <div
               className={styles.orderSelect}
@@ -696,18 +758,19 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                 <div className={styles.reviewHeading}><h3>服务与时效核对</h3><span>确认前可修改</span></div>
                 <div className={styles.reviewKeyFacts}>
                   <div><small>收件人</small><strong>{order.input.recipient.name}</strong><span>{order.input.recipient.phone}</span></div>
-                  <div><small>服务与物品</small><strong>{serviceNameOf(order, serviceId, selectedServices)}</strong><span>{order.input.cargo} · {order.input.weight}kg</span></div>
+                  <div><small>服务与物品</small><strong>{reviewService?.name || '产品不可用，请重新选择'}</strong><span>{order.input.cargo} · {order.input.weight}kg</span></div>
                 </div>
                 {expandedOrderId === order.id && <div className={styles.inlineCheckout}>
                   <div className={styles.inlineServiceChoices} role="radiogroup" aria-label={`工单 ${order.orderNo} 快递服务`}>
                     <span>快递服务</span>
-                    {selectedServices.map(service => <button key={service.id} type="button" role="radio" aria-checked={serviceId === String(service.id)} className={serviceId === String(service.id) ? styles.serviceSelected : ''} disabled={confirmationBusy} onClick={() => setServiceId(String(service.id))}>{service.name}<small>{service.preference === 'urgent' ? '加急' : '标准'}</small></button>)}
+                    {selectedServices.map(service => <button key={service.id} type="button" role="radio" aria-checked={reviewService?.id === service.id} className={reviewService?.id === service.id ? styles.serviceSelected : ''} disabled={confirmationBusy} onClick={() => setServiceOverrides(current => ({ ...current, [order.id]: { serviceId: service.id, revision: order.revision || 1, source: '本票选择' } }))}>{service.name}<small>{service.preference === 'urgent' ? '加急' : '标准'}</small></button>)}
                     {!selectedServices.length && <small>当前连接暂无可用服务</small>}
                   </div>
+                  <small>服务仅修改本票；以下连接、付款和月结账号用于本批。</small>
                   <div className={styles.inlineCheckoutGrid}>
-                    <label><span>连接</span><select aria-label={`工单 ${order.orderNo} 承运商连接`} disabled={confirmationBusy} value={connectionId} onChange={event => changeConnection(event.target.value)}>{!settings.carrierConnections?.length && <option value="">顺丰 · 待配置接口</option>}{(settings.carrierConnections || []).map(connection => <option key={connection.id} value={connection.id}>顺丰 · {connection.environment === 'sandbox' ? '沙盒' : '生产'} · {connection.status === 'connected' ? '已连接' : '待验证'}</option>)}</select></label>
-                    <label><span>付款</span><select aria-label={`工单 ${order.orderNo} 付款方式`} disabled={confirmationBusy} value={payment} onChange={event => setPayment(event.target.value as ShippingPayment)}><option value="sender_monthly">公司月结</option><option value="sender_cash">寄方现结</option><option value="recipient">收方到付</option></select></label>
-                    <label><span>月结账号</span><select aria-label={`工单 ${order.orderNo} 月结账号`} disabled={confirmationBusy || payment !== 'sender_monthly'} value={payment === 'sender_monthly' ? billingAccountId : ''} onChange={event => setBillingAccountId(event.target.value)}>{payment !== 'sender_monthly' ? <option value="">无需月结账号</option> : !availableAccounts.length ? <option value="">暂无月结账号</option> : availableAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName} · 尾号 {account.tail}{account.isDefault ? ' · 默认' : ''}</option>)}</select></label>
+                    <label><span>本批连接</span><select aria-label={`工单 ${order.orderNo} 承运商连接`} disabled={confirmationBusy} value={connectionId} onChange={event => changeConnection(event.target.value)}>{!settings.carrierConnections?.length && <option value="">顺丰 · 待配置接口</option>}{(settings.carrierConnections || []).map(connection => <option key={connection.id} value={connection.id}>顺丰 · {connection.environment === 'sandbox' ? '沙盒' : '生产'} · {connection.status === 'connected' ? '已连接' : '待验证'}</option>)}</select></label>
+                    <label><span>本批付款</span><select aria-label={`工单 ${order.orderNo} 付款方式`} disabled={confirmationBusy} value={payment} onChange={event => setPayment(event.target.value as ShippingPayment)}><option value="sender_monthly">公司月结</option><option value="sender_cash">寄方现结</option><option value="recipient">收方到付</option></select></label>
+                    <label><span>本批月结账号</span><select aria-label={`工单 ${order.orderNo} 月结账号`} disabled={confirmationBusy || payment !== 'sender_monthly'} value={payment === 'sender_monthly' ? billingAccountId : ''} onChange={event => setBillingAccountId(event.target.value)}>{payment !== 'sender_monthly' ? <option value="">无需月结账号</option> : !availableAccounts.length ? <option value="">暂无月结账号</option> : availableAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName} · 尾号 {account.tail}{account.isDefault ? ' · 默认' : ''}</option>)}</select></label>
                     <div className={styles.inlineCheckoutStatus}><span>当前</span><b>{canSubmitCurrent ? '参数可用' : '需补全配置'}</b><small>{order.input.recipient.province}{order.input.recipient.city}{order.input.recipient.county}</small></div>
                   </div>
                 </div>}
@@ -762,7 +825,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
             )}
           </article>})}
         </div>
-        <footer className={styles.stickyFooter}><div><strong>已选 {reviewedOrders.length} 票工单</strong><small>核对后确认才通知顺丰</small></div><button disabled={!reviewedOrders.length || confirmationBusy || batchBusy || !!busy || !canSubmitCurrent || !reviewedSendersReady || (productionOrderUnverified && reviewedOrders.length !== 1)} onClick={() => void confirmReviewed()}><Truck size={15}/>{confirmationBusy ? '正式下单中…' : `${isSimulation ? '模拟确认并下单' : '批量确认并下单'}（${reviewedOrders.length}票）`}</button></footer>
+        <footer className={styles.stickyFooter}><div><strong>已选 {reviewedOrders.length} 票工单</strong><small>核对后确认才通知顺丰</small></div><button disabled={!reviewedOrders.length || confirmationBusy || batchBusy || !!busy || !canSubmitCurrent || !reviewedSendersReady || !reviewedServicesReady || (productionOrderUnverified && reviewedOrders.length !== 1)} onClick={() => void confirmReviewed()}><Truck size={15}/>{confirmationBusy ? '正式下单中…' : `${isSimulation ? '模拟确认并下单' : '批量确认并下单'}（${reviewedOrders.length}票）`}</button></footer>
       </section>
 
       <section className={`${styles.column} ${styles.detailColumn}`} aria-label="单据详情与物流轨迹">
@@ -801,7 +864,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                 <div><span>收</span><p><b>{selected.input.recipient.name}</b><small>{selected.input.recipient.phone}<br/>{selected.input.recipient.province}{selected.input.recipient.city}{selected.input.recipient.county}{selected.input.recipient.address}</small></p></div>
               </div>
               <div className={styles.goods}>
-                <span><Box size={14}/>{selected.input.cargo} · {selected.input.weight}kg · {selected.input.serviceName || (selected.input.servicePreference === 'urgent' ? '加急偏好' : '标准偏好')}</span>
+                <span><Box size={14}/>{selected.input.cargo} · {selected.input.weight}kg · {actualServiceLabel(selected)}</span>
                 {selected.input.specialRequirements && <p><AlertTriangle size={13}/>{selected.input.specialRequirements}</p>}
               </div>
             </section>

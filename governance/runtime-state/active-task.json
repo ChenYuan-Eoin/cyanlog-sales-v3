@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-02T08:04:41.844141+00:00",
+  "updated_at": "2026-11-03T01:39:02.242Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -194,125 +194,49 @@
       "新证据证明产品基线或当前方向错误",
       "用户在看到影响评估后明确批准插队"
     ],
-    "harness_mode": "advisory"
+    "harness_mode": "advisory",
+    "joint_candidate_preparation_exception": {
+      "authority": "IN-20261102-028",
+      "scope_input": "IN-20261102-025",
+      "wip_limit": 1,
+      "candidate_switch_requires": "bounded user task and required candidate checks; retain actual delivery stage",
+      "final_acceptance": "per-item exact Production evidence and existing Chrome replay; unresolved scoped blockers keep joint milestone open",
+      "ordered_outcomes": [
+        "necessary permission prerequisites",
+        "uniform connection configuration",
+        "directory preview cutover rollback",
+        "WP94 double-entry login and denial replay",
+        "existing employee workorder recovery",
+        "tracking recovery explicit cancellation and provider pushes in separate bounded increments"
+      ],
+      "external_permissions_unchanged": true
+    }
   },
   "active_task": {
-    "id": "WP94",
-    "slug": "fxiaoke-sso-federated-identity",
-    "name": "纷享 SSO 与联合身份门禁",
+    "id": "WP52",
+    "slug": "shipping-per-order-service-confirmation",
+    "name": "逐票时效核对与确认参数隔离",
     "kind": "product",
     "status": "active",
-    "objective": "真实员工通过纷享 OAuth 或 IN-20261102-013 批准的受限既有账号过渡入口进入同一系统主体、组织和权限；所有权限、审计和业务关系只引用 canonical users.id。企业 OAuth 校验一次性 state、企业 corpId 和 external_identities 稳定 subject，无映射或冲突时失败关闭，provider 手机号不得触发静默 JIT 绑定。受限账号只验证唯一既有邮箱/手机号候选及现有凭据，要求用户、默认成员、在职与组织均有效、未强制改密且有新鲜组织角色，再复用统一可撤销会话；默认关闭的服务器开关与页面能力发现一致，具备共享限流和失败清理。不恢复注册、改密、密码重置、环境变量 bootstrap 或影子管理员，不创建/绑定/合并账号。密码列与旧 RPC 的物理删除仍是后置安全目标，须明确退出过渡入口、替代登录与恢复证据及独立写入授权满足后执行，本批不做。零租户 bootstrap、创建人 Owner、短信 step-up 与角色授予矩阵仍归后续责任包。",
+    "objective": "操作员在批量确认前分别选择并核对每票服务产品；只改A票不影响B票；批量设置仅在明确应用时更新所选票；每票摘要和冻结后的确认请求使用同一解析结果。无效产品阻止发送，切连接或刷新配置重新核对，保留防重、结果未知查回和已成功票的真实服务展示。不扩展下单后改产品或其他参数逐票化。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
-    "activation_basis": "IN-20261029-004：用户批准 Project Charter，并以 WIP=1 先推进 WP94；保留受审计恢复通道直到 SSO 生产验证通过。",
-    "started_at": "2026-10-29T06:14:13.111308+00:00",
-    "feature_id": "F003",
     "allowed_paths": [
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-sso-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-sso-verifier.test.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "governance/runtime-state/main-chain-governance-charter.md",
-      "governance/runtime-state/identity-authorization-blueprint.md",
-      "product-truth/REQ_REGISTRY.yml",
-      "product-truth/feature-packets/F003-account-auth.md",
+      "product-truth/feature-packets/F054-sf-self-service-order.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "product-truth/product-code/app/api/admin/organization-sources/fxiaoke/route.test.ts",
-      "product-truth/product-code/app/api/admin/organization-sources/fxiaoke/route.ts",
-      "product-truth/product-code/app/api/auth",
-      "product-truth/product-code/app/api/admin/users",
-      "product-truth/product-code/app/api/admin/org/route.ts",
-      "product-truth/product-code/app/accept-invitation",
-      "product-truth/product-code/app/change-password",
-      "product-truth/product-code/app/register",
-      "product-truth/product-code/app/configs/tabs/FxiaokeSourceForm.test.tsx",
-      "product-truth/product-code/app/configs/tabs/FxiaokeSourceForm.tsx",
-      "product-truth/product-code/app/configs/ConfigsClient.tsx",
-      "product-truth/product-code/app/configs/tabs/OrgStructureTab.tsx",
-      "product-truth/product-code/app/configs/tabs/RoleDetailPanel.tsx",
-      "product-truth/product-code/app/configs/tabs/components/UserFormDialog.tsx",
-      "product-truth/product-code/app/configs/tabs/components/IdentityBindingDialog.tsx",
-      "product-truth/product-code/app/configs/types.ts",
-      "product-truth/product-code/app/login/LoginForm.test.tsx",
-      "product-truth/product-code/app/login/LoginForm.tsx",
-      "product-truth/product-code/app/login/page.test.tsx",
-      "product-truth/product-code/app/login/page.tsx",
-      "product-truth/product-code/lib/admin",
-      "product-truth/product-code/lib/auth-context-cookie.ts",
-      "product-truth/product-code/lib/auth-token.ts",
-      "product-truth/product-code/lib/auth",
-      "product-truth/product-code/lib/auth/oauth-state.test.ts",
-      "product-truth/product-code/lib/auth/oauth-state.ts",
-      "product-truth/product-code/lib/auth/session-response.test.ts",
-      "product-truth/product-code/lib/auth/session-response.ts",
-      "product-truth/product-code/lib/auth/sso-session.test.ts",
-      "product-truth/product-code/lib/auth/sso-session.ts",
-      "product-truth/product-code/lib/auth/oauth-state-migration.test.ts",
-      "product-truth/product-code/lib/database-environment.test.ts",
-      "product-truth/product-code/lib/database-environment.ts",
-      "product-truth/product-code/lib/fxiaoke",
-      "product-truth/product-code/lib/fxiaoke/client.test.ts",
-      "product-truth/product-code/lib/fxiaoke/client.ts",
-      "product-truth/product-code/lib/fxiaoke/contracts.ts",
-      "product-truth/product-code/lib/fxiaoke/egress/server.test.ts",
-      "product-truth/product-code/lib/fxiaoke/identity.test.ts",
-      "product-truth/product-code/lib/fxiaoke/identity.ts",
-      "product-truth/product-code/lib/fxiaoke/oauth.test.ts",
-      "product-truth/product-code/lib/fxiaoke/oauth.ts",
-      "product-truth/product-code/lib/fxiaoke/settings.test.ts",
-      "product-truth/product-code/lib/fxiaoke/settings.ts",
-      "product-truth/product-code/lib/fxiaoke/sso.test.ts",
-      "product-truth/product-code/lib/fxiaoke/sso.ts",
-      "product-truth/product-code/lib/login-prewarm.ts",
-      "product-truth/product-code/lib/rate-limit.ts",
-      "product-truth/product-code/lib/rate-limit.test.ts",
-      "product-truth/product-code/lib/schema-check.ts",
-      "product-truth/product-code/lib/scoped-access.ts",
-      "product-truth/product-code/lib/tech-architecture/data.ts",
-      "product-truth/product-code/lib/validation.ts",
-      "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/middleware.test.ts",
-      "product-truth/product-code/package.json",
-      "product-truth/product-code/pnpm-lock.yaml",
-      "product-truth/product-code/scripts",
-      "product-truth/product-code/supabase/seed.sql",
-      "product-truth/product-code/supabase/migrations"
+      "product-truth/product-code/app/shipping/workbench.tsx",
+      "product-truth/product-code/app/shipping/workbench.test.tsx",
+      "product-truth/product-code/app/shipping/workbench-service-selection.test.tsx",
+      "product-truth/product-code/lib/shipping/simulation.ts",
+      "product-truth/product-code/lib/shipping/simulation.test.ts"
     ],
-    "reproduction_capsule": "codex-runtime/wp94-sso/reproduction.json",
-    "acceptance_checks": [
-      "登录页诚实显示已配置的纷享入口；只有服务器受限账号开关启用时显示既有账号表单。企业提供方故障不能隐藏已启用的账号能力，不显示死按钮或后门入口",
-      "开始授权使用随机一次性 state、HttpOnly cookie、短有效期和固定回调地址",
-      "回调校验 state、授权码、企业 corpId 和稳定员工ID后才签发系统会话",
-      "未映射、停用、跨组织或跨企业身份返回明确 403，不按姓名合并",
-      "稳定员工映射复用现有 organization_sources / external_identities 台账，不建立平行身份真相表",
-      "公开 SSO start 不接受浏览器指定的组织 ID，配置组织不唯一时失败关闭",
-      "同一外部身份后续登录复用稳定映射；映射冲突阻断登录",
-      "企业 OAuth 只按已建立的 external_identities 稳定映射解析主体；provider 返回手机号不得静默 JIT 绑定。受限既有账号仅验证已有凭据而不写外部映射，两种入口后续权限、审计和业务关系只引用同一 users.id",
-      "外部映射以 source_id + external_user_id 为稳定键，同一来源下同一 canonical user 至多一条；姓名永不参与匹配",
-      "users.phone 可用于 IN013 受限既有账号凭据查找、展示和受审计的绑定核验；不得作为企业 OAuth 静默绑定依据。当前值与历史归属分离，同一企业当前手机号唯一，phone_history 保留有效期",
-      "超级管理员不经过特殊身份匹配路径；解析出 users.id 后只核验其既有系统角色，禁止用 employee_number 或部署配置绕过统一映射链",
-      "零租户系统 bootstrap、租户创建者自动超管、Owner 硬保护和角色授予矩阵归 WP82，不得在 WP94 建按租户授予超管的临时入口",
-      "企业 OAuth 没有稳定映射时必须失败关闭；只允许当前组织超级管理员通过受审计预绑定显式选择现有成员。已有 canonical user 被另一 provider subject 占用时拒绝转人工，不按手机号覆盖；受限账号入口不得创建或改变该映射",
-      "phone_history 同一企业的同一手机号时间区间必须由 PostgreSQL 排他约束禁止重叠，不能只依赖应用检查或普通触发器",
-      "IN-20261102-013 批准保留受限既有账号过渡入口及已有凭据；注册、改密、重置、bootstrap 和管理员后门继续禁止。密码列与旧 RPC 物理删除保持后置，须过渡退出、替代登录/恢复证据及独立写入授权满足，本批不执行删除",
-      "受限账号只接受唯一既有邮箱或手机号候选；歧义、空凭据、must_change_password、非 active/login_enabled、非唯一默认活动在职成员、组织无效或零有效角色均拒绝，不创建用户/成员/角色",
-      "受限账号以 canonical users.id 共用邮箱/手机限额；共享 login_attempts 先预留后检查账号/IP窗口，读写失败关闭；生产 Origin、JSON、实际字节、密码截断和可信部署 IP 边界明确",
-      "受限账号复用 issueSystemSession；签发前后凭据/成员变更或审计失败不返回 token/cookie并清理新会话；成功仅持久化当前客户端会话并整页进入固定首页",
-      "新增受限账号的真实管理员/普通成员登录及拒绝证据须独立绑定同一候选；现有纷享 SSO verifier 结果不能冒充账号入口验收，也不关闭其他 WP 的全域授权欠账",
-      "账号与企业SSO同时可用时主次清楚，重复标题/副标题不重复展示；空账号/密码以内联字段提示并正确聚焦，不依赖原生tooltip且不发送空凭据",
-      "账号必填/密码API反馈与前次企业SSO错误有明确归属；UI通过不能代替真实凭据和企业身份验收，第三胶囊只能凭精确候选正式站现有Chrome证据关闭"
-    ],
+    "feature_id": "F054",
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "code_green",
       "allowed_states": [
         "executing",
-        "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -327,89 +251,59 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "fxiaoke_sso"
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
       ],
-      "required_production_runtime_evidence": [
-        "fxiaoke_sso_login",
-        "fxiaoke_sso_denials"
-      ],
-      "runtime_profile": "application",
-      "runtime_contract_version": "f003-fxiaoke-sso-v1",
-      "production_database_mode": "controlled_write_approved",
-      "production_release_authorization": {
-        "status": "approved_for_final_release",
-        "micro_fix_approval_id": "IN-20261102-013",
-        "clarification_id": "IN-20261102-019",
-        "micro_fix_scope": "WP94 IN013 受限既有成员账号过渡入口，与纷享 OAuth 共用 canonical users.id、活动成员/新鲜角色及统一可撤销会话；不恢复注册、重置、改密、bootstrap、自动绑定/合并或数据库迁移。",
-        "final_scope": "发布 WP94 登录界面修正精确候选 13b6984999003a9cdf785e96e603910bf29d11d4 及不改变产品树的两项治理记录：推送并集成 main/production、部署网站，由用户现有 Chrome 在 sales.cyanlog.icu 验收主次登录按钮、去重文案、表单内必填与两种登录错误归属。认证后端、密码、账号、成员/角色、既有 Production 账号开关均保持原样。Preview 保持 not_passed，沿本次 Production-first 顺序例外；正常 auth_tokens/login_attempts 登录写入延续 IN016，不新增数据权限。禁止数据库迁移、账号创建/合并/身份绑定、密码重置/删除、角色/成员/组织来源变更、组织同步或旧源解绑、worker/IP 白名单/企微服务修改及顺丰调用。",
-        "database_write_authorized": true,
-        "production_write_scope": [
-          "auth_tokens",
-          "login_attempts"
-        ],
-        "database_write_scope_description": "Only ordinary login session creation/revocation in auth_tokens and login-attempt reservation/result logging in login_attempts; no credential/member/role/identity mutations.",
-        "production_migrations_authorized": false,
-        "migration_execution_authorized": false,
-        "account_creation_authorized": false,
-        "account_merge_execution_authorized": false,
-        "identity_binding_authorized": false,
-        "password_reset_authorized": false,
-        "phone_history_migration_authorized": false,
-        "password_removal_authorized": false,
-        "role_modification_authorized": false,
-        "egress_worker_authorized": false,
-        "carrier_calls_authorized": false,
-        "final_release_approval_id": "IN-20261102-019",
-        "organization_configuration_write_authorized": false,
-        "directory_sync_authorized": false,
-        "source_unbind_authorized": false,
-        "transport_execution_clarification_id": "IN-20261102-027"
-      },
-      "final_acceptance": {
-        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
-        "production_database_mode": "controlled_write_approved"
-      },
-      "note": "IN019 已批准登录UI精确候选与不改变产品树的治理记录发布；用户现有Chrome正式站验收，Preview仍not_passed。组织来源路径审计单独只读，不修改来源/同步/解绑或任何组织数据。原IN003/007/017与最终真实登录/拒绝矩阵不因发布自动关闭。",
-      "blocking_acceptance_defects": [
-        "IN-20261102-003",
-        "IN-20261102-007",
-        "IN-20261102-017"
-      ],
-      "preview_order_exception_approval_id": "IN-20261102-019"
+      "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-ui-v1",
+      "production_database_mode": "read_only",
+      "note": "用户IN-20261103-001批准当前权限候选封存后优先逐票时效修复，再回统一接入主链。本阶段仅候选准备；不继承既往登录UI的发布批准，不执行Production写入、数据库迁移或真实顺丰下单/改单/取消。"
     },
-    "micro_fixes": [
-      {
-        "id": "WP94-phone-history-identity-contract",
-        "objective": "纷享 openUserId 只写入 external_identities.external_user_id，绝不与 users.employee_id 同值自动关联；无稳定映射时 fail-closed，禁止用 provider 手机号静默接管已有用户。超管与其他成员共用同一链路，只核验既有系统角色。users.id 为唯一主体根，phone_history 用排他约束禁止区间重叠。"
-      },
-      {
-        "id": "WP94-single-database-enforcement",
-        "objective": "落实唯一业务库红线：生产远端只允许 cyanlog-sales-v3，测试仅允许本地临时存储；拒绝旧隔离 Supabase 项目或任意其他远端库。"
-      },
-      {
-        "id": "WP94-restricted-existing-account-transition",
-        "objective": "依 IN-20261102-013，在统一 UUID、活动默认成员/在职/组织、新鲜角色及统一会话约束下恢复默认关闭的受限既有账号入口；共享限流、凭据竞态和签发失败清理必须验收。注册、重置、改密、bootstrap、影子管理员继续禁止；原密码物理删除目标后置且本批不执行。 当前登录验收UI反馈限定账号主操作、SSO次操作、重复副标题、inline必填与入口错误归属，复用本微修复，不新增业务范围。"
-      }
-    ]
+    "acceptance_checks": [
+      "旧组件的两票独立选择与payload用例真实失败，保存复现胶囊",
+      "A票特快B票标快；两票逐票摘要/radio/确认URL与serviceId一致",
+      "批量服务先选后明确应用；单票修改只更新自己的ID；重勾/切票不串",
+      "产品失效阻止整批发送；配置刷新/切连接/修订变化不得继续使用旧覆盖",
+      "成功回执后本地和台账服务一致；明确失败与未知结果保持现有防重/查回语义",
+      "目标、受影响回归、typecheck/build和全量严格门禁通过，精确Production与既有Chrome验收仍独立保留"
+    ],
+    "micro_fixes": [],
+    "started_at": "2026-11-03T01:39:02.242Z",
+    "activation_basis": "IN-20261103-001",
+    "reason": "按用户批准，先修逐票时效，再回统一接入主链。"
   },
   "execution_queue": {
     "active": {
-      "id": "WP94",
-      "slug": "fxiaoke-sso-federated-identity",
-      "name": "纷享 SSO 与联合身份门禁"
+      "id": "WP52",
+      "slug": "shipping-per-order-service-confirmation",
+      "name": "逐票时效核对与确认参数隔离"
     },
     "next": {
-      "id": "WP82",
-      "slug": "permission-default-deny",
-      "name": "权限路由与菜单默认拒绝",
-      "scheduling_group": "权限安全",
-      "acceptance_state": "候选保留；安全专项未验收",
-      "remaining_acceptance": "无标书权限无菜单、直链拒绝、接口重放403、跨租户拒绝；经营/部门/财务报表按原子权限默认拒绝并覆盖新增模块",
-      "acceptance_owner": "WP82",
+      "id": "WP92",
+      "slug": "fxiaoke-primary-source-sync",
+      "name": "纷享组织同步与主来源切换",
+      "scheduling_group": "组织来源",
+      "acceptance_state": "待开发",
+      "remaining_acceptance": "预览差异→确认同步/主来源切换→原子回滚；旧飞书和手工数据不丢",
+      "acceptance_owner": "WP92",
       "source_records": [
-        "suspended_wp82_20261026"
+        "current_queue.next",
+        "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:next"
       ],
-      "reconciliation_source": "IN-20261029-004"
+      "reconciliation_source": "IN-20261028-010",
+      "historical_record": {
+        "id": "WP92",
+        "slug": "fxiaoke-primary-source-sync",
+        "name": "纷享组织同步与主来源切换",
+        "depends_on": [
+          "WP91"
+        ]
+      },
+      "depends_on": [
+        "WP91",
+        "WP65"
+      ]
     },
     "ready": [
       {
@@ -562,28 +456,6 @@
         }
       },
       {
-        "id": "WP65",
-        "slug": "personnel-organization-authorization-closure",
-        "name": "人员与组织管理租户授权收口",
-        "scheduling_group": "权限安全",
-        "acceptance_state": "代码通过；生产未验收",
-        "remaining_acceptance": "人员/组织/角色API逐条验证新鲜授权和跨组织拒绝",
-        "acceptance_owner": "WP65",
-        "source_records": [
-          "/Users/nsss/.codex/worktrees/wp45-tenant-identity-foundation/Price-v3:completed"
-        ],
-        "reconciliation_source": "IN-20261028-010",
-        "historical_record": {
-          "id": "WP65",
-          "slug": "personnel-organization-authorization-closure",
-          "name": "人员与组织管理租户授权收口",
-          "completed_at": "2026-10-22T11:52:23Z",
-          "evidence_commit": "cd13cc9b01407a845f20d04002cfde2073d10797",
-          "result": "达到code_green：16条人员、部门、组织聚合和角色主路由迁移到活动租户+新鲜动作权限守卫；邀请、成员移除/恢复、角色作用域、汇报关系、密码重置和原子RPC保护保留。目标18文件120测试、全量2906通过/5跳过、严格10/10、lint/typecheck与99页build通过；剩余82条service_role租户路由、45条认证旧路由、隔离迁移、Preview和Production未验收。",
-          "evidence": "codex-runtime/wp65-personnel-authz/"
-        }
-      },
-      {
         "id": "WP66",
         "slug": "shipping-route-tenant-authorization",
         "name": "顺丰后台操作租户授权收口",
@@ -625,32 +497,6 @@
           "status": "active",
           "reason": "WP66已完成顺丰后台活动租户与新鲜权限收口；继续处理配置控制面的租户资源、平台资产和发布动作边界。"
         }
-      },
-      {
-        "id": "WP92",
-        "slug": "fxiaoke-primary-source-sync",
-        "name": "纷享组织同步与主来源切换",
-        "scheduling_group": "组织来源",
-        "acceptance_state": "待开发",
-        "remaining_acceptance": "预览差异→确认同步/主来源切换→原子回滚；旧飞书和手工数据不丢",
-        "acceptance_owner": "WP92",
-        "source_records": [
-          "current_queue.next",
-          "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:next"
-        ],
-        "reconciliation_source": "IN-20261028-010",
-        "historical_record": {
-          "id": "WP92",
-          "slug": "fxiaoke-primary-source-sync",
-          "name": "纷享组织同步与主来源切换",
-          "depends_on": [
-            "WP91"
-          ]
-        },
-        "depends_on": [
-          "WP91",
-          "WP65"
-        ]
       },
       {
         "id": "WP93",
@@ -1911,6 +1757,24 @@
           "source_input": "IN-20261023-050"
         },
         "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
+      },
+      {
+        "id": "WP94",
+        "slug": "fxiaoke-sso-federated-identity",
+        "name": "纷享 SSO 与联合身份门禁",
+        "acceptance_state": "保留候选；统一接入后联合复验",
+        "remaining_acceptance": "真实账号和纷享登录、拒绝矩阵及精确Production/现有Chrome验收",
+        "acceptance_owner": "WP94",
+        "reconciliation_source": "IN-20261102-028"
+      },
+      {
+        "id": "WP82",
+        "slug": "permission-default-deny",
+        "name": "权限路由与菜单默认拒绝",
+        "acceptance_state": "候选保留；待联合生产验收",
+        "remaining_acceptance": "有效成员前置、精确迁移和发布、现有Chrome菜单/直链/API/组织隔离复验",
+        "acceptance_owner": "WP82",
+        "reconciliation_source": "IN-20261102-028"
       }
     ],
     "completed": [
@@ -4640,6 +4504,401 @@
         "requested_target": "production_released",
         "constraint": "code-only release; no schema or new production shipment"
       }
+    },
+    "WP94": {
+      "id": "WP94",
+      "slug": "fxiaoke-sso-federated-identity",
+      "name": "纷享 SSO 与联合身份门禁",
+      "kind": "product",
+      "status": "parked",
+      "objective": "真实员工通过纷享 OAuth 或 IN-20261102-013 批准的受限既有账号过渡入口进入同一系统主体、组织和权限；所有权限、审计和业务关系只引用 canonical users.id。企业 OAuth 校验一次性 state、企业 corpId 和 external_identities 稳定 subject，无映射或冲突时失败关闭，provider 手机号不得触发静默 JIT 绑定。受限账号只验证唯一既有邮箱/手机号候选及现有凭据，要求用户、默认成员、在职与组织均有效、未强制改密且有新鲜组织角色，再复用统一可撤销会话；默认关闭的服务器开关与页面能力发现一致，具备共享限流和失败清理。不恢复注册、改密、密码重置、环境变量 bootstrap 或影子管理员，不创建/绑定/合并账号。密码列与旧 RPC 的物理删除仍是后置安全目标，须明确退出过渡入口、替代登录与恢复证据及独立写入授权满足后执行，本批不做。零租户 bootstrap、创建人 Owner、短信 step-up 与角色授予矩阵仍归后续责任包。 IN021 已确认所有组织提供方统一接入配置主表与公共生命周期，提供方差异通过凭据schema/协议适配器处理；当前仅记录设计与用户路径，不在WP94夹带统一表数据迁移或组织切源。",
+      "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
+      "activation_basis": "IN-20261029-004：用户批准 Project Charter，并以 WIP=1 先推进 WP94；保留受审计恢复通道直到 SSO 生产验证通过。",
+      "started_at": "2026-10-29T06:14:13.111308+00:00",
+      "feature_id": "F003",
+      "allowed_paths": [
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-sso-verifier.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-sso-verifier.test.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "governance/runtime-state/main-chain-governance-charter.md",
+        "governance/runtime-state/identity-authorization-blueprint.md",
+        "product-truth/REQ_REGISTRY.yml",
+        "product-truth/feature-packets/F003-account-auth.md",
+        "product-truth/feature-packets/F099-current-goal-ledger.md",
+        "product-truth/product-code/app/api/admin/organization-sources/fxiaoke/route.test.ts",
+        "product-truth/product-code/app/api/admin/organization-sources/fxiaoke/route.ts",
+        "product-truth/product-code/app/api/auth",
+        "product-truth/product-code/app/api/admin/users",
+        "product-truth/product-code/app/api/admin/org/route.ts",
+        "product-truth/product-code/app/accept-invitation",
+        "product-truth/product-code/app/change-password",
+        "product-truth/product-code/app/register",
+        "product-truth/product-code/app/configs/tabs/FxiaokeSourceForm.test.tsx",
+        "product-truth/product-code/app/configs/tabs/FxiaokeSourceForm.tsx",
+        "product-truth/product-code/app/configs/ConfigsClient.tsx",
+        "product-truth/product-code/app/configs/tabs/OrgStructureTab.tsx",
+        "product-truth/product-code/app/configs/tabs/RoleDetailPanel.tsx",
+        "product-truth/product-code/app/configs/tabs/components/UserFormDialog.tsx",
+        "product-truth/product-code/app/configs/tabs/components/IdentityBindingDialog.tsx",
+        "product-truth/product-code/app/configs/types.ts",
+        "product-truth/product-code/app/login/LoginForm.test.tsx",
+        "product-truth/product-code/app/login/LoginForm.tsx",
+        "product-truth/product-code/app/login/page.test.tsx",
+        "product-truth/product-code/app/login/page.tsx",
+        "product-truth/product-code/lib/admin",
+        "product-truth/product-code/lib/auth-context-cookie.ts",
+        "product-truth/product-code/lib/auth-token.ts",
+        "product-truth/product-code/lib/auth",
+        "product-truth/product-code/lib/auth/oauth-state.test.ts",
+        "product-truth/product-code/lib/auth/oauth-state.ts",
+        "product-truth/product-code/lib/auth/session-response.test.ts",
+        "product-truth/product-code/lib/auth/session-response.ts",
+        "product-truth/product-code/lib/auth/sso-session.test.ts",
+        "product-truth/product-code/lib/auth/sso-session.ts",
+        "product-truth/product-code/lib/auth/oauth-state-migration.test.ts",
+        "product-truth/product-code/lib/database-environment.test.ts",
+        "product-truth/product-code/lib/database-environment.ts",
+        "product-truth/product-code/lib/fxiaoke",
+        "product-truth/product-code/lib/fxiaoke/client.test.ts",
+        "product-truth/product-code/lib/fxiaoke/client.ts",
+        "product-truth/product-code/lib/fxiaoke/contracts.ts",
+        "product-truth/product-code/lib/fxiaoke/egress/server.test.ts",
+        "product-truth/product-code/lib/fxiaoke/identity.test.ts",
+        "product-truth/product-code/lib/fxiaoke/identity.ts",
+        "product-truth/product-code/lib/fxiaoke/oauth.test.ts",
+        "product-truth/product-code/lib/fxiaoke/oauth.ts",
+        "product-truth/product-code/lib/fxiaoke/settings.test.ts",
+        "product-truth/product-code/lib/fxiaoke/settings.ts",
+        "product-truth/product-code/lib/fxiaoke/sso.test.ts",
+        "product-truth/product-code/lib/fxiaoke/sso.ts",
+        "product-truth/product-code/lib/login-prewarm.ts",
+        "product-truth/product-code/lib/rate-limit.ts",
+        "product-truth/product-code/lib/rate-limit.test.ts",
+        "product-truth/product-code/lib/schema-check.ts",
+        "product-truth/product-code/lib/scoped-access.ts",
+        "product-truth/product-code/lib/tech-architecture/data.ts",
+        "product-truth/product-code/lib/validation.ts",
+        "product-truth/product-code/middleware.ts",
+        "product-truth/product-code/middleware.test.ts",
+        "product-truth/product-code/package.json",
+        "product-truth/product-code/pnpm-lock.yaml",
+        "product-truth/product-code/scripts",
+        "product-truth/product-code/supabase/seed.sql",
+        "product-truth/product-code/supabase/migrations"
+      ],
+      "reproduction_capsule": "codex-runtime/wp94-sso/reproduction.json",
+      "acceptance_checks": [
+        "登录页诚实显示已配置的纷享入口；只有服务器受限账号开关启用时显示既有账号表单。企业提供方故障不能隐藏已启用的账号能力，不显示死按钮或后门入口",
+        "开始授权使用随机一次性 state、HttpOnly cookie、短有效期和固定回调地址",
+        "回调校验 state、授权码、企业 corpId 和稳定员工ID后才签发系统会话",
+        "未映射、停用、跨组织或跨企业身份返回明确 403，不按姓名合并",
+        "稳定员工映射复用现有 organization_sources / external_identities 台账，不建立平行身份真相表",
+        "公开 SSO start 不接受浏览器指定的组织 ID，配置组织不唯一时失败关闭",
+        "同一外部身份后续登录复用稳定映射；映射冲突阻断登录",
+        "企业 OAuth 只按已建立的 external_identities 稳定映射解析主体；provider 返回手机号不得静默 JIT 绑定。受限既有账号仅验证已有凭据而不写外部映射，两种入口后续权限、审计和业务关系只引用同一 users.id",
+        "外部映射以 source_id + external_user_id 为稳定键，同一来源下同一 canonical user 至多一条；姓名永不参与匹配",
+        "users.phone 可用于 IN013 受限既有账号凭据查找、展示和受审计的绑定核验；不得作为企业 OAuth 静默绑定依据。当前值与历史归属分离，同一企业当前手机号唯一，phone_history 保留有效期",
+        "超级管理员不经过特殊身份匹配路径；解析出 users.id 后只核验其既有系统角色，禁止用 employee_number 或部署配置绕过统一映射链",
+        "零租户系统 bootstrap、租户创建者自动超管、Owner 硬保护和角色授予矩阵归 WP82，不得在 WP94 建按租户授予超管的临时入口",
+        "企业 OAuth 没有稳定映射时必须失败关闭；只允许当前组织超级管理员通过受审计预绑定显式选择现有成员。已有 canonical user 被另一 provider subject 占用时拒绝转人工，不按手机号覆盖；受限账号入口不得创建或改变该映射",
+        "phone_history 同一企业的同一手机号时间区间必须由 PostgreSQL 排他约束禁止重叠，不能只依赖应用检查或普通触发器",
+        "IN-20261102-013 批准保留受限既有账号过渡入口及已有凭据；注册、改密、重置、bootstrap 和管理员后门继续禁止。密码列与旧 RPC 物理删除保持后置，须过渡退出、替代登录/恢复证据及独立写入授权满足，本批不执行删除",
+        "受限账号只接受唯一既有邮箱或手机号候选；歧义、空凭据、must_change_password、非 active/login_enabled、非唯一默认活动在职成员、组织无效或零有效角色均拒绝，不创建用户/成员/角色",
+        "受限账号以 canonical users.id 共用邮箱/手机限额；共享 login_attempts 先预留后检查账号/IP窗口，读写失败关闭；生产 Origin、JSON、实际字节、密码截断和可信部署 IP 边界明确",
+        "受限账号复用 issueSystemSession；签发前后凭据/成员变更或审计失败不返回 token/cookie并清理新会话；成功仅持久化当前客户端会话并整页进入固定首页",
+        "新增受限账号的真实管理员/普通成员登录及拒绝证据须独立绑定同一候选；现有纷享 SSO verifier 结果不能冒充账号入口验收，也不关闭其他 WP 的全域授权欠账",
+        "账号与企业SSO同时可用时主次清楚，重复标题/副标题不重复展示；空账号/密码以内联字段提示并正确聚焦，不依赖原生tooltip且不发送空凭据",
+        "账号必填/密码API反馈与前次企业SSO错误有明确归属；UI通过不能代替真实凭据和企业身份验收，第三胶囊只能凭精确候选正式站现有Chrome证据关闭"
+      ],
+      "delivery_contract": {
+        "target_state": "production_released",
+        "allowed_states": [
+          "executing",
+          "code_green",
+          "clean_preview_green",
+          "integration_ready",
+          "main_integrated",
+          "production_released"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "fxiaoke_sso"
+        ],
+        "required_production_runtime_evidence": [
+          "fxiaoke_sso_login",
+          "fxiaoke_sso_denials"
+        ],
+        "runtime_profile": "application",
+        "runtime_contract_version": "f003-fxiaoke-sso-v1",
+        "production_database_mode": "read_only_pending_security_gate_and_final_approval",
+        "production_release_authorization": {
+          "status": "pending_security_gate_and_final_write_approval",
+          "micro_fix_approval_id": "IN-20261102-013",
+          "clarification_id": "IN-20261102-021",
+          "micro_fix_scope": "WP94 IN013 受限既有成员账号过渡入口，与纷享 OAuth 共用 canonical users.id、活动成员/新鲜角色及统一可撤销会话；不恢复注册、重置、改密、bootstrap、自动绑定/合并或数据库迁移。",
+          "final_scope": "本设计合同分支仅确认IN021统一组织接入一表与公共生命周期；不授权实现迁移、凭据搬运、组织同步/切源/解绑、账号/成员/角色修改或发布新应用。IN019已批准的13b UI产品树发布与IN020必要传输修复在独立原发布分支保留，不因本设计合同再申请同一授权，也不将其批准扩展为统一表迁移授权。",
+          "database_write_authorized": false,
+          "production_write_scope": [],
+          "database_write_scope_description": "No new production write authority under IN021 design-only reconciliation; prior scoped approvals remain preserved in their original records and release branch.",
+          "production_migrations_authorized": false,
+          "migration_execution_authorized": false,
+          "account_creation_authorized": false,
+          "account_merge_execution_authorized": false,
+          "identity_binding_authorized": false,
+          "password_reset_authorized": false,
+          "phone_history_migration_authorized": false,
+          "password_removal_authorized": false,
+          "role_modification_authorized": false,
+          "egress_worker_authorized": false,
+          "carrier_calls_authorized": false,
+          "organization_configuration_write_authorized": false,
+          "directory_sync_authorized": false,
+          "source_unbind_authorized": false,
+          "transport_execution_clarification_id": "IN-20261102-027"
+        },
+        "final_acceptance": {
+          "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+          "production_database_mode": "read_only_pending_security_gate_and_final_approval"
+        },
+        "note": "本分支只对齐用户已确认的统一组织接入配置真相与安全用户路径，实施仍由后续有界迁移批次承载，Active WP94/Next WP82不变。不得继承独立UI候选的授权来执行统一表迁移；既有UI发布分支及其批准保留。",
+        "blocking_acceptance_defects": [
+          "IN-20261102-003",
+          "IN-20261102-007",
+          "IN-20261102-017"
+        ]
+      },
+      "micro_fixes": [
+        {
+          "id": "WP94-phone-history-identity-contract",
+          "objective": "纷享 openUserId 只写入 external_identities.external_user_id，绝不与 users.employee_id 同值自动关联；无稳定映射时 fail-closed，禁止用 provider 手机号静默接管已有用户。超管与其他成员共用同一链路，只核验既有系统角色。users.id 为唯一主体根，phone_history 用排他约束禁止区间重叠。"
+        },
+        {
+          "id": "WP94-single-database-enforcement",
+          "objective": "落实唯一业务库红线：生产远端只允许 cyanlog-sales-v3，测试仅允许本地临时存储；拒绝旧隔离 Supabase 项目或任意其他远端库。"
+        },
+        {
+          "id": "WP94-restricted-existing-account-transition",
+          "objective": "依 IN-20261102-013，在统一 UUID、活动默认成员/在职/组织、新鲜角色及统一会话约束下恢复默认关闭的受限既有账号入口；共享限流、凭据竞态和签发失败清理必须验收。注册、重置、改密、bootstrap、影子管理员继续禁止；原密码物理删除目标后置且本批不执行。 当前登录验收UI反馈限定账号主操作、SSO次操作、重复副标题、inline必填与入口错误归属，复用本微修复，不新增业务范围。"
+        }
+      ],
+      "parked_at": "2026-11-02T10:28:35.605Z",
+      "reason": "IN028批准统一接入后联合双登录验收；UI发布分支及真实网络阻断证据保留，未宣称Production关闭。"
+    },
+    "WP82": {
+      "id": "WP82",
+      "slug": "permission-default-deny",
+      "name": "权限路由与菜单默认拒绝",
+      "kind": "product",
+      "status": "parked",
+      "objective": "整合已有模块默认拒绝候选：无模块权限的成员看不到入口，标书页面直链和API在业务读取/解析/写入前拒绝；授权、撤权与当前组织切换由新鲜服务端角色判断，未知模块默认拒绝。保留现有登录、撤销会话及组织校验，不扩展Owner/bootstrap/短信或角色编辑新方案。 IN031确认历史可见性规则：新增OCR绑定同一次受信组织，列表/详情拒绝跨组织与归属未知记录，未证明归属的旧数据原样保留且暂时隐藏，核实后恢复；只准备同库迁移，不执行Production写入。",
+      "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
+      "activation_basis": "IN-20261102-028：用户批准本批必要权限先行、WIP1串行候选准备后联合生产验收。",
+      "allowed_paths": [
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "product-truth/feature-packets/F099-current-goal-ledger.md",
+        "product-truth/feature-packets/F003-account-auth.md",
+        "product-truth/product-code/middleware.ts",
+        "product-truth/product-code/middleware.test.ts",
+        "product-truth/product-code/lib/module-access.ts",
+        "product-truth/product-code/lib/module-access.test.ts",
+        "product-truth/product-code/lib/request-authorization.ts",
+        "product-truth/product-code/lib/request-authorization.test.ts",
+        "product-truth/product-code/lib/permission-catalog.ts",
+        "product-truth/product-code/lib/permission-catalog.test.ts",
+        "product-truth/product-code/components/layout/Sidebar.tsx",
+        "product-truth/product-code/components/layout/Sidebar.test.tsx",
+        "product-truth/product-code/app/api/navigation",
+        "product-truth/product-code/app/api/tenders",
+        "product-truth/product-code/lib/tenders/owned-ocr-result.ts",
+        "product-truth/product-code/lib/tenders/owned-ocr-result.test.ts",
+        "product-truth/product-code/supabase/migrations/20261026033051_module_access_permissions.sql",
+        "product-truth/product-code/lib/module-access-migration.test.ts",
+        "product-truth/product-code/lib/core-page-warmup.ts",
+        "product-truth/product-code/lib/core-page-warmup.test.ts",
+        "product-truth/product-code/app/tenders/TendersClient.tsx",
+        "product-truth/product-code/app/tenders/TendersClient.test.tsx",
+        "product-truth/product-code/app/tenders/upload/TenderUploadClient.tsx",
+        "product-truth/product-code/app/tenders/upload/TenderUploadClient.test.tsx",
+        "product-truth/product-code/lib/tenders/organization-isolation-migration.test.ts",
+        "product-truth/product-code/supabase/migrations/20261102104546_bind_tender_ocr_organization.sql"
+      ],
+      "feature_id": "F003",
+      "delivery_contract": {
+        "target_state": "code_green",
+        "allowed_states": [
+          "executing",
+          "code_green"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "role_edit_save",
+          "role_access_enforcement"
+        ],
+        "runtime_profile": "application",
+        "runtime_contract_version": "f003-role-permissions-v1",
+        "production_database_mode": "read_only",
+        "note": "IN028批准的有界权限候选准备。code_green不代表联合完成；后续隔离与精确Production发布/现有Chrome验收另按原门禁和授权推进，不修改Production角色。"
+      },
+      "started_at": "2026-11-02T10:28:35.605Z",
+      "reason": "IN028已批准串行候选联合验收；保存当前候选检查证据，生产迁移/发布/现有Chrome验收仍待，继续必要WP65前置。",
+      "micro_fixes": [],
+      "acceptance_checks": [
+        "未授权标书入口隐藏，列表/上传/详情直链拒绝",
+        "列表、OCR及workflow全部handler在业务访问前403",
+        "使用新鲜当前组织权限；撤销和组织变更下一请求生效，浏览器权限头不能伪造",
+        "未知模块与无权限新模块默认拒绝，已有公开认证/机器人回调/机器桥接边界保留",
+        "目标和受影响测试、typecheck、build通过；生产验收逐项保持待验证",
+        "OCR新记录绑定固定授权org，列表/详情同时按org和本人过滤，未知归属不暴露",
+        "同token切组织不读取旧标书列表缓存，迟到响应不能覆盖新上下文"
+      ],
+      "parked_at": "2026-11-02T11:12:28.522Z"
+    },
+    "WP65": {
+      "id": "WP65",
+      "slug": "personnel-organization-authorization-closure",
+      "name": "人员与组织管理租户授权收口",
+      "kind": "product",
+      "status": "parked",
+      "objective": "整合已有人员与组织授权候选：只有唯一当前默认组织的有效在职成员，持有对应新鲜动作权限，才能读写本批16个组织管理handler；停用、离职、撤权、组织无效、跨组织和伪造组织下一请求拒绝，保留既有管理员原子RPC、委派上限、最后管理员和身份绑定限制。将受限登录的严格组织判定提纯共享，两个默认组织getter均fresh且不退回users.org_id，不引入旧membership版本基础设施，不恢复密码创建/重置，不开发Owner/bootstrap/短信或独立角色编辑新方案。",
+      "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
+      "activation_basis": "IN-20261102-028批准必要权限串行候选；IN034将其具体化为现存WP65候选及共享组织解析的必要修正。",
+      "allowed_paths": [
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "product-truth/feature-packets/F003-account-auth.md",
+        "product-truth/feature-packets/F099-current-goal-ledger.md",
+        "product-truth/product-code/app/api/admin/users/route.ts",
+        "product-truth/product-code/app/api/admin/users/route.test.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/route.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/route.test.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/departments/route.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/departments/route.test.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/invitations/route.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/invitations/route.test.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/login-enabled/route.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/login-enabled/route.test.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/membership/route.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/membership/route.test.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/report-to/route.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/report-to/route.test.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/restore/route.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/restore/route.test.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/roles/route.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/roles/route.test.ts",
+        "product-truth/product-code/app/api/admin/departments/route.ts",
+        "product-truth/product-code/app/api/admin/departments/route.test.ts",
+        "product-truth/product-code/app/api/admin/departments/[id]/route.ts",
+        "product-truth/product-code/app/api/admin/departments/[id]/route.test.ts",
+        "product-truth/product-code/app/api/admin/org/route.ts",
+        "product-truth/product-code/app/api/admin/org/route.test.ts",
+        "product-truth/product-code/app/api/roles/route.ts",
+        "product-truth/product-code/app/api/roles/route.test.ts",
+        "product-truth/product-code/app/api/roles/[id]/route.ts",
+        "product-truth/product-code/app/api/roles/[id]/route.test.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/role-scopes/route.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/role-scopes/route.test.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/identity-binding/route.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/identity-binding/route.test.ts",
+        "product-truth/product-code/lib/auth/active-organization.ts",
+        "product-truth/product-code/lib/auth/active-organization.test.ts",
+        "product-truth/product-code/lib/auth/local-account.ts",
+        "product-truth/product-code/lib/auth/local-account.test.ts",
+        "product-truth/product-code/lib/scoped-access.ts",
+        "product-truth/product-code/lib/scoped-access.test.ts",
+        "product-truth/product-code/lib/api/auth-wrapper.ts",
+        "product-truth/product-code/lib/api/auth-wrapper.test.ts",
+        "product-truth/product-code/lib/request-authorization.ts",
+        "product-truth/product-code/lib/request-authorization.test.ts",
+        "product-truth/product-code/lib/scoped-access.sales-space.test.ts"
+      ],
+      "feature_id": "F003",
+      "delivery_contract": {
+        "target_state": "code_green",
+        "allowed_states": [
+          "executing",
+          "code_green"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "role_edit_save",
+          "role_access_enforcement"
+        ],
+        "runtime_profile": "application",
+        "runtime_contract_version": "f003-role-permissions-v1",
+        "production_database_mode": "read_only",
+        "note": "IN028本批串行候选准备；WP65限定共享严格成员组织解析和16个组织管理handler，保留旧原子操作保护。不push/PR/Production发布，不执行数据库迁移、人员/角色/组织/身份/凭据修改。Preview与精确Production联合验收仍待后续独立门禁。"
+      },
+      "started_at": "2026-11-02T11:12:28.522Z",
+      "reason": "IN-20261103-001批准逐票时效优先；167236db已code_green封存，仍待联合Production验收。",
+      "micro_fixes": [
+        {
+          "id": "IN-20261102-036",
+          "objective": "封住通用PATCH绕过既有汇报关系原子命令的旁路，保留专用入口与全部现有管理员保护",
+          "reproduction_capsule": "codex-runtime/wp65-reporting-reproduction/reproduction-capsule.json",
+          "scope_files": [
+            "product-truth/product-code/app/api/admin/users/[id]/route.ts",
+            "product-truth/product-code/app/api/admin/users/[id]/route.test.ts"
+          ]
+        },
+        {
+          "id": "IN-20261102-037",
+          "objective": "负责人按当前组织有效成员关系验证，禁止旧home字段误拒合法成员或选中已离职成员",
+          "reproduction_capsule": "codex-runtime/wp65-group-b/in037-leader-membership/reproduction-capsule.json",
+          "scope_files": [
+            "product-truth/product-code/app/api/admin/departments/route.ts",
+            "product-truth/product-code/app/api/admin/departments/route.test.ts",
+            "product-truth/product-code/app/api/admin/departments/[id]/route.ts",
+            "product-truth/product-code/app/api/admin/departments/[id]/route.test.ts"
+          ]
+        }
+      ],
+      "acceptance_checks": [
+        "唯一default成员status/employment active、left_at null且组织active；无/重复default或legacy users.org_id不授权",
+        "getDefaultOrgId/getFreshDefaultOrgId都逐次读取，B组织不能命中A的跨请求授权缓存",
+        "明确16个组织管理handler使用同次组织和fresh动作权限，跨组织目标和scope不触发写入",
+        "无权限403，未登录401，查询故障503；伪造或不匹配x-org-id不成为切租户入口",
+        "不恢复退休重置路由，保留当前手机号/纷享/UUID、根管理员、最后管理员、原子RPC和审计",
+        "现有role-scopes路径与测试恢复到当前UI调用链，生产函数是否安装单独核对而不执行迁移",
+        "目标/受影响回归、typecheck、build及代码门禁通过；仅候选准备，不以此声称Production已验收"
+      ],
+      "parked_at": "2026-11-03T01:39:02.242Z"
     }
   },
   "suspended_wp77": {

@@ -1,6 +1,7 @@
 // Explicit demo adapter: browser memory only. No fetch, provider call or persistence.
 import type { Contact, ShipmentOrder, ShipmentOrderStatus, ShippingInput, ShippingSettings, TrackingResult } from './types'
 import type { ShippingWorkbenchRequest } from './workbench-client'
+import { orderSelectionSchema } from './validation'
 
 export const shippingExampleText = [
   '演示张三 13800000001 广东省深圳市南山区示例路88号A座',
@@ -10,7 +11,10 @@ export const shippingExampleText = [
 ].join('\n')
 
 const sender: Contact = { name: '示例公司前台', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '演示园区示例楼1号' }
-const services = [{ id: 2, name: '示例标准寄件', preference: 'standard' as const }]
+const services = [
+  { id: 2, name: '示例标准寄件', preference: 'standard' as const },
+  { id: 1, name: '示例特快寄件', preference: 'urgent' as const },
+]
 export const shippingSimulationSettings: ShippingSettings = {
   intakeRules: { companyName: { enabled: false, required: false, minLength: 0 }, team: { enabled: false, required: false, minLength: 0 }, teamOptions: [] },
   environment: 'sandbox', ready: true, canSubmit: true, reason: '', monthlyTail: '0000', sender,
@@ -55,7 +59,7 @@ export function createShippingSimulation(now = Date.now()): ShippingWorkbenchReq
     const method = init?.method || 'GET'
     if (method === 'GET' && url === '/api/shipping/ledger?limit=50') return { records }
     if (method !== 'POST') throw new Error('模拟体验不支持此操作。')
-    const body = JSON.parse(String(init?.body || '{}')) as { key?: string; input?: ShippingInput; waybill?: string; reason?: string; payment?: unknown }
+    const body = JSON.parse(String(init?.body || '{}')) as { key?: string; input?: ShippingInput; waybill?: string; reason?: string; payment?: unknown; serviceId?: unknown }
     if (url === '/api/shipping/owner/orders') {
       if (!body.key || !body.input?.recipient?.name) throw new Error('请先完成示例收件资料。')
       const previous = createdByKey.get(body.key)
@@ -85,7 +89,12 @@ export function createShippingSimulation(now = Date.now()): ShippingWorkbenchReq
         order.status = 'returned'
       } else {
         const payment = orderSelectionSchema.shape.payment.parse(body.payment)
-        order.input.payment = payment || order.input.payment || 'sender_monthly'
+        const serviceId = orderSelectionSchema.shape.serviceId.parse(body.serviceId) ?? order.input.serviceId
+        const service = serviceId !== undefined
+          ? shippingSimulationSettings.services.find(item => item.id === serviceId)
+          : shippingSimulationSettings.services.find(item => (item.preference || 'standard') === (order.input.servicePreference || 'standard'))
+        if (!service) throw new Error('请选择已配置的示例服务产品。')
+        order.input = { ...order.input, payment: payment || order.input.payment || 'sender_monthly', serviceId: service.id, serviceName: service.name }
         order.status = 'waybill_created'
         order.waybill = `DEMO-${String(++sequence).padStart(6, '0')}`
       }
@@ -95,4 +104,3 @@ export function createShippingSimulation(now = Date.now()): ShippingWorkbenchReq
 
   return async <T>(url: string, init?: RequestInit) => structuredClone(dispatch(url, init)) as T
 }
-import { orderSelectionSchema } from './validation'

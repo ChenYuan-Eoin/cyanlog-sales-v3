@@ -11,7 +11,8 @@ import * as importParser from '@/lib/shipping/import-parser'
 
 const settings: ShippingSettings = { intakeRules: { companyName: { enabled: false, required: false, minLength: 0 }, team: { enabled: false, required: false, minLength: 0 }, teamOptions: [] }, environment: 'sandbox', ready: true, canSubmit: true, reason: '', services: [{ id: 2, name: '顺丰标快' }], monthlyTail: '0000', sender: { name: '前台', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '科苑路15号' } }
 const fetcher = vi.fn()
-const fixtureOrders: ShipmentOrder[] = workbenchOrdersForTest.map((order, index) => ({ ...order, id: `order-${index + 1}` }))
+// These baseline scenarios use the configured standard service; mixed and invalid products have dedicated regressions.
+const fixtureOrders: ShipmentOrder[] = workbenchOrdersForTest.map((order, index) => ({ ...order, id: `order-${index + 1}`, input: { ...order.input, serviceId: 2, serviceName: '顺丰标快' } }))
 
 function useLedger(records: ShipmentOrder[]) {
   fetcher.mockImplementation(async (url: string) => new Response(JSON.stringify(url === '/api/shipping/ledger?limit=50' ? { records } : {}), { status: 200 }))
@@ -154,7 +155,7 @@ describe('self-service shipping workbench', () => {
     const [, init] = fetcher.mock.calls.find(([url]) => String(url).endsWith('/confirm'))!
     const body = JSON.parse(String(init.body))
     expect(body).toMatchObject({ payment, connectionId })
-    expect(body).not.toHaveProperty('serviceId')
+    expect(body.serviceId).toBe(2)
     expect(body).not.toHaveProperty('billingAccountId')
   })
   it('keeps intake usable during configuration outages while disabling formal confirmation', async () => {
@@ -332,7 +333,7 @@ describe('self-service shipping workbench', () => {
     const preview = within(middle.getByRole('region', { name: `工单 ${pending[0].orderNo} 收寄预览` }))
     expect(preview.getByText(/销售办公室9号/)).toBeTruthy()
     expect(preview.getByText(/销售甲/)).toBeTruthy()
-    expect(middle.getByLabelText('月结账号')).toBeTruthy()
+    expect(middle.getByLabelText(`工单 ${pending[0].orderNo} 月结账号`)).toBeTruthy()
     expect(left.queryByLabelText('月结账号')).toBeNull()
     expect(sent).toHaveLength(0)
     fireEvent.click(middle.getByRole('button', { name: '批量确认并下单（2票）' }))
@@ -558,7 +559,7 @@ describe('self-service shipping workbench', () => {
   it('allows intake but requires a single reviewed ticket for the first unverified Production order', async () => {
     const pending = fixtureOrders.slice(0, 2).map(order => ({ ...order, status: 'awaiting_confirmation' as const, waybill: null }))
     useLedger(pending)
-    const services = [{ id: 1, name: 'Production 标快', preference: 'standard' as const }]
+    const services = [{ id: 2, name: 'Production 标快', preference: 'standard' as const }]
     const productionSettings: ShippingSettings = { ...settings, environment: 'production', connectionId: 'production-connection', defaultBillingAccountId: 'production-account', services,
       carrierConnections: [{ id: 'production-connection', carrier: 'sf', environment: 'production', status: 'connected', orderCapability: 'not_tested', services }],
       billingAccounts: [{ id: 'production-account', connectionId: 'production-connection', environment: 'production', displayName: 'Production 月结', tail: '4321', isDefault: true, status: 'active' }] }
