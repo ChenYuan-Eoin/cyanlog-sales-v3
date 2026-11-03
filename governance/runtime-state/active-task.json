@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-03T01:39:02.242Z",
+  "updated_at": "2026-11-03T02:03:58.846Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -229,14 +229,19 @@
       "product-truth/product-code/app/shipping/workbench.test.tsx",
       "product-truth/product-code/app/shipping/workbench-service-selection.test.tsx",
       "product-truth/product-code/lib/shipping/simulation.ts",
-      "product-truth/product-code/lib/shipping/simulation.test.ts"
+      "product-truth/product-code/lib/shipping/simulation.test.ts",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-service-selection-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-service-selection-verifier.test.js"
     ],
     "feature_id": "F054",
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "clean_preview_green",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -251,14 +256,16 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "shipping_workspace",
-        "shipping_tracking",
+        "shipping_service_selection",
         "shipping_access"
       ],
       "runtime_profile": "shipping_workspace",
-      "runtime_contract_version": "f054-ui-v1",
+      "runtime_contract_version": "f054-service-selection-v1",
       "production_database_mode": "read_only",
-      "note": "用户IN-20261103-001批准当前权限候选封存后优先逐票时效修复，再回统一接入主链。本阶段仅候选准备；不继承既往登录UI的发布批准，不执行Production写入、数据库迁移或真实顺丰下单/改单/取消。"
+      "note": "IN001批准先修逐票时效，IN002补匹配本任务的独立只读验收合同。允许既有技术授权内的Preview候选与现有Chrome操作；不push/PR/Production发布、不写生产数据库、不真实顺丰操作。Preview不替代Production，未获本候选正式发布授权前不能前进至主干/Production。",
+      "blocking_acceptance_defects": [
+        "IN-20261102-032"
+      ]
     },
     "acceptance_checks": [
       "旧组件的两票独立选择与payload用例真实失败，保存复现胶囊",

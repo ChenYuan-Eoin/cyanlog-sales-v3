@@ -16,6 +16,7 @@ const {
   APPLICATION_PERMISSION_ACTIONS,
   APPLICATION_PERMISSION_PRODUCTION_ACTIONS,
   FXIAOKE_SSO_CONTRACT,
+  SHIPPING_SERVICE_SELECTION_CONTRACT,
   SHIPPING_COLLABORATION_ACTIONS,
   SHIPPING_CONFIG_UI_ITEMS,
   SHIPPING_CONFIG_UI_ACTIONS,
@@ -809,6 +810,175 @@ function runApplicationPermissionReleaseSelftest(repoRoot, scheduler, options) {
     })().catch(error => { console.error(error); process.exitCode = 1; });
   `], { encoding: 'utf8' });
   assert.strictEqual(collectorTest.status, 0, collectorTest.stderr || collectorTest.stdout);
+}
+
+function runServiceSelectionContractSelftest(repoRoot) {
+  const verifier = require('./shipping-service-selection-verifier');
+  assert.strictEqual(verifier.CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT);
+  assert.deepStrictEqual(verifier.ITEMS, ['shipping_service_selection', 'shipping_access']);
+  assert.deepStrictEqual(verifier.ACTIONS, ['open_shipping_workspace', 'select_two_existing_pending_orders',
+    'change_service_for_order_a', 'verify_order_b_unchanged', 'choose_batch_service_without_apply',
+    'verify_pending_batch_choice_no_change', 'apply_batch_service_to_selected_orders',
+    'restore_original_services_explicitly', 'review_per_order_service_summary', 'leave_confirmation_unsubmitted']);
+  runGit(repoRoot, ['init', '--quiet']);
+  runGit(repoRoot, ['config', 'user.name', 'Harness Selftest']);
+  runGit(repoRoot, ['config', 'user.email', 'harness-selftest@example.invalid']);
+  makeSettings(repoRoot);
+  makeSchedulerFixture(repoRoot);
+  const schedulerPath = path.join(repoRoot, 'governance/runtime-state/active-task.json');
+  const scheduler = JSON.parse(fs.readFileSync(schedulerPath, 'utf8'));
+  scheduler.active_task.id = scheduler.execution_queue.active.id = 'WP52';
+  scheduler.active_task.feature_id = 'F054';
+  scheduler.active_task.delivery_contract = {
+    target_state: 'clean_preview_green', allowed_states: ['executing', 'code_green', 'clean_preview_green'],
+    integration_branch: 'main', production_branch: 'production', production_release_separate: true,
+    same_release_commit_required: true, attestation_ref: DELIVERY_ATTESTATION_REF,
+    required_code_checks: ['target_tests', 'full_tests', 'lint', 'typecheck', 'build'],
+    required_runtime_evidence: [...verifier.ITEMS], runtime_profile: 'shipping_workspace',
+    runtime_contract_version: verifier.CONTRACT, production_database_mode: 'read_only'
+  };
+  writeJson(schedulerPath, scheduler);
+  core.startGoal(repoRoot, 'Verify per-order service choices without confirming shipments', { level: 'A1', workPackageId: 'WP52', scopes: 'app', success: 'selection accepted' });
+  core.approveContract(repoRoot, { level: 'A1', by: 'selftest' });
+  core.setPhase(repoRoot, 'verify');
+  assert.deepStrictEqual(validateSchedulerState({ repoRoot }).errors, []);
+  assert.deepStrictEqual(requiredReplayActions(scheduler), verifier.ACTIONS);
+  assert.deepStrictEqual(requiredReplayActions(scheduler, 'production'), verifier.ACTIONS);
+  for (const change of [
+    state => { state.active_task.id = state.execution_queue.active.id = 'WP53'; },
+    state => { state.active_task.feature_id = 'F003'; },
+    state => { state.active_task.delivery_contract.runtime_profile = 'application'; },
+    state => { state.active_task.delivery_contract.production_database_mode = 'controlled_write_approved'; },
+    state => { state.active_task.delivery_contract.required_runtime_evidence = ['shipping_service_selection']; },
+    state => { state.active_task.delivery_contract.required_runtime_evidence.push('shipping_tracking'); }
+  ]) {
+    const invalid = structuredClone(scheduler); change(invalid); writeJson(schedulerPath, invalid);
+    assert.strictEqual(validateSchedulerState({ repoRoot }).ok, false);
+  }
+  const authorization = { status: 'approved_code_only', micro_fix_approval_id: 'IN-SELFTEST-MICROFIX-APPROVAL',
+    clarification_id: 'IN-SELFTEST-CLARIFICATION', final_release_approval_id: 'IN-SELFTEST-FINAL-APPROVAL',
+    micro_fix_scope: 'per_order_service_selection', final_scope: 'selftest selection UI without carrier operations',
+    database_write_authorized: false, production_database_write_authorized: false, carrier_calls_authorized: false };
+  const productionScheduler = structuredClone(scheduler);
+  Object.assign(productionScheduler.active_task.delivery_contract, {
+    target_state: 'production_released', allowed_states: ['executing', 'code_green', 'clean_preview_green', 'integration_ready', 'main_integrated', 'production_released'],
+    required_production_runtime_evidence: [...verifier.ITEMS], production_release_authorization: authorization,
+    final_acceptance: { browser: 'trusted_operator_attestation_from_user_existing_chrome_only', production_database_mode: 'read_only' }
+  });
+  const inboxPath = path.join(repoRoot, 'governance/runtime-state/demand-inbox.jsonl');
+  const inbox = fs.readFileSync(inboxPath, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  Object.assign(inbox.find(record => record.id === authorization.final_release_approval_id), {
+    scope: authorization.final_scope, code_release_authorized: true, production_write_authorized: false,
+    production_database_write_authorized: false, carrier_calls_authorized: false
+  });
+  fs.writeFileSync(inboxPath, inbox.map(record => JSON.stringify(record)).join('\n') + '\n');
+  writeJson(schedulerPath, productionScheduler);
+  assert.deepStrictEqual(validateSchedulerState({ repoRoot }).errors, []);
+  for (const change of [
+    state => { delete state.active_task.delivery_contract.production_release_authorization.production_database_write_authorized; },
+    state => { delete state.active_task.delivery_contract.production_release_authorization.carrier_calls_authorized; },
+    state => { state.active_task.delivery_contract.production_release_authorization.database_write_authorized = true; },
+    state => { state.active_task.delivery_contract.production_release_authorization.production_database_write_authorized = true; },
+    state => { state.active_task.delivery_contract.production_release_authorization.carrier_calls_authorized = true; },
+    state => { state.active_task.delivery_contract.production_release_authorization.status = 'approved_for_final_release'; },
+    state => { state.active_task.delivery_contract.required_production_runtime_evidence.push('shipping_tracking'); }
+  ]) {
+    const invalid = structuredClone(productionScheduler); change(invalid); writeJson(schedulerPath, invalid);
+    assert.strictEqual(validateSchedulerState({ repoRoot }).ok, false);
+  }
+  const scope = { activeId: 'WP52', featureId: 'F054', runtimeProfile: 'shipping_workspace', runtimeContractVersion: verifier.CONTRACT,
+    targetState: 'production_released', productionDatabaseMode: 'read_only', productionReleaseAuthorization: authorization };
+  assert.deepStrictEqual(shippingProductionVerifierScopeBlockers(scope), []);
+  for (const change of [
+    value => { value.activeId = 'WP53'; }, value => { value.featureId = 'F003'; }, value => { value.runtimeProfile = 'application'; },
+    value => { value.targetState = 'code_green'; }, value => { value.productionDatabaseMode = 'controlled_write_approved'; },
+    value => { value.productionReleaseAuthorization.status = 'pending_security_gate_and_final_write_approval'; },
+    value => { delete value.productionReleaseAuthorization.carrier_calls_authorized; },
+    value => { value.productionReleaseAuthorization.production_database_write_authorized = true; }
+  ]) {
+    const invalid = structuredClone(scope); change(invalid);
+    assert.ok(shippingProductionVerifierScopeBlockers(invalid).length);
+  }
+  writeJson(schedulerPath, scheduler);
+  fs.writeFileSync(path.join(repoRoot, '.gitignore'), '.runtime/\n');
+  runGit(repoRoot, ['add', '.']); runGit(repoRoot, ['commit', '--quiet', '-m', 'Selection contract fixture']);
+  fs.writeFileSync(path.join(repoRoot, 'candidate.txt'), 'selection candidate\n');
+  runGit(repoRoot, ['add', '.']); runGit(repoRoot, ['commit', '--quiet', '-m', 'Selection candidate']);
+  const head = runGit(repoRoot, ['rev-parse', 'HEAD']), deploymentId = 'dpl_ServiceSelectionSelftest', origin = 'https://selection-preview.example.invalid';
+  const options = { repoRoot, remoteSnapshot: {} };
+  const behavior = writeBehaviorEvidence(repoRoot, makeBehaviorEntry(repoRoot, head));
+  const checks = scheduler.active_task.delivery_contract.required_code_checks;
+  recordDeliveryEvidence('code', { commit: head, checks: Object.fromEntries(checks.map(name => [name, true])), behavior_log: behavior.behavior_log,
+    commands: checks.map(name => ({ name, exit_code: 0, ...behavior.commandArtifact })) }, options);
+  assert.strictEqual(transitionDeliveryState('code_green', options).ok, true);
+  const common = { commit: head, deployment_id: deploymentId, origin, environment: 'preview', contract_version: verifier.CONTRACT,
+    result: 'pass', production_requests_exercised: false, read_only: true };
+  const runtime = {
+    shipping_service_selection: evidenceEnvelope(repoRoot, 'selection-runtime', { ...common, per_order_isolation: true, payload_regression_passed: true }),
+    shipping_access: evidenceEnvelope(repoRoot, 'selection-access', { ...common, anonymous_access_denied: true })
+  };
+  assert.deepStrictEqual(shippingWorkspaceEvidenceBlockers(runtime, 'sandbox', verifier.CONTRACT), []);
+  assert.ok(shippingWorkspaceEvidenceBlockers({ ...runtime, shipping_workspace: { payload: { contract_version: 'f054-ui-v1' } } }, 'sandbox', 'f054-ui-v1').some(message => message.includes('six_sections_available')));
+  assert.ok(productionRuntimeEvidenceBlockers({ production_runtime: runtime }, verifier.ITEMS, repoRoot, { commit: head, deploymentId, runtimeContractVersion: verifier.CONTRACT }).length, 'Preview declarations must never become controlled Production proof');
+  assert.throws(() => recordDeliveryEvidence('production_runtime', runtime, options), /controlled live Production verifier/);
+  recordDeliveryEvidence('runtime', runtime, options);
+  const replay = { ...common, url: origin + '/shipping', actions: [...verifier.ACTIONS], result: 'pass', overlays_after: 0, body_scroll_lock_released: true, app_inert_after: false };
+  recordDeliveryEvidence('preview', { commit: head, provider_source_commit: head, deployment_id: deploymentId, url: origin, ready: true, git_dirty: false,
+    journeys: { desktop: true, ipad: true, blocking_defect_replay: true }, artifacts: {
+      desktop: evidenceEnvelope(repoRoot, 'selection-desktop', { ...common, viewport: { width: 1440, height: 1000 }, result: 'pass' }),
+      ipad: evidenceEnvelope(repoRoot, 'selection-ipad', { ...common, viewport: { width: 1024, height: 768 }, result: 'pass' }),
+      defect_replay: evidenceEnvelope(repoRoot, 'selection-replay', replay)
+    } }, options);
+  const transition = transitionDeliveryState('clean_preview_green', options);
+  assert.deepStrictEqual(transition.blockers || [], []);
+  assert.strictEqual(transition.ok, true);
+  const status = getDeliveryStatus(options);
+  let sequence = 0;
+  const envelope = payload => evidenceEnvelope(repoRoot, `selection-negative-${++sequence}`, payload);
+  for (const mutate of [
+    value => { value.evidence.preview.journeys.ipad = false; },
+    value => { value.evidence.preview.artifacts.defect_replay = envelope({ ...replay, actions: [...verifier.ACTIONS].reverse() }); },
+    value => { value.evidence.preview.artifacts.defect_replay = envelope({ ...replay, actions: verifier.ACTIONS.slice(0, -1) }); },
+    value => { value.evidence.runtime.shipping_service_selection = envelope({ ...runtime.shipping_service_selection.payload, per_order_isolation: false }); },
+    value => { value.evidence.runtime.shipping_service_selection = envelope({ ...runtime.shipping_service_selection.payload, commit: 'b'.repeat(40) }); },
+    value => { value.evidence.runtime.shipping_access = envelope({ ...runtime.shipping_access.payload, deployment_id: 'dpl_Other' }); },
+    value => { value.evidence.runtime.shipping_access = envelope({ ...runtime.shipping_access.payload, origin: 'https://other.example.invalid' }); },
+    value => { value.evidence.runtime.shipping_access.sha256 = '0'.repeat(64); }
+  ]) {
+    const invalid = structuredClone(status); mutate(invalid);
+    assert.strictEqual(checkDeliveryStage('clean_preview_green', { ...options, status: invalid }).ok, false);
+  }
+  // Isolate the final operator link: these checks must run even without a
+  // configured blocking defect. Other terminal release prerequisites stay closed.
+  const productionStatus = structuredClone(status);
+  Object.assign(productionStatus, { targetState: 'production_released', productionDatabaseMode: 'read_only',
+    productionReleaseAuthorization: authorization, requiredProductionRuntimeEvidence: [...verifier.ITEMS] });
+  Object.assign(productionStatus.git, { remoteProduction: head, remoteMain: head, mainIntegrated: true, defaultBranch: 'main' });
+  const browser = evidenceEnvelope(repoRoot, 'selection-production-browser', {
+    commit: head, deployment_id: SELFTEST_PRODUCTION_DEPLOYMENT_ID, url: 'https://sales.cyanlog.icu/shipping',
+    environment: 'production', attestation_type: 'trusted_operator_browser', trust_boundary: 'operator_attestation_not_machine_proof',
+    attestation_method: 'codex_chrome_control_existing_session', attested_by: 'selftest', attested_at: new Date().toISOString(),
+    existing_tab_id: 'existing-selftest-tab', browser_context: 'existing_user_chrome', new_tabs: 0, new_browser_contexts: 0,
+    result: 'pass', actions: [...verifier.ACTIONS]
+  }, [{ filename: 'observation.json', contents: '{"fixture":"operator-observation"}\n' }]);
+  productionStatus.evidence.production = { commit: head, deployment_id: SELFTEST_PRODUCTION_DEPLOYMENT_ID,
+    domain: VERCEL_PRODUCTION_CONTRACT.domain, browser_acceptance: browser };
+  productionStatus.evidence.production_runtime = { shipping_service_selection: { payload: { source_operator_sha256: browser.sha256 } } };
+  const terminalOptions = { ...options, testOnlyVercelApiResponses: makeTestVercelApiResponses(head) };
+  const operatorLinkErrors = value => checkDeliveryStage('production_released', { ...terminalOptions, status: value }).blockers
+    .filter(message => message.startsWith('Service selection Production operator actions') || message.startsWith('Service selection Production runtime is not bound'));
+  assert.deepStrictEqual(operatorLinkErrors(productionStatus), []);
+  for (const actions of [[], [...verifier.ACTIONS].reverse()]) {
+    const invalid = structuredClone(productionStatus);
+    invalid.evidence.production.browser_acceptance = envelope({ ...browser.payload, actions });
+    invalid.evidence.production_runtime.shipping_service_selection.payload.source_operator_sha256 = invalid.evidence.production.browser_acceptance.sha256;
+    assert.ok(operatorLinkErrors(invalid).some(message => message.includes('operator actions')));
+  }
+  const unbound = structuredClone(productionStatus);
+  unbound.evidence.production_runtime.shipping_service_selection.payload.source_operator_sha256 = '0'.repeat(64);
+  assert.ok(operatorLinkErrors(unbound).some(message => message.includes('not bound')));
+  runShippingContractSelftest(repoRoot);
+  console.log('service selection scoped contract and ordinary Preview gate selftest ok');
 }
 
 function runConfigurationUiSelftest(repoRoot) {
@@ -2319,6 +2489,10 @@ function main() {
   process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(repoRoot, '.runtime', 'harness');
 
   try {
+    if (process.argv.includes('--service-selection-only')) {
+      runServiceSelectionContractSelftest(repoRoot);
+      return;
+    }
     if (process.argv.includes('--remote-snapshot-only')) {
       runRemoteSnapshotTransportSelftest(repoRoot);
       return;
@@ -2343,7 +2517,7 @@ function main() {
       runConfigurationUiSelftest(repoRoot);
       return;
     }
-    const verifierTests = spawnSync(process.execPath, ['--test', path.join(__dirname, 'shipping-workspace-verifier.test.js'), path.join(__dirname, 'shipping-parser-verifier.test.js')], {
+    const verifierTests = spawnSync(process.execPath, ['--test', path.join(__dirname, 'shipping-workspace-verifier.test.js'), path.join(__dirname, 'shipping-parser-verifier.test.js'), path.join(__dirname, 'shipping-service-selection-verifier.test.js')], {
       encoding: 'utf8', timeout: 60000
     });
     assert.strictEqual(verifierTests.status, 0, verifierTests.stderr || verifierTests.stdout || 'Shipping verifier offline tests failed');
@@ -2356,6 +2530,10 @@ function main() {
     fs.mkdirSync(configurationRoot);
     process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(configurationRoot, '.runtime', 'harness');
     runConfigurationUiSelftest(configurationRoot);
+    const selectionRoot = path.join(repoRoot, 'selection-fixture');
+    fs.mkdirSync(selectionRoot);
+    process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(selectionRoot, '.runtime', 'harness');
+    runServiceSelectionContractSelftest(selectionRoot);
     const approvalRoot = path.join(repoRoot, 'approval-fixture');
     fs.mkdirSync(approvalRoot);
     process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(approvalRoot, '.runtime', 'harness');
