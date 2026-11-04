@@ -659,6 +659,33 @@ function runApplicationPermissionSelftest(repoRoot) {
     production_database_mode: 'read_only'
   };
   writeJson(schedulerPath, scheduler);
+  // WP51 cannot borrow connection, cutover or permission evidence, expand writes,
+  // or claim a later delivery phase from its local candidate contract.
+  const directoryScope = structuredClone(scheduler);
+  directoryScope.active_task.id = 'WP51';
+  directoryScope.execution_queue.active.id = 'WP51';
+  Object.assign(directoryScope.active_task.delivery_contract, {
+    runtime_contract_version: 'f003-directory-scope-v1',
+    required_runtime_evidence: ['organization_directory_snapshot', 'organization_directory_scope']
+  });
+  core.startGoal(repoRoot, 'Verify read-only directory scope', { level: 'A1', workPackageId: 'WP51', scopes: 'app', success: 'scope candidate code verified' });
+  core.approveContract(repoRoot, { level: 'A1', by: 'selftest' });
+  core.setPhase(repoRoot, 'verify');
+  writeJson(schedulerPath, directoryScope);
+  assert.deepStrictEqual(validateSchedulerState({ repoRoot }).errors, []);
+  for (const change of [
+    value => { value.active_task.id = 'WP92'; value.execution_queue.active.id = 'WP92'; },
+    value => { value.active_task.feature_id = 'F054'; },
+    value => { value.active_task.delivery_contract.target_state = 'clean_preview_green'; value.active_task.delivery_contract.allowed_states.push('clean_preview_green'); },
+    value => { value.active_task.delivery_contract.production_database_mode = 'controlled_write_approved'; },
+    value => { value.active_task.delivery_contract.required_runtime_evidence = [...ORGANIZATION_CONNECTIONS_ITEMS]; },
+    value => { value.active_task.delivery_contract.required_runtime_evidence.push('manual_scope_approval'); },
+    value => { value.active_task.delivery_contract.allowed_states.push('clean_preview_green'); },
+  ]) {
+    const invalid = structuredClone(directoryScope); change(invalid); writeJson(schedulerPath, invalid);
+    assert.strictEqual(validateSchedulerState({ repoRoot }).ok, false);
+  }
+  writeJson(schedulerPath, scheduler);
   core.startGoal(repoRoot, 'Verify organization role permissions', { level: 'A1', workPackageId: 'WP99', scopes: 'app', success: 'permission code verified' });
   core.approveContract(repoRoot, { level: 'A1', by: 'selftest' });
   core.setPhase(repoRoot, 'verify');

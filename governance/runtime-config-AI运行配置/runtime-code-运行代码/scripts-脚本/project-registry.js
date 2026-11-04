@@ -48,6 +48,8 @@ const ORGANIZATION_CONNECTIONS_CONTRACT = 'f003-organization-connections-v1';
 const ORGANIZATION_CONNECTIONS_ITEMS = Object.freeze(['organization_connection_lifecycle', 'organization_directory_preview']);
 const DIRECTORY_CUTOVER_CONTRACT = 'f003-directory-cutover-v1';
 const DIRECTORY_CUTOVER_ITEMS = Object.freeze(['organization_directory_snapshot', 'organization_directory_cutover']);
+const DIRECTORY_SCOPE_CONTRACT = 'f003-directory-scope-v1';
+const DIRECTORY_SCOPE_ITEMS = Object.freeze(['organization_directory_snapshot', 'organization_directory_scope']);
 const FXIAOKE_CONNECTION_CONTRACT = 'f003-fxiaoke-connection-v1';
 const FXIAOKE_CONNECTION_ITEMS = Object.freeze(['fxiaoke_connection']);
 const FXIAOKE_CONNECTION_PRODUCTION_ITEMS = Object.freeze(['connection_preview']);
@@ -586,6 +588,7 @@ function validateSchedulerSnapshot(options, candidate) {
   const contractVersion = runtimeContractVersionOf(state);
   const organizationConnectionsCode = profile === 'application' && contractVersion === ORGANIZATION_CONNECTIONS_CONTRACT;
   const directoryCutoverCode = profile === 'application' && contractVersion === DIRECTORY_CUTOVER_CONTRACT;
+  const directoryScopeCode = profile === 'application' && contractVersion === DIRECTORY_SCOPE_CONTRACT;
   const fxiaokeRelease = profile === 'application' && contractVersion === FXIAOKE_CONNECTION_CONTRACT;
   const fxiaokeSsoRelease = profile === 'application' && contractVersion === FXIAOKE_SSO_CONTRACT;
   const parserRelease = profile === 'shipping_workspace' && contractVersion === SHIPPING_PARSER_CONTRACT;
@@ -618,8 +621,15 @@ function validateSchedulerSnapshot(options, candidate) {
       productionDatabaseMode: deliveryContract?.production_database_mode,
     }));
   }
+  if (directoryScopeCode) {
+    if (activeId !== 'WP51') errors.push('Directory scope contract is limited to WP51');
+    if (deliveryContract.target_state !== 'code_green') errors.push('Directory scope candidate cannot claim Production acceptance');
+    if (JSON.stringify(deliveryContract.allowed_states) !== JSON.stringify(['executing', 'code_green'])) errors.push('Directory scope candidate cannot enable later delivery states');
+    if (deliveryContract.production_database_mode !== 'read_only') errors.push('Directory scope verification must keep Production read-only');
+    if (JSON.stringify(requiredRuntimeEvidence) !== JSON.stringify(DIRECTORY_SCOPE_ITEMS)) errors.push('Directory scope evidence must contain only snapshot and scope verification');
+  }
   if (['shipping', 'shipping_workspace'].includes(profile) && state.active_task?.feature_id !== 'F054') errors.push('Shipping evidence profile requires the F054 feature binding');
-  const applicationRelease = profile === 'application' && [APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(contractVersion);
+  const applicationRelease = profile === 'application' && [APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, DIRECTORY_SCOPE_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(contractVersion);
   if (contractVersion && !applicationRelease && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', SHIPPING_PARSER_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT].includes(contractVersion))) errors.push('Unknown or mismatched runtime contract version');
   if (parserRelease && (state.active_task.id !== 'WP95' || deliveryContract.production_database_mode !== 'read_only')) errors.push('Parser contract is limited to WP95 without business writes');
   if (serviceSelectionRelease && (state.active_task.id !== 'WP52' || deliveryContract.production_database_mode !== 'read_only')) errors.push('Service selection contract is limited to read-only WP52');
@@ -627,6 +637,8 @@ function validateSchedulerSnapshot(options, candidate) {
   if (contractVersion === 'f054-config-ui-v1' && (!['code_green', 'clean_preview_green'].includes(deliveryContract.target_state) || deliveryContract.production_database_mode !== 'read_only')) errors.push('Configuration UI contract is limited to read-only Preview acceptance');
   const canonicalRuntimeEvidence = organizationConnectionsCode
     ? ORGANIZATION_CONNECTIONS_ITEMS
+    : directoryScopeCode
+      ? DIRECTORY_SCOPE_ITEMS
     : directoryCutoverCode
       ? DIRECTORY_CUTOVER_ITEMS
     : serviceSelectionRelease

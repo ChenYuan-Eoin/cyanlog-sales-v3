@@ -490,6 +490,54 @@ async function previewLegacyReadOnlyConnection(
   }
 }
 
+/** WP51: does not persist connection verification or organization business data.
+ * Existing provider transport may use its established transient request queue.
+ */
+export async function inspectOrganizationDirectory(input: {
+  orgId: string
+  provider: string
+  sourceId: string
+  revision: string
+}) {
+  const { buildDirectoryInspection } = await import('./directory-inspection')
+  const provider = validateProvider(input.provider)
+  const row = await rowBySource(input.orgId, provider)
+  if (!row || row.id !== input.sourceId || row.configuration_revision !== input.revision) {
+    throw new OrganizationConnectionError('CONFIG_CHANGED', '连接配置已改变，请刷新后重新核验。', 409)
+  }
+  const connectionAdapter = getConnectionAdapter(provider)
+  const directoryAdapter = getDirectoryAdapter(provider)
+  const credentials = decryptDraft(row)
+  const verification = await connectionAdapter.verifyConnection(credentials, { systemOrgId: input.orgId })
+  if (verification.externalTenantId !== row.external_tenant_id) {
+    throw new OrganizationConnectionError('ENTERPRISE_MISMATCH', '读取到的企业与保存的连接不一致，本次核验结果已拒绝。', 409)
+  }
+  const directory = await directoryAdapter.readDirectory(
+    { ...credentials, ...(verification.credentialPatch || {}) },
+    { systemOrgId: input.orgId },
+  )
+  const current = await rowBySource(input.orgId, provider)
+  if (!current || current.id !== row.id || current.configuration_revision !== row.configuration_revision
+    || current.external_tenant_id !== row.external_tenant_id || current.status !== row.status
+    || current.connection_state !== row.connection_state
+    || current.updated_at !== row.updated_at || current.storage_mode !== row.storage_mode
+    || current.draft_credentials_ciphertext !== row.draft_credentials_ciphertext) {
+    throw new OrganizationConnectionError('CONFIG_CHANGED', '读取期间连接或来源发生变化，本次结果已失效，请重新核验。', 409)
+  }
+  return buildDirectoryInspection({
+    organizationId: input.orgId,
+    sourceId: row.id,
+    provider,
+    externalTenantId: verification.externalTenantId,
+    connectionRevision: row.configuration_revision,
+    sourceState: row.connection_state,
+  }, {
+    ...directory,
+    departments: directory.departments.map(department => ({ ...department, status: directoryAdapter.normalizeDirectoryStatus(department.status) })),
+    employees: directory.employees.map(employee => ({ ...employee, status: directoryAdapter.normalizeDirectoryStatus(employee.status) })),
+  })
+}
+
 export async function previewOrganizationConnection(input: {
   orgId: string
   actorId: string

@@ -9,6 +9,7 @@ const toast = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/toast', () => toast)
+vi.mock('./DirectoryInspectionPanel', () => ({ DirectoryInspectionPanel: () => <div>目录范围核验</div> }))
 vi.mock('./OrganizationConnectionForm', () => ({
   OrganizationConnectionForm: ({ provider }: { provider: { label: string } }) => (
     <div>{provider.label}共享连接表单</div>

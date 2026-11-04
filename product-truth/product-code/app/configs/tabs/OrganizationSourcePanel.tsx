@@ -19,6 +19,7 @@ import { confirmAction, error, success } from '@/lib/toast'
 import type { OrganizationConnectionProvider, ProviderCapability } from '@/lib/organization-connections/types'
 import type { DirectoryCutoverClientPlan } from '@/lib/organization-connections/directory-cutover'
 import { OrganizationConnectionForm } from './OrganizationConnectionForm'
+import { DirectoryInspectionPanel } from './DirectoryInspectionPanel'
 
 type SourceStatus = 'draft' | 'active' | 'disabled'
 type SyncMode = 'read_only' | 'authoritative' | 'enrichment'
@@ -125,6 +126,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
   const [directoryAvailability, setDirectoryAvailability] = useState<DirectoryAvailability | null>(null)
   const [loading, setLoading] = useState(true)
   const [directoryAction, setDirectoryAction] = useState<DirectoryAction>(null)
+  const [inspectionGeneration, setInspectionGeneration] = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -213,6 +215,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
   }, [load])
 
   async function refreshAll() {
+    setInspectionGeneration(value => value + 1)
     await load()
     await onRefresh?.()
   }
@@ -496,6 +499,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
         {selected && (
           <div className="mt-3">
             <OrganizationConnectionForm key={selected.key} provider={selected} onChanged={refreshAll} />
+            <DirectoryInspectionPanel key={`${selected.key}:${inspectionGeneration}`} provider={selected} />
           </div>
         )}
 
