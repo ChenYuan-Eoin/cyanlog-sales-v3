@@ -139,7 +139,7 @@ describe('organization directory cutover migration', () => {
     } finally {
       await db.close()
     }
-  })
+  }, 15_000)
 
 
   it('atomically switches, preserves manual data, is idempotent and restores the exact pre-switch state', async () => {

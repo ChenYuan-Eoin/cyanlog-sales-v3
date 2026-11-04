@@ -30,7 +30,9 @@ export function isMissingSchemaObject(error: SupabaseFailure | null | undefined)
 export async function detectConnectionStorageMode(): Promise<ConnectionStorageMode> {
   const { error } = await supabaseAdmin
     .from('organization_sources')
-    .select('configuration_revision', { head: true })
+    // PostgREST can return an empty error body for HEAD failures. Use a body-bearing
+    // GET so a missing legacy column remains distinguishable from transport failures.
+    .select('configuration_revision')
     .limit(1)
 
   if (!error) return 'unified'
@@ -58,7 +60,7 @@ export async function detectDirectoryCutoverStorage() {
   if (await detectConnectionStorageMode() !== 'unified') return false
   const { error } = await supabaseAdmin
     .from('organization_directory_cutover_plans')
-    .select('id', { head: true })
+    .select('id')
     .limit(1)
   if (!error) return true
   if (isMissingSchemaObject(error)) return false

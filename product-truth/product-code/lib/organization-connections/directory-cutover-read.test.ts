@@ -47,8 +47,10 @@ const mocks = vi.hoisted(() => {
   const from = vi.fn((table: string) => {
     if (table === 'organization_sources') {
       return {
-        select: vi.fn((_columns: string, options?: { head?: boolean }) => {
-          if (!options?.head) throw new Error('must not guess the source by creation order')
+        select: vi.fn((columns: string) => {
+          if (columns !== 'configuration_revision') {
+            throw new Error('must not guess the source by creation order')
+          }
           return { limit: vi.fn().mockResolvedValue({ error: null }) }
         }),
       }

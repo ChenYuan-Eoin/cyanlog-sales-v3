@@ -21,6 +21,16 @@ function result(value: { error: unknown }) {
   })
 }
 
+function resultWithHeadlessSchemaError() {
+  mocks.from.mockReturnValueOnce({
+    select: vi.fn((_columns: string, options?: { head?: boolean }) => ({
+      limit: vi.fn().mockResolvedValue(options?.head
+        ? { error: { message: '' } }
+        : { error: { code: '42703', message: 'column organization_sources.configuration_revision does not exist' } }),
+    })),
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
@@ -40,6 +50,11 @@ describe('organization connection storage compatibility', () => {
       code: 'CONNECTION_STORAGE_UNAVAILABLE',
       status: 503,
     })
+  })
+
+  it('uses body-bearing schema probes when PostgREST omits HEAD error details', async () => {
+    resultWithHeadlessSchemaError()
+    await expect(detectConnectionStorageMode()).resolves.toBe('legacy_fxiaoke_read_only')
   })
 
   it('requires both the unified source fields and the cutover tables', async () => {
