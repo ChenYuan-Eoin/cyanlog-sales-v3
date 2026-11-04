@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "activeId": "WP92",
+  "commit": "5afe465f0f0041354c0399726ef9bc9d358b090b",
+  "evidence": {
+    "code": {
+      "commit": "5afe465f0f0041354c0399726ef9bc9d358b090b",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "3799c092eea6ea5298eca5931b15307157ec77e0d4f3f2668b3475f570f0abb2",
+        "entry_sha256": "24613cf750ae5adfa13cb10963b336c87afe3c5e6e36e597226e6afdc1046e94"
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "command": [
+            "pnpm",
+            "test:run",
+            "<wp92-target-files>"
+          ],
+          "exit_code": 0,
+          "artifact_path": "wp92-release-candidate/target-tests.log",
+          "log_sha256": "ad180006fce2503004d3eb6aeb827c5a8d0d684c81498deb72e0e217eba3a96e"
+        },
+        {
+          "name": "full_tests",
+          "command": [
+            "bash",
+            "governance/ai-behavior-准则/checks/check-03-test.sh"
+          ],
+          "exit_code": 0,
+          "artifact_path": "check-logs/1e965b37b692e30f067e0b53bfe2654c5b6b2c05/check-03-test.log",
+          "log_sha256": "078375eaac9d88de30b360f5bb7fa5ede7d7f228a384ecf52873ce8e14d9d1d1"
+        },
+        {
+          "name": "lint",
+          "command": [
+            "bash",
+            "governance/ai-behavior-准则/checks/check-02-lint.sh"
+          ],
+          "exit_code": 0,
+          "artifact_path": "check-logs/1e965b37b692e30f067e0b53bfe2654c5b6b2c05/check-02-lint.log",
+          "log_sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c"
+        },
+        {
+          "name": "typecheck",
+          "command": [
+            "bash",
+            "governance/ai-behavior-准则/checks/check-01-typecheck.sh"
+          ],
+          "exit_code": 0,
+          "artifact_path": "check-logs/1e965b37b692e30f067e0b53bfe2654c5b6b2c05/check-01-typecheck.log",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+        },
+        {
+          "name": "build",
+          "command": [
+            "pnpm",
+            "build"
+          ],
+          "exit_code": 0,
+          "artifact_path": "wp92-release-candidate/build.log",
+          "log_sha256": "68fff6ed1c4bd238dc9838b6290be8f7931dc0a7314259c873e7f39f5204ba8d"
+        }
+      ]
+    }
+  },
+  "updatedAt": "2026-11-04T08:48:27.303Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-11-04T08:48:27.284Z",
+      "head": "5afe465f0f0041354c0399726ef9bc9d358b090b",
+      "originMain": "5afe465f0f0041354c0399726ef9bc9d358b090b",
+      "remoteMain": "5afe465f0f0041354c0399726ef9bc9d358b090b",
+      "remoteProduction": "72a0fff0c313b8d2d583ef148c54b4c25b17647f",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": true,
+      "localAttestationRefOid": "166276cf54acc20832a436abdf0392f7f415cedf",
+      "remoteAttestationRefOid": "166276cf54acc20832a436abdf0392f7f415cedf",
+      "remoteSnapshotCheckedAt": "2026-11-04T08:48:24.957Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "1bb3799918fc0563a8640ac69647831c592f439720d685dde06e0eb5bb2470f5",
+  "sealedAt": "2026-11-04T08:48:27.303Z",
+  "attestationDigest": "4cbb82939c8cb451bf9bfd6a02c82f1e81a796ca20ba7623a160ccaa7e0ef4a8"
+}
