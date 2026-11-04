@@ -106,6 +106,37 @@ function json(data: unknown, status = 200) {
 }
 
 describe('OrganizationSourcePanel', () => {
+  it('keeps a failed source read unknown, renders structured API errors and retries only on request', async () => {
+    const message = '组织来源操作失败。'
+    const fetchMock = vi.fn(async (_input?: RequestInfo | URL) => json({ success: false, error: { code: 'INTERNAL_ERROR', message } }, 500))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<OrganizationSourcePanel />)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(message)
+    expect(alert).toHaveTextContent('读取失败不表示尚未配置连接')
+    expect(alert).not.toHaveTextContent('[object Object]')
+    expect(screen.queryByText('尚未配置外部组织连接。选择上方提供方开始配置。')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('接入能力状态')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /确认切换|生成差异|回滚本次/ })).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    fetchMock.mockImplementation(async (input?: RequestInfo | URL) => String(input).includes('/directory')
+      ? json({ data: { plan: null } })
+      : json({ data: { sources: [source], providers, active_primary_source_id: source.id } }))
+    fireEvent.click(screen.getByRole('button', { name: '重新读取组织接入状态' }))
+    expect(await screen.findByText('tenant-1')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it.each([{}, { data: {} }, { data: { sources: [] } }, { data: { sources: null, providers } }])('does not turn malformed success payload into an empty connection ledger', async payload => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(payload)))
+    render(<OrganizationSourcePanel />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('组织来源读取结果不完整')
+    expect(screen.queryByLabelText('接入能力状态')).not.toBeInTheDocument()
+  })
+
   it('keeps the connection page usable when directory cutover storage is awaiting migration', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
       ? json({

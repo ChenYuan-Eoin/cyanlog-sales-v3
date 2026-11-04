@@ -117,6 +117,13 @@ function Metric({ label, value, tone = 'slate' }: { label: string; value: number
   )
 }
 
+function readErrorMessage(value: unknown, fallback: string) {
+  if (typeof value === 'string' && value.trim()) return value
+  if (value && typeof value === 'object' && 'message' in value
+    && typeof value.message === 'string' && value.message.trim()) return value.message
+  return fallback
+}
+
 export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelProps) {
   const [sources, setSources] = useState<Source[]>([])
   const [providers, setProviders] = useState<ProviderCapability[]>([])
@@ -125,17 +132,23 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
   const [latestPlan, setLatestPlan] = useState<DirectoryCutoverClientPlan | null>(null)
   const [directoryAvailability, setDirectoryAvailability] = useState<DirectoryAvailability | null>(null)
   const [loading, setLoading] = useState(true)
+  const [sourceReadError, setSourceReadError] = useState('')
   const [directoryAction, setDirectoryAction] = useState<DirectoryAction>(null)
   const [inspectionGeneration, setInspectionGeneration] = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
+    setSourceReadError('')
+    let sourcesLoaded = false
     try {
       const sourceResponse = await fetch('/api/admin/organization-sources', { headers: authHeaders(), cache: 'no-store' })
-      const sourceBody = await sourceResponse.json().catch(() => ({})) as { data?: SourcePayload; error?: string }
-      if (!sourceResponse.ok) throw new Error(sourceBody.error || '组织来源读取失败。')
-      const nextSources = sourceBody.data?.sources || []
-      const nextProviders = sourceBody.data?.providers || []
+      const sourceBody = await sourceResponse.json().catch(() => ({})) as { data?: SourcePayload; error?: unknown }
+      if (!sourceResponse.ok) throw new Error(readErrorMessage(sourceBody.error, '组织来源读取失败。'))
+      if (!Array.isArray(sourceBody.data?.sources) || !Array.isArray(sourceBody.data?.providers)) {
+        throw new Error('组织来源读取结果不完整，请重新读取。')
+      }
+      const nextSources = sourceBody.data.sources
+      const nextProviders = sourceBody.data.providers
       const activeSource = nextSources.find(item => item.status === 'active' && item.priority === 1)
       const currentProvider = selectedProviderRef.current
       const configurableProviderKeys = new Set(
@@ -162,6 +175,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
       setSelectedProvider(preferredProvider)
       selectedProviderRef.current = preferredProvider
       setLatestPlan(null)
+      sourcesLoaded = true
 
       if (preferredProvider) {
         const directoryResponse = await fetch(
@@ -180,7 +194,9 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
         setLatestPlan(directoryBody.data?.plan || null)
       }
     } catch (readError) {
-      error(readError instanceof Error ? readError.message : '组织来源读取失败。')
+      const message = readError instanceof Error ? readError.message : '组织来源读取失败。'
+      if (!sourcesLoaded) setSourceReadError(message)
+      error(message)
     } finally {
       setLoading(false)
     }
@@ -400,6 +416,23 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
             ? '映射已回滚 · 寄件授权未验收'
             : '待目录差异计划 · 寄件授权未验收'
   const capabilityBadge = (ready: boolean) => ready ? 'default' as const : 'secondary' as const
+
+  if (loading) {
+    return <div className="rounded-lg border bg-white p-4" role="status">正在读取组织接入状态…</div>
+  }
+
+  if (sourceReadError) {
+    return (
+      <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <div role="alert">
+          <h3 className="font-medium text-amber-950">组织接入状态暂时无法核验</h3>
+          <p className="mt-1 text-sm text-amber-900">{sourceReadError}</p>
+          <p className="mt-2 text-sm text-amber-900">读取失败不表示尚未配置连接。成功读取前，连接和目录状态保持未知，不能据此进行目录操作。</p>
+        </div>
+        <Button type="button" variant="outline" onClick={() => void load()}>重新读取组织接入状态</Button>
+      </div>
+    )
+  }
 
   return (
     <div className="rounded-lg border bg-white p-4">
