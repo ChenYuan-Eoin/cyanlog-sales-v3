@@ -6,12 +6,10 @@ import type { OrganizationConnectionAdapter } from './types'
 const adapter = {
   provider: 'feishu',
   label: '飞书',
-  previewAvailable: true,
-  syncAvailable: true,
   fields: [],
   parseInput: (value: unknown) => value as Record<string, unknown>,
   prepare: () => ({ credentials: {}, metadata: {}, externalTenantId: 'tenant' }),
-  verify: async () => ({ checkedAt: new Date().toISOString(), externalTenantId: 'tenant' }),
+  verifyConnection: async () => ({ checkedAt: new Date().toISOString(), externalTenantId: 'tenant' }),
   validateStored: (value: Record<string, unknown>) => value,
 } satisfies OrganizationConnectionAdapter
 

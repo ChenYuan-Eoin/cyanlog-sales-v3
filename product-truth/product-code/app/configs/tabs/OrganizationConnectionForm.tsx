@@ -5,13 +5,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type {
-  ConfigurableProvider,
+  OrganizationConnectionProvider,
   ConnectionSummary,
   DirectoryPreview,
   ProviderCapability,
 } from '@/lib/organization-connections'
 
-type ConfigurableCapability = ProviderCapability & { key: ConfigurableProvider }
+type ConfigurableCapability = ProviderCapability & { key: OrganizationConnectionProvider }
 
 type OrganizationConnectionFormProps = {
   provider: ConfigurableCapability
@@ -42,6 +42,13 @@ function connectionLabel(connection: ConnectionSummary | null) {
   return '未配置'
 }
 
+function directoryStatusLabel(status: string) {
+  if (status === 'active') return '启用'
+  if (status === 'inactive') return '停用'
+  if (status === 'deleted') return '删除'
+  return '待核对'
+}
+
 function FieldHelp({ fieldKey, text }: { fieldKey: string; text: string }) {
   return (
     <details className="text-xs text-slate-600">
@@ -70,6 +77,7 @@ const inputClass = 'mt-1 h-10 w-full min-w-0 border border-slate-400 bg-white te
 
 export function OrganizationConnectionForm({ provider, onChanged }: OrganizationConnectionFormProps) {
   const [connection, setConnection] = useState<ConnectionSummary | null>(null)
+  const [storageMode, setStorageMode] = useState<'unified' | 'legacy_fxiaoke_read_only'>('unified')
   const [values, setValues] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -87,6 +95,7 @@ export function OrganizationConnectionForm({ provider, onChanged }: Organization
 
   const applyConnection = useCallback((saved: ConnectionSummary | null) => {
     setConnection(saved)
+    if (saved?.storageMode) setStorageMode(saved.storageMode)
     setValues(Object.fromEntries(provider.fields.map(field => [
       field.key,
       field.secret || !saved ? '' : String(saved.metadata[field.key] ?? ''),
@@ -102,11 +111,17 @@ export function OrganizationConnectionForm({ provider, onChanged }: Organization
         { headers: authHeaders(), cache: 'no-store', signal },
       )
       const body = await response.json().catch(() => ({})) as {
-        data?: { connection?: ConnectionSummary | null }
+        data?: {
+          connection?: ConnectionSummary | null
+          storage_mode?: 'unified' | 'legacy_fxiaoke_read_only'
+        }
         error?: string
       }
       if (!response.ok) throw new Error(body.error || '组织连接读取失败。')
-      if (!signal?.aborted) applyConnection(body.data?.connection || null)
+      if (!signal?.aborted) {
+        if (body.data?.storage_mode) setStorageMode(body.data.storage_mode)
+        applyConnection(body.data?.connection || null)
+      }
     } catch (error) {
       if (!signal?.aborted) setFailure(error instanceof Error ? error.message : '组织连接读取失败。')
     } finally {
@@ -197,7 +212,7 @@ export function OrganizationConnectionForm({ provider, onChanged }: Organization
       }
       applyConnection(body.data.connection)
       setPreview(body.data.preview)
-      setMessage('通讯录验证通过；本次仅预览，没有同步目录、启用来源或切换主来源。')
+      setMessage('连接可用；已固定本次读取结果。目录范围、状态映射和差异仍需核对，当前没有写入组织。')
       await onChanged?.()
     } catch (error) {
       setFailure(error instanceof Error ? error.message : '通讯录验证失败。')
@@ -207,6 +222,8 @@ export function OrganizationConnectionForm({ provider, onChanged }: Organization
       setBusy(false)
     }
   }
+
+  const legacyReadOnly = storageMode === 'legacy_fxiaoke_read_only'
 
   return (
     <section aria-label={`${provider.label}连接配置`} className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
@@ -221,7 +238,12 @@ export function OrganizationConnectionForm({ provider, onChanged }: Organization
       </div>
 
       {loading && <p role="status" className="text-sm text-slate-500">正在读取已保存配置…</p>}
-      <fieldset disabled={loading || busy} className="grid min-w-0 grid-cols-1 gap-4">
+      {legacyReadOnly && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+          当前生产库尚未完成统一连接结构升级。现有纷享连接可继续做只读连接与通讯录检查；修改配置、启用来源和目录切源暂不开放。
+        </p>
+      )}
+      <fieldset disabled={loading || busy || legacyReadOnly} className="grid min-w-0 grid-cols-1 gap-4">
         {provider.fields.map(field => (
           <div key={field.key} className="min-w-0 space-y-1">
             <label className="block text-sm font-medium" htmlFor={`organization-connection-${provider.key}-${field.key}`}>
@@ -256,7 +278,7 @@ export function OrganizationConnectionForm({ provider, onChanged }: Organization
       {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" disabled={loading || busy || !dirty} onClick={() => void save()}>
+        <Button type="button" disabled={loading || busy || legacyReadOnly || !dirty} onClick={() => void save()}>
           {busy ? '正在处理…' : '保存配置草稿'}
         </Button>
         {provider.previewAvailable && (
@@ -266,7 +288,7 @@ export function OrganizationConnectionForm({ provider, onChanged }: Organization
             disabled={loading || busy || dirty || !connection?.configured}
             onClick={() => void validateAndPreview()}
           >
-            {busy ? '处理中…' : '验证并预览通讯录'}
+            {busy ? '处理中…' : '检查连接与读取范围'}
           </Button>
         )}
       </div>
@@ -274,28 +296,49 @@ export function OrganizationConnectionForm({ provider, onChanged }: Organization
 
       {preview && (
         <div className="space-y-3 border-t border-slate-200 pt-3">
-          <p className="font-medium">通讯录预览：可读取 {preview.departments.length} 个部门、{preview.employees.length} 位员工</p>
-          {preview.warnings.map(warning => <p key={warning} className="text-sm text-amber-800">{warning}</p>)}
-          <div className="max-h-64 overflow-auto rounded border p-2">
-            <ul className="space-y-1 text-sm">
-              {(expanded ? preview.departments : preview.departments.slice(0, 5)).map(department => (
-                <li key={department.id}>{department.name} · {department.status === 'active' ? '正常' : '待核对'}</li>
-              ))}
-            </ul>
+          <div>
+            <p className="font-medium">读取范围检查：{preview.departments.length} 个部门、{preview.employees.length} 位员工</p>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              本次只显示当前连接实际读到的数据，尚未写入组织。公司范围是否完整仍需组织管理侧的总量或权限证据核对。
+            </p>
           </div>
-          <div className="max-h-64 overflow-auto rounded border p-2">
-            <ul className="space-y-1 text-sm">
-              {(expanded ? preview.employees : preview.employees.slice(0, 5)).map(employee => (
-                <li key={employee.id}>
-                  {employee.name} · {employee.departmentIds.map(id => departmentNames.get(id) || '部门未读取').join('、') || '未指定主属部门'} · {employee.status === 'active' ? '正常' : '待核对'}
-                  {employee.loginDisabled === true ? ' · 禁止登录' : ''}
-                </li>
-              ))}
-            </ul>
+          <div className="grid gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm sm:grid-cols-3">
+            <div>部门 · 启用 {preview.departments.filter(item => item.status === 'active').length} / 停用 {preview.departments.filter(item => item.status === 'inactive').length} / 待核对 {preview.departments.filter(item => !['active', 'inactive'].includes(item.status)).length}</div>
+            <div>员工 · 在职 {preview.employees.filter(item => item.status === 'active').length} / 停用 {preview.employees.filter(item => item.status === 'inactive').length} / 待核对 {preview.employees.filter(item => !['active', 'inactive'].includes(item.status)).length}</div>
+            <div>登录状态未知 {preview.employees.filter(item => item.loginDisabled === null).length} 人 · 禁止寄件授权</div>
           </div>
-          {(preview.departments.length > 5 || preview.employees.length > 5) && (
+          {!preview.complete && (
+            <p role="alert" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              当前快照存在未识别状态或关系缺口，不能直接生成可执行目录差异。
+            </p>
+          )}
+          {preview.warnings.map(warning => <p key={warning} className="text-sm leading-6 text-amber-800">{warning}</p>)}
+          {expanded && (
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div className="max-h-64 overflow-auto rounded border p-2">
+                <p className="mb-2 text-xs font-medium text-slate-500">部门读取明细</p>
+                <ul className="space-y-1 text-sm">
+                  {preview.departments.map(department => (
+                    <li key={department.id}>{department.name} · {directoryStatusLabel(department.status)}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="max-h-64 overflow-auto rounded border p-2">
+                <p className="mb-2 text-xs font-medium text-slate-500">成员读取明细</p>
+                <ul className="space-y-1 text-sm">
+                  {preview.employees.map(employee => (
+                    <li key={employee.id}>
+                      {employee.name} · 主属 {employee.primaryDepartmentId ? (departmentNames.get(employee.primaryDepartmentId) || '部门未读取') : '未确定'} · 其他 {employee.departmentIds.filter(id => id !== employee.primaryDepartmentId).map(id => departmentNames.get(id) || '部门未读取').join('、') || '无'} · {directoryStatusLabel(employee.status)}
+                      {employee.loginDisabled === true ? ' · 禁止登录' : employee.loginDisabled === null ? ' · 登录状态未知' : ''}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+          {(preview.departments.length > 0 || preview.employees.length > 0) && (
             <Button type="button" variant="ghost" onClick={() => setExpanded(value => !value)}>
-              {expanded ? '收起' : '展开更多'}
+              {expanded ? '收起读取明细' : '查看全部读取明细'}
             </Button>
           )}
         </div>

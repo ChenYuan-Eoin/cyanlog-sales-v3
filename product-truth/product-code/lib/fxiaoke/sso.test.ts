@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/organization-connections', () => ({
-  listVerifiedConnectionOrganizationIds: mocks.organizations,
+  listIdentityAuthoritativeConnectionOrganizationIds: mocks.organizations,
 }))
 vi.mock('./settings', () => ({ loadOAuthCredentials: mocks.credentials }))
 
@@ -36,11 +36,12 @@ describe('Fxiaoke SSO organization resolution', () => {
     })
   })
 
-  it('reports missing verified connections instead of reading environment credentials', async () => {
+  it('reports missing identity-authoritative connections instead of reading environment credentials', async () => {
     mocks.organizations.mockResolvedValue([])
     await expect(resolveConfiguredOAuthOrganization()).rejects.toMatchObject({
       code: 'CONFIGURATION_REQUIRED',
       status: 409,
+      message: expect.stringContaining('身份权威'),
     })
     expect(mocks.credentials).not.toHaveBeenCalled()
   })

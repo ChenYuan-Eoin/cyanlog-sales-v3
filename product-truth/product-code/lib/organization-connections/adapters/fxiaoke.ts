@@ -5,7 +5,7 @@ import { decryptCredentials } from '@/lib/fxiaoke/crypto'
 import { FxiaokeError } from '@/lib/fxiaoke/contracts'
 import { transportForOrganization } from '@/lib/fxiaoke/egress/server'
 import { OrganizationConnectionError } from '../errors'
-import type { AdapterVerification, OrganizationConnectionAdapter, PreparedConnection } from '../types'
+import type { AdapterDirectoryRead, AdapterVerification, DirectoryAdapter, OrganizationConnectionAdapter, PreparedConnection } from '../types'
 
 const identifier = z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/)
 const inputSchema = z.object({
@@ -31,8 +31,6 @@ function invalid(message: string) {
 export const fxiaokeConnectionAdapter: OrganizationConnectionAdapter = {
   provider: 'fxiaoke',
   label: '纷享销客',
-  previewAvailable: true,
-  syncAvailable: false,
   fields: [
     { key: 'appId', label: 'AppID', type: 'text', placeholder: '填写纷享的 AppID', help: '在纷享管理后台对应自建应用的开发模式中复制。', secret: false },
     { key: 'appSecret', label: 'APPSecret', type: 'password', placeholder: '留空将保留同一应用的已保存密钥', help: '首次配置或更换 AppID 时必须填写；密钥只保存在服务端。', secret: true },
@@ -68,7 +66,7 @@ export const fxiaokeConnectionAdapter: OrganizationConnectionAdapter = {
       externalTenantId: expectedEa,
     }
   },
-  async verify(credentials, context): Promise<AdapterVerification> {
+  async verifyConnection(credentials, context): Promise<AdapterVerification> {
     const parsed = storedSchema.parse(credentials)
     try {
       const enterprise = await discoverEnterprise(
@@ -78,28 +76,23 @@ export const fxiaokeConnectionAdapter: OrganizationConnectionAdapter = {
       if (!parsed.expectedEa.startsWith('pending-') && parsed.expectedEa !== enterprise.ea) {
         throw new OrganizationConnectionError('ENTERPRISE_MISMATCH', '应用所属企业与已保存配置不一致，请核对凭据。', 409)
       }
-      const verifiedCredentials = {
-        appId: parsed.appId,
-        appSecret: parsed.appSecret,
-        permanentCode: parsed.permanentCode,
-        expectedEa: enterprise.ea,
-        expectedCorpId: enterprise.corpId,
-        apiUserId: parsed.apiUserId,
-      }
-      const preview = await previewDirectory(verifiedCredentials, transportForOrganization(context.systemOrgId))
       return {
-        checkedAt: preview.checkedAt,
+        checkedAt: new Date().toISOString(),
         externalTenantId: enterprise.ea,
         metadata: { appId: parsed.appId, apiUserId: parsed.apiUserId, expectedEa: enterprise.ea },
-        credentialPatch: verifiedCredentials,
-        departments: preview.departments,
-        employees: preview.employees,
-        warnings: preview.warnings,
+        credentialPatch: {
+          appId: parsed.appId,
+          appSecret: parsed.appSecret,
+          permanentCode: parsed.permanentCode,
+          expectedEa: enterprise.ea,
+          expectedCorpId: enterprise.corpId,
+          apiUserId: parsed.apiUserId,
+        },
       }
     } catch (error) {
       if (error instanceof OrganizationConnectionError) throw error
       if (error instanceof FxiaokeError) throw new OrganizationConnectionError(error.code, error.message, error.status as OrganizationConnectionError['status'])
-      throw new OrganizationConnectionError('PREVIEW_FAILED', '纷享通讯录预览失败，请重新检查配置。', 502)
+      throw new OrganizationConnectionError('CONNECTION_VERIFICATION_FAILED', '纷享应用连接验证失败，请重新检查配置。', 502)
     }
   },
   validateStored(credentials) {
@@ -109,5 +102,43 @@ export const fxiaokeConnectionAdapter: OrganizationConnectionAdapter = {
   },
   decryptLegacy(ciphertext, context) {
     return JSON.parse(decryptCredentials(context.systemOrgId, ciphertext)) as Record<string, unknown>
+  },
+}
+
+/**
+ * Fxiaoke directory capability. It shares the connection record and credentials,
+ * but is resolved independently from enterprise login and connection verification.
+ */
+export const fxiaokeDirectoryAdapter: DirectoryAdapter = {
+  provider: 'fxiaoke',
+  supportsScopeProof: false,
+  async readDirectory(credentials, context): Promise<AdapterDirectoryRead> {
+    const parsed = storedSchema.parse(credentials)
+    try {
+      const preview = await previewDirectory(parsed, transportForOrganization(context.systemOrgId))
+      return {
+        checkedAt: preview.checkedAt,
+        complete: preview.complete,
+        // Pagination only proves the authorized readable scope was consumed.
+        // Fxiaoke has not returned evidence that this employee can read the
+        // whole company, so this remains a separate, fail-closed gate.
+        scopeVerified: false,
+        scopeEvidence: null,
+        departments: preview.departments,
+        employees: preview.employees,
+        warnings: preview.warnings,
+      }
+    } catch (error) {
+      if (error instanceof OrganizationConnectionError) throw error
+      if (error instanceof FxiaokeError) throw new OrganizationConnectionError(error.code, error.message, error.status as OrganizationConnectionError['status'])
+      throw new OrganizationConnectionError('DIRECTORY_READ_FAILED', '纷享通讯录读取失败，请检查应用通讯录权限。', 502)
+    }
+  },
+  normalizeDirectoryStatus(value) {
+    const normalized = value.trim().toLowerCase()
+    if (normalized === '0' || ['active', 'enabled'].includes(normalized)) return 'active'
+    if (normalized === '1' || ['inactive', 'disabled', 'resigned', 'frozen'].includes(normalized)) return 'inactive'
+    if (normalized === '2' || normalized === 'deleted') return 'deleted'
+    return 'unknown'
   },
 }

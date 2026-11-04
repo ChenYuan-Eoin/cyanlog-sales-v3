@@ -4,9 +4,16 @@ const plain = value => value !== null && typeof value === 'object' && !Array.isA
 const exactKeys = (value, keys) => plain(value) && Object.keys(value).sort().join(',') === [...keys].sort().join(',');
 const identifier = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 const secret = value => typeof value === 'string' && value.length > 0 && value.length <= 2048 && !/[\r\n]/.test(value);
-const projections = {
-  DepartmentObj: ['_id','name','parent_id','status'],
-  PersonnelObj: ['_id','user_id','name','main_department','status','is_pause_login'],
+const departmentProjection = ['_id','name','parent_id','status'];
+const directoryProjections = {
+  DepartmentObj: [departmentProjection],
+  PersonnelObj: [
+    ['_id','user_id','name','data_own_department','vice_departments','status','is_pause_login','employee_number','email','phone'],
+    // Transitional compatibility for the already-deployed website during the
+    // atomic worker rollout. Remove only after the old Production SHA is no
+    // longer eligible for traffic or rollback.
+    ['_id','user_id','name','main_department','status','is_pause_login'],
+  ],
 };
 const identityProjection = ['_id','user_id','full_name','name','phone','employee_number','status','is_pause_login','life_status','is_deleted'];
 export function validRequest(input) {
@@ -31,20 +38,47 @@ export function validRequest(input) {
     if (!exactKeys(input.headers, ['content-type','authorization','x-fs-ea','x-fs-userid'])
       || input.headers['content-type'] !== 'application/json' || !secret(input.headers.authorization)
       || !input.headers.authorization.startsWith('Bearer ') || !identifier(input.headers['x-fs-ea']) || !identifier(input.headers['x-fs-userid'])) return false;
-    if (!exactKeys(body, ['convertUserId','data']) || body.convertUserId !== false || !exactKeys(body.data, ['dataObjectApiName','search_query_info'])) return false;
+    const previewEnvelope = exactKeys(body, ['convertUserId','returnTotalNum','data']) && body.returnTotalNum === 1;
+    const identityEnvelope = exactKeys(body, ['convertUserId','data']);
+    if ((!previewEnvelope && !identityEnvelope) || body.convertUserId !== false || !exactKeys(body.data, ['dataObjectApiName','search_query_info'])) return false;
     const query = body.data.search_query_info;
-    const fields = projections[body.data.dataObjectApiName];
+    const allowedProjections = directoryProjections[body.data.dataObjectApiName];
     if (
-      !fields
+      !allowedProjections
       || !exactKeys(query, ['limit','offset','fieldProjection','filters','orders'])
-      || query.limit !== 100 || !Number.isInteger(query.offset) || query.offset < 0 || query.offset > 5000 || query.offset % 100 !== 0
-      || !Array.isArray(query.orders) || query.orders.length !== 0
+      || query.limit !== 100 || !Number.isInteger(query.offset)
+      || query.offset < 0 || query.offset > 5000
       || !Array.isArray(query.filters)
     ) return false;
-    const isPreview = JSON.stringify(query.fieldProjection) === JSON.stringify(fields)
-      && query.filters.length === 0;
-    const isIdentityLookup = body.data.dataObjectApiName === 'PersonnelObj'
+    const hasDirectoryProjection = allowedProjections.some(fields =>
+      JSON.stringify(query.fieldProjection) === JSON.stringify(fields));
+    const stableOrder = Array.isArray(query.orders)
+      && query.orders.length === 1
+      && exactKeys(query.orders[0], ['fieldName','isAsc'])
+      && query.orders[0].fieldName === '_id'
+      && query.orders[0].isAsc === true;
+    const firstPage = query.filters.length === 0;
+    const cursorPage = query.filters.length === 1
+      && exactKeys(query.filters[0], ['field_name','field_values','operator'])
+      && query.filters[0].field_name === '_id'
+      && query.filters[0].operator === 'GT'
+      && Array.isArray(query.filters[0].field_values)
+      && query.filters[0].field_values.length === 1
+      && identifier(String(query.filters[0].field_values[0]));
+    const isCurrentPreview = previewEnvelope
+      && query.offset === 0
+      && hasDirectoryProjection
+      && stableOrder
+      && (firstPage || cursorPage);
+    const isRollbackPreview = identityEnvelope
+      && query.offset % 100 === 0
+      && hasDirectoryProjection
+      && Array.isArray(query.orders) && query.orders.length === 0
+      && firstPage;
+    const isIdentityLookup = identityEnvelope
+      && body.data.dataObjectApiName === 'PersonnelObj'
       && JSON.stringify(query.fieldProjection) === JSON.stringify(identityProjection)
+      && Array.isArray(query.orders) && query.orders.length === 0
       && query.filters.length === 1
       && exactKeys(query.filters[0], ['field_name','field_values','operator'])
       && query.filters[0].field_name === 'user_id'
@@ -52,7 +86,7 @@ export function validRequest(input) {
       && Array.isArray(query.filters[0].field_values)
       && query.filters[0].field_values.length === 1
       && identifier(String(query.filters[0].field_values[0]));
-    return isPreview || isIdentityLookup;
+    return isCurrentPreview || isRollbackPreview || isIdentityLookup;
   } catch { return false; }
 }
 export function validResult(value) {

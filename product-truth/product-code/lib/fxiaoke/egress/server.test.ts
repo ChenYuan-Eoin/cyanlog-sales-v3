@@ -38,7 +38,7 @@ vi.mock('@/lib/supabase', () => ({ supabaseAdmin: {
   channel: () => ({ httpSend: fake.wake }), removeChannel: vi.fn().mockResolvedValue('ok'),
 } }))
 import { authorizeWorker, egressConfig, transportForOrganization, workerClaim, workerComplete } from './server'
-import { discoverEnterprise } from '../client'
+import { discoverEnterprise, previewDirectory } from '../client'
 import { exchangeFxiaokeAuthorizationCode } from '../oauth'
 import { POST } from '@/app/api/admin/organization-sources/fxiaoke/egress/route'
 const org = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -66,6 +66,44 @@ it('carries enterprise discovery through encrypted jobs and only broadcasts an e
   expect(fake.wake).toHaveBeenCalledWith('wake',{}, {timeout:3000})
   expect(fake.tables.organization_fxiaoke_egress_jobs).toHaveLength(0)
   expect(JSON.stringify(fake.inserts)).not.toContain(credentials.appSecret)
+})
+it('carries ownership and supplementary departments through the worker protocol', async () => {
+  const previewCredentials = { ...credentials, expectedEa: 'fixture-enterprise', apiUserId: 'fixture-user' }
+  const departmentProjection = ['_id','name','parent_id','status']
+  const personnelProjection = ['_id','user_id','name','data_own_department','vice_departments','status','is_pause_login','employee_number','email','phone']
+  let requestIndex = 0
+  fake.wake.mockImplementation(async () => {
+    const claim = await workerClaim(egressConfig()!, ip)
+    expect(claim.job).not.toBeNull()
+    const body = JSON.parse(claim.job!.request.body)
+    let response: unknown
+    if (requestIndex === 0) {
+      expect(body).toMatchObject(credentials)
+      response = { errorCode: 0, appId: credentials.appId, ea: 'fixture-enterprise', accessToken: 'fixture-token', openUserId: 'FSCID_fixture' }
+    } else if (body.data.dataObjectApiName === 'DepartmentObj') {
+      expect(body.data.search_query_info.fieldProjection).toEqual(departmentProjection)
+      response = { errorCode: 0, data: { total: 2, dataList: [
+        { _id: '100', name: '南区客户成功组', parent_id: [], status: '0' },
+        { _id: '200', name: '客户成功部', parent_id: [], status: '0' },
+      ] } }
+    } else {
+      expect(body.data.dataObjectApiName).toBe('PersonnelObj')
+      expect(body.data.search_query_info.fieldProjection).toEqual(personnelProjection)
+      response = { errorCode: 0, data: { total: 1, dataList: [{
+        _id: 'record-1', user_id: 'employee-1', name: '员工甲',
+        data_own_department: ['100'], vice_departments: ['200'], status: '0', is_pause_login: false,
+      }] } }
+    }
+    await workerComplete(egressConfig()!, { id: claim.job!.id, lease: claim.job!.lease, result: { status: 200, body: JSON.stringify(response) } })
+    requestIndex += 1
+    return { success: true }
+  })
+
+  const preview = await previewDirectory(previewCredentials, transportForOrganization(org))
+  expect(preview.employees[0]).toMatchObject({ primaryDepartmentId: '100', departmentIds: ['100', '200'] })
+  expect(preview.complete).toBe(true)
+  expect(requestIndex).toBe(3)
+  expect(fake.tables.organization_fxiaoke_egress_jobs).toHaveLength(0)
 })
 it('carries an OAuth code through an encrypted, single-use worker job without exposing code or tokens', async () => {
   const input = { code: 'fixture-authorization-code', redirectUrl: 'https://sales.cyanlog.icu/api/auth/fxiaoke/callback' }

@@ -56,7 +56,7 @@ beforeEach(() => {
       provider: 'fxiaoke',
       externalTenantId: 'FSCID_primary',
       departments: [{ id: 'dept-1', name: '销售部', parentId: null, status: 'active' }],
-      employees: [{ id: 'employee-1', name: '张三', departmentIds: ['dept-1'], status: 'active', loginDisabled: false }],
+      employees: [{ id: 'employee-1', name: '张三', departmentIds: ['dept-1'], primaryDepartmentId: 'dept-1', status: 'active', loginDisabled: false }],
       warnings: ['仅包含当前员工可访问范围'],
       applied: false,
     },
@@ -111,7 +111,7 @@ describe('Fxiaoke shared connection wrapper', () => {
       ea: 'FSCID_primary',
       checkedAt: '2026-11-03T05:00:00.000Z',
       departments: [{ id: 'dept-1', name: '销售部', parentId: null, status: 'active' }],
-      employees: [{ id: 'employee-1', name: '张三', departmentIds: ['dept-1'], status: 'active', loginDisabled: false }],
+      employees: [{ id: 'employee-1', name: '张三', departmentIds: ['dept-1'], primaryDepartmentId: 'dept-1', status: 'active', loginDisabled: false }],
       warnings: ['仅包含当前员工可访问范围'],
       applied: false,
     })

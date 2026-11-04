@@ -80,10 +80,11 @@ export async function previewSavedConnection(orgId: string, revision: string, ac
       parentId: item.parentId,
       status: item.status,
     })
-    const toEmployee = (item: { id: string; name: string; departmentIds: string[]; status: string; loginDisabled: boolean | null }) => ({
+    const toEmployee = (item: { id: string; name: string; departmentIds: string[]; primaryDepartmentId: string | null; status: string; loginDisabled: boolean | null }) => ({
       id: item.id,
       name: item.name,
       departmentIds: item.departmentIds,
+      primaryDepartmentId: item.primaryDepartmentId,
       status: item.status,
       loginDisabled: item.loginDisabled,
     })

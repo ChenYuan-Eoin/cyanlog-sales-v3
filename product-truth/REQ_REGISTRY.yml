@@ -9,8 +9,8 @@
 #   - 代码位置由 AI 在开发时回填
 #   - 代码中的 REQ 标记必须与之一致
 
-version: "2026-11-02.1"
-last_updated: "2026-11-02T06:51:43Z"
+version: "2026-11-04.1"
+last_updated: "2026-11-04T03:10:00Z"
 
 goal_governance:
   status: active
@@ -27,10 +27,10 @@ goal_governance:
     feature: F003
     source: IN-20261028-003
     name: 纷享组织接入与企业SSO及寄件许可
-    sequence: [WP91, WP94, WP92, WP93]
+    sequence: [WP91, WP92, WP93, WP94]
     contract: product-truth/feature-packets/F003-account-auth.md
-    shared_configuration: "目录读取与员工SSO复用企业应用连接；ea后台获取；目录读取员工ID不代替登录身份。"
-    final_acceptance: "WP94以真实管理员/普通员工完成纷享SSO、稳定映射/拒绝路径及角色正确，并按IN013独立验收受限既有账号过渡入口；两种入口使用同一users.id/组织/新鲜角色/会话。随后WP92/93完成主来源与寄件许可。仅配置保存或机器部署不算接通。"
+    shared_configuration: "所有提供方共用organization_sources一张运行时连接记录；提供方只差异凭据schema和协议适配。连接、目录范围、目录权威、企业SSO、身份映射与业务授权分别证明、分别启用；目录写只经统一不可变计划、原子应用与回滚链。"
+    final_acceptance: "先证明目录全公司读取范围，再以不可变差异完成显式切源和原子回滚；随后WP93统一寄件许可，WP94再以真实管理员/普通员工完成纷享SSO、稳定映射/拒绝路径及角色正确，并按IN013独立验收受限既有账号过渡入口。两类登录使用同一users.id/组织/新鲜角色/会话；仅配置保存、分页结束或机器部署不算接通。"
     login_transition:
       authority: IN-20261102-013
       implementation_authorized: true
@@ -45,8 +45,8 @@ goal_governance:
     source: IN-20261028-010
     objective: "销售一次填写真实收件信息，形成归属正确的待确认工单；授权人员确认后顺丰只下单一次，单号回到原销售与原CRM记录。共享组织权限，数据隔离，原单可恢复。"
     ledger: product-truth/feature-packets/F099-current-goal-ledger.md
-    active: WP94
-    next: WP82
+    active: WP92
+    next: WP93
     execution_policy: "目标已建立，按F099顺序保持单一Active，每批一个可演示用户任务；生产实证才可交付，不继承上一WP的发布或数据写入批准。"
     data_boundary: "仅cyanlog-sales-v3；销售填写本票地址；村庄无门牌合法；客户档案已有地址不得覆盖；正式顺丰下单由用户确认。"
     intake_chain: [WP94, WP92, WP93, WP96, WP97, WP99, WP98]
@@ -58,9 +58,9 @@ goal_governance:
     WP96: {name: CRM审批寄件字段映射预览, primary_goals: [], state: queued_goal_registered}
     WP95: {name: 寄件信息正确解析与无门牌地址提交, primary_goals: [], state: production_released, closed_scope: "解析与无门牌地址校验；真实履约移交WP99"}
     WP91: {name: 纷享应用配置与通讯录预览, primary_goals: [G5, G7, G10], state: production_released}
-    WP92: {name: 纷享组织同步与主来源切换, primary_goals: [G5, G7, G10], state: queued}
+    WP92: {name: 纷享组织同步与主来源切换, primary_goals: [G5, G7, G10], state: executing}
     WP93: {name: 统一成员身份与寄件许可, primary_goals: [G5, G7, G10], state: queued}
-    WP94: {name: 纷享SSO与联合身份门禁, primary_goals: [G5, G7, G10], state: executing}
+    WP94: {name: 纷享SSO与联合身份门禁, primary_goals: [G5, G7, G10], state: blocked_by_directory_scope_and_identity_authority}
     WP99: {name: 顺丰真实履约端到端闭环, primary_goals: [G5, G7, G10], state: queued}
     WP00: {name: 目标基线整合, primary_goals: [G1, G10, G11], state: completed_goal_baseline_commit_18dad230}
     WP01: {name: 平台模型接入与应用底座, primary_goals: [G4], supporting_goals: [G3, G7], state: production_acceptance_pending}
@@ -289,7 +289,7 @@ requirements:
       - app/configs/page.tsx
     description: 统一 UUID 的纷享 OAuth 与受限既有账号过渡登录、角色权限和用户管理（自主可控 + 可配置 RBAC）
     audit_supplement:
-      status_caveat: "WP94保持Active、WP82为Next；真实SSO与受限账号均须正式站证据，机器部署不等于登录通过。IN013已批准过渡入口实现，新产品树发布pending；角色权限和全域授权收口仍由各责任WP独立验收。"
+      status_caveat: "WP92为当前Active、WP93为Next；正式数据73部门/405员工仅证明当前可读范围分页完成，scopeVerified仍为false，目录切源保持阻断。SSO还必须具备显式identity权威与稳定映射，机器部署不等于登录通过。IN013已批准受限账号过渡入口，角色权限和全域授权仍由各责任WP独立验收。"
       supplemental_requirements:
         - "登录成功用户必须解析到稳定 org context；缺默认组织时要返回可诊断错误或自动修复路径。"
         - "认证、鉴权、组织上下文失败必须有统一错误码，不得被消费页面吞掉。"

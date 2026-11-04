@@ -46,6 +46,8 @@ const APPLICATION_PERMISSION_PRODUCTION_ITEMS = Object.freeze(['role_read_edit',
 const APPLICATION_PERMISSION_CONTRACT = 'f003-role-permissions-v1';
 const ORGANIZATION_CONNECTIONS_CONTRACT = 'f003-organization-connections-v1';
 const ORGANIZATION_CONNECTIONS_ITEMS = Object.freeze(['organization_connection_lifecycle', 'organization_directory_preview']);
+const DIRECTORY_CUTOVER_CONTRACT = 'f003-directory-cutover-v1';
+const DIRECTORY_CUTOVER_ITEMS = Object.freeze(['organization_directory_snapshot', 'organization_directory_cutover']);
 const FXIAOKE_CONNECTION_CONTRACT = 'f003-fxiaoke-connection-v1';
 const FXIAOKE_CONNECTION_ITEMS = Object.freeze(['fxiaoke_connection']);
 const FXIAOKE_CONNECTION_PRODUCTION_ITEMS = Object.freeze(['connection_preview']);
@@ -323,6 +325,7 @@ function runtimeContractVersionOf(state) {
 }
 function requiredReplayActions(state, environment = 'preview') {
   if (runtimeProfileOf(state) === 'application' && runtimeContractVersionOf(state) === ORGANIZATION_CONNECTIONS_CONTRACT) return require('./organization-connections-verifier').CANDIDATE_ACTIONS;
+  if (runtimeProfileOf(state) === 'application' && runtimeContractVersionOf(state) === DIRECTORY_CUTOVER_CONTRACT) return require('./organization-directory-cutover-verifier').CANDIDATE_ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === SHIPPING_SERVICE_SELECTION_CONTRACT) return require('./shipping-service-selection-verifier').ACTIONS;
   if (runtimeContractVersionOf(state) === SHIPPING_PARSER_CONTRACT) return require('./shipping-parser-verifier').ACTIONS;
   if (runtimeProfileOf(state) === 'application' && runtimeContractVersionOf(state) === FXIAOKE_SSO_CONTRACT) {
@@ -582,6 +585,7 @@ function validateSchedulerSnapshot(options, candidate) {
   const profile = runtimeProfileOf(state);
   const contractVersion = runtimeContractVersionOf(state);
   const organizationConnectionsCode = profile === 'application' && contractVersion === ORGANIZATION_CONNECTIONS_CONTRACT;
+  const directoryCutoverCode = profile === 'application' && contractVersion === DIRECTORY_CUTOVER_CONTRACT;
   const fxiaokeRelease = profile === 'application' && contractVersion === FXIAOKE_CONNECTION_CONTRACT;
   const fxiaokeSsoRelease = profile === 'application' && contractVersion === FXIAOKE_SSO_CONTRACT;
   const parserRelease = profile === 'shipping_workspace' && contractVersion === SHIPPING_PARSER_CONTRACT;
@@ -591,7 +595,7 @@ function validateSchedulerSnapshot(options, candidate) {
   if (!['ai', 'shipping', 'shipping_workspace', 'application'].includes(profile)) errors.push('Unknown runtime evidence profile');
   if (profile === 'application' && (
     state.active_task?.feature_id !== 'F003'
-    || (deliveryContract.target_state !== 'code_green' && ![APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(runtimeContractVersionOf(state)))
+    || (deliveryContract.target_state !== 'code_green' && ![APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(runtimeContractVersionOf(state)))
     || (!fxiaokeProduction && !fxiaokeSsoProduction && deliveryContract.production_database_mode !== 'read_only')
   )) errors.push('Application profile requires F003 and a scoped contract; only explicitly approved Fxiaoke connection saves may write Production');
   if (organizationConnectionsCode) {
@@ -604,8 +608,18 @@ function validateSchedulerSnapshot(options, candidate) {
       productionDatabaseMode: deliveryContract?.production_database_mode,
     }));
   }
+  if (directoryCutoverCode) {
+    errors.push(...require('./organization-directory-cutover-verifier').contractScopeBlockers({
+      activeId: state.active_task?.id,
+      featureId: state.active_task?.feature_id,
+      runtimeProfile: profile,
+      runtimeContractVersion: contractVersion,
+      targetState: deliveryContract?.target_state,
+      productionDatabaseMode: deliveryContract?.production_database_mode,
+    }));
+  }
   if (['shipping', 'shipping_workspace'].includes(profile) && state.active_task?.feature_id !== 'F054') errors.push('Shipping evidence profile requires the F054 feature binding');
-  const applicationRelease = profile === 'application' && [APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(contractVersion);
+  const applicationRelease = profile === 'application' && [APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(contractVersion);
   if (contractVersion && !applicationRelease && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', SHIPPING_PARSER_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT].includes(contractVersion))) errors.push('Unknown or mismatched runtime contract version');
   if (parserRelease && (state.active_task.id !== 'WP95' || deliveryContract.production_database_mode !== 'read_only')) errors.push('Parser contract is limited to WP95 without business writes');
   if (serviceSelectionRelease && (state.active_task.id !== 'WP52' || deliveryContract.production_database_mode !== 'read_only')) errors.push('Service selection contract is limited to read-only WP52');
@@ -613,6 +627,8 @@ function validateSchedulerSnapshot(options, candidate) {
   if (contractVersion === 'f054-config-ui-v1' && (!['code_green', 'clean_preview_green'].includes(deliveryContract.target_state) || deliveryContract.production_database_mode !== 'read_only')) errors.push('Configuration UI contract is limited to read-only Preview acceptance');
   const canonicalRuntimeEvidence = organizationConnectionsCode
     ? ORGANIZATION_CONNECTIONS_ITEMS
+    : directoryCutoverCode
+      ? DIRECTORY_CUTOVER_ITEMS
     : serviceSelectionRelease
     ? require('./shipping-service-selection-verifier').ITEMS
     : parserRelease
@@ -2386,7 +2402,7 @@ function checkDeliveryStage(stage, options = {}) {
     }
   }
   if (deliveryStateAtLeast(stage, 'clean_preview_green') && !productionFirst) {
-    const applicationPermissions = status.runtimeProfile === 'application' && [APPLICATION_PERMISSION_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(status.runtimeContractVersion);
+    const applicationPermissions = status.runtimeProfile === 'application' && [APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(status.runtimeContractVersion);
     if (evidence.preview?.commit !== status.git.head) blockers.push('Preview commit does not equal HEAD');
     if (evidence.preview?.provider_source_commit !== status.git.head) blockers.push('Preview provider source commit does not equal HEAD');
     if (!/^dpl_[A-Za-z0-9]+$/.test(String(evidence.preview?.deployment_id || ''))) blockers.push('Preview deployment ID is missing');
@@ -2423,7 +2439,7 @@ function checkDeliveryStage(stage, options = {}) {
       } else {
         if (envelope.payload.commit !== status.git.head) blockers.push(`runtime evidence commit mismatch: ${item}`);
         if (envelope.payload.deployment_id !== evidence.preview?.deployment_id) blockers.push(`runtime evidence deployment mismatch: ${item}`);
-        if (['f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', SHIPPING_SERVICE_SELECTION_CONTRACT, APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(status.runtimeContractVersion)) {
+        if (['f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', SHIPPING_SERVICE_SELECTION_CONTRACT, APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(status.runtimeContractVersion)) {
           try {
             const origin = new URL(envelope.payload.origin);
             if (origin.protocol !== 'https:' || origin.origin !== new URL(evidence.preview.url).origin) blockers.push(`runtime evidence origin mismatch: ${item}`);
@@ -2433,6 +2449,8 @@ function checkDeliveryStage(stage, options = {}) {
     }
     if (status.runtimeProfile === 'application' && status.runtimeContractVersion === ORGANIZATION_CONNECTIONS_CONTRACT) {
       blockers.push(...require('./organization-connections-verifier').runtimeEvidenceBlockers(evidence.runtime || {}, 'sandbox', { commit: status.git.head }));
+    } else if (status.runtimeProfile === 'application' && status.runtimeContractVersion === DIRECTORY_CUTOVER_CONTRACT) {
+      blockers.push(...require('./organization-directory-cutover-verifier').runtimeEvidenceBlockers(evidence.runtime || {}, 'sandbox', { commit: status.git.head }));
     } else if (status.runtimeProfile === 'application' && status.runtimeContractVersion === FXIAOKE_SSO_CONTRACT) {
       blockers.push(...require('./fxiaoke-sso-verifier').previewBlockers(evidence.runtime?.fxiaoke_sso?.payload, { commit: status.git.head, deploymentId: evidence.preview?.deployment_id }));
     } else if (status.runtimeProfile === 'application' && status.runtimeContractVersion === FXIAOKE_CONNECTION_CONTRACT) {
@@ -2570,7 +2588,7 @@ function checkDeliveryStage(stage, options = {}) {
     if (status.git.remoteProduction !== status.git.head) blockers.push('origin/production does not equal released candidate HEAD');
     const codeOnly = status.productionReleaseAuthorization?.status === 'approved_code_only';
     if (!codeOnly && status.productionReleaseAuthorization?.status !== 'approved_for_final_release') blockers.push('Final Production release authorization is still pending');
-    if (codeOnly ? status.productionDatabaseMode !== 'read_only' || !['f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', SHIPPING_PARSER_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, APPLICATION_PERMISSION_CONTRACT, FXIAOKE_CONNECTION_CONTRACT].includes(status.runtimeContractVersion) : status.productionDatabaseMode !== 'controlled_write_approved') blockers.push('Production database boundary does not match the authorized release mode');
+    if (codeOnly ? status.productionDatabaseMode !== 'read_only' || !['f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', SHIPPING_PARSER_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT].includes(status.runtimeContractVersion) : status.productionDatabaseMode !== 'controlled_write_approved') blockers.push('Production database boundary does not match the authorized release mode');
     if (status.runtimeContractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT) blockers.push(...shippingProductionVerifierScopeBlockers(status));
     const approvalRecord = status.productionReleaseAuthorizationRecord;
     if (approvalRecord?.type !== 'final_production_release_authorization') blockers.push('Final Production authorization record type is invalid');

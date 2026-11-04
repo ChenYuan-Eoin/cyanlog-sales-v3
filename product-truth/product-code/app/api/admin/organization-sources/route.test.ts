@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({
@@ -64,10 +64,6 @@ beforeEach(() => {
   ])
 })
 
-afterEach(() => {
-  vi.unstubAllEnvs()
-})
-
 describe('/api/admin/organization-sources', () => {
   it('returns tenant sources and provider capabilities', async () => {
     const response = await GET(request())
@@ -113,20 +109,4 @@ describe('/api/admin/organization-sources', () => {
     expect((await response.json()).error.message).toContain('启用、主来源切换、同步和停用')
   })
 
-  it('does not offer a second legacy Feishu import after a shared draft exists', async () => {
-    vi.stubEnv('FEISHU_APP_ID', 'legacy-app')
-    vi.stubEnv('FEISHU_APP_SECRET', 'legacy-secret')
-    vi.stubEnv('FEISHU_ORG_ID', 'org-1')
-    mocks.load.mockResolvedValue([{
-      ...source,
-      priority: 100,
-      status: 'draft',
-      connectionState: 'configured',
-      syncMode: 'read_only',
-    }])
-
-    const response = await GET(request())
-    expect(response.status).toBe(200)
-    expect((await response.json()).data.legacy_feishu_binding).toBeNull()
-  })
 })

@@ -21,14 +21,13 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, PowerOffIcon, PowerIcon, LockIcon, UnlockIcon, MailIcon, BanIcon, FingerprintIcon } from 'lucide-react'
-import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment, FeishuSyncFeedback } from '../types'
+import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment } from '../types'
 import Fuse from 'fuse.js'
 import { success, error, confirmAction } from '@/lib/toast'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
 import { IdentityBindingDialog } from './components/IdentityBindingDialog'
-import { OrganizationSourcePanel } from './OrganizationSourcePanel'
 import { getRoleMutationRestriction } from './role-assignment-policy'
 import {
   DropdownMenu,
@@ -41,16 +40,8 @@ import {
 interface OrgStructureTabProps {
   orgSummary: OrgSummaryPayload | null
   currentUserId: string | null
-  feishuSyncing: boolean
-  feishuFeedback: FeishuSyncFeedback | null
-  onFeishuSync: () => void | Promise<void>
   onRefresh?: () => void | Promise<void>
-}
-
-const feishuFeedbackStyle: Record<FeishuSyncFeedback['status'], string> = {
-  success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-  warning: 'border-amber-200 bg-amber-50 text-amber-800',
-  error: 'border-rose-200 bg-rose-50 text-rose-800',
+  onOpenIntegrations?: () => void
 }
 
 function buildAuthHeaders(includeJson = false): HeadersInit {
@@ -791,10 +782,8 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
 export default function OrgStructureTab({
   orgSummary,
   currentUserId,
-  feishuSyncing,
-  feishuFeedback,
-  onFeishuSync,
   onRefresh,
+  onOpenIntegrations,
 }: OrgStructureTabProps) {
   const departments = useMemo(() => orgSummary?.departments ?? [], [orgSummary?.departments])
   const users = useMemo(() => orgSummary?.users ?? [], [orgSummary?.users])
@@ -841,26 +830,12 @@ export default function OrgStructureTab({
         </div>
       </div>
 
-      {feishuFeedback && (
-        <div
-          role="status"
-          aria-live="polite"
-          className={`rounded-lg border px-4 py-3 text-sm ${feishuFeedbackStyle[feishuFeedback.status]}`}
-        >
-          <p className="font-medium">{feishuFeedback.title}</p>
-          <p className="mt-1">{feishuFeedback.message}</p>
-          {feishuFeedback.detail && (
-            <p className="mt-1 opacity-80">{feishuFeedback.detail}</p>
-          )}
-        </div>
-      )}
-
       {/* A3: 空数据状态提示 */}
       {isEmptyState && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <p className="font-medium">暂无组织架构数据</p>
           <p className="mt-1 text-amber-700">
-            当前组织没有可显示的部门或成员。请先添加部门/成员，或使用右侧同步入口导入部门结构。
+            当前组织没有可显示的部门或成员。可先手工添加，或进入“外部系统接入”核对目录差异。
           </p>
         </div>
       )}
@@ -952,11 +927,17 @@ export default function OrgStructureTab({
         </div>
 
         <div className="min-w-0 space-y-4">
-          <OrganizationSourcePanel
-            feishuSyncing={feishuSyncing}
-            onFeishuSync={onFeishuSync}
-            onRefresh={onRefresh}
-          />
+          <div className="rounded-lg border bg-white p-4">
+            <h3 className="font-medium text-slate-900">当前组织目录</h3>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              外部目录只在冻结差异并人工确认后更新这里。连接、可读范围和主来源切换在独立页面管理。
+            </p>
+            {onOpenIntegrations && (
+              <Button type="button" variant="outline" size="sm" className="mt-3 w-full justify-center" onClick={onOpenIntegrations}>
+                前往外部系统接入
+              </Button>
+            )}
+          </div>
           <div className="rounded-lg border bg-white p-4">
             <h3 className="font-medium text-slate-900">组织操作</h3>
             <div className="mt-4 grid gap-2">
@@ -1031,7 +1012,7 @@ export default function OrgStructureTab({
                 <span className="font-semibold text-slate-900">{stats.filteredCount}</span>
               </div>
               <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-500">
-                飞书同步会导入部门结构、成员和主部门映射；若通讯录权限不足，将显示部分同步或失败原因，不静默伪造成员数据。
+                外部目录同步先检查读取范围并生成差异；冲突、范围不明或快照不完整时整批阻断。
               </div>
             </div>
           </div>

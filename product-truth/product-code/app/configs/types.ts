@@ -649,7 +649,7 @@ export interface PermissionCatalogGroup {
 }
 
 export type ConfigTabId =
-  | 'price-list' | 'rules' | 'tax' | 'approval' | 'ai' | 'theme' | 'org-structure' | 'role-access'
+  | 'price-list' | 'rules' | 'tax' | 'approval' | 'ai' | 'theme' | 'org-structure' | 'integrations' | 'role-access'
   | 'business-params' | 'field-dictionary' | 'numbering-rules'
   | 'product-versions' | 'price-matrix' | 'price-matrix-import'
   | 'approval-chains' | 'approval-rules' | 'clause-mappings' | 'output-templates' | 'shipping'

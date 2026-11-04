@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-03T05:01:31.520Z",
+  "updated_at": "2026-11-04T05:03:42Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -213,12 +213,12 @@
     }
   },
   "active_task": {
-    "id": "WP50",
-    "slug": "unified-organization-connection-config",
-    "name": "统一组织连接配置与生命周期",
+    "id": "WP92",
+    "slug": "fxiaoke-primary-source-sync",
+    "name": "纷享组织同步与主来源切换",
     "kind": "product",
     "status": "active",
-    "objective": "管理员在组织来源页通过一张统一连接记录和各提供方的薄适配器完成组织接入配置：飞书与纷享等提供方只差异于凭据 schema、验证和目录协议；连接记录统一保存加密 payload、版本、能力状态、草稿/验证/预览/启用/停用/回滚与审计。保存或验证不得隐式启用、同步、切主来源或复活停用来源；页面仅在当前组织真实存在可执行能力时显示操作。保留 organization_sources 的 source_id、external_identities、历史来源和手工数据；旧飞书环境变量及纷享独立配置表只作为一次性显式迁移输入，不得作为运行时真相，不执行 Production 迁移、目录同步、切源、外部写入或发布。",
+    "objective": "把外部组织接入拆成同一条提供方连接记录上的独立能力：连接凭据、目录读取、目录权威、企业登录、身份映射与业务授权分别判定，相应用户在同一连接上只配置提供方差异的凭据格式和协议适配。管理员先验证提供方对全公司目录的读取范围，再看到绑定目录hash、连接revision和当前来源revisions的不可变差异计划，并显式确认以目标提供方完成组织切源；范围未证明、结构不完整、冲突或过期计划整批阻断。应用与回滚使用事务和幂等运行，保留旧来源、手工部门、成员资料、历史身份与关联，禁止按姓名合并或静默创建成员。企业登录只绑定既有稳定身份，不能由目录主来源、连接验证或登录按钮自动启用。",
     "feature_id": "F003",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
@@ -227,6 +227,7 @@
       "governance/runtime-state/identity-authorization-blueprint.md",
       "product-truth/feature-packets/F003-account-auth.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
+      "product-truth/REQ_REGISTRY.yml",
       "product-truth/product-code/lib/organization-sources.ts",
       "product-truth/product-code/lib/organization-sources.test.ts",
       "product-truth/product-code/lib/organization-sources-migration.test.ts",
@@ -234,16 +235,18 @@
       "product-truth/product-code/lib/organization-source-identity.test.ts",
       "product-truth/product-code/lib/organization-connections",
       "product-truth/product-code/lib/fxiaoke",
+      "product-truth/product-code/lib/admin/org-membership.ts",
       "product-truth/product-code/lib/schema-check.ts",
       "product-truth/product-code/app/api/admin/organization-sources",
       "product-truth/product-code/app/api/access/feishu/sync",
       "product-truth/product-code/app/configs",
       "product-truth/product-code/app/admin/org",
       "product-truth/product-code/supabase/migrations/20261103090000_unified_organization_connections.sql",
+      "product-truth/product-code/supabase/migrations/20261103120000_organization_directory_cutover.sql",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-connections-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-connections-verifier.test.js"
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-directory-cutover-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-directory-cutover-verifier.test.js"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -264,58 +267,66 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "organization_connection_lifecycle",
-        "organization_directory_preview"
+        "organization_directory_snapshot",
+        "organization_directory_cutover"
       ],
       "runtime_profile": "application",
-      "runtime_contract_version": "f003-organization-connections-v1",
+      "runtime_contract_version": "f003-directory-cutover-v1",
       "production_database_mode": "read_only",
-      "note": "IN-20261103-004统一接入代码候选。专用f003-organization-connections-v1仅证明共享连接生命周期和只读目录预览；本批不执行Production迁移、目录同步、来源启用或停用、主来源切换、凭据搬运、人员或角色写入，也不发布。"
+      "note": "WP92仅办理提供方中立的目录快照、显式切源和原子回滚代码候选；Production数据库保持只读，目录写、切源、SSO、发布和承运商调用均未获授权。"
     },
     "acceptance_checks": [
-      "organization_sources是唯一运行时连接真相；飞书不再读取FEISHU_APP_ID/FEISHU_APP_SECRET，纷享不再读取独立连接表作为双真相",
-      "提供方差异只存在于凭据schema、验证器和目录协议适配器；共享保存、加密、版本、状态、预览、停用和回滚走同一服务",
-      "保存/验证/预览不自动激活、不改主来源、不写组织骨架、不复活disabled来源；失败保留上一生效配置",
-      "迁移保留source_id、external_identities和手工组织数据；旧环境变量/旧表无静默回读，冲突或不可解密配置失败关闭",
-      "组织来源页以真实连接能力显示操作，无环境变量伪状态和无入口的同步按钮；未配置、未启用和停用状态可区分",
-      "目标测试、受影响回归、typecheck/build和全量代码门禁通过；本批不声称目录同步、切源、Production或用户页面已交付"
+      "目录预览从固定provider快照计算新增、更新、未变化、冲突和保留手工数据，并分别展示部门与身份映射结果",
+      "确认计划绑定plan hash、连接revision、当前来源revisions及目录快照；stale、重复或篡改计划拒绝",
+      "任一冲突或部门/成员快照不完整时整批阻断，不发生部分写入",
+      "确认后在单一事务内将目标提供方设为priority 1 active目录/组织权威，旧主来源停止权威同步但不删除历史组织、成员、部门或身份映射；不设置身份权威",
+      "手工部门、人员字段和历史关联不覆盖；成员匹配只使用工号/邮箱/手机号等受信证据，姓名不参与合并，登录不JIT创建成员",
+      "成功应用幂等重试返回同一运行，回滚原子恢复来源状态与本次目录变化，并在后续变更发生后拒绝旧回滚",
+      "API和组织来源页展示先预览差异、再确认、应用状态与回滚能力，连接配置、目录主来源和登录状态保持分离",
+      "连接验证、目录读取完整、目录权威、企业登录开关和系统业务授权分别计算；任一能力不得由另一能力自动推导为已启用",
+      "企业登录能力由独立EnterpriseLoginAdapter注册表计算；目录适配器不得用ssoAvailable自报登录能力，未注册登录协议的提供方必须失败关闭",
+      "SSO仅在企业登录适配器可用、连接已验证、来源已启用且identity权威明确开启时展示为可用；目录同步的主来源选择不自动开启SSO",
+      "目录分页与关系自洽只证明快照结构完整；未取得全公司范围证据时scopeVerified=false且差异计划不可应用",
+      "目录切源入口按提供方能力注册表选择适配器，只有声明syncAvailable的提供方可用；提供方线值生命周期映射只在适配器内完成，共享差异服务不包含 provider 名称分支；递归分页完成仍只证明返回范围结构，不得把分页结束伪报为全公司范围已证明",
+      "历史飞书直写接口返回DIRECTORY_CUTOVER_REQUIRED且不产生数据库或外部写入；飞书与纷享目录变更只能进入同一不可变计划、原子应用和回滚服务",
+      "目标/受影响/全量测试、lint、typecheck、build、安全门禁和严格Harness通过；仅code_green，不宣称生产目录已切换"
     ],
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
-    "started_at": "2026-11-03T05:01:31.520Z",
-    "activation_basis": "IN-20261103-004",
-    "reason": "WP52 production scope closed; activate the bounded predecessor that unifies connection truth before WP92 directory cutover."
+    "started_at": "2026-11-03T08:03:02.300Z",
+    "activation_basis": "IN-20261103-004, IN-20261103-006, IN-20261103-007",
+    "reason": "WP50已达到code_green；按已批准串行顺序激活其唯一后继WP92，准备目录差异预览、显式确认切源和原子回滚代码候选。"
   },
   "execution_queue": {
     "active": {
-      "id": "WP50",
-      "slug": "unified-organization-connection-config",
-      "name": "统一组织连接配置与生命周期"
-    },
-    "next": {
       "id": "WP92",
       "slug": "fxiaoke-primary-source-sync",
-      "name": "纷享组织同步与主来源切换",
-      "scheduling_group": "组织来源",
+      "name": "纷享组织同步与主来源切换"
+    },
+    "next": {
+      "id": "WP93",
+      "slug": "unified-shipping-authorization",
+      "name": "统一成员身份与寄件许可",
+      "scheduling_group": "统一寄件许可",
       "acceptance_state": "待开发",
-      "remaining_acceptance": "预览差异→确认同步/主来源切换→原子回滚；旧飞书和手工数据不丢",
-      "acceptance_owner": "WP92",
+      "remaining_acceptance": "统一成员/部门/角色授权，离职/停用/撤权后下一请求拒绝，历史归属不变",
+      "acceptance_owner": "WP93",
       "source_records": [
-        "current_queue.next",
-        "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:next"
+        "current_queue.ready",
+        "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:ready"
       ],
       "reconciliation_source": "IN-20261028-010",
       "historical_record": {
-        "id": "WP92",
-        "slug": "fxiaoke-primary-source-sync",
-        "name": "纷享组织同步与主来源切换",
+        "id": "WP93",
+        "slug": "unified-shipping-authorization",
+        "name": "统一成员身份与寄件许可",
         "depends_on": [
-          "WP91"
+          "WP92"
         ]
       },
       "depends_on": [
-        "WP50",
-        "WP91",
-        "WP65"
+        "WP92",
+        "WP66",
+        "WP83"
       ]
     },
     "ready": [
@@ -510,33 +521,6 @@
           "status": "active",
           "reason": "WP66已完成顺丰后台活动租户与新鲜权限收口；继续处理配置控制面的租户资源、平台资产和发布动作边界。"
         }
-      },
-      {
-        "id": "WP93",
-        "slug": "unified-shipping-authorization",
-        "name": "统一成员身份与寄件许可",
-        "scheduling_group": "统一寄件许可",
-        "acceptance_state": "待开发",
-        "remaining_acceptance": "统一成员/部门/角色授权，离职/停用/撤权后下一请求拒绝，历史归属不变",
-        "acceptance_owner": "WP93",
-        "source_records": [
-          "current_queue.ready",
-          "/Users/nsss/.codex/worktrees/wp76-private-shipping/Price-v3:ready"
-        ],
-        "reconciliation_source": "IN-20261028-010",
-        "historical_record": {
-          "id": "WP93",
-          "slug": "unified-shipping-authorization",
-          "name": "统一成员身份与寄件许可",
-          "depends_on": [
-            "WP92"
-          ]
-        },
-        "depends_on": [
-          "WP92",
-          "WP66",
-          "WP83"
-        ]
       },
       {
         "id": "WP96",
@@ -1885,6 +1869,17 @@
         "source_record": "IN-20261103-005",
         "closed_scope": "两票逐票服务选择、显式批量应用与只读Production验收；真实批量下单及承运商调用不在授权范围。",
         "completed_at": "2026-11-03T05:01:31.520Z"
+      },
+      {
+        "id": "WP50",
+        "slug": "unified-organization-connection-config",
+        "name": "统一组织连接配置与生命周期",
+        "status": "code_green",
+        "candidate": "47fdd1d322f1965b58272d5a66af766ffb6ce763",
+        "source_record": "IN-20261103-006",
+        "closed_scope": "统一提供方连接记录、加密版本生命周期、飞书/纷享薄适配器和只读目录预览的代码候选及本地验证。",
+        "remaining_acceptance": "Production迁移、真实外呼、同步、切源、目录写入、push与部署未执行，均由后继独立门禁承接。",
+        "completed_at": "2026-11-03T08:03:02.300Z"
       }
     ],
     "release_blockers": [
@@ -4929,7 +4924,7 @@
       "slug": "unified-organization-connection-config",
       "name": "统一组织连接配置与生命周期",
       "kind": "product",
-      "status": "parked",
+      "status": "code_green",
       "objective": "管理员在组织来源页通过一张统一连接记录和各提供方的薄适配器完成组织接入配置：飞书与纷享等提供方只差异于凭据 schema、验证和目录协议；连接记录统一保存加密 payload、版本、能力状态、草稿/验证/预览/启用/停用/回滚与审计。保存或验证不得隐式启用、同步、切主来源或复活停用来源；页面仅在当前组织真实存在可执行能力时显示操作。保留 organization_sources 的 source_id、external_identities、历史来源和手工数据；旧飞书环境变量及纷享独立配置表只作为一次性显式迁移输入，不得作为运行时真相，不执行 Production 迁移、目录同步、切源、外部写入或发布。",
       "feature_id": "F003",
       "allowed_paths": [
@@ -4991,7 +4986,9 @@
         "迁移保留source_id、external_identities和手工组织数据；旧环境变量/旧表无静默回读，冲突或不可解密配置失败关闭",
         "组织来源页以真实连接能力显示操作，无环境变量伪状态和无入口的同步按钮；未配置、未启用和停用状态可区分",
         "目标测试、受影响回归、typecheck/build和全量代码门禁通过；本批不声称目录同步、切源、Production或用户页面已交付"
-      ]
+      ],
+      "candidate": "47fdd1d322f1965b58272d5a66af766ffb6ce763",
+      "code_green_at": "2026-11-03T08:03:02.300Z"
     },
     "WP52": {
       "id": "WP52",

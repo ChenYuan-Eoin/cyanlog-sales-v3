@@ -1,17 +1,27 @@
 // REQ: F003 / WP50. Shared connection lifecycle; provider differences live in adapters.
 import { randomUUID } from 'node:crypto'
 import { supabaseAdmin } from '@/lib/supabase'
-import { getConnectionAdapter, adapters } from './adapters'
+import {
+  getConnectionAdapter,
+  getDirectoryAdapter,
+  getProviderAdapterCapabilities,
+  isConfigurableProvider,
+  listProviderCatalog,
+} from './adapters'
 import { decryptConnectionPayload, encryptConnectionPayload, SHARED_ENVELOPE } from './crypto'
 import { OrganizationConnectionError } from './errors'
+import {
+  assertUnifiedConnectionStorage,
+  detectConnectionStorageMode,
+  type ConnectionStorageMode,
+} from './storage'
 import type {
   AdapterContext,
-  ConfigurableProvider,
+  OrganizationConnectionProvider,
   ConnectionState,
   ConnectionSummary,
   DirectoryPreview,
   DraftCheckStatus,
-  OrganizationConnectionProvider,
   ProviderCapability,
 } from './types'
 
@@ -27,10 +37,22 @@ const COLUMNS = [
   'previous_effective_connection_state', 'lifecycle_audit', 'created_at', 'updated_at',
 ].join(',')
 
+const LEGACY_SOURCE_COLUMNS = [
+  'id', 'system_org_id', 'provider', 'external_tenant_id', 'priority', 'status',
+  'authority_scope', 'sync_mode', 'last_successful_sync_at', 'last_error',
+  'created_at', 'updated_at',
+].join(',')
+
+const LEGACY_FXIAOKE_COLUMNS = [
+  'system_org_id', 'app_id', 'expected_ea', 'api_user_id', 'credentials_ciphertext',
+  'revision', 'last_checked_at', 'last_check_status', 'last_error',
+  'preview_started_at', 'updated_by', 'updated_at',
+].join(',')
+
 type ConnectionRow = {
   id: string
   system_org_id: string
-  provider: ConfigurableProvider
+  provider: OrganizationConnectionProvider
   external_tenant_id: string
   priority: number
   status: 'draft' | 'active' | 'disabled'
@@ -62,6 +84,40 @@ type ConnectionRow = {
   updated_at: string
 }
 
+type StoredConnectionRow = ConnectionRow & {
+  storage_mode: ConnectionStorageMode
+}
+
+type LegacySourceRow = {
+  id: string
+  system_org_id: string
+  provider: OrganizationConnectionProvider
+  external_tenant_id: string
+  priority: number
+  status: 'draft' | 'active' | 'disabled'
+  authority_scope: Record<string, unknown>
+  sync_mode: 'read_only' | 'authoritative' | 'enrichment'
+  last_successful_sync_at: string | null
+  last_error: string | null
+  created_at: string
+  updated_at: string
+}
+
+type LegacyFxiaokeRow = {
+  system_org_id: string
+  app_id: string
+  expected_ea: string
+  api_user_id: string
+  credentials_ciphertext: string
+  revision: string
+  last_checked_at: string | null
+  last_check_status: 'not_checked' | 'preview_ready' | 'failed'
+  last_error: string | null
+  preview_started_at: string | null
+  updated_by: string | null
+  updated_at: string
+}
+
 type AuditEvent = {
   command: 'configured' | 'verified' | 'verification_failed' | 'promoted' | 'rolled_back' | 'disabled' | 'sync_failed' | 'sync_succeeded'
   actorId: string | null
@@ -76,14 +132,14 @@ function storageFailure() {
   return new OrganizationConnectionError('CONNECTION_STORAGE_UNAVAILABLE', '组织连接存储暂时不可用，请稍后重试。', 503)
 }
 
-function validateProvider(provider: string): ConfigurableProvider {
-  if (provider !== 'feishu' && provider !== 'fxiaoke') {
+function validateProvider(provider: string): OrganizationConnectionProvider {
+  if (!isConfigurableProvider(provider)) {
     throw new OrganizationConnectionError('PROVIDER_NOT_CONFIGURABLE', '该组织提供方尚未接入连接配置。', 400)
   }
   return provider
 }
 
-function context(row: Pick<ConnectionRow, 'id' | 'provider' | 'system_org_id'>): AdapterContext & { sourceId: string; provider: ConfigurableProvider } {
+function context(row: Pick<ConnectionRow, 'id' | 'provider' | 'system_org_id'>): AdapterContext & { sourceId: string; provider: OrganizationConnectionProvider } {
   return { sourceId: row.id, provider: row.provider, systemOrgId: row.system_org_id }
 }
 
@@ -92,22 +148,108 @@ function appendAudit(existing: unknown, event: AuditEvent) {
   return [...entries.slice(-49), event]
 }
 
-function normalizeRow(value: unknown): ConnectionRow {
+function normalizeRow(value: unknown, storageMode: ConnectionStorageMode = 'unified'): StoredConnectionRow {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw storageFailure()
-  return value as ConnectionRow
+  return { ...(value as ConnectionRow), storage_mode: storageMode }
 }
 
-async function rowsForOrganization(orgId: string, provider: ConfigurableProvider) {
+export function mapLegacyFxiaokeConnectionRow(source: LegacySourceRow, legacy: LegacyFxiaokeRow): StoredConnectionRow {
+  if (source.external_tenant_id !== legacy.expected_ea) {
+    throw new OrganizationConnectionError(
+      'CONNECTION_AMBIGUOUS',
+      '旧纷享连接与当前企业来源不一致，已停止自动选择。',
+      409,
+    )
+  }
+  const draftCheckStatus = legacy.last_check_status
+  const verified = draftCheckStatus === 'preview_ready' && source.status !== 'disabled'
+  const connectionState: ConnectionState = source.status === 'disabled'
+    ? 'disabled'
+    : verified
+      ? 'verified'
+      : draftCheckStatus === 'failed'
+        ? 'failed'
+        : 'configured'
+  const metadata = {
+    appId: legacy.app_id,
+    apiUserId: legacy.api_user_id,
+    expectedEa: legacy.expected_ea,
+  }
+  return {
+    id: source.id,
+    system_org_id: source.system_org_id,
+    provider: source.provider,
+    external_tenant_id: source.external_tenant_id,
+    priority: source.priority,
+    status: source.status,
+    authority_scope: source.authority_scope,
+    sync_mode: source.sync_mode,
+    configuration_revision: legacy.revision,
+    draft_credentials_ciphertext: legacy.credentials_ciphertext,
+    draft_credential_envelope: 'legacy-fxiaoke-v1',
+    draft_credential_schema_version: 1,
+    draft_metadata: metadata,
+    draft_check_status: draftCheckStatus,
+    draft_checked_at: legacy.last_checked_at,
+    verification_started_at: legacy.preview_started_at,
+    effective_revision: verified ? legacy.revision : null,
+    effective_credentials_ciphertext: verified ? legacy.credentials_ciphertext : null,
+    effective_credential_envelope: verified ? 'legacy-fxiaoke-v1' : null,
+    effective_metadata: verified ? metadata : {},
+    connection_state: connectionState,
+    last_verified_at: verified ? legacy.last_checked_at : null,
+    last_error: legacy.last_error || source.last_error,
+    last_error_at: draftCheckStatus === 'failed' ? legacy.last_checked_at : null,
+    previous_effective_revision: null,
+    previous_effective_credentials_ciphertext: null,
+    previous_effective_credential_envelope: null,
+    previous_effective_metadata: {},
+    previous_effective_connection_state: null,
+    lifecycle_audit: [],
+    created_at: source.created_at,
+    updated_at: legacy.updated_at || source.updated_at,
+    storage_mode: 'legacy_fxiaoke_read_only',
+  }
+}
+
+async function legacyRowsForOrganization(orgId: string, provider: OrganizationConnectionProvider) {
+  if (provider !== 'fxiaoke') return []
+  const sourceResult = await supabaseAdmin
+    .from('organization_sources')
+    .select(LEGACY_SOURCE_COLUMNS)
+    .eq('system_org_id', orgId)
+    .eq('provider', provider)
+  if (sourceResult.error) throw storageFailure()
+  const sources = (sourceResult.data || []).map((value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw storageFailure()
+    return value as LegacySourceRow
+  })
+  if (sources.length === 0) return []
+
+  const legacyResult = await supabaseAdmin
+    .from('organization_fxiaoke_connections')
+    .select(LEGACY_FXIAOKE_COLUMNS)
+    .eq('system_org_id', orgId)
+    .maybeSingle()
+  if (legacyResult.error) throw storageFailure()
+  if (!legacyResult.data) return []
+  const legacy = legacyResult.data as unknown as LegacyFxiaokeRow
+  return sources.map(source => mapLegacyFxiaokeConnectionRow(source, legacy))
+}
+
+async function rowsForOrganization(orgId: string, provider: OrganizationConnectionProvider) {
+  const storageMode = await detectConnectionStorageMode()
+  if (storageMode !== 'unified') return legacyRowsForOrganization(orgId, provider)
   const { data, error } = await supabaseAdmin
     .from('organization_sources')
     .select(COLUMNS)
     .eq('system_org_id', orgId)
     .eq('provider', provider)
   if (error) throw storageFailure()
-  return (data || []).map(normalizeRow)
+  return (data || []).map(value => normalizeRow(value, 'unified'))
 }
 
-async function findConnectionRow(orgId: string, provider: ConfigurableProvider) {
+async function findConnectionRow(orgId: string, provider: OrganizationConnectionProvider) {
   const rows = await rowsForOrganization(orgId, provider)
   const configured = rows.filter(row => Boolean(row.draft_credentials_ciphertext || row.effective_credentials_ciphertext))
   if (configured.length > 1) {
@@ -120,7 +262,7 @@ async function findConnectionRow(orgId: string, provider: ConfigurableProvider) 
   return rows[0] || null
 }
 
-async function rowBySource(orgId: string, provider: ConfigurableProvider, sourceId?: string) {
+async function rowBySource(orgId: string, provider: OrganizationConnectionProvider, sourceId?: string) {
   const row = await findConnectionRow(orgId, provider)
   if (!row) return null
   if (sourceId && row.id !== sourceId) return null
@@ -144,33 +286,24 @@ function decryptEffective(row: ConnectionRow) {
 }
 
 export function listOrganizationConnectionProviders(): ProviderCapability[] {
-  const providers: OrganizationConnectionProvider[] = ['fxiaoke', 'feishu', 'wecom', 'dingtalk']
-  return providers.map(provider => {
-    if (provider === 'fxiaoke' || provider === 'feishu') {
-      const adapter = adapters[provider]
-      return {
-        key: provider,
-        label: adapter.label,
-        configurable: true,
-        previewAvailable: adapter.previewAvailable,
-        syncAvailable: adapter.syncAvailable,
-        fields: adapter.fields,
-        unavailableReason: null,
-      }
-    }
+  return listProviderCatalog().map(entry => {
+    const capabilities = getProviderAdapterCapabilities(entry.key)
+    const adapter = capabilities.credentialVerification ? getConnectionAdapter(entry.key) : null
     return {
-      key: provider,
-      label: provider === 'wecom' ? '企业微信' : '钉钉',
-      configurable: false,
-      previewAvailable: false,
-      syncAvailable: false,
-      fields: [],
-      unavailableReason: '该组织提供方的连接器尚未接入统一配置。',
-    }
+      key: entry.key,
+      label: entry.label,
+      configurable: capabilities.credentialVerification,
+      previewAvailable: capabilities.directoryPreview,
+      syncAvailable: capabilities.directoryPreview,
+      ssoAvailable: capabilities.enterpriseLogin,
+      capabilities,
+      fields: adapter?.fields ?? [],
+      unavailableReason: adapter ? null : entry.unavailableReason,
+    } satisfies ProviderCapability
   })
 }
 
-export function toConnectionSummary(row: ConnectionRow): ConnectionSummary {
+export function toConnectionSummary(row: StoredConnectionRow): ConnectionSummary {
   const metadata = row.draft_metadata && Object.keys(row.draft_metadata).length
     ? row.draft_metadata
     : row.effective_metadata || {}
@@ -187,6 +320,7 @@ export function toConnectionSummary(row: ConnectionRow): ConnectionSummary {
     lastCheckedAt: row.draft_checked_at,
     lastVerifiedAt: row.last_verified_at,
     lastError: row.last_error,
+    storageMode: row.storage_mode,
   }
 }
 
@@ -203,6 +337,7 @@ export async function saveOrganizationConnection(input: {
   value: unknown
 }) {
   const provider = validateProvider(input.provider)
+  await assertUnifiedConnectionStorage()
   if (!input.value || typeof input.value !== 'object' || Array.isArray(input.value)) {
     throw new OrganizationConnectionError('INVALID_CONFIGURATION', '连接配置格式无效。', 400)
   }
@@ -300,6 +435,61 @@ export async function saveOrganizationConnection(input: {
   return toConnectionSummary(normalizeRow(result.data))
 }
 
+async function previewLegacyReadOnlyConnection(
+  row: StoredConnectionRow,
+  input: { orgId: string; provider: OrganizationConnectionProvider },
+): Promise<{ connection: ConnectionSummary; preview: DirectoryPreview }> {
+  const connectionAdapter = getConnectionAdapter(input.provider)
+  const directoryAdapter = getDirectoryAdapter(input.provider)
+  let connectionVerified = false
+  try {
+    const credentials = decryptDraft(row)
+    const verification = await connectionAdapter.verifyConnection(credentials, { systemOrgId: input.orgId })
+    connectionVerified = true
+    const verifiedCredentials = verification.credentialPatch
+      ? { ...credentials, ...verification.credentialPatch }
+      : credentials
+    const directory = await directoryAdapter.readDirectory(verifiedCredentials, { systemOrgId: input.orgId })
+    const state: ConnectionState = row.status === 'disabled'
+      ? 'disabled'
+      : row.effective_revision
+        ? row.connection_state
+        : 'verified'
+    return {
+      connection: toConnectionSummary({
+        ...row,
+        external_tenant_id: verification.externalTenantId,
+        draft_metadata: { ...row.draft_metadata, ...(verification.metadata || {}) },
+        draft_check_status: 'preview_ready',
+        draft_checked_at: directory.checkedAt,
+        connection_state: state,
+        last_verified_at: verification.checkedAt,
+        last_error: null,
+        last_error_at: null,
+      }),
+      preview: {
+        checkedAt: directory.checkedAt,
+        provider: input.provider,
+        externalTenantId: verification.externalTenantId,
+        complete: directory.complete,
+        scopeVerified: directory.scopeVerified,
+        scopeEvidence: directory.scopeEvidence,
+        departments: directory.departments,
+        employees: directory.employees,
+        warnings: directory.warnings,
+        applied: false,
+      },
+    }
+  } catch (error) {
+    if (error instanceof OrganizationConnectionError) throw error
+    throw new OrganizationConnectionError(
+      connectionVerified ? 'DIRECTORY_READ_FAILED' : 'CONNECTION_VERIFICATION_FAILED',
+      connectionVerified ? '应用连接已通过，但通讯录读取失败，请检查目录权限。' : '连接验证失败，请检查配置后重试。',
+      502,
+    )
+  }
+}
+
 export async function previewOrganizationConnection(input: {
   orgId: string
   actorId: string
@@ -311,7 +501,11 @@ export async function previewOrganizationConnection(input: {
   if (!row || row.configuration_revision !== input.revision) {
     throw new OrganizationConnectionError('CONFIG_CHANGED', '连接配置不存在或已修改，请重新读取后再验证。', 409)
   }
-  const adapter = getConnectionAdapter(provider)
+  if (row.storage_mode === 'legacy_fxiaoke_read_only') {
+    return previewLegacyReadOnlyConnection(row, { orgId: input.orgId, provider })
+  }
+  const connectionAdapter = getConnectionAdapter(provider)
+  const directoryAdapter = getDirectoryAdapter(provider)
   const now = new Date()
   const cutoff = new Date(now.getTime() - 60_000).toISOString()
   const lease = await supabaseAdmin
@@ -326,38 +520,71 @@ export async function previewOrganizationConnection(input: {
   if (lease.error) throw storageFailure()
   if (!lease.data) throw new OrganizationConnectionError('PREVIEW_BUSY', '正在验证或刚刚读取过通讯录，请一分钟后再试。', 429)
 
+  let connectionVerified = false
+  let audit = row.lifecycle_audit
   try {
     const credentials = decryptDraft(row)
-    const verified = await adapter.verify(credentials, { systemOrgId: input.orgId })
-    const verifiedCredentials = verified.credentialPatch ? { ...credentials, ...verified.credentialPatch } : credentials
-    const ciphertext = verified.credentialPatch
+    const verification = await connectionAdapter.verifyConnection(credentials, { systemOrgId: input.orgId })
+    connectionVerified = true
+    const verifiedCredentials = verification.credentialPatch
+      ? { ...credentials, ...verification.credentialPatch }
+      : credentials
+    const ciphertext = verification.credentialPatch
       ? encryptConnectionPayload({ sourceId: row.id, provider, systemOrgId: input.orgId }, verifiedCredentials)
       : row.draft_credentials_ciphertext
-    const metadata = { ...row.draft_metadata, ...(verified.metadata || {}) }
+    const metadata = { ...row.draft_metadata, ...(verification.metadata || {}) }
     const state: ConnectionState = row.status === 'disabled'
       ? 'disabled'
       : row.effective_revision
         ? row.connection_state
         : 'verified'
+    const connectionCheckedAt = verification.checkedAt
+
+    // Persist credential validity before the directory operation. A missing
+    // contact permission must not turn a valid application connection into a
+    // credential failure.
+    const connectionResult = await supabaseAdmin
+      .from('organization_sources')
+      .update({
+        external_tenant_id: verification.externalTenantId,
+        draft_credentials_ciphertext: ciphertext,
+        draft_credential_envelope: SHARED_ENVELOPE,
+        draft_metadata: metadata,
+        draft_check_status: 'not_checked',
+        draft_checked_at: connectionCheckedAt,
+        connection_state: state,
+        last_verified_at: connectionCheckedAt,
+        last_error: null,
+        last_error_at: null,
+        lifecycle_audit: appendAudit(row.lifecycle_audit, {
+          command: 'verified', actorId: input.actorId, occurredAt: connectionCheckedAt,
+          configurationRevision: input.revision, effectiveRevision: row.effective_revision,
+          state,
+        }),
+        updated_by: input.actorId,
+        updated_at: connectionCheckedAt,
+      })
+      .eq('id', row.id)
+      .eq('system_org_id', input.orgId)
+      .eq('configuration_revision', input.revision)
+      .select(COLUMNS)
+      .maybeSingle()
+    if (connectionResult.error || !connectionResult.data) {
+      throw new OrganizationConnectionError('CONFIG_CHANGED', '验证期间连接配置已改变，请重新验证。', 409)
+    }
+    const connectionRow = normalizeRow(connectionResult.data)
+    audit = connectionRow.lifecycle_audit
+
+    const directory = await directoryAdapter.readDirectory(verifiedCredentials, { systemOrgId: input.orgId })
     const completedAt = new Date().toISOString()
     const result = await supabaseAdmin
       .from('organization_sources')
       .update({
-        external_tenant_id: verified.externalTenantId,
-        draft_credentials_ciphertext: ciphertext,
-        draft_credential_envelope: SHARED_ENVELOPE,
-        draft_metadata: metadata,
         draft_check_status: 'preview_ready',
-        draft_checked_at: verified.checkedAt,
+        draft_checked_at: directory.checkedAt,
         verification_started_at: completedAt,
-        connection_state: state,
         last_error: null,
         last_error_at: null,
-        lifecycle_audit: appendAudit(row.lifecycle_audit, {
-          command: 'verified', actorId: input.actorId, occurredAt: completedAt,
-          configurationRevision: input.revision, effectiveRevision: row.effective_revision,
-          state,
-        }),
         updated_by: input.actorId,
         updated_at: completedAt,
       })
@@ -372,25 +599,32 @@ export async function previewOrganizationConnection(input: {
     return {
       connection: toConnectionSummary(normalizeRow(result.data)),
       preview: {
-        checkedAt: verified.checkedAt,
+        checkedAt: directory.checkedAt,
         provider,
-        externalTenantId: verified.externalTenantId,
-        departments: verified.departments || [],
-        employees: verified.employees || [],
-        warnings: verified.warnings || [],
+        externalTenantId: verification.externalTenantId,
+        complete: directory.complete,
+        scopeVerified: directory.scopeVerified,
+        scopeEvidence: directory.scopeEvidence,
+        departments: directory.departments,
+        employees: directory.employees,
+        warnings: directory.warnings,
         applied: false,
       },
     }
   } catch (error) {
     const safe = error instanceof OrganizationConnectionError
       ? error
-      : new OrganizationConnectionError('PREVIEW_FAILED', '连接验证失败，请检查配置后重试。', 502)
+      : new OrganizationConnectionError(
+          connectionVerified ? 'DIRECTORY_READ_FAILED' : 'CONNECTION_VERIFICATION_FAILED',
+          connectionVerified ? '应用连接已通过，但通讯录读取失败，请检查目录权限。' : '连接验证失败，请检查配置后重试。',
+          502,
+        )
     const failedAt = new Date().toISOString()
     const failedState: ConnectionState = row.status === 'disabled'
       ? 'disabled'
-      : row.effective_revision
-        ? row.connection_state
-        : 'failed'
+      : connectionVerified && !row.effective_revision
+        ? 'verified'
+        : row.connection_state
     await supabaseAdmin
       .from('organization_sources')
       .update({
@@ -400,7 +634,7 @@ export async function previewOrganizationConnection(input: {
         connection_state: failedState,
         last_error: safe.message,
         last_error_at: failedAt,
-        lifecycle_audit: appendAudit(row.lifecycle_audit, {
+        lifecycle_audit: appendAudit(audit, {
           command: 'verification_failed', actorId: input.actorId, occurredAt: failedAt,
           configurationRevision: input.revision, effectiveRevision: row.effective_revision,
           state: failedState, detail: safe.code,
@@ -440,7 +674,48 @@ export async function loadVerifiedConnection(input: {
   }
 }
 
-export async function listVerifiedConnectionOrganizationIds(provider: ConfigurableProvider, limit = 10) {
+async function legacyVerifiedOrganizationIds(
+  provider: OrganizationConnectionProvider,
+  limit: number,
+  identityAuthorityOnly: boolean,
+) {
+  if (provider !== 'fxiaoke') return []
+  let sourceQuery = supabaseAdmin
+    .from('organization_sources')
+    .select(LEGACY_SOURCE_COLUMNS)
+    .eq('provider', provider)
+    .neq('status', 'disabled')
+    .order('updated_at', { ascending: false })
+    .limit(100)
+  if (identityAuthorityOnly) sourceQuery = sourceQuery.eq('status', 'active')
+  const sourceResult = await sourceQuery
+  if (sourceResult.error) throw storageFailure()
+  const sourceIds = Array.from(new Set((sourceResult.data || [])
+    .filter(value => value && typeof value === 'object' && !Array.isArray(value))
+    .map(value => value as LegacySourceRow)
+    .filter(source => !identityAuthorityOnly || hasIdentityAuthority(source.authority_scope))
+    .map(source => source.system_org_id)))
+  if (sourceIds.length === 0) return []
+  const legacyResult = await supabaseAdmin
+    .from('organization_fxiaoke_connections')
+    .select('system_org_id')
+    .in('system_org_id', sourceIds)
+    .eq('last_check_status', 'preview_ready')
+    .order('updated_at', { ascending: false })
+    .limit(Math.max(1, Math.min(limit, 10)))
+  if (legacyResult.error) throw storageFailure()
+  return Array.from(new Set((legacyResult.data || [])
+    .map(value => value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as { system_org_id?: unknown }).system_org_id
+      : null)
+    .filter((value): value is string => typeof value === 'string')))
+}
+
+export async function listVerifiedConnectionOrganizationIds(provider: OrganizationConnectionProvider, limit = 10) {
+  const boundedLimit = Math.max(1, Math.min(limit, 10))
+  if (await detectConnectionStorageMode() !== 'unified') {
+    return legacyVerifiedOrganizationIds(provider, boundedLimit, false)
+  }
   const { data, error } = await supabaseAdmin
     .from('organization_sources')
     .select(COLUMNS)
@@ -449,9 +724,44 @@ export async function listVerifiedConnectionOrganizationIds(provider: Configurab
     .not('effective_revision', 'is', null)
     .neq('status', 'disabled')
     .order('updated_at', { ascending: false })
-    .limit(Math.max(1, Math.min(limit, 10)))
+    .limit(boundedLimit)
   if (error) throw storageFailure()
-  return Array.from(new Set((data || []).map(normalizeRow).map(row => row.system_org_id)))
+  return Array.from(new Set((data || []).map(value => normalizeRow(value)).map(row => row.system_org_id)))
+}
+
+export function hasIdentityAuthority(authorityScope: unknown) {
+  return Boolean(
+    authorityScope
+    && typeof authorityScope === 'object'
+    && !Array.isArray(authorityScope)
+    && (authorityScope as Record<string, unknown>).identity === 'authoritative',
+  )
+}
+
+export async function listIdentityAuthoritativeConnectionOrganizationIds(
+  provider: OrganizationConnectionProvider,
+  limit = 10,
+) {
+  const boundedLimit = Math.max(1, Math.min(limit, 10))
+  if (await detectConnectionStorageMode() !== 'unified') {
+    return legacyVerifiedOrganizationIds(provider, boundedLimit, true)
+  }
+  const { data, error } = await supabaseAdmin
+    .from('organization_sources')
+    .select(COLUMNS)
+    .eq('provider', provider)
+    .eq('status', 'active')
+    .eq('connection_state', 'verified')
+    .not('effective_revision', 'is', null)
+    .order('updated_at', { ascending: false })
+    .limit(boundedLimit)
+  if (error) throw storageFailure()
+  return Array.from(new Set(
+    (data || [])
+      .map(value => normalizeRow(value))
+      .filter(row => hasIdentityAuthority(row.authority_scope))
+      .map(row => row.system_org_id),
+  ))
 }
 
 export async function promoteOrganizationConnection(input: {
@@ -460,6 +770,7 @@ export async function promoteOrganizationConnection(input: {
   provider: string
   configurationRevision: string
 }) {
+  await assertUnifiedConnectionStorage()
   const provider = validateProvider(input.provider)
   const row = await rowBySource(input.orgId, provider)
   if (!row || row.configuration_revision !== input.configurationRevision) {
@@ -509,6 +820,7 @@ export async function rollbackOrganizationConnection(input: {
   provider: string
   effectiveRevision: string
 }) {
+  await assertUnifiedConnectionStorage()
   const provider = validateProvider(input.provider)
   const row = await rowBySource(input.orgId, provider)
   if (!row || row.effective_revision !== input.effectiveRevision || !row.previous_effective_revision) {
@@ -540,30 +852,4 @@ export async function rollbackOrganizationConnection(input: {
     .maybeSingle()
   if (result.error || !result.data) throw new OrganizationConnectionError('ROLLBACK_FAILED', '上一生效配置已改变，回滚未执行。', 409)
   return toConnectionSummary(normalizeRow(result.data))
-}
-
-export function legacyFeishuMigrationAvailable() {
-  return Boolean(process.env.FEISHU_APP_ID && process.env.FEISHU_APP_SECRET)
-}
-
-export async function migrateLegacyFeishuConnection(orgId: string, actorId: string) {
-  const appId = process.env.FEISHU_APP_ID
-  const appSecret = process.env.FEISHU_APP_SECRET
-  if (!appId || !appSecret) {
-    throw new OrganizationConnectionError('LEGACY_CONFIGURATION_MISSING', '没有可导入的旧飞书环境配置。', 404)
-  }
-  const existing = await loadOrganizationConnection(orgId, 'feishu')
-  if (existing?.configured) {
-    throw new OrganizationConnectionError(
-      'LEGACY_CONFIGURATION_ALREADY_IMPORTED',
-      '当前组织已有飞书共享连接草稿；请直接编辑草稿，不再重复导入部署环境配置。',
-      409,
-    )
-  }
-  return saveOrganizationConnection({
-    orgId,
-    actorId,
-    provider: 'feishu',
-    value: { appId, appSecret, revision: existing?.revision || null },
-  })
 }

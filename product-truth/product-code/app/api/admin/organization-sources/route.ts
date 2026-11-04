@@ -16,7 +16,6 @@ import {
   OrganizationSourceError,
   sortActiveOrganizationSources,
 } from '@/lib/organization-sources'
-import { legacyFeishuMigrationAvailable } from '@/lib/organization-connections'
 
 const DEFERRED_LIFECYCLE_MESSAGE = '当前版本只保存共享连接草稿并验证通讯录；启用、主来源切换、同步和停用将在目录差异确认批次开放。'
 
@@ -54,16 +53,10 @@ export async function GET(req: NextRequest) {
     try {
       const sources = await loadOrganizationSources(orgId)
       const activePrimary = sortActiveOrganizationSources(sources).find((source) => source.priority === 1) || null
-      const hasSharedFeishuConnection = sources.some(source => (
-        source.provider === 'feishu' && source.connectionState !== 'unconfigured'
-      ))
       return successResponse({
         sources,
         active_primary_source_id: activePrimary?.id || null,
         providers: listOrganizationSourceProviders(),
-        legacy_feishu_binding: !activePrimary && !hasSharedFeishuConnection && legacyFeishuMigrationAvailable() && process.env.FEISHU_ORG_ID === orgId
-          ? { provider: 'feishu', external_tenant_id: process.env.FEISHU_ORG_ID, migration_available: true }
-          : null,
       })
     } catch (error) {
       return sourceError(error)

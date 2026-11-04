@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
-import type { AIRuntimeOverview, ProductRecord, Config, ConfigPublishFeedback, OrgSummaryPayload, FeishuSyncFeedback } from '../types'
+import type { AIRuntimeOverview, ProductRecord, Config, ConfigPublishFeedback, OrgSummaryPayload } from '../types'
 import type { ContractPolicyRule } from '@/types/rules'
 import type { AIPlatformAssetKind } from '@/lib/configs/types'
 
@@ -37,6 +37,9 @@ const OrgStructureTab = dynamic(() => import('./OrgStructureTab'), {
       <CardSkeleton />
     </div>
   ),
+})
+const OrganizationSourcePanel = dynamic(() => import('./OrganizationSourcePanel').then(module => module.OrganizationSourcePanel), {
+  loading: () => <CardSkeleton />,
 })
 const RoleAccessTab = dynamic(() => import('./RoleAccessTab'), {
   loading: () => (
@@ -85,10 +88,8 @@ export interface TabsContentProps {
   onRefreshConfigs?: () => void | Promise<void>
   // org-structure
   orgSummary: OrgSummaryPayload | null
-  feishuSyncing: boolean
-  feishuFeedback: FeishuSyncFeedback | null
-  onFeishuSync: () => void | Promise<void>
   onRefreshOrg: () => void | Promise<void>
+  onOpenIntegrations?: () => void
   // role-access
   roles: Array<{
     id: string
@@ -130,10 +131,8 @@ export default function TabsContent({
   onDeleteConfig,
   onRefreshConfigs,
   orgSummary,
-  feishuSyncing,
-  feishuFeedback,
-  onFeishuSync,
   onRefreshOrg,
+  onOpenIntegrations,
   roles,
   savingRoleId,
   permissionsEditable,
@@ -145,7 +144,8 @@ export default function TabsContent({
   useEffect(() => {
     if (activeTab !== 'org-structure' && activeTab !== 'role-access') return
     const controller = new AbortController()
-    const token = localStorage.getItem('token')
+    let token: string | null = null
+    try { token = localStorage.getItem('token') } catch { token = null }
 
     void fetch('/api/auth/me', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -184,6 +184,7 @@ export default function TabsContent({
           </div>
         )
       case 'org-structure':
+      case 'integrations':
         return (
           <div className="space-y-4">
             <StatsSkeleton count={3} />
@@ -299,11 +300,15 @@ export default function TabsContent({
         <OrgStructureTab
           orgSummary={orgSummary}
           currentUserId={currentUserId}
-          feishuSyncing={feishuSyncing}
-          feishuFeedback={feishuFeedback}
-          onFeishuSync={onFeishuSync}
           onRefresh={onRefreshOrg}
+          onOpenIntegrations={onOpenIntegrations}
         />
+      )
+    case 'integrations':
+      return (
+        <div className="mx-auto w-full max-w-5xl">
+          <OrganizationSourcePanel onRefresh={onRefreshOrg} />
+        </div>
       )
     case 'role-access':
       return (

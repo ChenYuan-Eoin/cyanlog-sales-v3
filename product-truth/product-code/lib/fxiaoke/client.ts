@@ -2,7 +2,14 @@
 // https://developer.fxiaoke.com/openapi_v2/start/auth/app-info.html
 // https://developer.fxiaoke.com/openapi_v2/start/example/public.html
 import { randomUUID } from 'node:crypto'
-import { FxiaokeError, type Credentials, type DirectoryPreview, type VerifiedEmployeeIdentity } from './contracts'
+import {
+  FxiaokeError,
+  normalizeFxiaokeDepartmentStatus,
+  normalizeFxiaokePersonnelStatus,
+  type Credentials,
+  type DirectoryPreview,
+  type VerifiedEmployeeIdentity,
+} from './contracts'
 
 const ORIGIN = 'https://open.fxiaoke.com'
 const LIMIT = 100
@@ -26,7 +33,6 @@ function name(value: unknown): string {
   if (typeof value !== 'string' || !value.trim()) throw new FxiaokeError('INVALID_RESPONSE', '纷享记录缺少名称，本次预览未完成。', 502)
   return value.trim()
 }
-function status(value: unknown) { return typeof value === 'string' || typeof value === 'number' ? String(value) : 'unknown' }
 function optionalText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
@@ -80,10 +86,20 @@ export async function previewDirectory(credentials: Credentials, request: typeof
   const headers = { authorization: `Bearer ${token.accessToken}`, 'x-fs-ea': credentials.expectedEa, 'x-fs-userid': credentials.apiUserId }
   async function readAll(apiName: string, fields: string[]): Promise<Row[]> {
     const result: Row[] = []; const seen = new Set<string>(); let total: number | null = null
-    for (let offset = 0; offset <= MAX_RECORDS; offset += LIMIT) {
+    let cursor: string | null = null
+    for (let pageNumber = 0; pageNumber <= Math.ceil(MAX_RECORDS / LIMIT); pageNumber += 1) {
+      const filters = cursor === null
+        ? []
+        : [{ field_name: '_id', field_values: [cursor], operator: 'GT' }]
       const response = await post('/cgi/crm/v2/data/query', {
-        convertUserId: false, data: { dataObjectApiName: apiName, search_query_info: {
-          limit: LIMIT, offset, fieldProjection: fields, filters: [], orders: [],
+        convertUserId: false,
+        returnTotalNum: 1,
+        data: { dataObjectApiName: apiName, search_query_info: {
+          limit: LIMIT,
+          offset: 0,
+          fieldProjection: fields,
+          filters,
+          orders: [{ fieldName: '_id', isAsc: true }],
         } },
       }, headers)
       const page = object(response.data)
@@ -98,19 +114,73 @@ export async function previewDirectory(credentials: Credentials, request: typeof
       }
       if (result.length === total) return result
       if (result.length > total || page.dataList.length !== LIMIT) throw new FxiaokeError('INCOMPLETE_DIRECTORY', '通讯录分页未读取完整，不能将部分结果用于同步。', 409)
+      const nextCursor = id(object(page.dataList[page.dataList.length - 1])._id)
+      if (nextCursor === cursor) throw new FxiaokeError('INCOMPLETE_DIRECTORY', '通讯录分页游标没有前进，不能将部分结果用于同步。', 409)
+      cursor = nextCursor
     }
     throw new FxiaokeError('INCOMPLETE_DIRECTORY', '通讯录超出本次预览上限。', 409)
   }
   const departmentRows = await readAll('DepartmentObj', ['_id', 'name', 'parent_id', 'status'])
-  const employeeRows = await readAll('PersonnelObj', ['_id', 'user_id', 'name', 'main_department', 'status', 'is_pause_login'])
-  const departments = departmentRows.map(row => ({ id: id(row._id), name: name(row.name), parentId: ids(row.parent_id)[0] || null, status: status(row.status) }))
-  const employees = employeeRows.map(row => ({ id: id(row.user_id), name: name(row.name), departmentIds: ids(row.main_department), status: status(row.status), loginDisabled: typeof row.is_pause_login === 'boolean' ? row.is_pause_login : null }))
+  const employeeRows = await readAll('PersonnelObj', [
+    '_id', 'user_id', 'name', 'data_own_department', 'vice_departments',
+    'status', 'is_pause_login', 'employee_number', 'email', 'phone',
+  ])
+  const departments = departmentRows.map(row => ({
+    id: id(row._id),
+    name: name(row.name),
+    parentId: ids(row.parent_id)[0] || null,
+    status: normalizeFxiaokeDepartmentStatus(row.status),
+  }))
+  const employees = employeeRows.map(row => {
+    const primaryDepartmentIds = ids(row.data_own_department)
+    const departmentIds = [...new Set([
+      ...primaryDepartmentIds,
+      ...ids(row.vice_departments),
+    ])]
+    return {
+      id: id(row.user_id),
+      name: name(row.name),
+      departmentIds,
+      // PersonnelObj separates the single ownership field from supplementary
+      // memberships. Never infer ownership from array order or vice_departments.
+      primaryDepartmentId: primaryDepartmentIds.length === 1 ? primaryDepartmentIds[0] : null,
+      status: normalizeFxiaokePersonnelStatus(row.status),
+      loginDisabled: typeof row.is_pause_login === 'boolean' ? row.is_pause_login : null,
+      employeeNumber: optionalText(row.employee_number),
+      email: optionalText(row.email),
+      phone: optionalText(row.phone),
+    }
+  })
   if (new Set(employees.map(item => item.id)).size !== employees.length) throw new FxiaokeError('DUPLICATE_IDENTITY', '多个人员记录对应同一员工 ID，需先处理纷享人员数据。', 409)
   const departmentIds = new Set(departments.map(item => item.id))
-  const warnings = ['仅显示该员工有权读取的通讯录；分页读取完成不代表拥有全公司读取权限。', '本次为只读预览，尚未同步成员、授予寄件权限或切换主来源。']
+  const missingDepartmentParents = departments.some(item => item.parentId && !departmentIds.has(item.parentId))
+  const employeesMissingDepartments = employees.some(item => item.departmentIds.some(departmentId => !departmentIds.has(departmentId)))
+  const employeesWithoutDepartments = employees.filter(item => item.departmentIds.length === 0)
+  const employeesWithoutPrimaryDepartments = employees.filter(item => !item.primaryDepartmentId)
+  const unknownDepartmentStatuses = departments.filter(item => item.status === 'unknown')
+  const unknownEmployeeStatuses = employees.filter(item => item.status === 'unknown')
+  const unknownLoginStates = employees.filter(item => item.loginDisabled === null)
+  const complete = departments.length > 0
+    && employees.length > 0
+    && !missingDepartmentParents
+    && !employeesMissingDepartments
+    && employeesWithoutDepartments.length === 0
+    && employeesWithoutPrimaryDepartments.length === 0
+    && unknownDepartmentStatuses.length === 0
+    && unknownEmployeeStatuses.length === 0
+  const warnings = [
+    '仅显示该员工有权读取的通讯录；分页读取完成不代表拥有全公司读取权限，不能据此单独证明目录完整。',
+    '本次为只读检查，尚未同步成员、授予寄件权限或切换主来源。',
+  ]
   if (!departments.length || !employees.length) warnings.push('部门或员工结果为空，请先核对读取范围，不可据此停用系统成员。')
-  if (employees.some(item => item.departmentIds.some(departmentId => !departmentIds.has(departmentId)))) warnings.push('部分员工的主属部门不在可读取范围内，需补齐权限后再同步。')
-  return { ea: credentials.expectedEa, corpId: token.openUserId, checkedAt: new Date().toISOString(), departments, employees, warnings, visibility: 'authorized_scope', applied: false }
+  if (missingDepartmentParents) warnings.push('部分部门的上级不在可读取范围内，需补齐权限后再生成切源计划。')
+  if (employeesMissingDepartments) warnings.push('部分员工的部门关系不在可读取范围内，需补齐权限后再生成切源计划。')
+  if (employeesWithoutDepartments.length) warnings.push(`${employeesWithoutDepartments.length} 位员工没有部门关系，目录关系不完整。`)
+  if (employeesWithoutPrimaryDepartments.length) warnings.push(`${employeesWithoutPrimaryDepartments.length} 位员工没有唯一的归属部门；禁止从附属部门或数组顺序猜测主属关系。`)
+  if (unknownDepartmentStatuses.length) warnings.push(`${unknownDepartmentStatuses.length} 个部门的生命周期状态无法识别，切源将整批阻断。`)
+  if (unknownEmployeeStatuses.length) warnings.push(`${unknownEmployeeStatuses.length} 位员工的在职状态无法识别，切源将整批阻断。`)
+  if (unknownLoginStates.length) warnings.push(`${unknownLoginStates.length} 位员工的禁止登录状态未知；这些成员不能获得寄件权限。`)
+  return { ea: credentials.expectedEa, corpId: token.openUserId, checkedAt: new Date().toISOString(), departments, employees, complete, warnings, visibility: 'authorized_scope', applied: false }
 }
 
 /**
@@ -236,7 +306,7 @@ export async function readEmployeeIdentity(
     phone: optionalText(row.phone),
     employeeNumber: optionalText(row.employee_number),
     displayName: optionalText(row.full_name) || name(row.name),
-    status: status(row.status),
+    status: normalizeFxiaokePersonnelStatus(row.status),
     loginDisabled: typeof row.is_pause_login === 'boolean' ? row.is_pause_login : null,
     lifeStatus,
     deleted: row.is_deleted === true,
@@ -244,7 +314,7 @@ export async function readEmployeeIdentity(
   if (
     profile.deleted
     || profile.loginDisabled === true
-    || profile.status === '停用'
+    || profile.status !== 'active'
     || (profile.lifeStatus && profile.lifeStatus !== '正常')
   ) {
     throw new FxiaokeError('EMPLOYEE_INACTIVE', '当前纷享员工已停用、离职或不可登录。', 403)

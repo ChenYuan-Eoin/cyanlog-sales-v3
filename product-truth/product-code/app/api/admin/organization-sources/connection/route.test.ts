@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => {
     load: vi.fn(),
     save: vi.fn(),
     preview: vi.fn(),
-    importLegacy: vi.fn(),
+    storageMode: vi.fn(),
     OrganizationConnectionError,
   }
 })
@@ -39,8 +39,10 @@ vi.mock('@/lib/organization-connections', () => ({
   loadOrganizationConnection: mocks.load,
   saveOrganizationConnection: mocks.save,
   previewOrganizationConnection: mocks.preview,
-  migrateLegacyFeishuConnection: mocks.importLegacy,
   OrganizationConnectionError: mocks.OrganizationConnectionError,
+}))
+vi.mock('@/lib/organization-connections/storage', () => ({
+  detectConnectionStorageMode: mocks.storageMode,
 }))
 
 import { GET, POST } from './route'
@@ -51,6 +53,13 @@ const capability = {
   configurable: true,
   previewAvailable: true,
   syncAvailable: true,
+  ssoAvailable: false,
+  capabilities: {
+    credentialVerification: true,
+    directoryPreview: true,
+    directoryScopeProof: false,
+    enterpriseLogin: false,
+  },
   fields: [],
   unavailableReason: null,
 }
@@ -93,6 +102,13 @@ beforeEach(() => {
       configurable: false,
       previewAvailable: false,
       syncAvailable: false,
+      ssoAvailable: false,
+      capabilities: {
+        credentialVerification: false,
+        directoryPreview: false,
+        directoryScopeProof: false,
+        enterpriseLogin: false,
+      },
       fields: [],
       unavailableReason: '连接器尚未接入',
     },
@@ -100,7 +116,7 @@ beforeEach(() => {
   mocks.load.mockResolvedValue(connection)
   mocks.save.mockResolvedValue(connection)
   mocks.preview.mockResolvedValue({ connection, preview: { applied: false, departments: [], employees: [], warnings: [] } })
-  mocks.importLegacy.mockResolvedValue(connection)
+  mocks.storageMode.mockResolvedValue('unified')
 })
 
 describe('/api/admin/organization-sources/connection', () => {
@@ -108,7 +124,7 @@ describe('/api/admin/organization-sources/connection', () => {
     const response = await GET(request('GET', { provider: 'feishu' }))
 
     expect(response.status).toBe(200)
-    expect((await response.json()).data).toEqual({ provider: capability, connection })
+    expect((await response.json()).data).toEqual({ provider: capability, storage_mode: 'unified', connection })
     expect(mocks.defaultOrgId).toHaveBeenCalledWith('admin-1')
     expect(mocks.canManage).toHaveBeenCalledWith([{ scopeType: 'org', scopeId: 'org-1' }], 'org-1')
     expect(mocks.load).toHaveBeenCalledWith('org-1', 'feishu')
@@ -151,16 +167,6 @@ describe('/api/admin/organization-sources/connection', () => {
       provider: 'feishu',
       revision,
     })
-  })
-
-  it('imports legacy Feishu credentials only through an explicit action', async () => {
-    const response = await POST(request('POST', {
-      body: { action: 'import_legacy_feishu' },
-    }))
-
-    expect(response.status).toBe(200)
-    expect(mocks.importLegacy).toHaveBeenCalledWith('org-1', 'admin-1')
-    expect(mocks.save).not.toHaveBeenCalled()
   })
 
   it('rejects malformed, oversized and unknown requests before calling the service', async () => {

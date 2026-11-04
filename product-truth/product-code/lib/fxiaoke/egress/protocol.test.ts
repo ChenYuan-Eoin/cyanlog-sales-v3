@@ -68,10 +68,72 @@ it('rejects custom grants, extra secrets in URL, arbitrary headers and query obj
   expect(validRequest({ ...tokenRequest(), body: tokenRequest().body.replace('app_secret','authorization_code') })).toBe(false)
   const query = { url: tokenRequest().url.replace('/oauth2.0/token','/cgi/crm/v2/data/query'),
     headers: { 'content-type': 'application/json', authorization: 'Bearer fixture-token', 'x-fs-ea': 'enterprise', 'x-fs-userid': '123' },
-    body: JSON.stringify({ convertUserId: false, data: { dataObjectApiName: 'DepartmentObj', search_query_info: { limit: 100, offset: 0, fieldProjection: ['_id','name','parent_id','status'], filters: [], orders: [] } } }) }
+    body: JSON.stringify({ convertUserId: false, returnTotalNum: 1, data: { dataObjectApiName: 'DepartmentObj', search_query_info: { limit: 100, offset: 0, fieldProjection: ['_id','name','parent_id','status'], filters: [], orders: [{ fieldName: '_id', isAsc: true }] } } }) }
+  const body = JSON.parse(query.body)
   expect(validRequest(query)).toBe(true)
+  expect(validRequest({ ...query, body: JSON.stringify({
+    ...body,
+    data: { ...body.data, search_query_info: { ...body.data.search_query_info, filters: [{ field_name: '_id', field_values: ['100'], operator: 'GT' }] } },
+  }) })).toBe(true)
+  expect(validRequest({ ...query, body: JSON.stringify({ ...body, returnTotalNum: 2 }) })).toBe(false)
+  expect(validRequest({ ...query, body: JSON.stringify((({ returnTotalNum: _total, ...rest }) => rest)(body)) })).toBe(false)
+  expect(validRequest({ ...query, body: JSON.stringify({
+    ...body,
+    data: { ...body.data, search_query_info: { ...body.data.search_query_info, orders: [{ fieldName: '_id', isAsc: false }] } },
+  }) })).toBe(false)
+  expect(validRequest({ ...query, body: JSON.stringify({
+    ...body,
+    data: { ...body.data, search_query_info: { ...body.data.search_query_info, orders: [{ fieldName: 'name', isAsc: true }] } },
+  }) })).toBe(false)
   expect(validRequest({ ...query, body: query.body.replace('DepartmentObj','AccountObj') })).toBe(false)
   expect(validRequest({ ...query, body: query.body.replace('"offset":0','"offset":100000') })).toBe(false)
+})
+it('allows only the exact PersonnelObj directory projection and rejects arbitrary fields', () => {
+  const query = {
+    url: tokenRequest().url.replace('/oauth2.0/token','/cgi/crm/v2/data/query'),
+    headers: { 'content-type': 'application/json', authorization: 'Bearer fixture-token', 'x-fs-ea': 'enterprise', 'x-fs-userid': '123' },
+    body: JSON.stringify({
+      convertUserId: false,
+      returnTotalNum: 1,
+      data: {
+        dataObjectApiName: 'PersonnelObj',
+        search_query_info: {
+          limit: 100,
+          offset: 0,
+          fieldProjection: ['_id','user_id','name','data_own_department','vice_departments','status','is_pause_login','employee_number','email','phone'],
+          filters: [],
+          orders: [{ fieldName: '_id', isAsc: true }],
+        },
+      },
+    }),
+  }
+  expect(validRequest(query)).toBe(true)
+  expect(validRequest({ ...query, body: query.body.replace('vice_departments','password') })).toBe(false)
+  expect(validRequest({ ...query, body: query.body.replace('email','password') })).toBe(false)
+})
+it('keeps the previously deployed website protocol valid during worker rollout', () => {
+  const response = {
+    url: tokenRequest().url.replace('/oauth2.0/token','/cgi/crm/v2/data/query'),
+    headers: { 'content-type': 'application/json', authorization: 'Bearer fixture-token', 'x-fs-ea': 'enterprise', 'x-fs-userid': '123' },
+    body: JSON.stringify({
+      convertUserId: false,
+      data: {
+        dataObjectApiName: 'PersonnelObj',
+        search_query_info: {
+          limit: 100,
+          offset: 300,
+          fieldProjection: ['_id','user_id','name','main_department','status','is_pause_login'],
+          filters: [],
+          orders: [],
+        },
+      },
+    }),
+  }
+  expect(validRequest(response)).toBe(true)
+  expect(validRequest({ ...response, body: response.body.replace('"offset":300','"offset":350') })).toBe(false)
+  expect(validRequest({ ...response, body: response.body.replace('"offset":300','"offset":5100') })).toBe(false)
+  expect(validRequest({ ...response, body: response.body.replace('"main_department"','"data_own_department"') })).toBe(false)
+  expect(validRequest({ ...response, body: response.body.replace('"orders":[]','"orders":[{"fieldName":"_id","isAsc":true}]') })).toBe(false)
 })
 it('allows only the exact PersonnelObj identity lookup', () => {
   const query = {

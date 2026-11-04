@@ -1,5 +1,9 @@
 import { supabaseAdmin } from '@/lib/supabase'
-import { listOrganizationConnectionProviders, type ProviderCapability } from '@/lib/organization-connections'
+import {
+  listOrganizationConnectionProviders,
+  loadOrganizationConnection,
+  type ProviderCapability,
+} from '@/lib/organization-connections'
 
 export type OrganizationSourceStatus = 'draft' | 'active' | 'disabled'
 export type OrganizationSource = {
@@ -113,7 +117,7 @@ export function selectPrimaryOrganizationSource(
 export async function loadOrganizationSources(orgId: string): Promise<OrganizationSource[]> {
   const { data, error } = await supabaseAdmin
     .from('organization_sources')
-    .select('id, system_org_id, provider, external_tenant_id, priority, status, connection_state, configuration_revision, draft_check_status, authority_scope, sync_mode, last_successful_sync_at, last_error, created_at, updated_at')
+    .select('*')
     .eq('system_org_id', orgId)
     .order('priority', { ascending: true })
 
@@ -125,9 +129,25 @@ export async function loadOrganizationSources(orgId: string): Promise<Organizati
     )
   }
 
-  return (data || [])
+  const sources = (data || [])
     .map((value) => normalizeSource(value))
     .filter((source): source is OrganizationSource => Boolean(source))
+
+  // Production may still be on the legacy Fxiaoke connection table while the
+  // provider-neutral application code is deployed. Project that existing
+  // record into the same read model without writing to either table.
+  return Promise.all(sources.map(async source => {
+    if (source.connectionRevision || source.provider !== 'fxiaoke') return source
+    const compatibility = await loadOrganizationConnection(orgId, source.provider)
+    if (!compatibility) return source
+    return {
+      ...source,
+      connectionState: compatibility.state,
+      connectionRevision: compatibility.revision,
+      draftCheckStatus: compatibility.draftCheckStatus,
+      lastError: compatibility.lastError || source.lastError,
+    }
+  }))
 }
 
 export function validateOrganizationSourceBinding(input: {

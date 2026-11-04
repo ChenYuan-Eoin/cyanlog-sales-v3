@@ -26,7 +26,41 @@ export type ConnectionSummary = {
   lastError: string | null
 }
 export type DirectoryDepartment = { id: string; name: string; parentId: string | null; status: string }
-export type DirectoryEmployee = { id: string; name: string; departmentIds: string[]; status: string; loginDisabled: boolean | null }
+export type DirectoryLifecycleStatus = 'active' | 'inactive' | 'deleted' | 'unknown'
+
+function normalizedStatus(value: unknown): string {
+  return typeof value === 'string' || typeof value === 'number'
+    ? String(value).trim().toLowerCase()
+    : 'unknown'
+}
+
+// Fxiaoke select fields are returned as strings. Keep the wire-value mapping in
+// one place so directory sync and SSO cannot disagree about lifecycle state.
+export function normalizeFxiaokePersonnelStatus(value: unknown): DirectoryLifecycleStatus {
+  const normalized = normalizedStatus(value)
+  if (['0', 'active', 'enabled', '启用', '正常'].includes(normalized)) return 'active'
+  if (['1', 'inactive', 'disabled', 'resigned', 'frozen', '停用', '离职', '冻结'].includes(normalized)) return 'inactive'
+  return 'unknown'
+}
+
+export function normalizeFxiaokeDepartmentStatus(value: unknown): DirectoryLifecycleStatus {
+  const normalized = normalizedStatus(value)
+  if (['0', 'active', 'enabled', '启用', '正常'].includes(normalized)) return 'active'
+  if (['1', 'inactive', 'disabled', '停用'].includes(normalized)) return 'inactive'
+  if (['2', 'deleted', '删除'].includes(normalized)) return 'deleted'
+  return 'unknown'
+}
+export type DirectoryEmployee = {
+  id: string
+  name: string
+  departmentIds: string[]
+  primaryDepartmentId: string | null
+  status: string
+  loginDisabled: boolean | null
+  employeeNumber: string | null
+  email: string | null
+  phone: string | null
+}
 export type VerifiedEmployeeIdentity = {
   externalSubject: string
   phone: string | null
@@ -40,6 +74,7 @@ export type VerifiedEmployeeIdentity = {
 export type DirectoryPreview = {
   ea: string; corpId: string; checkedAt: string
   departments: DirectoryDepartment[]; employees: DirectoryEmployee[]
+  complete: boolean
   warnings: string[]; visibility: 'authorized_scope'; applied: false
 }
 export class FxiaokeError extends Error {

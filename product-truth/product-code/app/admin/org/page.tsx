@@ -2,14 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import dynamic from 'next/dynamic'
-import type { FeishuSyncFeedback, OrgSummaryPayload } from '@/app/configs/types'
-import { confirmAction } from '@/lib/toast'
-import {
-  buildFeishuErrorFeedback,
-  buildFeishuNetworkErrorFeedback,
-  buildFeishuSuccessFeedback,
-  type FeishuSyncResponse,
-} from '@/app/configs/feishu-sync-feedback'
+import type { OrgSummaryPayload } from '@/app/configs/types'
 
 const OrgStructureTab = dynamic(() => import('@/app/configs/tabs/OrgStructureTab'), {
   loading: () => (
@@ -30,8 +23,6 @@ export default function AdminOrgPage() {
   const [orgSummary, setOrgSummary] = useState<OrgSummaryPayload | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [feishuSyncing, setFeishuSyncing] = useState(false)
-  const [feishuFeedback, setFeishuFeedback] = useState<FeishuSyncFeedback | null>(null)
 
   const fetchOrgData = useCallback(async () => {
     setLoading(true)
@@ -61,32 +52,6 @@ export default function AdminOrgPage() {
     void fetchOrgData()
   }, [fetchOrgData])
 
-  const handleFeishuSync = useCallback(async () => {
-    if (!await confirmAction('从飞书导入组织架构？系统会刷新 source=feishu 的部门，并按可访问范围导入成员与主部门关系。', { confirmText: '开始导入' })) return
-    setFeishuSyncing(true)
-    setFeishuFeedback(null)
-
-    try {
-      const token = localStorage.getItem('token')
-      const res = await fetch('/api/access/feishu/sync', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      })
-      const data = await res.json().catch(() => ({})) as FeishuSyncResponse
-
-      if (res.ok) {
-        await fetchOrgData()
-        setFeishuFeedback(buildFeishuSuccessFeedback(data))
-      } else {
-        setFeishuFeedback(buildFeishuErrorFeedback(res.status, data))
-      }
-    } catch {
-      setFeishuFeedback(buildFeishuNetworkErrorFeedback())
-    } finally {
-      setFeishuSyncing(false)
-    }
-  }, [fetchOrgData])
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -105,9 +70,6 @@ export default function AdminOrgPage() {
         <OrgStructureTab
           orgSummary={orgSummary}
           currentUserId={currentUserId}
-          feishuSyncing={feishuSyncing}
-          feishuFeedback={feishuFeedback}
-          onFeishuSync={handleFeishuSync}
           onRefresh={fetchOrgData}
         />
       </div>

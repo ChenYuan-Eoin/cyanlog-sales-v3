@@ -9,11 +9,11 @@ import {
 import {
   listOrganizationConnectionProviders,
   loadOrganizationConnection,
-  migrateLegacyFeishuConnection,
   OrganizationConnectionError,
   previewOrganizationConnection,
   saveOrganizationConnection,
 } from '@/lib/organization-connections'
+import { detectConnectionStorageMode } from '@/lib/organization-connections/storage'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -52,6 +52,7 @@ export async function GET(req: NextRequest) {
     }
     return response({
       provider: capability,
+      storage_mode: await detectConnectionStorageMode(),
       connection: await loadOrganizationConnection(orgId, provider),
     })
   })
@@ -70,9 +71,6 @@ export async function POST(req: NextRequest) {
       throw new OrganizationConnectionError('INVALID_INPUT', '请求格式无效。', 400)
     }
 
-    if (body.action === 'import_legacy_feishu') {
-      return response({ connection: await migrateLegacyFeishuConnection(orgId, actorId) })
-    }
     const provider = typeof body.provider === 'string' ? body.provider : ''
     if (body.action === 'save') {
       return response({ connection: await saveOrganizationConnection({ orgId, actorId, provider, value: body.configuration }) })

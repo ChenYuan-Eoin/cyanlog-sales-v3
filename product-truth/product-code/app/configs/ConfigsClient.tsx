@@ -15,7 +15,7 @@ import {
   FileTextIcon,
 } from '@/components/icons'
 import { isAIRuntimeOverview } from './types'
-import type { AIRuntimeOverview, Config, ConfigPublishFeedback, ConfigsInitialData, EditableConfig, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup, FeishuSyncFeedback } from './types'
+import type { AIRuntimeOverview, Config, ConfigPublishFeedback, ConfigsInitialData, EditableConfig, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup } from './types'
 import { deleteBrowserCache, readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
 import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
@@ -26,12 +26,6 @@ import { isMaskedApiKey } from '@/lib/configs/runtime'
 import { isResolvedRuleContractComplete } from '@/lib/rules/rule-contract'
 import TabsContent from './tabs/TabsContent'
 import { confirmAction } from '@/lib/toast'
-import {
-  buildFeishuErrorFeedback,
-  buildFeishuNetworkErrorFeedback,
-  buildFeishuSuccessFeedback,
-  type FeishuSyncResponse,
-} from './feishu-sync-feedback'
 
 const ProductDialog = dynamic(() => import('./dialogs/ProductDialog'), {
   loading: () => null,
@@ -80,9 +74,15 @@ const CONFIG_TABS: Record<ConfigTabId, {
   },
   'org-structure': {
     label: '组织架构',
-    description: '维护部门、成员、销售空间与导入同步入口，作为权限与审批的组织基础。',
+    description: '维护当前生效的部门、成员和销售空间，作为权限与审批的组织基础。',
     section: 'org-access',
     icon: UsersIcon,
+  },
+  integrations: {
+    label: '外部系统接入',
+    description: '统一管理纷享、飞书等连接，并分别核对目录同步与企业登录能力。',
+    section: 'org-access',
+    icon: ShieldCheckIcon,
   },
   'role-access': {
     label: '角色权限',
@@ -203,8 +203,8 @@ const CONFIG_SECTIONS: Array<{
   {
     id: 'org-access',
     label: '组织与权限',
-    description: '部门、成员和角色权限。',
-    tabs: ['org-structure', 'role-access'],
+    description: '部门、成员、外部接入和角色权限。',
+    tabs: ['org-structure', 'integrations', 'role-access'],
   },
   {
     id: 'experience',
@@ -499,8 +499,6 @@ export default function ConfigsClient({
   // 角色权限（Tab: roles）
   const [roles, setRoles] = useState<ConfigRoleRecord[]>((initialData?.roles as ConfigRoleRecord[] | undefined) || [])
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null)
-  const [feishuSyncing, setFeishuSyncing] = useState(false)
-  const [feishuFeedback, setFeishuFeedback] = useState<FeishuSyncFeedback | null>(null)
   const [orgSummary, setOrgSummary] = useState<OrgSummaryPayload | null>(null)
   const [permissionsEditable, setPermissionsEditable] = useState(false)
   const [permissionsEditBlockReason, setPermissionsEditBlockReason] = useState<string | null>('正在确认当前组织的角色管理权限。')
@@ -926,6 +924,7 @@ export default function ConfigsClient({
     ai: groupPlatformConfigRevisions(getConfigsByType('AI_CONFIG')).length,
     theme: getConfigsByType('UI_THEME').length,
     'org-structure': orgSummary?.departments.length ?? 0,
+    integrations: 0,
     'role-access': roles.length,
     'business-params': 0,
     'product-versions': 0,
@@ -1062,31 +1061,6 @@ export default function ConfigsClient({
       setError('网络错误')
     } finally {
       setSavingRoleId(null)
-    }
-  }
-
-  // 飞书同步：同步部门树、成员和主部门关系；上游权限不足时服务端返回 partial。
-  async function handleFeishuSync() {
-    if (!await confirmAction('从飞书导入组织架构？系统会刷新 source=feishu 的部门，并按可访问范围导入成员与主部门关系。', { confirmText: '开始导入' })) return
-    setFeishuSyncing(true)
-    setFeishuFeedback(null)
-    try {
-      const token = localStorage.getItem('token')
-      const res = await fetch('/api/access/feishu/sync', {
-        method: 'POST',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      })
-      const data = await res.json().catch(() => ({})) as FeishuSyncResponse
-      if (res.ok) {
-        await refreshOrgSummary()
-        setFeishuFeedback(buildFeishuSuccessFeedback(data))
-      } else {
-        setFeishuFeedback(buildFeishuErrorFeedback(res.status, data))
-      }
-    } catch {
-      setFeishuFeedback(buildFeishuNetworkErrorFeedback())
-    } finally {
-      setFeishuSyncing(false)
     }
   }
 
@@ -1844,10 +1818,8 @@ export default function ConfigsClient({
                 onDeleteConfig={handleDeleteConfig}
                 onRefreshConfigs={() => refreshTabData(activeTab)}
                 orgSummary={orgSummary}
-                feishuSyncing={feishuSyncing}
-                feishuFeedback={feishuFeedback}
-                onFeishuSync={handleFeishuSync}
                 onRefreshOrg={refreshOrgSummary}
+                onOpenIntegrations={() => setActiveTab('integrations')}
                 roles={roles}
                 savingRoleId={savingRoleId}
                 permissionsEditable={permissionsEditable}
