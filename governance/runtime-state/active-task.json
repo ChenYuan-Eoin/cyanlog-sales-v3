@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-04T05:03:42Z",
+  "updated_at": "2026-11-04T08:42:04.214292Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -273,7 +273,7 @@
       "runtime_profile": "application",
       "runtime_contract_version": "f003-directory-cutover-v1",
       "production_database_mode": "read_only",
-      "note": "WP92仅办理提供方中立的目录快照、显式切源和原子回滚代码候选；Production数据库保持只读，目录写、切源、SSO、发布和承运商调用均未获授权。"
+      "note": "WP92目录切源代码候选已完成并通过全量门禁；用户明确授权将精确提交整合到main/production、更新现有固定出口worker并部署网站供阶段验收。Production数据库仍只读；不执行迁移、目录写入或切源、成员/角色写入、凭据变更或承运商调用。"
     },
     "acceptance_checks": [
       "目录预览从固定provider快照计算新增、更新、未变化、冲突和保留手工数据，并分别展示部门与身份映射结果",
@@ -294,7 +294,7 @@
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
     "started_at": "2026-11-03T08:03:02.300Z",
     "activation_basis": "IN-20261103-004, IN-20261103-006, IN-20261103-007",
-    "reason": "WP50已达到code_green；按已批准串行顺序激活其唯一后继WP92，准备目录差异预览、显式确认切源和原子回滚代码候选。"
+    "reason": "候选399894b7已完成目标、全量、lint、类型、构建与固定10项检查准备；按用户2026-11-04命令进入代码-only整合、Production部署与现有Chrome阶段验收，生产数据库保持只读。"
   },
   "execution_queue": {
     "active": {
