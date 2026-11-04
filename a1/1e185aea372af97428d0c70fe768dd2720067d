@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "activeId": "WP92",
+  "commit": "a11e185aea372af97428d0c70fe768dd2720067d",
+  "evidence": {
+    "code": {
+      "commit": "a11e185aea372af97428d0c70fe768dd2720067d",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "command": [
+            "pnpm",
+            "vitest",
+            "run",
+            "lib/organization-connections",
+            "--reporter=dot"
+          ],
+          "artifact_path": "wp92-storage-compat/target-tests.log",
+          "sha256": "4a963344f60a3943c91a80b5dc9e00340f65419ccb2e3f2b3051fa657de03ca2",
+          "log_sha256": "4a963344f60a3943c91a80b5dc9e00340f65419ccb2e3f2b3051fa657de03ca2",
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "name": "full_tests",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh"
+          ],
+          "artifact_path": "check-logs/29b997a27e00d9ffa03a798a7331e954faf7bab3/check-03-test.log",
+          "sha256": "146d1ea4c1e13ab155566998fe857d4a84d3d7f08f5cee2c9c6a250208cf058e",
+          "log_sha256": "146d1ea4c1e13ab155566998fe857d4a84d3d7f08f5cee2c9c6a250208cf058e",
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "name": "lint",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-02-lint.sh"
+          ],
+          "artifact_path": "check-logs/29b997a27e00d9ffa03a798a7331e954faf7bab3/check-02-lint.log",
+          "sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c",
+          "log_sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c",
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "name": "typecheck",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-01-typecheck.sh"
+          ],
+          "artifact_path": "check-logs/29b997a27e00d9ffa03a798a7331e954faf7bab3/check-01-typecheck.log",
+          "sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "name": "build",
+          "command": [
+            "pnpm",
+            "build"
+          ],
+          "artifact_path": "wp92-storage-compat/build.log",
+          "sha256": "5fdfb3c8e9219fc8230e43467824c0779d670480e9a52084a03c18984aa156e8",
+          "log_sha256": "5fdfb3c8e9219fc8230e43467824c0779d670480e9a52084a03c18984aa156e8",
+          "exit_code": 0,
+          "timeout": false
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "1ee8e9174d7483347d5aeb7ef3fa7e944e890aaaf01bab95051ee7b7e5d09f38",
+        "entry_sha256": "fb435e14a8b173710f82107130da9d01b0a981326b3f0372d0ee9b29dad1246a"
+      },
+      "summary": "Uses body-bearing PostgREST schema probes so the legacy Fxiaoke connection is read as a supported read-only compatibility mode instead of a storage outage; the WP92 migration setup test receives a bounded timeout for loaded full-suite execution.",
+      "boundary": "Code and local checks are green. Production remains read-only; no migration, directory write, source cutover, member/role write, credential change, or carrier call is authorized by this record."
+    }
+  },
+  "updatedAt": "2026-11-04T10:29:39.686Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-11-04T10:29:39.666Z",
+      "head": "a11e185aea372af97428d0c70fe768dd2720067d",
+      "originMain": "5afe465f0f0041354c0399726ef9bc9d358b090b",
+      "remoteMain": "5afe465f0f0041354c0399726ef9bc9d358b090b",
+      "remoteProduction": "5afe465f0f0041354c0399726ef9bc9d358b090b",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "9e1c3fd95fe00ef28dc5c70431c861cb8ae3d230",
+      "remoteAttestationRefOid": "9e1c3fd95fe00ef28dc5c70431c861cb8ae3d230",
+      "remoteSnapshotCheckedAt": "2026-11-04T10:29:37.133Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "560a87442f1e7da7a24007b7d4b8dfe2d20ff7ccb68cde70e01e0e5b6ea8e3f9",
+  "sealedAt": "2026-11-04T10:29:39.687Z",
+  "attestationDigest": "aec8db860e6191432ec0a921070351980110598660f3da74b3add7991df22d3a"
+}
