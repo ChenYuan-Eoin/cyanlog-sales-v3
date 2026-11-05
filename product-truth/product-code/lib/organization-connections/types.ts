@@ -48,6 +48,7 @@ export type ConnectionSummary = {
   draftCheckStatus: DraftCheckStatus
   configured: boolean
   effectiveVerified: boolean
+  effectiveRevision?: string | null
   metadata: Record<string, unknown>
   lastCheckedAt: string | null
   lastVerifiedAt: string | null

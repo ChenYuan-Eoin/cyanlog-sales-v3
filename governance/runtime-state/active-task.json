@@ -274,7 +274,11 @@
       "product-truth/product-code/scripts/organization-schema-gate.test.ts",
       ".github/workflows/organization-db-gates.yml",
       "product-truth/product-code/lib/fxiaoke/egress/directory-transport.ts",
-      "product-truth/product-code/lib/fxiaoke/egress/directory-transport.test.ts"
+      "product-truth/product-code/lib/fxiaoke/egress/directory-transport.test.ts",
+      "product-truth/product-code/app/api/admin/organization-sources/connection",
+      "product-truth/product-code/app/configs/tabs/OrganizationConnectionForm.test.tsx",
+      "AGENTS.md",
+      "product-truth/product-code/lib/organization-sources.ts"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -301,7 +305,7 @@
       "runtime_profile": "application",
       "runtime_contract_version": "f003-directory-cutover-v2",
       "production_database_mode": "read_only",
-      "note": "code_green是当前开发状态。IN-20261105-007独立批准发布、两项迁移及计划生成，不代表完整组织目录业务验收，不推进WP53；真实目录应用仍未授权。",
+      "note": "code_green为既有候选状态；IN-20261105-014批准完整目录应用及回读，运行事实单独留存。WP92-M2连接生效缺口未关闭，不推进WP53。",
       "production_release_authorization": {
         "status": "approved_release_migrations_and_plan_only",
         "approval_id": "IN-20261105-007",
@@ -320,7 +324,8 @@
           "rename_or_rebind_organization",
           "login_or_role_grants",
           "fxiaoke_crm_writes"
-        ]
+        ],
+        "subsequent_data_approval": "IN-20261105-014：73部门、405待关联员工及589部门归属整体应用；不包含角色或登录授权。"
       },
       "required_database_release_checks": [
         "fresh_production_ddl_diff",
@@ -338,14 +343,15 @@
       "不修改登录启停、密码、角色或业务许可；不自动把目录状态解释为登录启停；手工和旧来源资料保留",
       "本地/隔离开发检查与正式站真实同步分别记录；仅精确发布版本及现有Chrome联动回读通过才关闭业务阶段",
       "IN-20261105-009：生产同源DDL版本化，发布前通过DDL差异、同构迁移演练、约束/触发器集成测试及SQL review四道门禁；CI自动比对，失败禁止发布。",
-      "IN-20261105-012：可选接入主机不可用时，已有组织架构仍可查看和管理；可用的直接读取路径可继续同步，所有读取路径均失败时明确本次未完成、保留已生效数据并允许重试，不返回空目录冒充成功。"
+      "IN-20261105-012：可选接入主机不可用时，已有组织架构仍可查看和管理；可用的直接读取路径可继续同步，所有读取路径均失败时明确本次未完成、保留已生效数据并允许重试，不返回空目录冒充成功。",
+      "IN-20261105-020/021/022：开发前按改动规模回溯相关案例并优先复用，允许跨轮分步实现；准备开放或宣称本次用户任务完成时，核对必要步骤、状态与关键异常出口；尚未完成不构成停工或无限扩大范围的理由。"
     ],
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
     "activation_basis": "IN-20261105-004",
     "blocking_items": [
-      "已批准候选发布、既有转发程序更新、两项必要迁移及差异生成；真实部门/人员应用等待差异审查后的独立确认。",
       "系统组织与外部企业的显示资料对应须在真实同步前明确，不按名称自动新建或改绑组织",
-      "IN-20261105-012：允许具备实证降级路径的轻度依赖；主机关机不得阻断已有组织架构查看和管理。验证网站直连及来源读取失败处理后，再决定是否保留既有转发，不新增常驻基础设施或付费出口。"
+      "IN-20261105-012：允许具备实证降级路径的轻度依赖；主机关机不得阻断已有组织架构查看和管理。验证网站直连及来源读取失败处理后，再决定是否保留既有转发，不新增常驻基础设施或付费出口。",
+      "WP92-M2：连接草稿验证与生效状态未闭合；补齐明确的目录连接启用及刷新回读，不得随目录启用授予企业登录或账号权限。"
     ],
     "non_goals": [
       "SSO、登录、寄件、AI、下单",
@@ -356,7 +362,27 @@
     "started_at": "2026-11-04T11:07:29.936Z",
     "reason": "用户指出组织架构是整体级联关系；撤回部门/员工分批交付，复用原WP92整批快照、差异与事务。",
     "scope_revision_basis": "IN-20261105-004",
-    "business_exit": "production_released_with_whole_directory_sync_and_linked_org_readback"
+    "business_exit": "production_released_with_whole_directory_sync_and_linked_org_readback",
+    "product_path_contract": {
+      "authority": [
+        "IN-20261105-020",
+        "IN-20261105-021",
+        "IN-20261105-022"
+      ],
+      "rule": "开发前看与本次改动相关的案例并优先复用；允许跨轮分步实现，准备开放或宣称用户任务完成时才按承诺范围核对闭环。",
+      "reference": "product-truth/feature-packets/F003-account-auth.md#2026-11-05-案例回溯复用与操作闭环红线",
+      "development_entry": [
+        "relevant_case_and_topology_review",
+        "proportionate_existing_implementation_and_reuse_assessment"
+      ],
+      "release_veto": [
+        "blocking_dead_end_in_declared_release_task",
+        "status_behavior_conflict_in_declared_release_task",
+        "missing_required_case_replay_for_claimed_completion"
+      ],
+      "runtime_evidence": "wp92-native-organization-correction/product-path-closure-review.md",
+      "boundary": "一轮上下文、一次提交、内部步骤不等于业务交付。未完成不阻止范围内继续开发，记录进度/未做/依赖/下一步。未开放能力及非必要增强可后补，不要求WP92提前完成WP53；红线不自动冻结其他独立范围。"
+    }
   },
   "execution_queue": {
     "active": {

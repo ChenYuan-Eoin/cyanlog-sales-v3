@@ -12,6 +12,7 @@ import {
   OrganizationConnectionError,
   previewOrganizationConnection,
   saveOrganizationConnection,
+  activateDirectoryConnection,
 } from '@/lib/organization-connections'
 import { detectConnectionStorageMode } from '@/lib/organization-connections/storage'
 
@@ -78,6 +79,11 @@ export async function POST(req: NextRequest) {
     if (body.action === 'preview' && typeof body.revision === 'string' && UUID.test(body.revision)) {
       return response(await previewOrganizationConnection({ orgId, actorId, provider, revision: body.revision }))
     }
-    throw new OrganizationConnectionError('INVALID_ACTION', '请选择保存配置或验证通讯录。', 400)
+    if (body.action === 'activate_directory' && typeof body.revision === 'string' && UUID.test(body.revision)) {
+      return response({ connection: await activateDirectoryConnection({
+        orgId, actorId, provider, configurationRevision: body.revision,
+      }) })
+    }
+    throw new OrganizationConnectionError('INVALID_ACTION', '请选择保存配置、检查连接或启用目录连接。', 400)
   })
 }

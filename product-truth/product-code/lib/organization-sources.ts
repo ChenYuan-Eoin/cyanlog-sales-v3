@@ -15,6 +15,8 @@ export type OrganizationSource = {
   status: OrganizationSourceStatus
   connectionState: 'unconfigured' | 'configured' | 'verified' | 'failed' | 'disabled'
   connectionRevision: string
+  effectiveConnectionRevision?: string | null
+  connectionConfigured?: boolean
   draftCheckStatus: 'not_checked' | 'preview_ready' | 'failed'
   authorityScope: Record<string, unknown>
   syncMode: 'read_only' | 'authoritative' | 'enrichment'
@@ -71,6 +73,8 @@ function normalizeSource(value: unknown): OrganizationSource | null {
       ? row.connection_state as OrganizationSource['connectionState']
       : 'unconfigured',
     connectionRevision: typeof row.configuration_revision === 'string' ? row.configuration_revision : '',
+    effectiveConnectionRevision: typeof row.effective_revision === 'string' ? row.effective_revision : null,
+    connectionConfigured: Boolean(row.draft_credentials_ciphertext || row.effective_credentials_ciphertext),
     draftCheckStatus: ['not_checked', 'preview_ready', 'failed'].includes(String(row.draft_check_status))
       ? row.draft_check_status as OrganizationSource['draftCheckStatus']
       : 'not_checked',
@@ -144,6 +148,8 @@ export async function loadOrganizationSources(orgId: string): Promise<Organizati
       ...source,
       connectionState: compatibility.state,
       connectionRevision: compatibility.revision,
+      effectiveConnectionRevision: compatibility.effectiveRevision || null,
+      connectionConfigured: compatibility.configured,
       draftCheckStatus: compatibility.draftCheckStatus,
       lastError: compatibility.lastError || source.lastError,
     }

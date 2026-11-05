@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 
 const toast = vi.hoisted(() => ({
@@ -51,13 +51,15 @@ const providers = [
 ]
 
 const source = {
-  id: 'source-1',
+  id: 'source-2',
   provider: 'feishu',
   externalTenantId: 'tenant-1',
   priority: 1,
   status: 'active',
   connectionState: 'verified',
-  connectionRevision: 'revision-1',
+  connectionRevision: '00000000-0000-4000-8000-000000000002',
+  effectiveConnectionRevision: '00000000-0000-4000-8000-000000000002',
+  connectionConfigured: true,
   draftCheckStatus: 'preview_ready',
   authorityScope: { identity: 'authoritative', organization: 'authoritative', directory: 'authoritative' },
   syncMode: 'authoritative',
@@ -106,6 +108,97 @@ function json(data: unknown, status = 200) {
 }
 
 describe('OrganizationSourcePanel', () => {
+  it('ignores a late directory response from a provider that is no longer selected', async () => {
+    let finishOldRead: (response: Response) => void = () => {}
+    const oldRead = new Promise<Response>(resolve => { finishOldRead = resolve })
+    let feishuReads = 0
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/directory?provider=fxiaoke')) return oldRead
+      if (url.includes('/directory?provider=feishu')) {
+        feishuReads++
+        return json({ data: { plan: null } })
+      }
+      return json({ data: { sources: [source], providers } })
+    }))
+    render(<OrganizationSourcePanel />)
+    await screen.findByText('tenant-1')
+    fireEvent.click(screen.getByRole('button', { name: /^纷享销客/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^飞书/ }))
+    await waitFor(() => expect(feishuReads).toBe(2))
+    await act(async () => { finishOldRead(json({ data: { plan: plan({ provider: 'fxiaoke' }) } })); await oldRead })
+    expect(screen.getByRole('button', { name: /^飞书/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByTestId('directory-cutover-plan')).not.toBeInTheDocument()
+  })
+
+  it('shows a checked legacy source as not enabled without claiming that its applied directory disappeared', async () => {
+    const disabled = { ...source, status: 'disabled', connectionState: 'disabled', effectiveConnectionRevision: null,
+      lastSuccessfulSyncAt: '2026-11-05T05:49:31Z' }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
+      ? json({ data: { plan: null } }) : json({ data: { sources: [disabled], providers } })))
+    render(<OrganizationSourcePanel />)
+    expect(await screen.findByText('配置检查通过', { exact: true })).toBeInTheDocument()
+    expect(screen.getAllByText('目录连接未启用', { exact: true }).length).toBeGreaterThan(0)
+    expect(screen.queryByText('已停用', { exact: true })).not.toBeInTheDocument()
+    expect(screen.getByText(/最近应用/)).toBeInTheDocument()
+    expect(screen.getByText(/已同步的部门、员工和归属仍保留/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '飞书启用目录连接后可用' })).toBeDisabled()
+  })
+
+  it('requires a new draft to become effective before reading or applying another directory plan', async () => {
+    const changed = { ...source, connectionRevision: 'new-revision' }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
+      ? json({ data: { plan: plan() } }) : json({ data: { sources: [changed], providers } })))
+    render(<OrganizationSourcePanel />)
+    await screen.findByText('配置已改变 · 需重新生成差异')
+    expect(screen.queryByRole('button', { name: '确认切换目录主来源' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '读取组织目录并生成差异' })).not.toBeInTheDocument()
+    expect(screen.getByText('沿用上一份配置', { exact: true })).toBeInTheDocument()
+  })
+
+  it('does not label an expired plan executable and keeps regeneration available', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
+      ? json({ data: { plan: plan({ expiresAt: '2020-01-01T00:00:00Z' }) } })
+      : json({ data: { sources: [source], providers } })))
+    render(<OrganizationSourcePanel />)
+    await screen.findByText('差异计划已过期')
+    expect(screen.queryByText('差异计划可执行')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '确认切换目录主来源' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '读取组织目录并生成差异' })).toBeEnabled()
+  })
+
+  it('keeps directory read failures unknown and retries without losing saved connection state', async () => {
+    let directoryReads = 0
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/directory')) {
+        directoryReads++
+        return directoryReads === 1 ? json({ error: '同步记录暂不可用' }, 503) : json({ data: { plan: null } })
+      }
+      return json({ data: { sources: [source], providers } })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    render(<OrganizationSourcePanel />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('当前同步记录未知')
+    expect(screen.getByText('配置检查通过', { exact: true })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '重新读取同步记录后可用' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: '重新读取同步记录' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '读取组织目录并生成差异' })).toBeEnabled())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(directoryReads).toBe(2)
+  })
+
+  it('cancels confirmation without posting or hiding the current plan', async () => {
+    toast.confirmAction.mockResolvedValue(false)
+    const fetcher = vi.fn(async (input: RequestInfo | URL, _options?: RequestInit) => String(input).includes('/directory')
+      ? json({ data: { plan: plan() } }) : json({ data: { sources: [source], providers } }))
+    vi.stubGlobal('fetch', fetcher)
+    render(<OrganizationSourcePanel />)
+    fireEvent.click(await screen.findByRole('button', { name: '确认切换目录主来源' }))
+    await waitFor(() => expect(toast.confirmAction).toHaveBeenCalledOnce())
+    expect(fetcher.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+    expect(screen.getByText('差异计划可执行')).toBeInTheDocument()
+  })
+
   it('keeps a failed source read unknown, renders structured API errors and retries only on request', async () => {
     const message = '组织来源操作失败。'
     const fetchMock = vi.fn(async (_input?: RequestInfo | URL) => json({ success: false, error: { code: 'INTERNAL_ERROR', message } }, 500))
@@ -176,7 +269,7 @@ describe('OrganizationSourcePanel', () => {
     expect(screen.getAllByText(/企业单点登录/).length).toBeGreaterThan(0)
     expect(screen.getByText('身份映射与寄件授权')).toBeInTheDocument()
     expect(screen.getByText(/寄件授权未验收/)).toBeInTheDocument()
-    expect(screen.getAllByText('连接已验证').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('配置检查通过').length).toBeGreaterThan(0)
     expect(screen.queryByText('已验证并启用')).not.toBeInTheDocument()
     expect(screen.getByText(/待目录差异计划 · 寄件授权未验收/)).toBeInTheDocument()
     expect(screen.getByText('手工维护')).toBeInTheDocument()

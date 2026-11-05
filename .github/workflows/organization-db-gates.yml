@@ -66,6 +66,7 @@ jobs:
           lib/organization-connections/schema-baseline/database.test.ts
           lib/organization-connections/unified-connection-migration.test.ts
           lib/organization-connections/organization-directory-cutover-migration.test.ts
+          lib/organization-connections/directory-connection-activation.test.ts
       - name: Compare fresh Production DDL before a release
         if: github.event_name == 'workflow_dispatch'
         env:

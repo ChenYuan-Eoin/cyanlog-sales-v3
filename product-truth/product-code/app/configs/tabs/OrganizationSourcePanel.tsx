@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { confirmAction, error, success } from '@/lib/toast'
 import type { OrganizationConnectionProvider, ProviderCapability } from '@/lib/organization-connections/types'
 import type { DirectoryCutoverClientPlan } from '@/lib/organization-connections/directory-cutover'
+import { connectionPresentation } from '@/lib/organization-connections/presentation'
 import { OrganizationConnectionForm } from './OrganizationConnectionForm'
 import { DirectoryInspectionPanel } from './DirectoryInspectionPanel'
 
@@ -34,6 +35,8 @@ type Source = {
   status: SourceStatus
   connectionState: ConnectionState
   connectionRevision: string
+  effectiveConnectionRevision?: string | null
+  connectionConfigured?: boolean
   draftCheckStatus: DraftCheckStatus
   authorityScope: Record<string, unknown>
   syncMode: SyncMode
@@ -71,24 +74,28 @@ function authHeaders(withJson = false): HeadersInit {
   }
 }
 
+function sourcePresentation(source: Source | null | undefined) {
+  return connectionPresentation(source ? {
+    configured: source.connectionConfigured ?? Boolean(source.connectionRevision),
+    state: source.connectionState,
+    revision: source.connectionRevision,
+    effectiveRevision: source.effectiveConnectionRevision,
+    effectiveVerified: Boolean(source.status === 'active' && source.connectionState === 'verified'
+      && source.effectiveConnectionRevision),
+    draftCheckStatus: source.draftCheckStatus,
+  } : null)
+}
+
 function sourceStateLabel(source: Source | undefined) {
-  if (!source || source.connectionState === 'unconfigured') return '未配置'
-  if (source.connectionState === 'disabled' || source.status === 'disabled') return '已停用'
-  if (source.draftCheckStatus === 'failed') {
-    return source.connectionState === 'verified' ? '连接已验证 · 目录读取失败' : '连接验证失败'
-  }
-  if (source.connectionState === 'failed') return '验证失败'
-  if (source.connectionState === 'verified') {
-    if (source.draftCheckStatus === 'preview_ready') return '连接已验证'
-    return '连接已验证 · 新草稿待验证'
-  }
-  return '连接已保存 · 待验证'
+  if (!source) return '未配置'
+  const presentation = sourcePresentation(source)
+  return `${presentation.checkLabel} · ${presentation.directoryLabel}`
 }
 
 function providerBadgeVariant(source: Source | undefined): 'default' | 'secondary' | 'outline' | 'destructive' {
   if (!source || source.connectionState === 'unconfigured') return 'outline'
-  if (source.connectionState === 'failed' || source.draftCheckStatus === 'failed') return 'destructive'
-  if (source.connectionState === 'verified') return 'default'
+  if (source.draftCheckStatus === 'failed') return 'destructive'
+  if (sourcePresentation(source).currentConfigurationEnabled) return 'default'
   return 'secondary'
 }
 
@@ -140,10 +147,14 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
   const [directoryAvailability, setDirectoryAvailability] = useState<DirectoryAvailability | null>(null)
   const [loading, setLoading] = useState(true)
   const [sourceReadError, setSourceReadError] = useState('')
+  const [directoryReadError, setDirectoryReadError] = useState('')
+  const [directoryLoading, setDirectoryLoading] = useState(false)
+  const directoryReadGeneration = useRef(0)
   const [directoryAction, setDirectoryAction] = useState<DirectoryAction>(null)
   const [inspectionGeneration, setInspectionGeneration] = useState(0)
 
   const load = useCallback(async () => {
+    const generation = ++directoryReadGeneration.current
     setLoading(true)
     setSourceReadError('')
     let sourcesLoaded = false
@@ -157,6 +168,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
       const nextSources = sourceBody.data.sources
       const nextProviders = sourceBody.data.providers
       const activeSource = primaryDirectorySource(nextSources)
+      if (generation !== directoryReadGeneration.current) return
       const currentProvider = selectedProviderRef.current
       const configurableProviderKeys = new Set(
         nextProviders
@@ -182,6 +194,8 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
       setSelectedProvider(preferredProvider)
       selectedProviderRef.current = preferredProvider
       setLatestPlan(null)
+      setDirectoryAvailability(null)
+      setDirectoryReadError('')
       sourcesLoaded = true
 
       if (preferredProvider) {
@@ -197,22 +211,33 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
           error?: string
         }
         if (!directoryResponse.ok) throw new Error(directoryBody.error || '目录切源状态读取失败。')
+        if (!directoryBody.data || !('plan' in directoryBody.data)) throw new Error('同步记录读取结果不完整，请重新读取。')
+        if (generation !== directoryReadGeneration.current) return
         setDirectoryAvailability(directoryBody.data?.directory_cutover || null)
         setLatestPlan(directoryBody.data?.plan || null)
       }
     } catch (readError) {
+      if (generation !== directoryReadGeneration.current) return
       const message = readError instanceof Error ? readError.message : '组织来源读取失败。'
       if (!sourcesLoaded) setSourceReadError(message)
+      else setDirectoryReadError(message)
       error(message)
     } finally {
-      setLoading(false)
+      if (generation === directoryReadGeneration.current) {
+        setLoading(false)
+        setDirectoryLoading(false)
+      }
     }
   }, [])
 
   async function selectProvider(provider: OrganizationConnectionProvider) {
+    const generation = ++directoryReadGeneration.current
     selectedProviderRef.current = provider
     setSelectedProvider(provider)
     setLatestPlan(null)
+    setDirectoryAvailability(null)
+    setDirectoryReadError('')
+    setDirectoryLoading(true)
     try {
       const response = await fetch(
         `/api/admin/organization-sources/directory?provider=${encodeURIComponent(provider)}`,
@@ -226,10 +251,17 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
         error?: string
       }
       if (!response.ok) throw new Error(body.error || '目录切源状态读取失败。')
+      if (!body.data || !('plan' in body.data)) throw new Error('同步记录读取结果不完整，请重新读取。')
+      if (generation !== directoryReadGeneration.current) return
       setDirectoryAvailability(body.data?.directory_cutover || null)
       setLatestPlan(body.data?.plan || null)
     } catch (readError) {
-      error(readError instanceof Error ? readError.message : '目录切源状态读取失败。')
+      if (generation !== directoryReadGeneration.current) return
+      const message = readError instanceof Error ? readError.message : '目录切源状态读取失败。'
+      setDirectoryReadError(message)
+      error(message)
+    } finally {
+      if (generation === directoryReadGeneration.current) setDirectoryLoading(false)
     }
   }
 
@@ -245,7 +277,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
 
   async function previewDirectory() {
     const provider = selectedProviderRef.current
-    if (!provider) return
+    if (!provider || !directoryReady || directoryAction !== null) return
     const providerLabel = providers.find(item => item.key === provider)?.label || provider
     setDirectoryAction('preview')
     try {
@@ -259,6 +291,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
         error?: string
       }
       if (!response.ok || !body.data?.plan) throw new Error(body.error || `${providerLabel}目录差异生成失败。`)
+      if (selectedProviderRef.current !== provider) return
       setLatestPlan(body.data.plan)
       success(body.data.plan.applyable ? '目录差异计划已生成，请核对后明确确认。' : '差异计划已生成，但仍有冲突，当前不能切换。')
     } catch (previewError) {
@@ -269,7 +302,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
   }
 
   async function applyLatestPlan() {
-    if (!latestPlan) return
+    if (!latestPlan || !canApply) return
     const providerLabel = providers.find(item => item.key === latestPlan.provider)?.label || latestPlan.provider
     const accepted = await confirmAction(
       `确认整体同步${providerLabel}组织目录，并将其作为目录主来源？`
@@ -355,12 +388,14 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
     ? providers.find(provider => provider.key === directoryProvider) || null
     : null
   const directoryLabel = directoryCapability?.label || directoryProvider || '外部系统'
+  const connectionDisplay = sourcePresentation(directorySource)
   const directoryReady = Boolean(
     directorySource
-    && directorySource.connectionState !== 'unconfigured'
+    && connectionDisplay.currentConfigurationEnabled
     && directorySource.connectionRevision
     && directoryCapability?.syncAvailable
-    && directoryAvailability?.available !== false,
+    && directoryAvailability?.available !== false
+    && !directoryReadError && !directoryLoading && !loading,
   )
   const identityAuthoritative = Boolean(
     directorySource?.status === 'active'
@@ -369,14 +404,18 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
     && directorySource.authorityScope.identity === 'authoritative',
   )
   const planExpired = Boolean(latestPlan && Date.parse(latestPlan.expiresAt) <= Date.now())
+  const planVersionChanged = Boolean(latestPlan?.status === 'planned' && directorySource
+    && (latestPlan.targetSourceId !== directorySource.id
+      || latestPlan.connectionRevision !== directorySource.connectionRevision))
   const canApply = Boolean(
-    latestPlan
+    directoryReady && latestPlan
     && latestPlan.provider === directoryProvider
     && latestPlan.snapshot.connectionVerified
     && latestPlan.contractVersion === 'f003-directory-cutover-v2'
     && latestPlan.status === 'planned'
     && latestPlan.applyable
     && !planExpired
+    && !planVersionChanged
     && directoryAction === null,
   )
   const canRollback = Boolean(
@@ -385,12 +424,13 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
     && latestPlan.run?.status === 'applied'
     && directoryAction === null,
   )
-  const connectionState = sourceStateLabel(directorySource || undefined)
+  const connectionState = connectionDisplay.checkLabel
   const directoryScopeState = !directoryProvider || !directoryCapability?.syncAvailable
     ? '未接入'
     : latestPlan
       ? `${latestPlan.snapshot.departmentCount} 个部门 · ${latestPlan.snapshot.employeeCount} 位员工`
-      : directoryReady ? '待读取组织目录' : '待保存连接'
+      : directoryReadError ? '同步记录读取失败'
+        : directoryReady ? '待读取组织目录' : connectionDisplay.directoryLabel
   const directoryAuthorityState = !directoryProvider || !directoryCapability?.syncAvailable
     ? '未接入'
     : directorySource?.authorityScope.directory === 'authoritative'
@@ -421,7 +461,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
             : '待目录差异计划 · 寄件授权未验收'
   const capabilityBadge = (ready: boolean) => ready ? 'default' as const : 'secondary' as const
 
-  if (loading) {
+  if (loading && providers.length === 0) {
     return <div className="rounded-lg border bg-white p-4" role="status">正在读取组织接入状态…</div>
   }
 
@@ -443,7 +483,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
       <div>
         <h3 className="font-medium text-slate-900">外部系统接入</h3>
         <p className="mt-1 text-xs leading-5 text-slate-500">
-          每个提供方只有一张连接记录；下列五项能力分别证明、分别启停、分别验收。
+          配置检查、目录连接和同步结果分别显示；检查通过或启用连接都不会自动更新组织架构。
         </p>
       </div>
 
@@ -457,7 +497,11 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
               <Settings2Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
               <span>连接凭据</span>
             </span>
-            <Badge variant={capabilityBadge(Boolean(directorySource?.connectionState === 'verified'))}>{connectionState}</Badge>
+            <Badge variant={directorySource?.draftCheckStatus === 'failed' ? 'destructive' : capabilityBadge(directorySource?.draftCheckStatus === 'preview_ready')}>{connectionState}</Badge>
+          </div>
+          <div className="flex items-center justify-between gap-3 py-1.5">
+            <span className="text-xs text-slate-700">目录连接</span>
+            <Badge variant={capabilityBadge(connectionDisplay.currentConfigurationEnabled)}>{connectionDisplay.directoryLabel}</Badge>
           </div>
           <div className="flex items-center justify-between gap-3 py-1.5">
             <span className="flex min-w-0 items-center gap-2 text-xs text-slate-700">
@@ -512,7 +556,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
               <button
                 key={provider.key}
                 type="button"
-                disabled={!configurable || loading}
+                disabled={!configurable || loading || directoryAction !== null}
                 aria-pressed={selectedProvider === provider.key}
                 onClick={() => configurable && void selectProvider(provider.key as OrganizationConnectionProvider)}
                 className={`min-h-20 rounded-md border px-2.5 py-2 text-left transition ${
@@ -588,6 +632,14 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
             {directoryAvailability.reason}
           </p>
         )}
+        {directoryReadError && <div className="mt-3 space-y-2 rounded-md bg-amber-50 p-3">
+          <p role="alert" className="text-sm text-amber-900">{directoryReadError} 当前同步记录未知，重新读取后再操作；已同步的组织数据保留。</p>
+          <Button type="button" variant="outline" disabled={directoryLoading || !directoryProvider}
+            onClick={() => directoryProvider && void selectProvider(directoryProvider)}>重新读取同步记录</Button>
+        </div>}
+        {!directoryReady && !directoryReadError && !directoryLoading && (
+          <p className="mt-3 text-xs leading-5 text-slate-600">{connectionDisplay.directoryDetail}</p>
+        )}
 
         <div className="mt-3 rounded-lg border border-slate-200 p-3">
           <div className="flex items-center gap-2 text-xs">
@@ -613,11 +665,13 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
             <RefreshCwIcon className={`mr-1 h-4 w-4 ${directoryAction === 'preview' ? 'animate-spin' : ''}`} />
             {directoryAction === 'preview'
               ? '正在检查并生成差异…'
+              : directoryLoading ? '正在读取同步记录…'
+              : directoryReadError ? '重新读取同步记录后可用'
               : directoryAvailability?.available === false
                 ? '目录切源升级后可用'
                 : directoryReady
                   ? '读取组织目录并生成差异'
-                  : `${directoryLabel}保存连接后可用`}
+                  : `${directoryLabel}启用目录连接后可用`}
           </Button>
         </div>
 
@@ -635,6 +689,8 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
                       ? '已回滚'
                       : latestPlan.status === 'superseded'
                         ? '已被新计划替代'
+                        : planExpired ? '差异计划已过期'
+                        : planVersionChanged ? '配置已改变 · 需重新生成差异'
                         : latestPlan.applyable
                           ? '差异计划可执行'
                           : '差异计划被阻断'}
@@ -695,6 +751,9 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
 
             {latestPlan.status === 'planned' && planExpired && (
               <p className="mt-3 text-xs font-medium text-amber-700">计划已过期，请重新生成差异。</p>
+            )}
+            {planVersionChanged && (
+              <p className="mt-3 text-xs font-medium text-amber-700">本计划对应旧配置。请检查并应用当前配置后，重新读取组织目录并生成差异。</p>
             )}
 
             {canApply && (

@@ -336,6 +336,7 @@ export function toConnectionSummary(row: StoredConnectionRow): ConnectionSummary
     draftCheckStatus: row.draft_check_status,
     configured: Boolean(row.draft_credentials_ciphertext || row.effective_credentials_ciphertext),
     effectiveVerified: Boolean(row.effective_revision && row.connection_state === 'verified' && row.status !== 'disabled'),
+    effectiveRevision: row.effective_revision,
     metadata,
     lastCheckedAt: row.draft_checked_at,
     lastVerifiedAt: row.last_verified_at,
@@ -836,6 +837,64 @@ export async function listIdentityAuthoritativeConnectionOrganizationIds(
       .filter(row => hasIdentityAuthority(row.authority_scope))
       .map(row => row.system_org_id),
   ))
+}
+
+/** Explicit directory activation. A dormant identity authority must not become
+ * usable merely because directory credentials are enabled. */
+export async function activateDirectoryConnection(input: {
+  orgId: string
+  actorId: string
+  provider: string
+  configurationRevision: string
+}) {
+  await assertUnifiedConnectionStorage()
+  const provider = validateProvider(input.provider)
+  const row = await rowBySource(input.orgId, provider)
+  if (!row || row.configuration_revision !== input.configurationRevision) {
+    throw new OrganizationConnectionError('CONFIG_CHANGED', '连接草稿已改变，请刷新后重新验证。', 409)
+  }
+  if (!row.draft_credentials_ciphertext || row.draft_check_status !== 'preview_ready') {
+    throw new OrganizationConnectionError('CONNECTION_NOT_VERIFIED', '请先检查连接与读取范围，再启用目录连接。', 409)
+  }
+  if (row.status === 'active' && row.connection_state === 'verified'
+    && row.effective_revision === row.configuration_revision) return toConnectionSummary(row)
+
+  const identityWasEffective = row.status === 'active' && row.connection_state === 'verified'
+    && Boolean(row.effective_revision && row.effective_credentials_ciphertext)
+  const authorityScope = { ...row.authority_scope }
+  if (!identityWasEffective && hasIdentityAuthority(authorityScope)) authorityScope.identity = 'evidence'
+  const now = new Date().toISOString()
+  const result = await supabaseAdmin.from('organization_sources').update({
+    status: 'active',
+    authority_scope: authorityScope,
+    previous_effective_revision: row.effective_revision,
+    previous_effective_credentials_ciphertext: row.effective_credentials_ciphertext,
+    previous_effective_credential_envelope: row.effective_credential_envelope,
+    previous_effective_metadata: row.effective_metadata,
+    previous_effective_connection_state: row.effective_revision ? row.connection_state : null,
+    effective_revision: row.configuration_revision,
+    effective_credentials_ciphertext: row.draft_credentials_ciphertext,
+    effective_credential_envelope: row.draft_credential_envelope,
+    effective_metadata: row.draft_metadata,
+    connection_state: 'verified',
+    last_verified_at: row.draft_checked_at || now,
+    last_error: null,
+    last_error_at: null,
+    lifecycle_audit: appendAudit(row.lifecycle_audit, {
+      command: 'promoted', actorId: input.actorId, occurredAt: now,
+      configurationRevision: row.configuration_revision, effectiveRevision: row.configuration_revision,
+      state: 'verified', detail: 'directory_connection_enabled',
+    }),
+    updated_by: input.actorId,
+    updated_at: now,
+  }).eq('id', row.id).eq('system_org_id', input.orgId)
+    .eq('configuration_revision', input.configurationRevision)
+    .eq('updated_at', row.updated_at)
+    .select(COLUMNS).maybeSingle()
+  if (result.error || !result.data) {
+    throw new OrganizationConnectionError('CONFIG_CHANGED', '连接在启用前已改变，本次没有生效，请刷新后重试。', 409)
+  }
+  return toConnectionSummary(normalizeRow(result.data))
 }
 
 export async function promoteOrganizationConnection(input: {

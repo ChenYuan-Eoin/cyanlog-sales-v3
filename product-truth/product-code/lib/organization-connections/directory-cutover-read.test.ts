@@ -76,6 +76,7 @@ const mocks = vi.hoisted(() => {
     selectedSourceIds,
     loadOrganizationConnection: vi.fn(),
     readOrganizationDirectory: vi.fn(),
+    loadVerifiedConnection: vi.fn(),
     rpc: vi.fn(),
     from,
   }
@@ -85,20 +86,37 @@ vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from, rpc: mocks
 vi.mock('./service', () => ({
   loadOrganizationConnection: mocks.loadOrganizationConnection,
   readOrganizationDirectory: mocks.readOrganizationDirectory,
-  loadVerifiedConnection: vi.fn(),
+  loadVerifiedConnection: mocks.loadVerifiedConnection,
 }))
 vi.mock('./storage', () => ({ assertDirectoryCutoverStorage: vi.fn() }))
 
-import { loadLatestDirectoryCutoverPlan, prepareDirectoryCutoverPlan } from './directory-cutover'
+import { applyDirectoryCutoverPlan, loadLatestDirectoryCutoverPlan, prepareDirectoryCutoverPlan } from './directory-cutover'
 import { OrganizationConnectionError } from './errors'
 
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.selectedSourceIds.length = 0
-  mocks.loadOrganizationConnection.mockResolvedValue({ sourceId: mocks.organizationSourceId })
+  mocks.loadOrganizationConnection.mockResolvedValue({ sourceId: mocks.organizationSourceId, revision: 'revision-1', effectiveRevision: 'revision-1', effectiveVerified: true })
 })
 
 describe('latest directory cutover plan selection', () => {
+  it('requires explicit effective configuration before reading a directory for synchronization', async () => {
+    mocks.loadOrganizationConnection.mockResolvedValue({ sourceId: mocks.organizationSourceId, revision: 'draft', effectiveRevision: null, effectiveVerified: false })
+    await expect(prepareDirectoryCutoverPlan({ orgId: 'org-1', actorId: 'admin-1', provider: 'fxiaoke' }))
+      .rejects.toMatchObject({ code: 'DIRECTORY_CONNECTION_REQUIRED' })
+    expect(mocks.readOrganizationDirectory).not.toHaveBeenCalled()
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('rejects an old planned apply when its connection is disabled, before the data transaction', async () => {
+    mocks.loadVerifiedConnection.mockRejectedValue(new OrganizationConnectionError('SOURCE_DISABLED', '已停用', 409))
+    await expect(applyDirectoryCutoverPlan({
+      orgId: 'org-1', actorId: 'admin-1', planId: '00000000-0000-4000-8000-000000000030',
+      planHash: 'a'.repeat(64), connectionRevision: '00000000-0000-4000-8000-000000000021',
+      sourceRevisions: [{}] as never,
+    })).rejects.toMatchObject({ code: 'SOURCE_DISABLED' })
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
   it('keeps the previous plan readable and performs no writes when source reads are unavailable', async () => {
     const unavailable = new OrganizationConnectionError('DIRECTORY_SOURCE_UNAVAILABLE', '来源暂不可用，请重试。', 503)
     mocks.readOrganizationDirectory.mockRejectedValue(unavailable)

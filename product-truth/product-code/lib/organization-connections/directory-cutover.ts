@@ -8,7 +8,7 @@ import {
 } from '@/lib/organization-source-identity'
 import { getConnectionAdapter, getDirectoryAdapter, isConfigurableProvider } from './adapters'
 import { OrganizationConnectionError } from './errors'
-import { loadOrganizationConnection, readOrganizationDirectory } from './service'
+import { loadOrganizationConnection, loadVerifiedConnection, readOrganizationDirectory } from './service'
 import { assertDirectoryCutoverStorage } from './storage'
 import type { OrganizationConnectionProvider, DirectoryPreview } from './types'
 
@@ -931,6 +931,9 @@ export async function prepareDirectoryCutoverPlan(input: {
   if (!connection) {
     throw new OrganizationConnectionError('CONFIGURATION_REQUIRED', '请先保存来源连接。', 409)
   }
+  if (!connection.effectiveVerified || connection.effectiveRevision !== connection.revision) {
+    throw new OrganizationConnectionError('DIRECTORY_CONNECTION_REQUIRED', '请先检查并启用当前目录连接，再生成同步差异。', 409)
+  }
   const read = await readOrganizationDirectory({
     orgId: input.orgId, provider: input.provider,
     sourceId: connection.sourceId, revision: connection.revision,
@@ -1003,6 +1006,21 @@ export async function applyDirectoryCutoverPlan(input: {
   }
   if (!Array.isArray(input.sourceRevisions) || input.sourceRevisions.length === 0) {
     throw new OrganizationConnectionError('INVALID_INPUT', '来源版本快照缺失。', 400)
+  }
+  const stored = await supabaseAdmin.from('organization_directory_cutover_plans')
+    .select('status,target_source_id,plan_payload').eq('id', planId)
+    .eq('system_org_id', input.orgId).maybeSingle()
+  if (stored.error || !stored.data) throw new OrganizationConnectionError('PLAN_NOT_FOUND', '切源计划不存在或不属于当前组织。', 404)
+  // Already-applied retries still reach the transaction's original idempotency check.
+  if (stored.data.status === 'planned') {
+    const payload = objectValue(stored.data.plan_payload)
+    const connection = await loadVerifiedConnection({
+      orgId: input.orgId, provider: String(payload.targetProvider || ''),
+      sourceId: String(stored.data.target_source_id),
+    })
+    if (connection.revision !== connectionRevision) {
+      throw new OrganizationConnectionError('PLAN_STALE', '生效连接与差异计划不一致，请启用当前配置后重新生成差异。', 409)
+    }
   }
   const { data, error } = await supabaseAdmin.rpc('apply_organization_directory_cutover_v1', {
     p_system_org_id: input.orgId,

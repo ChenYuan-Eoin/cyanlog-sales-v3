@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => {
     load: vi.fn(),
     save: vi.fn(),
     preview: vi.fn(),
+    activate: vi.fn(),
     storageMode: vi.fn(),
     OrganizationConnectionError,
   }
@@ -39,6 +40,7 @@ vi.mock('@/lib/organization-connections', () => ({
   loadOrganizationConnection: mocks.load,
   saveOrganizationConnection: mocks.save,
   previewOrganizationConnection: mocks.preview,
+  activateDirectoryConnection: mocks.activate,
   OrganizationConnectionError: mocks.OrganizationConnectionError,
 }))
 vi.mock('@/lib/organization-connections/storage', () => ({
@@ -115,6 +117,7 @@ beforeEach(() => {
   ])
   mocks.load.mockResolvedValue(connection)
   mocks.save.mockResolvedValue(connection)
+  mocks.activate.mockResolvedValue(connection)
   mocks.preview.mockResolvedValue({ connection, preview: { applied: false, departments: [], employees: [], warnings: [] } })
   mocks.storageMode.mockResolvedValue('unified')
 })
@@ -177,7 +180,7 @@ describe('/api/admin/organization-sources/connection', () => {
     expect(malformed.status).toBe(400)
     expect(oversized.status).toBe(400)
     expect(unknown.status).toBe(400)
-    expect((await unknown.json()).error).toBe('请选择保存配置或验证通讯录。')
+    expect((await unknown.json()).error).toBe('请选择保存配置、检查连接或启用目录连接。')
     expect(mocks.save).not.toHaveBeenCalled()
     expect(mocks.preview).not.toHaveBeenCalled()
   })
@@ -197,5 +200,16 @@ describe('/api/admin/organization-sources/connection', () => {
     const response = await GET(request('GET', { provider: 'feishu' }))
     expect(response.status).toBe(500)
     expect(await response.text()).not.toContain('sensitive upstream value')
+  })
+
+  it('activates only the authenticated organization and explicit configuration revision', async () => {
+    const revision = '00000000-0000-4000-8000-000000000001'
+    const body = { action: 'activate_directory', provider: 'fxiaoke', revision }
+    expect((await POST(request('POST', { body }))).status).toBe(200)
+    expect(mocks.activate).toHaveBeenCalledWith({ orgId: 'org-1', actorId: 'admin-1', provider: 'fxiaoke', configurationRevision: revision })
+    mocks.activate.mockClear()
+    mocks.canManage.mockReturnValue(false)
+    expect((await POST(request('POST', { body, orgId: 'foreign-org' }))).status).toBe(403)
+    expect(mocks.activate).not.toHaveBeenCalled()
   })
 })
