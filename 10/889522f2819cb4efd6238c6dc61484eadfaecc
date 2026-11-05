@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "activeId": "WP92",
+  "commit": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+  "evidence": {
+    "code": {
+      "commit": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+      "tree": "0c71908cbbd9e0910babc346c78e85c504408ddb",
+      "checks": {
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "target_tests": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "full_tests",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh"
+          ],
+          "artifact_path": "check-logs/0c71908cbbd9e0910babc346c78e85c504408ddb/check-03-test.log",
+          "sha256": "eb1fc7020824df2c91994f187bffe0cdf9060d2e1b0023a5ffcc89cf8179e5c3",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "eb1fc7020824df2c91994f187bffe0cdf9060d2e1b0023a5ffcc89cf8179e5c3"
+        },
+        {
+          "name": "lint",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-02-lint.sh"
+          ],
+          "artifact_path": "check-logs/0c71908cbbd9e0910babc346c78e85c504408ddb/check-02-lint.log",
+          "sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c"
+        },
+        {
+          "name": "typecheck",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-01-typecheck.sh"
+          ],
+          "artifact_path": "check-logs/0c71908cbbd9e0910babc346c78e85c504408ddb/check-01-typecheck.log",
+          "sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+        },
+        {
+          "name": "target_tests",
+          "command": [
+            "pnpm",
+            "test:run",
+            "app/configs/tabs/OrganizationConnectionForm.test.tsx",
+            "app/configs/tabs/OrganizationSourcePanel.test.tsx"
+          ],
+          "artifact_path": "wp92-native-organization-correction/m2-state-path-final-target.log",
+          "log_sha256": "e28d48004d9d42190a46351cf0585a5a07fc272cc826ea564436baee6efbc64b",
+          "exit_code": 0,
+          "timeout": false,
+          "tree": "0c71908cbbd9e0910babc346c78e85c504408ddb"
+        },
+        {
+          "name": "build",
+          "command": [
+            "pnpm",
+            "build"
+          ],
+          "artifact_path": "wp92-native-organization-correction/m2-state-path-build.log",
+          "log_sha256": "221deabdf7ea8c5585bf9e32f46496178b704f780005a73575cfb3e8c934bfd4",
+          "exit_code": 0,
+          "timeout": false,
+          "tree": "0c71908cbbd9e0910babc346c78e85c504408ddb"
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "b8e15b6ca853ff687410c6f0011d3a6a8b5e4d7f93c3590dd3d9540bf9c2fa8b",
+        "entry_sha256": "c068c9119e3ee409ffa99e1e88b6cce66b3a957d8c17fd8a485e06392010b945"
+      },
+      "summary": "WP92-M2: directory activation with CAS; shared configuration/directory status, read retry, stale-plan and provider-race protection. Full3279 passed+5 skipped; native PG17.6 36 passed; strict10/10; lint/typecheck/build; fresh Production DDL matches unchanged migrations.",
+      "boundary": "Local candidate only. Production still1d766f34 with disabled source and previously applied native directory. No deployment, activation, migrations, or new directory apply this turn; production operator replay pending."
+    }
+  },
+  "updatedAt": "2026-11-05T06:47:35.293Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-11-05T06:47:35.271Z",
+      "head": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+      "originMain": "a11e185aea372af97428d0c70fe768dd2720067d",
+      "remoteMain": "a11e185aea372af97428d0c70fe768dd2720067d",
+      "remoteProduction": "1d766f34831884d88c2b9c2bcbc9788568364623",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "6bda4eb24beab5700739d939d5f0c69f9d351091",
+      "remoteAttestationRefOid": "6bda4eb24beab5700739d939d5f0c69f9d351091",
+      "remoteSnapshotCheckedAt": "2026-11-05T06:47:30.807Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "34b56994b3145009c969fb81d5a3e980132429422df52c7fb16fe221be9bb498",
+  "sealedAt": "2026-11-05T06:47:35.293Z",
+  "attestationDigest": "67249cd6d41fc3b5dfe4d2f9eaae29f05c1f106f202408c245db7781b1f0e00f"
+}
