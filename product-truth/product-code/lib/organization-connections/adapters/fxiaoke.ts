@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { previewDirectory, discoverEnterprise } from '@/lib/fxiaoke/client'
 import { decryptCredentials } from '@/lib/fxiaoke/crypto'
 import { FxiaokeError } from '@/lib/fxiaoke/contracts'
-import { transportForOrganization } from '@/lib/fxiaoke/egress/server'
+import { directoryTransportForOrganization } from '@/lib/fxiaoke/egress/directory-transport'
 import { OrganizationConnectionError } from '../errors'
 import type { AdapterDirectoryRead, AdapterVerification, DirectoryAdapter, OrganizationConnectionAdapter, PreparedConnection } from '../types'
 
@@ -71,7 +71,7 @@ export const fxiaokeConnectionAdapter: OrganizationConnectionAdapter = {
     try {
       const enterprise = await discoverEnterprise(
         { appId: parsed.appId, appSecret: parsed.appSecret, permanentCode: parsed.permanentCode },
-        transportForOrganization(context.systemOrgId),
+        directoryTransportForOrganization(context.systemOrgId),
       )
       if (!parsed.expectedEa.startsWith('pending-') && parsed.expectedEa !== enterprise.ea) {
         throw new OrganizationConnectionError('ENTERPRISE_MISMATCH', '应用所属企业与已保存配置不一致，请核对凭据。', 409)
@@ -116,7 +116,7 @@ export const fxiaokeDirectoryAdapter: DirectoryAdapter = {
   async readDirectory(credentials, context): Promise<AdapterDirectoryRead> {
     const parsed = storedSchema.parse(credentials)
     try {
-      const preview = await previewDirectory(parsed, transportForOrganization(context.systemOrgId))
+      const preview = await previewDirectory(parsed, directoryTransportForOrganization(context.systemOrgId))
       return {
         checkedAt: preview.checkedAt,
         complete: preview.complete,

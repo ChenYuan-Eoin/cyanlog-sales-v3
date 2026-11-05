@@ -11,8 +11,8 @@ vi.mock('@/lib/fxiaoke/client', async importOriginal => ({
   discoverEnterprise: mocks.discoverEnterprise,
   previewDirectory: mocks.previewDirectory,
 }))
-vi.mock('@/lib/fxiaoke/egress/server', () => ({
-  transportForOrganization: () => mocks.transport,
+vi.mock('@/lib/fxiaoke/egress/directory-transport', () => ({
+  directoryTransportForOrganization: () => mocks.transport,
 }))
 vi.mock('@/lib/fxiaoke/crypto', () => ({
   decryptCredentials: vi.fn(),

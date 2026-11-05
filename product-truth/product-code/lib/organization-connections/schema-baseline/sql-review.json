@@ -16,5 +16,5 @@
     "Rollback updates original memberships in place, preserves membership IDs, removes only data created by this plan and rejects later state changes or business references. Application rollback is tested under production foreign keys. Successful additive DDL is retained for website rollback; destructive down-migration is not authorized.",
     "Real unique identity mapping is enforced, and duplicate inserts are expected to fail. No production constraint, RLS policy or table grant is weakened to make tests pass."
   ],
-  "catalogSha256": "be20ceb74bd6deb17b49e8aa9deb8cf152415c1ba873a4919c818b96389248e8"
+  "catalogSha256": "03d7e4f9211b6f561bb266f3dbaf565294ac2d96824569eca7562c1ea0ff21f9"
 }

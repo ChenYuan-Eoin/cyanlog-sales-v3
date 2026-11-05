@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/auth', () => ({
   requireAuth: vi.fn(),
@@ -50,6 +50,7 @@ function makeQuery(result: any) {
 }
 
 describe('GET /api/admin/org', () => {
+  afterEach(() => vi.unstubAllGlobals())
   beforeEach(() => {
     vi.clearAllMocks()
     ;(canAccessOrgAdmin as any).mockReturnValue(true)
@@ -57,6 +58,8 @@ describe('GET /api/admin/org', () => {
   })
 
   it('RPC 成功时返回聚合数据和分段耗时头', async () => {
+    const offlineProvider = vi.fn().mockRejectedValue(new Error('optional relay is powered off'))
+    vi.stubGlobal('fetch', offlineProvider)
     const payload = {
       organization: { id: 'org-1', name: 'Org', slug: 'org' },
       users: [{ id: 'u-1', display_name: 'Admin' }],
@@ -81,6 +84,7 @@ describe('GET /api/admin/org', () => {
     })
     expect(getDefaultOrgId).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(offlineProvider).not.toHaveBeenCalled()
   })
 
   it('目录聚合读取失败时不回退成缺少目录关系的成功列表', async () => {

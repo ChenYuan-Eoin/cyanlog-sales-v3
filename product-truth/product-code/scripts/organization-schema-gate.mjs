@@ -19,11 +19,13 @@ export const migrationPaths = [
 ]
 export const migrationHashes = () => Object.fromEntries(migrationPaths.map(path => [path, sha256(readFileSync(resolve(root, path)))]))
 
-// Array order is meaningful for columns; grant ordering depends on local role OIDs.
+// Columns are ordered. Catalog sets are not: ordering varies with database locale and role OIDs.
 export function canonical(value, key = '') {
   if (Array.isArray(value)) {
     const array = value.map(item => canonical(item))
-    return ['grants', 'roles'].includes(key) ? array.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))) : array
+    return ['grants', 'roles', 'indexes', 'constraints', 'functions', 'schemas', 'tables', 'triggers', 'policies', 'defaultPrivileges'].includes(key)
+      ? array.sort((a, b) => { const left = JSON.stringify(a); const right = JSON.stringify(b); return left < right ? -1 : left > right ? 1 : 0 })
+      : array
   }
   if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(k => [k, canonical(value[k], k)]))
   return value

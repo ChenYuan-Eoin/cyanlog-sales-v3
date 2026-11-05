@@ -14,9 +14,11 @@ function snapshot() {
 }
 
 describe('organization release schema drift gate', () => {
-  it('accepts a fresh exact candidate export and ignores only grant ordering', () => {
+  it('accepts a fresh exact candidate export independently of catalog set ordering', () => {
     const live = snapshot()
     live.catalog.tables[0].grants.reverse()
+    live.catalog.tables[0].indexes.reverse()
+    live.catalog.tables.reverse()
     expect(catalogHash(live.catalog)).toBe(catalogHash(baseline.catalog))
     expect(verifySnapshot(live, { head, baseline })).toMatchObject({ status: 'passed', candidateSha: head })
   })
@@ -29,12 +31,14 @@ describe('organization release schema drift gate', () => {
     if (field === 'migration') live.migrations[Object.keys(live.migrations)[0]] = 'b'.repeat(64)
     expect(() => verifySnapshot(live, { head, baseline })).toThrow()
   })
-  it.each(['constraint', 'default', 'trigger', 'grant', 'server'])('blocks production drift in %s', field => {
+  it.each(['constraint', 'default', 'trigger', 'grant', 'index', 'column-order', 'server'])('blocks production drift in %s', field => {
     const live = snapshot()
     if (field === 'constraint') live.catalog.tables.find((t: { name: string }) => t.name === 'user_organizations').columns.find((c: { name: string }) => c.name === 'membership_id').notNull = false
     if (field === 'default') live.catalog.tables.find((t: { name: string }) => t.name === 'user_organizations').columns.find((c: { name: string }) => c.name === 'membership_id').default = 'gen_random_uuid()'
     if (field === 'trigger') live.catalog.functions.find((f: { name: string }) => f.name === 'update_department_path').definition += '\n-- changed'
     if (field === 'grant') live.catalog.tables[0].grants.pop()
+    if (field === 'index') live.catalog.tables[0].indexes[0] += ' WHERE true'
+    if (field === 'column-order') live.catalog.tables[0].columns.reverse()
     if (field === 'server') live.catalog.serverVersion = '18.3'
     expect(() => verifySnapshot(live, { head, baseline })).toThrow('Production DDL drift')
   })

@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-05T02:06:15.078856+00:00",
+  "updated_at": "2026-11-05T04:14:47.147560+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -272,7 +272,9 @@
       "product-truth/product-code/lib/organization-connections/schema-baseline",
       "product-truth/product-code/scripts/organization-schema-gate.mjs",
       "product-truth/product-code/scripts/organization-schema-gate.test.ts",
-      ".github/workflows/organization-db-gates.yml"
+      ".github/workflows/organization-db-gates.yml",
+      "product-truth/product-code/lib/fxiaoke/egress/directory-transport.ts",
+      "product-truth/product-code/lib/fxiaoke/egress/directory-transport.test.ts"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -335,14 +337,15 @@
       "组织架构页面按部门联动展示目录人员与状态；主属/附属关系、来源和待关联状态刷新回读一致",
       "不修改登录启停、密码、角色或业务许可；不自动把目录状态解释为登录启停；手工和旧来源资料保留",
       "本地/隔离开发检查与正式站真实同步分别记录；仅精确发布版本及现有Chrome联动回读通过才关闭业务阶段",
-      "IN-20261105-009：生产同源DDL版本化，发布前通过DDL差异、同构迁移演练、约束/触发器集成测试及SQL review四道门禁；CI自动比对，失败禁止发布。"
+      "IN-20261105-009：生产同源DDL版本化，发布前通过DDL差异、同构迁移演练、约束/触发器集成测试及SQL review四道门禁；CI自动比对，失败禁止发布。",
+      "IN-20261105-012：可选接入主机不可用时，已有组织架构仍可查看和管理；可用的直接读取路径可继续同步，所有读取路径均失败时明确本次未完成、保留已生效数据并允许重试，不返回空目录冒充成功。"
     ],
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
     "activation_basis": "IN-20261105-004",
     "blocking_items": [
       "已批准候选发布、既有转发程序更新、两项必要迁移及差异生成；真实部门/人员应用等待差异审查后的独立确认。",
       "系统组织与外部企业的显示资料对应须在真实同步前明确，不按名称自动新建或改绑组织",
-      "云主机更新暂停：先核对纷享固定出口必要性；不得因旧企微方案沿用或恢复其运行依赖。"
+      "IN-20261105-012：允许具备实证降级路径的轻度依赖；主机关机不得阻断已有组织架构查看和管理。验证网站直连及来源读取失败处理后，再决定是否保留既有转发，不新增常驻基础设施或付费出口。"
     ],
     "non_goals": [
       "SSO、登录、寄件、AI、下单",

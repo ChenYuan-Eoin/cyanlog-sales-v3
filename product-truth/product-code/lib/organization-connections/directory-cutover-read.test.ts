@@ -75,17 +75,22 @@ const mocks = vi.hoisted(() => {
     organizationSourceId,
     selectedSourceIds,
     loadOrganizationConnection: vi.fn(),
+    readOrganizationDirectory: vi.fn(),
+    rpc: vi.fn(),
     from,
   }
 })
 
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from } }))
+vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from, rpc: mocks.rpc } }))
 vi.mock('./service', () => ({
   loadOrganizationConnection: mocks.loadOrganizationConnection,
+  readOrganizationDirectory: mocks.readOrganizationDirectory,
   loadVerifiedConnection: vi.fn(),
 }))
+vi.mock('./storage', () => ({ assertDirectoryCutoverStorage: vi.fn() }))
 
-import { loadLatestDirectoryCutoverPlan } from './directory-cutover'
+import { loadLatestDirectoryCutoverPlan, prepareDirectoryCutoverPlan } from './directory-cutover'
+import { OrganizationConnectionError } from './errors'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -94,6 +99,16 @@ beforeEach(() => {
 })
 
 describe('latest directory cutover plan selection', () => {
+  it('keeps the previous plan readable and performs no writes when source reads are unavailable', async () => {
+    const unavailable = new OrganizationConnectionError('DIRECTORY_SOURCE_UNAVAILABLE', '来源暂不可用，请重试。', 503)
+    mocks.readOrganizationDirectory.mockRejectedValue(unavailable)
+    await expect(prepareDirectoryCutoverPlan({ orgId: 'org-1', actorId: 'admin-1', provider: 'fxiaoke' }))
+      .rejects.toBe(unavailable)
+    expect(mocks.from).not.toHaveBeenCalled()
+    expect(mocks.rpc).not.toHaveBeenCalled()
+    await expect(loadLatestDirectoryCutoverPlan('org-1', 'fxiaoke'))
+      .resolves.toMatchObject({ id: '00000000-0000-4000-8000-000000000030', status: 'planned' })
+  })
   it('uses the same uniquely resolved connection as preview and apply', async () => {
     const result = await loadLatestDirectoryCutoverPlan(
       '00000000-0000-4000-8000-000000000001',
