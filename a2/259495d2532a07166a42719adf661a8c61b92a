@@ -84,35 +84,110 @@
         "sha256": "336a9c902fbe51f98b9c3f7bbf2bc236ae3c78486039e3cdc19620e6300ac47a",
         "entry_sha256": "670431d800bcd7aa85624b9b6941170eaf1eb12d1ff7e8f19014ea13aba4e69e"
       }
+    },
+    "production": {
+      "commit": "a2259495d2532a07166a42719adf661a8c61b92a",
+      "deployment_id": "dpl_DwcAS1fbqsMVbYyNUdDEX7Nd6Wbm",
+      "domain": "sales.cyanlog.icu",
+      "url": "https://sales.cyanlog.icu",
+      "ready": true,
+      "target": "production",
+      "operator_acceptance": "wp92-confirm-dialog-ui/production-operator-acceptance.json",
+      "database_gate_run_id": 41999324077,
+      "artifacts": [
+        {
+          "path": "wp92-confirm-dialog-ui/production-after-dom.json",
+          "sha256": "d1ed6962dd75a7e3f4254c9b7fb8263619e3ef42d032b813818fee335d0cfdcb"
+        },
+        {
+          "path": "wp92-confirm-dialog-ui/production-after.png",
+          "sha256": "0e90b96da4102a3f4f29f3a9743e480d21825ecc60d62dccfcc7b207aad7789b"
+        },
+        {
+          "path": "wp92-confirm-dialog-ui/production-after-cancel.json",
+          "sha256": "08f1a52d2f850f0fe72c85c0b659ba9f845e4042c1b54c960c7b6b52b58db69e"
+        },
+        {
+          "path": "wp92-confirm-dialog-ui/production-after-cancel-dom.txt",
+          "sha256": "689f4c3f88bd2a0b60c0370f8adf53dc5fdb7586a72cc114c5ac30e372260ed2"
+        },
+        {
+          "path": "wp92-confirm-dialog-ui/production-deployment.json",
+          "sha256": "482a69ad53600a8521b2b7863d32c4ab5af5b79dfa404b1d66ec0e6b9f40935a"
+        },
+        {
+          "path": "wp92-confirm-dialog-ui/production-alias.json",
+          "sha256": "ea8827a2bcdc2e4428cf9d88a81d81d985a713b3cfa8900e59f08618d22ab44d"
+        },
+        {
+          "path": "wp92-confirm-dialog-ui/remote-database-gates.json",
+          "sha256": "6c008d59adf373951206e3a458167bac7aea9b64a9e4a09eaef47f8b7ed3fe85"
+        }
+      ]
     }
   },
-  "updatedAt": "2026-11-05T08:52:13.371Z",
+  "updatedAt": "2026-11-05T09:12:22.102Z",
   "defects": {
     "IN-20261105-025": {
-      "status": "reproduced",
+      "status": "verified",
       "candidate_commit": "a2259495d2532a07166a42719adf661a8c61b92a",
-      "production_commit": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+      "production_commit": "a2259495d2532a07166a42719adf661a8c61b92a",
       "reproduction": "wp92-confirm-dialog-ui/reproduction.json",
       "candidate_diagnostic": "wp92-confirm-dialog-ui/verification.json",
-      "production_replay_required": true
+      "production_replay_required": true,
+      "commit": "a2259495d2532a07166a42719adf661a8c61b92a",
+      "deployment_id": "dpl_DwcAS1fbqsMVbYyNUdDEX7Nd6Wbm",
+      "verified_at": "2026-11-05T09:11:04.680Z",
+      "verification_scope": "existing Chrome Production confirmation display and cancellation; no directory apply",
+      "operator_acceptance": "wp92-confirm-dialog-ui/production-operator-acceptance.json",
+      "artifacts": [
+        {
+          "path": "wp92-confirm-dialog-ui/production-after-dom.json",
+          "sha256": "d1ed6962dd75a7e3f4254c9b7fb8263619e3ef42d032b813818fee335d0cfdcb"
+        },
+        {
+          "path": "wp92-confirm-dialog-ui/production-after.png",
+          "sha256": "0e90b96da4102a3f4f29f3a9743e480d21825ecc60d62dccfcc7b207aad7789b"
+        },
+        {
+          "path": "wp92-confirm-dialog-ui/production-after-cancel.json",
+          "sha256": "08f1a52d2f850f0fe72c85c0b659ba9f845e4042c1b54c960c7b6b52b58db69e"
+        },
+        {
+          "path": "wp92-confirm-dialog-ui/production-after-cancel-dom.txt",
+          "sha256": "689f4c3f88bd2a0b60c0370f8adf53dc5fdb7586a72cc114c5ac30e372260ed2"
+        },
+        {
+          "path": "wp92-confirm-dialog-ui/production-deployment.json",
+          "sha256": "482a69ad53600a8521b2b7863d32c4ab5af5b79dfa404b1d66ec0e6b9f40935a"
+        },
+        {
+          "path": "wp92-confirm-dialog-ui/production-alias.json",
+          "sha256": "ea8827a2bcdc2e4428cf9d88a81d81d985a713b3cfa8900e59f08618d22ab44d"
+        },
+        {
+          "path": "wp92-confirm-dialog-ui/remote-database-gates.json",
+          "sha256": "6c008d59adf373951206e3a458167bac7aea9b64a9e4a09eaef47f8b7ed3fe85"
+        }
+      ]
     }
   },
   "completionState": "code_green",
   "gateSnapshots": {
     "code_green": {
       "stage": "code_green",
-      "checkedAt": "2026-11-05T08:52:13.354Z",
+      "checkedAt": "2026-11-05T09:12:22.083Z",
       "head": "a2259495d2532a07166a42719adf661a8c61b92a",
       "originMain": "10889522f2819cb4efd6238c6dc61484eadfaecc",
       "remoteMain": "10889522f2819cb4efd6238c6dc61484eadfaecc",
-      "remoteProduction": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+      "remoteProduction": "a2259495d2532a07166a42719adf661a8c61b92a",
       "defaultBranch": "main",
       "originMainFresh": true,
       "originMainIsAncestor": true,
       "mainIntegrated": false,
-      "localAttestationRefOid": "fa5c21493de1c126f96ec3f17df4e77031aecafb",
-      "remoteAttestationRefOid": "fa5c21493de1c126f96ec3f17df4e77031aecafb",
-      "remoteSnapshotCheckedAt": "2026-11-05T08:52:10.093Z",
+      "localAttestationRefOid": "5ec3867bc817362da739a04894f0730322d56ed3",
+      "remoteAttestationRefOid": "5ec3867bc817362da739a04894f0730322d56ed3",
+      "remoteSnapshotCheckedAt": "2026-11-05T09:12:19.385Z",
       "vercelProduction": null,
       "verifier": {
         "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
@@ -122,10 +197,147 @@
       }
     }
   },
-  "previousAttestationDigest": null,
-  "previousAttestation": null,
-  "revision": 1,
-  "contentDigest": "98ff91fe1db426ac2dff24a92d02c387859021a30c24e153310a012d7aa67a26",
-  "sealedAt": "2026-11-05T08:52:13.372Z",
-  "attestationDigest": "a52a4a2b28892310dd19518bd958a70a45b98645fb69b4ccdc4765008b14cbad"
+  "releaseControl": {
+    "production_branch": "production",
+    "production_commit_before": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+    "production_commit_after": "a2259495d2532a07166a42719adf661a8c61b92a",
+    "production_deployment_id_after": "dpl_DwcAS1fbqsMVbYyNUdDEX7Nd6Wbm",
+    "authorization": "wp92-confirm-dialog-ui/release-authorization.json"
+  },
+  "previousAttestationDigest": "a52a4a2b28892310dd19518bd958a70a45b98645fb69b4ccdc4765008b14cbad",
+  "previousAttestation": {
+    "version": 1,
+    "activeId": "WP92",
+    "commit": "a2259495d2532a07166a42719adf661a8c61b92a",
+    "evidence": {
+      "code": {
+        "commit": "a2259495d2532a07166a42719adf661a8c61b92a",
+        "tree": "0c6f388d1b8a7e2ef597902a6da00ce10de7e6a0",
+        "checks": {
+          "target_tests": true,
+          "full_tests": true,
+          "lint": true,
+          "typecheck": true,
+          "build": true
+        },
+        "commands": [
+          {
+            "name": "typecheck",
+            "command": [
+              "bash",
+              "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-01-typecheck.sh"
+            ],
+            "artifact_path": "check-logs/0c6f388d1b8a7e2ef597902a6da00ce10de7e6a0/check-01-typecheck.log",
+            "sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+            "exit_code": 0,
+            "timeout": false,
+            "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+          },
+          {
+            "name": "lint",
+            "command": [
+              "bash",
+              "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-02-lint.sh"
+            ],
+            "artifact_path": "check-logs/0c6f388d1b8a7e2ef597902a6da00ce10de7e6a0/check-02-lint.log",
+            "sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c",
+            "exit_code": 0,
+            "timeout": false,
+            "log_sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c"
+          },
+          {
+            "name": "full_tests",
+            "command": [
+              "bash",
+              "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh"
+            ],
+            "artifact_path": "check-logs/0c6f388d1b8a7e2ef597902a6da00ce10de7e6a0/check-03-test.log",
+            "sha256": "9bd1bda44c20e5dac212e04a398b9c5ea88d127ddf2b98e6c6ca0019311750cf",
+            "exit_code": 0,
+            "timeout": false,
+            "log_sha256": "9bd1bda44c20e5dac212e04a398b9c5ea88d127ddf2b98e6c6ca0019311750cf"
+          },
+          {
+            "name": "target_tests",
+            "command": [
+              "pnpm",
+              "test:run",
+              "tailwind.config.test.ts",
+              "app/configs/tabs/OrganizationSourcePanel.test.tsx",
+              "app/configs/tabs/OrganizationConnectionForm.test.tsx",
+              "app/configs/tabs/OrgStructureTab.test.tsx"
+            ],
+            "artifact_path": "wp92-confirm-dialog-ui/target-tests.log",
+            "log_sha256": "1661f3d05a3312c5af459e3065e9186ea2696c707f642d7f9b621863bec9257f",
+            "exit_code": 0,
+            "timeout": false,
+            "tree": "0c6f388d1b8a7e2ef597902a6da00ce10de7e6a0"
+          },
+          {
+            "name": "build",
+            "command": [
+              "pnpm",
+              "build"
+            ],
+            "artifact_path": "wp92-confirm-dialog-ui/build.log",
+            "log_sha256": "4d016119b40bd897eb0f09f107ee1254088b87f6870b29061332c23f5de05a26",
+            "exit_code": 0,
+            "timeout": false,
+            "tree": "0c6f388d1b8a7e2ef597902a6da00ce10de7e6a0"
+          }
+        ],
+        "behavior_log": {
+          "artifact_path": "behavior-log.jsonl",
+          "sha256": "336a9c902fbe51f98b9c3f7bbf2bc236ae3c78486039e3cdc19620e6300ac47a",
+          "entry_sha256": "670431d800bcd7aa85624b9b6941170eaf1eb12d1ff7e8f19014ea13aba4e69e"
+        }
+      }
+    },
+    "updatedAt": "2026-11-05T08:52:13.371Z",
+    "defects": {
+      "IN-20261105-025": {
+        "status": "reproduced",
+        "candidate_commit": "a2259495d2532a07166a42719adf661a8c61b92a",
+        "production_commit": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+        "reproduction": "wp92-confirm-dialog-ui/reproduction.json",
+        "candidate_diagnostic": "wp92-confirm-dialog-ui/verification.json",
+        "production_replay_required": true
+      }
+    },
+    "completionState": "code_green",
+    "gateSnapshots": {
+      "code_green": {
+        "stage": "code_green",
+        "checkedAt": "2026-11-05T08:52:13.354Z",
+        "head": "a2259495d2532a07166a42719adf661a8c61b92a",
+        "originMain": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+        "remoteMain": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+        "remoteProduction": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+        "defaultBranch": "main",
+        "originMainFresh": true,
+        "originMainIsAncestor": true,
+        "mainIntegrated": false,
+        "localAttestationRefOid": "fa5c21493de1c126f96ec3f17df4e77031aecafb",
+        "remoteAttestationRefOid": "fa5c21493de1c126f96ec3f17df4e77031aecafb",
+        "remoteSnapshotCheckedAt": "2026-11-05T08:52:10.093Z",
+        "vercelProduction": null,
+        "verifier": {
+          "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+          "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+          "worktree": "git status --porcelain=v1 --untracked-files=all",
+          "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+        }
+      }
+    },
+    "previousAttestationDigest": null,
+    "previousAttestation": null,
+    "revision": 1,
+    "contentDigest": "98ff91fe1db426ac2dff24a92d02c387859021a30c24e153310a012d7aa67a26",
+    "sealedAt": "2026-11-05T08:52:13.372Z",
+    "attestationDigest": "a52a4a2b28892310dd19518bd958a70a45b98645fb69b4ccdc4765008b14cbad"
+  },
+  "revision": 2,
+  "contentDigest": "1919207b3780045c11758d53984f54aed6eb4dac5b55cf4c7079cde0a6a41948",
+  "sealedAt": "2026-11-05T09:12:22.103Z",
+  "attestationDigest": "8f9253fb98a074b4d40ced9467a68e8b6d836ee0ca599d8439fa25101e7db475"
 }
