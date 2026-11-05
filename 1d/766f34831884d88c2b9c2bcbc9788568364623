@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "activeId": "WP92",
+  "commit": "1d766f34831884d88c2b9c2bcbc9788568364623",
+  "evidence": {
+    "code": {
+      "commit": "1d766f34831884d88c2b9c2bcbc9788568364623",
+      "tree": "b8e3b4da5a4618481eb41b93ea0375585e52d595",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "full_tests",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh"
+          ],
+          "artifact_path": "check-logs/b8e3b4da5a4618481eb41b93ea0375585e52d595/check-03-test.log",
+          "sha256": "cadd6b2361622798452b51c81f39edd85d1ef5bd4a6979ba3d7f78a91ab8743b",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "cadd6b2361622798452b51c81f39edd85d1ef5bd4a6979ba3d7f78a91ab8743b"
+        },
+        {
+          "name": "lint",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-02-lint.sh"
+          ],
+          "artifact_path": "check-logs/b8e3b4da5a4618481eb41b93ea0375585e52d595/check-02-lint.log",
+          "sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c"
+        },
+        {
+          "name": "typecheck",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-01-typecheck.sh"
+          ],
+          "artifact_path": "check-logs/b8e3b4da5a4618481eb41b93ea0375585e52d595/check-01-typecheck.log",
+          "sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+        },
+        {
+          "name": "target_tests",
+          "command": [
+            "pnpm",
+            "test:run",
+            "lib/fxiaoke/client.test.ts",
+            "lib/fxiaoke/egress/directory-transport.test.ts",
+            "lib/organization-connections/adapters/fxiaoke.test.ts"
+          ],
+          "artifact_path": "wp92-native-organization-correction/pagination-final-target.log",
+          "log_sha256": "c804631298330b8ebb726c50dc3292ddd5b9b4a167247801f3f7764452f6542d",
+          "exit_code": 0,
+          "timeout": false,
+          "tree": "b8e3b4da5a4618481eb41b93ea0375585e52d595"
+        },
+        {
+          "name": "build",
+          "command": [
+            "pnpm",
+            "build"
+          ],
+          "artifact_path": "wp92-native-organization-correction/pagination-final-build.log",
+          "log_sha256": "0e9782811f2f80d21d7653ce122238cb2c03cdd4c21e71b914c3b4b142e32af4",
+          "exit_code": 0,
+          "timeout": false,
+          "tree": "b8e3b4da5a4618481eb41b93ea0375585e52d595"
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "7b4b5f087f85f4f99ea7fcf8f39cc87dccefceca91112e7e3da7caa025595b0b",
+        "entry_sha256": "cb94420de5998b9ffd4c24e080af7eb76d28b275964ccda13b744477bbd4295b"
+      },
+      "summary": "Cursor totals now represent remaining filtered records. 42 targeted tests, full 3258 passed +5 skipped; strict 10/10, lint/typecheck/build. Current Production schema capture and historical migration predecessor both versioned; native PostgreSQL17.6 29 tests passed and exact-SHA four-gate CI41971667020 success.",
+      "boundary": "Repairs published b2b93722 pagination blocker. Production migrations are already applied, no migration SQL changed or to be reapplied. Directory plan/application still pending; no account/source activation authorized."
+    }
+  },
+  "updatedAt": "2026-11-05T05:09:08.327Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-11-05T05:09:08.310Z",
+      "head": "1d766f34831884d88c2b9c2bcbc9788568364623",
+      "originMain": "a11e185aea372af97428d0c70fe768dd2720067d",
+      "remoteMain": "a11e185aea372af97428d0c70fe768dd2720067d",
+      "remoteProduction": "b2b93722fc928629729c696736f530dc9bd7677e",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "42c1d751ac4c90d22beade833c4719a46de4b731",
+      "remoteAttestationRefOid": "42c1d751ac4c90d22beade833c4719a46de4b731",
+      "remoteSnapshotCheckedAt": "2026-11-05T05:09:06.131Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "293cfcfc931794d540a6119f05048de28a3b2696d8c4886636629ec3f3488c8d",
+  "sealedAt": "2026-11-05T05:09:08.327Z",
+  "attestationDigest": "626bbf6102fba72dfe39377ad35369578227761ddb747a5fa4d292289c7280b2"
+}
