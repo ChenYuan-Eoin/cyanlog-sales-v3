@@ -2,7 +2,7 @@
 
 正式站 → 加密短期请求 → 现有主机主动领取 → 纷享官方 API → 加密结果 → 正式站。
 
-当前使用已有云电脑；Mac mini 仅作备用，不切换企微接收进程。运行不依赖远程桌面、浏览器窗口或持续监看屏幕。它不监听公网端口，也不是通用代理。只允许应用鉴权、固定正式回调地址的 OAuth 授权码交换，以及 DepartmentObj、PersonnelObj 的固定字段只读查询；不能寄件、修改 CRM、任意抓取 URL 或跨组织领取。
+历史部署使用已有云主机；IN-20261105-009 要求重新核对固定出口是否必要，当前暂停主机更新。纷享出口与已放弃的企微接收进程是独立服务，组织同步不以企微运行状态作为前置。运行不依赖远程桌面、浏览器窗口或持续监看屏幕。它不监听公网端口，也不是通用代理。只允许应用鉴权、固定正式回调地址的 OAuth 授权码交换，以及 DepartmentObj、PersonnelObj 的固定字段只读查询；不能寄件、修改 CRM、任意抓取 URL 或跨组织领取。
 
 ## 发布边界
 
@@ -35,9 +35,9 @@ SUPABASE_PUBLISHABLE_KEY=<现有 cyanlog-sales-v3 的 publishable key>
 
 运行仅需 Node.js 22+。将本目录的 `worker.mjs`、`protocol.mjs`、`package.json` 和 `package-lock.json` 放进独立版本目录，执行 `npm ci --ignore-scripts --omit=dev`。通过 `FXIAOKE_RUNTIME_ENV` 指向上述私有文件，再运行 `node worker.mjs`。不复制网站环境变量或使用数据库管理员密钥。
 
-采用独立的 systemd 服务启动，保持现有 `price-v3-wecom.service` 原样。服务的 `WorkingDirectory` 和 `ExecStart` 必须指向已验证版本及实际 Node 路径，`Restart=on-failure`，开机启动；标准输出进 journal。安装、启用和设置白名单属于发布动作，不由此文档自动授权。
+采用独立的 systemd 服务启动，只管理纷享服务，不恢复或检查企微作为验收条件。服务的 `WorkingDirectory` 和 `ExecStart` 必须指向已验证版本及实际 Node 路径，`Restart=on-failure`，开机启动；标准输出进 journal。安装、启用和设置白名单属于发布动作，不由此文档自动授权。
 
-更新时使用独立版本目录，保留旧目录和 unit 备份；先验证新包 hash、语法和共享协议，再切换现有 `price-v3-fxiaoke.service`，不并行运行第二个领取者。失败时恢复原 unit 的版本路径并重启原 worker，核对固定出口心跳和企微服务。此版本回滚不等于停用整个固定出口。
+更新时使用独立版本目录，保留旧目录和 unit 备份；先验证新包 hash、语法和共享协议，再切换现有 `price-v3-fxiaoke.service`，不并行运行第二个领取者。失败时恢复原 unit 的版本路径并重启原 worker，核对纷享固定出口心跳及只读目录请求。此版本回滚不等于停用整个固定出口。
 
 ## 检查与失败处理
 

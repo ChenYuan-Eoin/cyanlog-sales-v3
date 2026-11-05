@@ -1,0 +1,20 @@
+{
+  "status": "approved",
+  "reviewer": "Codex / current WP92 implementation review",
+  "reviewedAt": "2026-11-05T03:53:18.106Z",
+  "migrations": {
+    "supabase/migrations/20261103090000_unified_organization_connections.sql": "ab99b807a91baf8587cd2908a1d75c895f3541e3d48eae045c5b47541745b2af",
+    "supabase/migrations/20261103120000_organization_directory_cutover.sql": "64309804840cbb30c3b83c0ab737d6415c38a27fed85df747afb7108e9407179"
+  },
+  "findings": [
+    "Membership inserts explicitly supply gen_random_uuid(); conflict updates preserve the existing membership_id. Native organization membership is inserted before department relationships to satisfy the production composite FK.",
+    "Both existing department triggers retain their behavior, use public.departments, and fix search_path to empty. Real original definitions are kept in the production baseline and tested before replacement.",
+    "The two migrations are transactional. Contradictory legacy tenant and duplicate department keys fail with no partial DDL or native data loss; failed migration rollback is tested separately for each migration.",
+    "Legacy import preserves organization/source IDs and disabled status. EA versus corpId imports encrypted credentials only as an unverified draft; it does not activate the source, apply the directory, rename the enterprise or grant login.",
+    "Store/apply/rollback RPCs remain service-role-only and validate tenant, immutable plan, source/config revisions and current directory state. Native service-role tests exercise the full transaction under empty search_path. Browser roles are denied.",
+    "Directory apply creates inactive people with login_enabled=false and invited organization membership, without passwords or roles. Full native organization readback uses the captured production RPC rather than a stub.",
+    "Rollback updates original memberships in place, preserves membership IDs, removes only data created by this plan and rejects later state changes or business references. Application rollback is tested under production foreign keys. Successful additive DDL is retained for website rollback; destructive down-migration is not authorized.",
+    "Real unique identity mapping is enforced, and duplicate inserts are expected to fail. No production constraint, RLS policy or table grant is weakened to make tests pass."
+  ],
+  "catalogSha256": "be20ceb74bd6deb17b49e8aa9deb8cf152415c1ba873a4919c818b96389248e8"
+}

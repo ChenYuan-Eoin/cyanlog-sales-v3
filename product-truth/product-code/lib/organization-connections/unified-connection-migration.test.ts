@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { PGlite } from '@electric-sql/pglite'
+import { productionSchemaDatabase } from './schema-baseline/database'
 import { describe, expect, it } from 'vitest'
 
 const migration = readFileSync(join(process.cwd(), 'supabase/migrations/20261103090000_unified_organization_connections.sql'), 'utf8')
@@ -9,23 +9,12 @@ const orgId = '22222222-2222-4222-8222-222222222222'
 const revision = '33333333-3333-4333-8333-333333333333'
 
 async function fixture(tenant: string, status: string) {
-  const db = new PGlite()
+  const db = await productionSchemaDatabase()
   await db.exec(`
-    create role anon; create role authenticated; create role service_role;
-    create table public.organization_sources (
-      id uuid primary key default gen_random_uuid(), system_org_id uuid not null,
-      provider text not null, external_tenant_id text not null, priority integer,
-      status text, authority_scope jsonb default '{}'::jsonb, sync_mode text,
-      last_error text, created_by uuid, updated_by uuid, updated_at timestamptz default now(),
-      unique(system_org_id, provider, external_tenant_id)
-    );
-    create table public.organization_fxiaoke_connections (
-      system_org_id uuid primary key, expected_ea text, revision uuid, credentials_ciphertext text,
-      app_id text, api_user_id text, last_check_status text, last_checked_at timestamptz,
-      preview_started_at timestamptz, last_error text, updated_by uuid, updated_at timestamptz default now()
-    );
-    insert into public.organization_fxiaoke_connections(system_org_id,expected_ea,revision,credentials_ciphertext,app_id,api_user_id,last_check_status,last_checked_at)
-      values ('${orgId}','ones001','${revision}','encrypted-fixture','app-fixture','employee-fixture','preview_ready',now());
+    insert into public.organizations(id,name) values ('${orgId}','Test organization');
+    insert into public.users(id,org_id,display_name) values ('${sourceId}','${orgId}','Test operator');
+    insert into public.organization_fxiaoke_connections(system_org_id,expected_ea,revision,credentials_ciphertext,app_id,api_user_id,last_check_status,last_checked_at,updated_by)
+      values ('${orgId}','ones001','${revision}','v1.encrypted-fixture','app-fixture','employee-fixture','preview_ready',now(),'${sourceId}');
   `)
   await db.query(`insert into public.organization_sources(id,system_org_id,provider,external_tenant_id,priority,status,sync_mode)
     values ($1::uuid,$2::uuid,'fxiaoke',$3,100,$4,'enrichment')`, [sourceId, orgId, tenant, status])

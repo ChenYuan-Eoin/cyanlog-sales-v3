@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { PGlite } from '@electric-sql/pglite'
+import { productionSchemaDatabase, connectionMigration } from './schema-baseline/database'
 import { describe, expect, it } from 'vitest'
 import { buildDirectoryCutoverPlan, type DirectoryStateSnapshot } from './directory-cutover'
 
@@ -15,109 +15,14 @@ const previousSource = '55555555-5555-4555-8555-555555555555'
 const manualDepartment = '66666666-6666-4666-8666-666666666666'
 
 async function database() {
-  const db = new PGlite()
+  const db = await productionSchemaDatabase()
+  await db.exec(connectionMigration)
   await db.exec(`
-    create role anon;
-    create role authenticated;
-    create role service_role;
-    create schema private;
-    create table public.organizations (id uuid primary key);
-    create table public.users (
-      id uuid primary key,
-      org_id uuid not null references public.organizations(id),
-      primary_dept_id uuid,
-      display_name text not null default 'Existing member',
-      login_enabled boolean not null default true,
-      created_at timestamptz not null default now(),
-      status text not null default 'active',
-      updated_at timestamptz not null default now()
-    );
-    create table public.departments (
-      id uuid primary key default gen_random_uuid(),
-      org_id uuid not null references public.organizations(id),
-      parent_id uuid references public.departments(id),
-      name text not null,
-      code text,
-      path text,
-      depth integer not null default 0,
-      external_id text,
-      source text not null default 'manual',
-      status text not null default 'active',
-      sort_order integer not null default 0,
-      member_count integer not null default 0,
-      created_at timestamptz not null default now(),
-      updated_at timestamptz not null default now()
-    );
-    create table public.user_departments (
-      user_id uuid not null references public.users(id),
-      department_id uuid not null references public.departments(id),
-      org_id uuid not null references public.organizations(id),
-      is_primary boolean not null default false,
-      joined_at timestamptz not null default now(),
-      primary key (user_id, department_id)
-    );
-    create table public.user_organizations (
-      user_id uuid not null references public.users(id) on delete cascade,
-      org_id uuid not null references public.organizations(id),
-      primary_department_id uuid references public.departments(id),
-      is_default boolean not null default true,
-      status text not null default 'active',
-      employment_status text not null default 'active',
-      created_at timestamptz not null default now(),
-      primary key (user_id, org_id)
-    );
-    create table public.user_roles (user_id uuid references public.users(id) on delete cascade, role_id text);
-    create function public.get_org_admin_payload_v1(p_org_id uuid) returns jsonb language sql stable as $$
-      select jsonb_build_object('users', coalesce((
-        select jsonb_agg(jsonb_build_object('id', u.id, 'display_name', u.display_name,
-          'primary_dept_id', m.primary_department_id, 'login_enabled', u.login_enabled,
-          'status', u.status, 'membership_status', m.status))
-        from public.users u join public.user_organizations m on m.user_id = u.id and m.org_id = p_org_id
-        where m.status in ('active','invited','suspended')
-      ), '[]'::jsonb), 'departments', '[]'::jsonb, 'roles', '[]'::jsonb, 'spaces', '[]'::jsonb);
-    $$;
-    create table public.organization_sources (
-      id uuid primary key default gen_random_uuid(),
-      system_org_id uuid not null references public.organizations(id),
-      provider text not null,
-      external_tenant_id text not null,
-      priority integer not null,
-      status text not null,
-      authority_scope jsonb not null default '{}'::jsonb,
-      sync_mode text not null,
-      configuration_revision uuid not null,
-      connection_state text not null,
-      effective_revision uuid,
-      draft_check_status text not null default 'not_checked',
-      last_successful_sync_at timestamptz,
-      last_error text,
-      last_error_at timestamptz,
-      created_at timestamptz not null default now(),
-      updated_at timestamptz not null default now(),
-      unique (id, system_org_id)
-    );
-    create table public.external_identities (
-      id uuid primary key default gen_random_uuid(),
-      source_id uuid not null,
-      system_org_id uuid not null,
-      external_user_id text not null,
-      external_union_id text,
-      external_open_id text,
-      canonical_user_id uuid references public.users(id),
-      match_status text not null default 'unresolved',
-      match_method text not null default 'none',
-      match_confidence numeric(5,4) not null default 0,
-      profile_snapshot jsonb not null default '{}'::jsonb,
-      observed_at timestamptz not null default now(),
-      updated_at timestamptz not null default now(),
-      foreign key (source_id, system_org_id) references public.organization_sources(id, system_org_id),
-      unique (source_id, external_user_id)
-    );
-    insert into public.organizations (id) values ('${org}'), ('${otherOrg}');
-    insert into public.users (id, org_id, primary_dept_id) values ('${actor}', '${org}', '${manualDepartment}');
+    insert into public.organizations (id,name) values ('${org}','Test organization'), ('${otherOrg}','Other organization');
     insert into public.departments (id, org_id, name, source, status) values ('${manualDepartment}', '${org}', '手工部门', 'manual', 'active');
+    insert into public.users (id, org_id, display_name, primary_dept_id) values ('${actor}', '${org}', 'Existing member', '${manualDepartment}');
+    insert into public.user_organizations(membership_id, user_id, org_id, primary_department_id) values ('77777777-0000-4000-8000-777777777777', '${actor}', '${org}', '${manualDepartment}');
     insert into public.user_departments (user_id, department_id, org_id) values ('${actor}', '${manualDepartment}', '${org}');
-    insert into public.user_organizations(user_id, org_id, primary_department_id) values ('${actor}', '${org}', '${manualDepartment}');
     insert into public.organization_sources (
       id, system_org_id, provider, external_tenant_id, priority, status,
       sync_mode, configuration_revision, connection_state, effective_revision, updated_at
@@ -374,6 +279,11 @@ describe('native organization directory landing', () => {
           select private.organization_directory_state_v1('${org}', '${source}', array(select id from public.users where org_id = '${org}')) as state
         `)).rows[0].state
       }
+      async function serviceQuery<T = Record<string, unknown>>(sql: string, params?: unknown[]) {
+        await db.exec("set role service_role; set search_path = '';")
+        try { return await db.query<T>(sql, params) }
+        finally { await db.exec('set role postgres; set search_path = public;') }
+      }
       async function prepare() {
         const current = await state()
         const payload = buildDirectoryCutoverPlan({
@@ -385,19 +295,19 @@ describe('native organization directory landing', () => {
         })
         expect(payload.conflicts).toEqual([])
         expect(payload.applyable).toBe(true)
-        const stored = await db.query<{ id: string }>(`
+        const stored = await serviceQuery<{ id: string }>(`
           select id from public.store_organization_directory_cutover_plan_v1(
             $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::text,$6::text,$7::jsonb,$8::uuid,now() + interval '20 minutes')
         `, [org, source, revision, payload.previousPrimarySourceId, payload.snapshot.directoryHash, payload.planHash, JSON.stringify(payload), actor])
         return { id: stored.rows[0].id, payload }
       }
       async function apply(item: Awaited<ReturnType<typeof prepare>>) {
-        return (await db.query<{ result: { id: string } }>(`
+        return (await serviceQuery<{ result: { id: string } }>(`
           select public.apply_organization_directory_cutover_v1($1::uuid,$2::uuid,$3::text,$4::uuid,$5::jsonb,$6::uuid) as result
         `, [org, item.id, item.payload.planHash, revision, JSON.stringify(item.payload.sourceRevisions), actor])).rows[0].result
       }
       async function rollback(id: string) {
-        return db.query('select public.rollback_organization_directory_cutover_v1($1::uuid,$2::uuid,$3::uuid)', [org, id, actor])
+        return serviceQuery('select public.rollback_organization_directory_cutover_v1($1::uuid,$2::uuid,$3::uuid)', [org, id, actor])
       }
       const before = await state()
       const firstPlan = await prepare()
@@ -413,17 +323,18 @@ describe('native organization directory landing', () => {
       expect((await db.query('select count(*)::integer as n from public.user_departments where user_id=$1::uuid', [newPerson.canonicalUserId])).rows)
         .toEqual([{ n: 2 }])
       expect((await db.query('select * from public.user_roles')).rows).toEqual([])
-      const read = (await db.query<{ payload: { users: Array<Record<string, unknown>>; departments: Array<Record<string, unknown>> } }>(`
+      expect((await db.query<{ membership_id: string }>('select membership_id from public.user_organizations where user_id=$1::uuid', [newPerson.canonicalUserId])).rows[0].membership_id).toMatch(/^[0-9a-f-]{36}$/)
+      expect((await db.query('select membership_id::text from public.user_organizations where user_id=$1::uuid', [actor])).rows).toEqual([{ membership_id: '77777777-0000-4000-8000-777777777777' }])
+      const read = (await serviceQuery<{ payload: { users: Array<Record<string, unknown>>; departments: Array<Record<string, unknown>> } }>(`
         select public.get_org_admin_directory_payload_v1('${org}') as payload
       `)).rows[0].payload
       expect(read.users).toHaveLength(2)
-      // A conflicting historical mapping must not duplicate a real member in the organization tree.
-      await db.query(`insert into public.external_identities(source_id, system_org_id, external_user_id, canonical_user_id,
+      // Production's unique mapping constraint rejects a second matched identity for the same person.
+      await expect(db.query(`insert into public.external_identities(source_id, system_org_id, external_user_id, canonical_user_id,
         match_status, match_method, match_confidence) values ($1::uuid,$2::uuid,'legacy-duplicate',$3::uuid,'matched','manual',1)`,
-      [source, org, newPerson.canonicalUserId])
+      [source, org, newPerson.canonicalUserId])).rejects.toMatchObject({ code: '23505', constraint: 'external_identities_source_canonical_unique' })
       expect((await db.query<{ payload: { users: unknown[] } }>(`select public.get_org_admin_directory_payload_v1('${org}') as payload`))
         .rows[0].payload.users).toHaveLength(2)
-      await db.query(`delete from public.external_identities where source_id=$1::uuid and external_user_id='legacy-duplicate'`, [source])
       const rootDepartment = read.departments.find(row => row.external_id === 'root')!
       const salesDepartment = read.departments.find(row => row.external_id === 'sales')!
       expect(salesDepartment.parent_id).toBe(rootDepartment.id)
@@ -441,11 +352,11 @@ describe('native organization directory landing', () => {
       await apply(secondPlan)
       expect((await db.query('select count(*)::integer as n from public.users')).rows).toEqual([{ n: 2 }])
       await rollback(secondPlan.id)
-      // A later role grant must prevent a rollback from deleting a person through ON DELETE CASCADE.
-      await db.query('insert into public.user_roles(user_id,role_id) values ($1::uuid,$2)', [newPerson.canonicalUserId, 'role-added-later'])
+      // A later business reference must prevent deletion of a newly provisioned person.
+      await db.query("insert into public.sales_spaces(org_id,department_id,name,owner_id) values ($1::uuid,$2::uuid,'Later space',$3::uuid)", [org, manualDepartment, newPerson.canonicalUserId])
       await expect(rollback(firstPlan.id)).rejects.toThrow('later changes')
-      expect((await db.query('select * from public.user_roles')).rows).toHaveLength(1)
-      await db.query('delete from public.user_roles where user_id=$1::uuid', [newPerson.canonicalUserId])
+      expect((await db.query('select * from public.sales_spaces')).rows).toHaveLength(1)
+      await db.query('delete from public.sales_spaces where owner_id=$1::uuid', [newPerson.canonicalUserId])
       await rollback(firstPlan.id)
       expect(await state()).toEqual(before)
       expect((await db.query('select count(*)::integer as n from public.users')).rows).toEqual([{ n: 1 }])

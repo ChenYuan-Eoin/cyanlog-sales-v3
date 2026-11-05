@@ -268,7 +268,11 @@
       "product-truth/product-code/lib/fxiaoke/egress/protocol.mjs",
       "product-truth/product-code/lib/fxiaoke/egress/protocol.test.ts",
       "product-truth/product-code/lib/fxiaoke/egress/server.test.ts",
-      "product-truth/product-code/lib/fxiaoke/egress/README.md"
+      "product-truth/product-code/lib/fxiaoke/egress/README.md",
+      "product-truth/product-code/lib/organization-connections/schema-baseline",
+      "product-truth/product-code/scripts/organization-schema-gate.mjs",
+      "product-truth/product-code/scripts/organization-schema-gate.test.ts",
+      ".github/workflows/organization-db-gates.yml"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -295,7 +299,33 @@
       "runtime_profile": "application",
       "runtime_contract_version": "f003-directory-cutover-v2",
       "production_database_mode": "read_only",
-      "note": "当前批准整体目录同步本地/隔离开发与迁移候选，code_green仅代表开发状态；完整部门员工归属正式站同步回读是业务出口。生产发布、迁移、写入在具体候选及恢复方案可审查后独立批准。"
+      "note": "code_green是当前开发状态。IN-20261105-007独立批准发布、两项迁移及计划生成，不代表完整组织目录业务验收，不推进WP53；真实目录应用仍未授权。",
+      "production_release_authorization": {
+        "status": "approved_release_migrations_and_plan_only",
+        "approval_id": "IN-20261105-007",
+        "candidate_sha": "01720f8084094fbc2cc87389f26fbdc13332ef4c",
+        "organization_id": "00000001-0000-0000-0000-000000000000",
+        "source_id": "3fdc0f37-5dfa-4ca1-acff-f665093b97f2",
+        "authorized": [
+          "push_and_website_production_release",
+          "existing_fxiaoke_worker_update",
+          "unified_connection_migration_with_encrypted_legacy_import",
+          "directory_schema_migration",
+          "generate_persisted_directory_diff_plan"
+        ],
+        "excluded": [
+          "apply_directory_people_and_departments",
+          "rename_or_rebind_organization",
+          "login_or_role_grants",
+          "fxiaoke_crm_writes"
+        ]
+      },
+      "required_database_release_checks": [
+        "fresh_production_ddl_diff",
+        "native_postgresql_17_6_migration_rehearsal",
+        "constraints_triggers_and_rollback_integration",
+        "exact_migration_sql_review"
+      ]
     },
     "acceptance_checks": [
       "同一来源连接验证后读取部门、员工及归属形成同一快照；企业、连接版本、分页与结构有效，独立名册/导出不是前置",
@@ -304,13 +334,15 @@
       "明确确认后同一事务应用完整目录；跨企业、结构冲突、过期/篡改/并发变化拒绝，重复确认幂等，任一步失败全部回滚",
       "组织架构页面按部门联动展示目录人员与状态；主属/附属关系、来源和待关联状态刷新回读一致",
       "不修改登录启停、密码、角色或业务许可；不自动把目录状态解释为登录启停；手工和旧来源资料保留",
-      "本地/隔离开发检查与正式站真实同步分别记录；仅精确发布版本及现有Chrome联动回读通过才关闭业务阶段"
+      "本地/隔离开发检查与正式站真实同步分别记录；仅精确发布版本及现有Chrome联动回读通过才关闭业务阶段",
+      "IN-20261105-009：生产同源DDL版本化，发布前通过DDL差异、同构迁移演练、约束/触发器集成测试及SQL review四道门禁；CI自动比对，失败禁止发布。"
     ],
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
     "activation_basis": "IN-20261105-004",
     "blocking_items": [
-      "生产部署、必要迁移及部门写入等待具体候选和恢复方案审查；未获授权前仅本地/隔离验证",
-      "系统组织与外部企业的显示资料对应须在真实同步前明确，不按名称自动新建或改绑组织"
+      "已批准候选发布、既有转发程序更新、两项必要迁移及差异生成；真实部门/人员应用等待差异审查后的独立确认。",
+      "系统组织与外部企业的显示资料对应须在真实同步前明确，不按名称自动新建或改绑组织",
+      "云主机更新暂停：先核对纷享固定出口必要性；不得因旧企微方案沿用或恢复其运行依赖。"
     ],
     "non_goals": [
       "SSO、登录、寄件、AI、下单",

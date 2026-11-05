@@ -6,6 +6,36 @@
 
 begin;
 
+-- Existing native triggers also run inside the directory RPC's empty search_path.
+-- Keep their behavior while qualifying the table they operate on.
+create or replace function public.update_department_path()
+returns trigger language plpgsql set search_path = '' as $$
+declare parent_path text;
+begin
+  if new.parent_id is null then
+    new.path := '/' || new.id::text || '/';
+    new.depth := 0;
+  else
+    select path, depth into parent_path, new.depth
+      from public.departments where id = new.parent_id;
+    new.path := parent_path || new.id::text || '/';
+    new.depth := new.depth + 1;
+  end if;
+  return new;
+end;
+$$;
+create or replace function public.update_dept_member_count()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  if tg_op = 'INSERT' then
+    update public.departments set member_count = member_count + 1 where id = new.department_id;
+  elsif tg_op = 'DELETE' then
+    update public.departments set member_count = greatest(member_count - 1, 0) where id = old.department_id;
+  end if;
+  return null;
+end;
+$$;
+
 alter table public.departments
   drop constraint if exists departments_source_check;
 alter table public.departments
@@ -888,6 +918,16 @@ begin
     end if;
     v_primary_department_id := nullif(v_department_map->>(v_change->>'primaryDepartmentExternalId'), '')::uuid;
 
+    -- The native department relationship has a composite FK to this membership.
+    insert into public.user_organizations(membership_id, user_id, org_id, is_default, status, employment_status, primary_department_id)
+      select gen_random_uuid(), v_user_id, p_system_org_id, true,
+        case when user_row.login_enabled = false and user_row.status = 'inactive' then 'invited' else 'active' end,
+        case when (v_change->>'active')::boolean then 'active' else 'suspended' end,
+        v_primary_department_id
+      from public.users user_row where user_row.id = v_user_id and user_row.org_id = p_system_org_id
+      on conflict (user_id, org_id) do update set primary_department_id = excluded.primary_department_id,
+        employment_status = excluded.employment_status;
+
     delete from public.user_departments as membership
      using public.departments as department
      where membership.user_id = v_user_id
@@ -914,15 +954,6 @@ begin
       on conflict (user_id, department_id)
       do update set is_primary = excluded.is_primary;
     end loop;
-
-    insert into public.user_organizations(user_id, org_id, is_default, status, employment_status, primary_department_id)
-      select v_user_id, p_system_org_id, true,
-        case when user_row.login_enabled = false and user_row.status = 'inactive' then 'invited' else 'active' end,
-        case when (v_change->>'active')::boolean then 'active' else 'suspended' end,
-        v_primary_department_id
-      from public.users user_row where user_row.id = v_user_id and user_row.org_id = p_system_org_id
-      on conflict (user_id, org_id) do update set primary_department_id = excluded.primary_department_id,
-        employment_status = excluded.employment_status;
 
     update public.users as user_row
        set primary_dept_id = v_primary_department_id,

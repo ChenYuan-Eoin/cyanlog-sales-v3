@@ -1,0 +1,82 @@
+name: Organization database gates
+
+on:
+  push:
+    branches: [main, production, 'codex/**']
+    paths:
+      - 'product-truth/product-code/lib/organization-connections/**'
+      - 'product-truth/product-code/supabase/migrations/**'
+      - 'product-truth/product-code/scripts/organization-schema-gate*'
+      - '.github/workflows/organization-db-gates.yml'
+  pull_request:
+    paths:
+      - 'product-truth/product-code/lib/organization-connections/**'
+      - 'product-truth/product-code/supabase/migrations/**'
+      - 'product-truth/product-code/scripts/organization-schema-gate*'
+      - '.github/workflows/organization-db-gates.yml'
+  workflow_dispatch:
+    inputs:
+      production_schema_export:
+        description: 'Fresh trusted capture.sql export, gzip/base64, bound to this exact candidate (no business rows or credentials)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: product-truth/product-code
+
+jobs:
+  database:
+    name: PostgreSQL 17.6 constraints, triggers, migrations and rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_USER: wp92_bootstrap
+          POSTGRES_PASSWORD: disposable-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd 'pg_isready -U wp92_bootstrap'
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      ORGANIZATION_TEST_DATABASE_URL: postgres://wp92_bootstrap:disposable-ci-only@127.0.0.1:5432/postgres
+      ORGANIZATION_RELEASE_GATE: 'true'
+      VITEST_MAX_WORKERS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: SQL review must match these exact migration bytes
+        run: node scripts/organization-schema-gate.mjs review
+      - name: Production-derived database integration and migration rehearsal
+        run: >-
+          pnpm test:run scripts/organization-schema-gate.test.ts
+          lib/organization-connections/schema-baseline/database.test.ts
+          lib/organization-connections/unified-connection-migration.test.ts
+          lib/organization-connections/organization-directory-cutover-migration.test.ts
+      - name: Compare fresh Production DDL before a release
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          PRODUCTION_SCHEMA_EXPORT: ${{ inputs.production_schema_export }}
+        run: node scripts/organization-schema-gate.mjs drift --env
+      - name: Record exact scope of this run
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            echo 'Four database gates passed for the checked-out SHA; export provenance is the trusted dispatch actor.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Candidate database checks passed. A fresh Production DDL comparison is still required before release.' >> "$GITHUB_STEP_SUMMARY"
+          fi
