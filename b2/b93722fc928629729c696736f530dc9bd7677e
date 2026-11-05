@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "activeId": "WP92",
+  "commit": "b2b93722fc928629729c696736f530dc9bd7677e",
+  "evidence": {
+    "code": {
+      "commit": "b2b93722fc928629729c696736f530dc9bd7677e",
+      "tree": "8ce6e968be2d6d186172d5984341e9f1b87c658d",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "full_tests",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh"
+          ],
+          "artifact_path": "check-logs/8ce6e968be2d6d186172d5984341e9f1b87c658d/check-03-test.log",
+          "sha256": "33a97bd1d9bed5177ef607507b6eaca8e87b2e816fca7a7894e78b2140468e86",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "33a97bd1d9bed5177ef607507b6eaca8e87b2e816fca7a7894e78b2140468e86"
+        },
+        {
+          "name": "lint",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-02-lint.sh"
+          ],
+          "artifact_path": "check-logs/8ce6e968be2d6d186172d5984341e9f1b87c658d/check-02-lint.log",
+          "sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c"
+        },
+        {
+          "name": "typecheck",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-01-typecheck.sh"
+          ],
+          "artifact_path": "check-logs/8ce6e968be2d6d186172d5984341e9f1b87c658d/check-01-typecheck.log",
+          "sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "exit_code": 0,
+          "timeout": false,
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+        },
+        {
+          "name": "target_tests",
+          "command": [
+            "pnpm",
+            "test:run",
+            "lib/fxiaoke/egress/directory-transport.test.ts",
+            "lib/fxiaoke/egress/server.test.ts",
+            "lib/organization-connections/adapters/fxiaoke.test.ts",
+            "lib/organization-connections/directory-cutover-read.test.ts",
+            "app/api/admin/org/route.test.ts"
+          ],
+          "artifact_path": "wp92-native-organization-correction/directory-degradation-target.log",
+          "log_sha256": "fe193e4dd507d87498e865e04e96add34cc4ba12f1544be0e6b93b577e06f441",
+          "exit_code": 0,
+          "timeout": false,
+          "tree": "8ce6e968be2d6d186172d5984341e9f1b87c658d"
+        },
+        {
+          "name": "build",
+          "command": [
+            "pnpm",
+            "build"
+          ],
+          "artifact_path": "wp92-native-organization-correction/directory-degradation-build.log",
+          "log_sha256": "59a9b7787058a1702011f41668f3ed7cf428b93bad1c655dc6d20f85e4eca615",
+          "exit_code": 0,
+          "timeout": false,
+          "tree": "8ce6e968be2d6d186172d5984341e9f1b87c658d"
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "1bad6b728d534810a52caacb9175a824680d6fa0f8a7a303748d7a96a8ca406f",
+        "entry_sha256": "3ff878aee868110a980a0c4322d7e9eb3537983c1e4f065293dac49ee5a4b689"
+      },
+      "summary": "Optional read-only directory transport: direct first, scoped relay only for availability/IP failure; native directory read and saved plan survive provider outage. 35 targeted tests; 3254 full passed + 5 skipped; strict 10/10, typecheck/lint/build. Catalog-set ordering fix with 29 native PostgreSQL 17.6 gate tests; current fresh Production DDL matches baseline.",
+      "boundary": "Candidate only. No website Production release, Production migration, directory application or cloud host update. Temporary Preview diagnostic deployments removed; live direct connectivity remains unverified."
+    }
+  },
+  "updatedAt": "2026-11-05T04:48:33.802Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-11-05T04:48:33.784Z",
+      "head": "b2b93722fc928629729c696736f530dc9bd7677e",
+      "originMain": "a11e185aea372af97428d0c70fe768dd2720067d",
+      "remoteMain": "a11e185aea372af97428d0c70fe768dd2720067d",
+      "remoteProduction": "a11e185aea372af97428d0c70fe768dd2720067d",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "4f12dd30bb61342325ddf98b3476dc7adf85d7f8",
+      "remoteAttestationRefOid": "9e1c3fd95fe00ef28dc5c70431c861cb8ae3d230",
+      "remoteSnapshotCheckedAt": "2026-11-05T04:48:30.120Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "0a1ec6b4f691c8e6b7dedcd55318416fda83e72b5790d77e686d4a226c36dfdc",
+  "sealedAt": "2026-11-05T04:48:33.804Z",
+  "attestationDigest": "55c3297f306611411af63f66a4b9046121525a71c7ed121745c6bd36918f9195"
+}
