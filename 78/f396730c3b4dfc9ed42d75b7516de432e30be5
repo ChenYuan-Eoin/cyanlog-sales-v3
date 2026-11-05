@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "activeId": "WP40",
+  "commit": "78f396730c3b4dfc9ed42d75b7516de432e30be5",
+  "evidence": {
+    "code": {
+      "commit": "78f396730c3b4dfc9ed42d75b7516de432e30be5",
+      "tree": "a149e3c21727735b0c0e3e644f50491eba60a3a1",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "app/shipping/config-drawer.test.tsx"
+          ],
+          "exit_code": 0,
+          "artifact_path": "wp40-shipping-settings-consolidation/target-tests.log",
+          "log_sha256": "4d9d72e13f6a7b7ae5130dbbc078a6a66177fcd049b36ee67f39ad1e7379c77b"
+        },
+        {
+          "name": "full_tests",
+          "command": [
+            "pnpm",
+            "run",
+            "test:run"
+          ],
+          "exit_code": 0,
+          "artifact_path": "wp40-shipping-settings-consolidation/full-tests.log",
+          "log_sha256": "d6f1a9d1a5cc56d709414e8bc99e9bc623f4036eca9136ebe5e4b73e88a50f54"
+        },
+        {
+          "name": "lint",
+          "command": [
+            "pnpm",
+            "run",
+            "lint"
+          ],
+          "exit_code": 0,
+          "artifact_path": "wp40-shipping-settings-consolidation/lint.log",
+          "log_sha256": "1a4b05d7d3802d54810a2a3e576dd8d784ee59d72b37ef70dfe3a9758d63424c"
+        },
+        {
+          "name": "typecheck",
+          "command": [
+            "pnpm",
+            "exec",
+            "tsc",
+            "--noEmit"
+          ],
+          "exit_code": 0,
+          "artifact_path": "wp40-shipping-settings-consolidation/typecheck.log",
+          "log_sha256": "fdb103df2d2757267c6145df36c379a809381866c1d77e3773aeb21fc520af5d"
+        },
+        {
+          "name": "build",
+          "command": [
+            "pnpm",
+            "run",
+            "build"
+          ],
+          "exit_code": 0,
+          "artifact_path": "wp40-shipping-settings-consolidation/build.log",
+          "log_sha256": "f13136856975a8a9bc0660abefb51c3c6b723d1dd0f23e68a049722298bacce3"
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "faaa307b92b4ce0a97df32edb54fc487f56598cece0f3721f9b4c91569708b39",
+        "entry_sha256": "58a9b660133b8072f30911f8b3a67dba2b9d1e70f1bcad430785a436757fc42f"
+      }
+    }
+  },
+  "updatedAt": "2026-11-05T10:53:45.766Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-11-05T10:53:45.749Z",
+      "head": "78f396730c3b4dfc9ed42d75b7516de432e30be5",
+      "originMain": "a2259495d2532a07166a42719adf661a8c61b92a",
+      "remoteMain": "a2259495d2532a07166a42719adf661a8c61b92a",
+      "remoteProduction": "a2259495d2532a07166a42719adf661a8c61b92a",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "670d15d76eacaee2febf0fd9e14cef5cab32d163",
+      "remoteAttestationRefOid": "670d15d76eacaee2febf0fd9e14cef5cab32d163",
+      "remoteSnapshotCheckedAt": "2026-11-05T10:53:43.136Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "19450d87743c151744bd679191db9f483fe434107877c23d17708fd1db35705e",
+  "sealedAt": "2026-11-05T10:53:45.767Z",
+  "attestationDigest": "4c0b4b04ccab328c7054e36df570c2c04150cae9941ca7a823d7360bd3eea3b8"
+}
