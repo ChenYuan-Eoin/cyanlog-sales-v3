@@ -179,6 +179,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
             <span className={`text-sm font-medium ${isSelected ? 'text-blue-900' : 'text-slate-900'}`}>
               {dept.name}
             </span>
+            {dept.status === 'inactive' && <span className="ml-1 text-xs text-slate-400">已停用</span>}
             {dept.leader_name && (
               <span className="ml-1 text-xs text-amber-600">
                 👤 {dept.leader_name}
@@ -331,7 +332,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
   // 使用 Fuse.js 进行模糊搜索
   const fuse = useMemo(() => {
     return new Fuse(users, {
-      keys: ['display_name', 'email', 'title', 'primary_dept_name', 'role_names'],
+      keys: ['display_name', 'email', 'title', 'primary_dept_name', 'secondary_dept_names', 'directory_external_id', 'role_names'],
       threshold: 0.4,
     })
   }, [users])
@@ -371,13 +372,22 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
     },
     {
       accessorKey: 'primary_dept_name',
-      header: '部门',
-      size: 140,
+      header: '主属／附属部门',
+      size: 180,
       cell: ({ row }) => (
-        <Badge variant="outline" className="font-normal truncate max-w-[120px]">
-          {row.original.primary_dept_name || '未分配'}
-        </Badge>
+        <div className="space-y-1">
+          <Badge variant="outline" className="font-normal">{row.original.primary_dept_name || '未分配'}</Badge>
+          {!!row.original.secondary_dept_names?.length && <div className="text-xs text-slate-500">附属：{row.original.secondary_dept_names.join('、')}</div>}
+        </div>
       ),
+    },
+    {
+      id: 'directory_association',
+      header: '账号关联',
+      size: 110,
+      cell: ({ row }) => row.original.directory_identity_id
+        ? <Badge variant={row.original.directory_pending_account ? 'outline' : 'secondary'}>{row.original.directory_pending_account ? '待关联账号' : '已有账号'}</Badge>
+        : <span className="text-xs text-slate-500">系统成员</span>,
     },
     {
       accessorKey: 'role_names',
@@ -400,14 +410,18 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <span className={`inline-block h-2 w-2 rounded-full ${
-            row.original.membership_status === 'invited'
+            row.original.directory_status
+              ? (row.original.directory_status === 'active' ? 'bg-emerald-400' : 'bg-amber-400')
+              : row.original.membership_status === 'invited'
               ? 'bg-blue-400'
               : row.original.status === 'active'
                 ? 'bg-emerald-400'
                 : 'bg-amber-400'
           }`} />
           <span className="text-sm text-slate-600">
-            {row.original.membership_status === 'invited'
+            {row.original.directory_status
+              ? (row.original.directory_status === 'active' ? '在职' : row.original.directory_status === 'ended' ? '已离职' : '已停用')
+              : row.original.membership_status === 'invited'
               ? '待激活'
               : row.original.status === 'active'
                 ? '在职'
@@ -793,7 +807,7 @@ export default function OrgStructureTab({
   const filteredUsers = useMemo(() => {
     if (!selectedDeptId) return users
     const allowedDeptIds = getAllChildDeptIds(departments, selectedDeptId)
-    return users.filter(u => u.primary_dept_id && allowedDeptIds.has(u.primary_dept_id))
+    return users.filter(u => [...(u.department_ids ?? []), ...(u.primary_dept_id ? [u.primary_dept_id] : [])].some(id => allowedDeptIds.has(id)))
   }, [users, departments, selectedDeptId])
 
   // 统计信息

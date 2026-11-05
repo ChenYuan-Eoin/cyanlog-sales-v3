@@ -22,7 +22,7 @@ type Department = AdapterDirectoryRead['departments'][number]
 type Employee = Pick<AdapterDirectoryRead['employees'][number], 'id' | 'name' | 'departmentIds' | 'primaryDepartmentId' | 'status'>
 
 export type DirectoryInspection = {
-  version: 'f003-directory-inspection-v1'
+  version: 'f003-directory-inspection-v2'
   binding: DirectoryInspectionBinding
   checkedAt: string
   contentHash: string
@@ -32,13 +32,7 @@ export type DirectoryInspection = {
   departments: Department[]
   employees: Employee[]
   structure: { complete: boolean; issues: DirectoryInspectionIssue[] }
-  scope: {
-    verified: false
-    status: 'independent_evidence_required'
-    evidence: null
-    reason: string
-    requiredEvidence: string[]
-  }
+  dataStatus: 'present' | 'empty'
 }
 
 function digest(value: unknown) {
@@ -97,7 +91,7 @@ export function buildDirectoryInspection(
   if (!Number.isFinite(Date.parse(directory.checkedAt))) add('invalid_observation_time', 'directory', null, '提供方读取时间无效。')
   const contentHash = digest({ provider: binding.provider, externalTenantId: binding.externalTenantId, departments, employees })
   return {
-    version: 'f003-directory-inspection-v1',
+    version: 'f003-directory-inspection-v2',
     binding: { ...binding },
     checkedAt: directory.checkedAt,
     contentHash,
@@ -107,18 +101,8 @@ export function buildDirectoryInspection(
     departments,
     employees,
     structure: { complete: issues.length === 0, issues },
-    // Neither a provider's boolean nor a free-text assertion is independent
-    // scope evidence. No supported authoritative evidence reader exists yet.
-    scope: {
-      verified: false,
-      status: 'independent_evidence_required',
-      evidence: null,
-      reason: '当前结果仅覆盖此连接可读取的范围，尚缺独立的全公司目录依据，不能据此同步或切源。',
-      requiredEvidence: [
-        '同一企业的权威部门和员工清单，含稳定标识、部门关系与人员状态范围',
-        '管理端读取权限和全公司范围依据，注明来源及取证时间',
-        '按稳定标识逐项对账并解释差异；总数相同不能代替逐项核对',
-      ],
-    },
+    // IN-20261105-001: functional readback, with no manual roster/export gate.
+    // This observation does not grant directory write or cutover authority.
+    dataStatus: departments.length || employees.length ? 'present' : 'empty',
   }
 }

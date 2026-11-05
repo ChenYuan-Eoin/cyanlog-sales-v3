@@ -4,7 +4,7 @@ import { discoverEnterprise, previewDirectory, readEmployeeIdentity } from './cl
 const credentials = { appId: 'FSAID_test', appSecret: 'test-only-secret', permanentCode: 'test-only-code', expectedEa: 'example', apiUserId: '123' }
 const token = { errorCode: 0, appId: credentials.appId, ea: 'example', openUserId: 'FSCID_test', accessToken: 'test-token' }
 const department = { _id: '100', name: '销售部', parent_id: [], status: 0 }
-const employee = { _id: 'record1', user_id: '123', name: '测试员工', data_own_department: ['100'], vice_departments: [], status: '0', is_pause_login: false }
+const employee = { _id: 'record1', user_id: '123', name: '测试员工', main_department: ['100'], vice_departments: [], status: '0', is_pause_login: false }
 const page = (rows: unknown[], total = rows.length) => ({ errorCode: 0, data: { dataList: rows, total } })
 function fixture(...values: unknown[]) { return vi.fn<typeof fetch>().mockImplementation(async () => Response.json(values.shift())) }
 
@@ -76,11 +76,11 @@ describe('Fxiaoke direct directory preview', () => {
     const result = await previewDirectory(credentials, fixture(token, page([department]), page([employee, { ...employee, _id: 'record2', user_id: '456' }])))
     expect(result.employees).toHaveLength(2)
   })
-  it('uses the ownership field for primary department and merges supplementary departments', async () => {
+  it('uses main_department instead of record ownership and merges supplementary departments', async () => {
     const request = fixture(
       token,
       page([department, { ...department, _id: '200', name: '华东销售部' }]),
-      page([{ ...employee, data_own_department: ['100'], vice_departments: ['200'] }]),
+      page([{ ...employee, main_department: ['100'], data_own_department: ['200'], vice_departments: ['200'] }]),
     )
     const result = await previewDirectory(credentials, request)
     expect(result.complete).toBe(true)
@@ -93,7 +93,7 @@ describe('Fxiaoke direct directory preview', () => {
     const missing = await previewDirectory(credentials, fixture(
       token,
       page([department]),
-      page([{ ...employee, data_own_department: [], vice_departments: ['100'] }]),
+      page([{ ...employee, main_department: [], vice_departments: ['100'] }]),
     ))
     expect(missing.complete).toBe(false)
     expect(missing.employees[0].primaryDepartmentId).toBeNull()
@@ -102,7 +102,7 @@ describe('Fxiaoke direct directory preview', () => {
     const ambiguous = await previewDirectory(credentials, fixture(
       token,
       page([department, { ...department, _id: '200', name: '华东销售部' }]),
-      page([{ ...employee, data_own_department: ['100', '200'], vice_departments: [] }]),
+      page([{ ...employee, main_department: ['100', '200'], vice_departments: [] }]),
     ))
     expect(ambiguous.complete).toBe(false)
     expect(ambiguous.employees[0].primaryDepartmentId).toBeNull()
@@ -115,8 +115,8 @@ describe('Fxiaoke direct directory preview', () => {
       { ...department, _id: 'deleted', status: '2' },
     ]
     const employees = [
-      { ...employee, _id: 'employee-active', user_id: 'active-user', data_own_department: ['active'], status: '0' },
-      { ...employee, _id: 'employee-inactive', user_id: 'inactive-user', data_own_department: ['active'], status: '1' },
+      { ...employee, _id: 'employee-active', user_id: 'active-user', main_department: ['active'], status: '0' },
+      { ...employee, _id: 'employee-inactive', user_id: 'inactive-user', main_department: ['active'], status: '1' },
     ]
     const mapped = await previewDirectory(credentials, fixture(token, page(departments), page(employees)))
     expect(mapped.departments.map(item => item.status)).toEqual(['active', 'inactive', 'deleted'])

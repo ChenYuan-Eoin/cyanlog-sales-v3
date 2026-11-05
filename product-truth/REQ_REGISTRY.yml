@@ -45,25 +45,25 @@ goal_governance:
     source: IN-20261028-010
     objective: "销售一次填写真实收件信息，形成归属正确的待确认工单；授权人员确认后顺丰只下单一次，单号回到原销售与原CRM记录。共享组织权限，数据隔离，原单可恢复。"
     ledger: product-truth/feature-packets/F099-current-goal-ledger.md
-    active: WP51
-    next: WP50
-    directory_stage_sequence: [WP51, WP50, WP53, WP92]
-    directory_stage_authority: IN-20261104-010
-    directory_stage_gate: "前阶段缺真实证据，后阶段不启动；代码、Preview和部署不能代替范围/连接/差异/切源验收。"
+    active: WP92
+    next: WP53
+    directory_stage_sequence: [WP92, WP53]
+    directory_stage_authority: IN-20261105-004
+    directory_stage_gate: "部门、员工和主属/附属关系整体同步并联动回读；前一批无真实证据，后一批不启动；代码、Preview和部署不能代替业务验收。"
     execution_policy: "目标已建立，按F099顺序保持单一Active，每批一个可演示用户任务；生产实证才可交付，不继承上一WP的发布或数据写入批准。"
     data_boundary: "仅cyanlog-sales-v3；销售填写本票地址；村庄无门牌合法；客户档案已有地址不得覆盖；正式顺丰下单由用户确认。"
     intake_chain: [WP94, WP92, WP93, WP96, WP97, WP99, WP98]
     sales_login_chain: [WP91, WP92, WP93, WP94]
     note: "依赖链不等于全部排期；全队列顺序与每项验收以F099为准。"
   work_package_crosswalk:
-    WP51: {name: 全公司组织目录范围核验, primary_goals: [G5, G7, G10], state: executing}
-    WP53: {name: 目录差异与待关联人员审查, primary_goals: [G5, G7, G10], state: waiting_previous_stage}
+    WP51: {name: 来源管理只读诊断基础, primary_goals: [G5, G7, G10], state: parked_reused_by_wp92}
+    WP53: {name: 持续同步、变更与恢复验收, primary_goals: [G5, G7, G10], state: waiting_previous_stage}
     WP98: {name: 真实运单结果回填原CRM记录, primary_goals: [], state: queued_goal_registered}
     WP97: {name: CRM审批生成唯一待确认工单, primary_goals: [], state: queued_goal_registered}
     WP96: {name: CRM审批寄件字段映射预览, primary_goals: [], state: queued_goal_registered}
     WP95: {name: 寄件信息正确解析与无门牌地址提交, primary_goals: [], state: production_released, closed_scope: "解析与无门牌地址校验；真实履约移交WP99"}
     WP91: {name: 纷享应用配置与通讯录预览, primary_goals: [G5, G7, G10], state: production_released}
-    WP92: {name: 纷享组织同步与主来源切换, primary_goals: [G5, G7, G10], state: waiting_directory_scope_connection_and_review}
+    WP92: {name: 组织目录整体同步与架构回读, primary_goals: [G5, G7, G10], state: executing}
     WP93: {name: 统一成员身份与寄件许可, primary_goals: [G5, G7, G10], state: queued}
     WP94: {name: 纷享SSO与联合身份门禁, primary_goals: [G5, G7, G10], state: blocked_by_directory_scope_and_identity_authority}
     WP99: {name: 顺丰真实履约端到端闭环, primary_goals: [G5, G7, G10], state: queued}
@@ -294,7 +294,7 @@ requirements:
       - app/configs/page.tsx
     description: 统一 UUID 的纷享 OAuth 与受限既有账号过渡登录、角色权限和用户管理（自主可控 + 可配置 RBAC）
     audit_supplement:
-      status_caveat: "WP51为当前Active、WP50为Next；WP53差异与待关联人员审查、WP92切源、WP93业务许可后置；正式数据73部门/405员工仅证明当前可读范围分页完成，scopeVerified仍为false，目录切源保持阻断。SSO还必须具备显式identity权威与稳定映射，机器部署不等于登录通过。IN013已批准受限账号过渡入口，角色权限和全域授权仍由各责任WP独立验收。"
+      status_caveat: "IN-20261105-004修订：唯一Active为WP92整体组织目录同步，Next为WP53持续变更与恢复。部门、员工与归属统一验收，待关联账号员工必须可见；不再以导出或独立范围证明为前置。当前仍缺正式站整体同步及联动回读证据，不将历史预览、代码或部署视为通过。登录与业务权限独立后置。"
       supplemental_requirements:
         - "登录成功用户必须解析到稳定 org context；缺默认组织时要返回可诊断错误或自动修复路径。"
         - "认证、鉴权、组织上下文失败必须有统一错误码，不得被消费页面吞掉。"

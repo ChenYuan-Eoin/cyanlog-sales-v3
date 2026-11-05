@@ -568,6 +568,13 @@ export interface ScopedRoleAssignment {
 }
 
 export interface OrgSummaryUser {
+  directory_identity_id?: string
+  directory_external_id?: string
+  directory_source?: string
+  directory_status?: string
+  directory_pending_account?: boolean
+  department_ids?: string[]
+  secondary_dept_names?: string[]
   id: string
   email: string
   phone?: string | null
@@ -588,6 +595,9 @@ export interface OrgSummaryUser {
 }
 
 export interface OrgSummaryDepartment {
+  source?: string
+  external_id?: string | null
+  status?: string
   id: string
   name: string
   code?: string | null

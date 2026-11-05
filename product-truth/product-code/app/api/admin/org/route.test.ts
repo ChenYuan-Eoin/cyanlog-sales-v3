@@ -76,10 +76,17 @@ describe('GET /api/admin/org', () => {
     expect(res.headers.get('X-Org-Timing')).toContain('auth;dur=')
     expect(res.headers.get('X-Org-Timing')).toContain('rpc_payload;dur=')
     expect(res.headers.get('X-Org-Timing')).toContain('total;dur=')
-    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('get_org_admin_payload_v1', {
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('get_org_admin_directory_payload_v1', {
       p_org_id: 'org-1',
     })
     expect(getDefaultOrgId).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('目录聚合读取失败时不回退成缺少目录关系的成功列表', async () => {
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: null, error: { code: '08006', message: 'connection failed' } })
+    const res = await GET(makeRequest())
+    expect(res.status).toBe(500)
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
@@ -87,7 +94,7 @@ describe('GET /api/admin/org', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     ;(supabaseAdmin.rpc as any).mockResolvedValue({
       data: null,
-      error: { message: 'function missing' },
+      error: { code: '42883', message: 'function missing' },
     })
     ;(supabaseAdmin.from as any).mockImplementation((table: string) => {
       const tableResults: Record<string, any> = {

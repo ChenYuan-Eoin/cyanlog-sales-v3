@@ -39,10 +39,23 @@ describe('Fxiaoke adapter capability boundary', () => {
     await expect(fxiaokeConnectionAdapter.verifyConnection(credentials, { systemOrgId: 'org-1' }))
       .resolves.toMatchObject({
         externalTenantId: 'FSCID_company',
+        verifiedTenantIds: ['FSCID_company', 'corp-1'],
         credentialPatch: { expectedEa: 'FSCID_company', expectedCorpId: 'corp-1' },
       })
     expect(mocks.discoverEnterprise).toHaveBeenCalledOnce()
     expect(mocks.previewDirectory).not.toHaveBeenCalled()
+  })
+
+  it('takes alternate tenant identifiers only from the current enterprise response', async () => {
+    mocks.discoverEnterprise.mockResolvedValue({ ea: 'ones001', corpId: 'FSCID_company' })
+    await expect(fxiaokeConnectionAdapter.verifyConnection({ ...credentials, expectedEa: 'ones001', expectedCorpId: 'FSCID_old' }, { systemOrgId: 'org-1' }))
+      .resolves.toMatchObject({ externalTenantId: 'ones001', verifiedTenantIds: ['ones001', 'FSCID_company'] })
+  })
+
+  it('rejects an application from a different saved EA', async () => {
+    mocks.discoverEnterprise.mockResolvedValue({ ea: 'foreign-ea', corpId: 'FSCID_company' })
+    await expect(fxiaokeConnectionAdapter.verifyConnection({ ...credentials, expectedEa: 'ones001' }, { systemOrgId: 'org-1' }))
+      .rejects.toMatchObject({ code: 'ENTERPRISE_MISMATCH' })
   })
 
   it('reads the authorized directory scope without redefining credential validity', async () => {

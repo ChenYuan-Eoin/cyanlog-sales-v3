@@ -101,9 +101,14 @@ function isOrgAdminPayload(value: unknown): value is OrgAdminPayload {
 }
 
 async function listOrgPayloadFromRpc(orgId: string): Promise<OrgAdminPayload> {
-  const { data, error } = await supabaseAdmin.rpc('get_org_admin_payload_v1', {
-    p_org_id: orgId,
-  })
+  let { data, error } = await supabaseAdmin.rpc('get_org_admin_directory_payload_v1', { p_org_id: orgId })
+  if (error && ['PGRST202', '42883'].includes(error.code || '')) {
+    const legacy = await supabaseAdmin.rpc('get_org_admin_payload_v1', { p_org_id: orgId })
+    data = legacy.data
+    error = legacy.error
+  } else if (error || !isOrgAdminPayload(data)) {
+    throw new Error('ORG_DIRECTORY_READ_FAILED')
+  }
 
   if (error || !isOrgAdminPayload(data)) {
     throw new Error('ORG_PAYLOAD_RPC_FAILED')
@@ -440,6 +445,7 @@ export async function GET(req: NextRequest) {
     try {
       data = await withTiming(timings, 'rpc_payload', () => listOrgPayloadFromRpc(auth.orgId))
     } catch (rpcError) {
+      if (rpcError instanceof Error && rpcError.message === 'ORG_DIRECTORY_READ_FAILED') throw rpcError
       console.error('[admin/org] RPC payload failed; falling back to query fan-out:', rpcError)
       payloadSource = 'fallback'
       data = await withTiming(timings, 'fallback_payload', () => listOrgPayload(auth.orgId))

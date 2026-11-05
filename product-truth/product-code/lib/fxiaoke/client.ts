@@ -122,7 +122,7 @@ export async function previewDirectory(credentials: Credentials, request: typeof
   }
   const departmentRows = await readAll('DepartmentObj', ['_id', 'name', 'parent_id', 'status'])
   const employeeRows = await readAll('PersonnelObj', [
-    '_id', 'user_id', 'name', 'data_own_department', 'vice_departments',
+    '_id', 'user_id', 'name', 'main_department', 'vice_departments',
     'status', 'is_pause_login', 'employee_number', 'email', 'phone',
   ])
   const departments = departmentRows.map(row => ({
@@ -132,7 +132,7 @@ export async function previewDirectory(credentials: Credentials, request: typeof
     status: normalizeFxiaokeDepartmentStatus(row.status),
   }))
   const employees = employeeRows.map(row => {
-    const primaryDepartmentIds = ids(row.data_own_department)
+    const primaryDepartmentIds = ids(row.main_department)
     const departmentIds = [...new Set([
       ...primaryDepartmentIds,
       ...ids(row.vice_departments),
@@ -141,8 +141,8 @@ export async function previewDirectory(credentials: Credentials, request: typeof
       id: id(row.user_id),
       name: name(row.name),
       departmentIds,
-      // PersonnelObj separates the single ownership field from supplementary
-      // memberships. Never infer ownership from array order or vice_departments.
+      // PersonnelObj main_department is the employee primary department;
+      // data_own_department controls record ownership and is not a membership.
       primaryDepartmentId: primaryDepartmentIds.length === 1 ? primaryDepartmentIds[0] : null,
       status: normalizeFxiaokePersonnelStatus(row.status),
       loginDisabled: typeof row.is_pause_login === 'boolean' ? row.is_pause_login : null,

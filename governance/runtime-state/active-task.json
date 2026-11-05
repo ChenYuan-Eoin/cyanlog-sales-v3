@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-04T11:07:29.936Z",
+  "updated_at": "2026-11-05T02:06:15.078856+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -214,26 +214,24 @@
       "superseded_by": "IN-20261104-010"
     },
     "directory_stage_gate": {
-      "authority": "IN-20261104-010",
+      "authority": "IN-20261105-004",
       "sequence": [
-        "WP51",
-        "WP50",
-        "WP53",
-        "WP92"
+        "WP92",
+        "WP53"
       ],
-      "rule": "前一阶段没有真实证据，后续阶段不启动；code_green、Preview或部署不解除阶段门禁。",
+      "rule": "部门、目录员工、主属和附属关系是同一业务整体，WP92统一同步与联动回读；WP92无真实业务证据不启动WP53。独立名册或导出不是前置，代码与部署不等于业务完成。",
       "scope": "组织目录当前主线",
       "business_permission_work_package": "WP93",
       "business_permission_entry": "WP92真实目录验收及WP66/WP83各自前置满足后再评估，当前不开发"
     }
   },
   "active_task": {
-    "id": "WP51",
-    "slug": "organization-directory-scope-verification",
-    "name": "全公司组织目录范围核验",
+    "id": "WP92",
+    "slug": "organization-directory-sync",
+    "name": "组织目录整体同步与架构回读",
     "kind": "product",
     "status": "active",
-    "objective": "管理员在外部系统接入中用既有连接只读核验全公司组织目录：明确企业、连接版本、读取时间、稳定快照、部门树、主属与附属部门和人员状态；独立范围证据与真实返回逐项对账，缺失、过期、范围或主体不一致时明确阻断。只构建目录事实与范围证明，不生成可执行切源计划、不启用来源、不写系统部门或成员。",
+    "objective": "管理员通过一次同步，将同一来源的部门、员工和主属/附属关系作为整体应用，在系统组织架构联动查看，未关联账号的员工仍可见；失败不留下半套组织数据。",
     "feature_id": "F003",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
@@ -252,8 +250,25 @@
       "product-truth/product-code/app/configs/tabs/DirectoryInspectionPanel.test.tsx",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-directory-scope-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-directory-scope-verifier.test.js"
+      "product-truth/product-code/lib/fxiaoke/client.ts",
+      "product-truth/product-code/lib/fxiaoke/client.test.ts",
+      "product-truth/product-code/app/configs/tabs/OrgStructureTab.tsx",
+      "product-truth/product-code/app/configs/tabs/OrgStructureTab.test.tsx",
+      "product-truth/product-code/app/configs/types.ts",
+      "product-truth/product-code/app/api/admin/org/route.ts",
+      "product-truth/product-code/app/api/admin/org/route.test.ts",
+      "product-truth/product-code/app/api/admin/departments",
+      "product-truth/product-code/supabase/migrations/20261103090000_unified_organization_connections.sql",
+      "product-truth/product-code/app/api/admin/organization-sources/directory",
+      "product-truth/product-code/lib/admin/organization-directory.ts",
+      "product-truth/product-code/lib/admin/organization-directory.test.ts",
+      "product-truth/product-code/supabase/migrations/20261103120000_organization_directory_cutover.sql",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-directory-cutover-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-directory-cutover-verifier.test.js",
+      "product-truth/product-code/lib/fxiaoke/egress/protocol.mjs",
+      "product-truth/product-code/lib/fxiaoke/egress/protocol.test.ts",
+      "product-truth/product-code/lib/fxiaoke/egress/server.test.ts",
+      "product-truth/product-code/lib/fxiaoke/egress/README.md"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -275,80 +290,56 @@
       ],
       "required_runtime_evidence": [
         "organization_directory_snapshot",
-        "organization_directory_scope"
+        "organization_directory_cutover"
       ],
       "runtime_profile": "application",
-      "runtime_contract_version": "f003-directory-scope-v1",
+      "runtime_contract_version": "f003-directory-cutover-v2",
       "production_database_mode": "read_only",
-      "note": "代码候选与业务阶段分别验收；本批开发和只读取证已授权，不继承旧WP92精确候选的发布授权；无全公司真实证据则后续阶段不启动。"
+      "note": "当前批准整体目录同步本地/隔离开发与迁移候选，code_green仅代表开发状态；完整部门员工归属正式站同步回读是业务出口。生产发布、迁移、写入在具体候选及恢复方案可审查后独立批准。"
     },
     "acceptance_checks": [
-      "同一已保存连接读取真实目录，不改连接状态、来源权威、组织部门、成员或角色；旧库与统一库读取语义一致",
-      "快照绑定系统组织、提供方、外部企业、source_id、连接revision、读取时间及稳定内容hash；失败或配置变化不能继续展示旧结果为当前有效",
-      "部门与员工按稳定ID对账，分别核对父子层级、主属与附属部门和生命周期状态；数量相同不能替代逐项核对",
-      "全公司范围证据须独立于当前API返回，明确来源、口径、取证时间和失效规则；没有可核验依据始终scopeVerified=false，禁止手工置真",
-      "产品明确展示授权范围已读、结构检查结果、全公司范围未证明及具体阻断；预览、代码、部署不能作为阶段通过",
-      "仅在精确Production版本及用户现有Chrome完成真实核验且独立范围证据通过后，才允许激活WP50；代码候选通过不解除业务门禁"
+      "同一来源连接验证后读取部门、员工及归属形成同一快照；企业、连接版本、分页与结构有效，独立名册/导出不是前置",
+      "落地到现有departments、users、user_organizations和user_departments，来源映射可追溯；来源快照拼接或合成人员行不能代替系统组织成员；未关联人员可建立登录禁用且无角色的真实人员记录",
+      "一份不可变差异计划同时包含部门树、员工目录与主属/附属关系；员工未关联系统账号允许待关联展示，不自动开账号或授角色",
+      "明确确认后同一事务应用完整目录；跨企业、结构冲突、过期/篡改/并发变化拒绝，重复确认幂等，任一步失败全部回滚",
+      "组织架构页面按部门联动展示目录人员与状态；主属/附属关系、来源和待关联状态刷新回读一致",
+      "不修改登录启停、密码、角色或业务许可；不自动把目录状态解释为登录启停；手工和旧来源资料保留",
+      "本地/隔离开发检查与正式站真实同步分别记录；仅精确发布版本及现有Chrome联动回读通过才关闭业务阶段"
     ],
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
-    "activation_basis": "IN-20261104-010",
+    "activation_basis": "IN-20261105-004",
     "blocking_items": [
-      "独立全公司目录范围依据尚未取得",
-      "当前纷享管理后台要求用户自行验证管理密码",
-      "IN-20261104-013：来源FSCID引用与旧连接EA不一致，现有正式入口读取失败；企业对应关系尚未获得同次权威验证，禁止直接改绑"
+      "生产部署、必要迁移及部门写入等待具体候选和恢复方案审查；未获授权前仅本地/隔离验证",
+      "系统组织与外部企业的显示资料对应须在真实同步前明确，不按名称自动新建或改绑组织"
     ],
     "non_goals": [
-      "SSO与登录实现",
-      "寄件与下单",
-      "AI",
-      "统一连接迁移",
-      "组织部门/成员/角色写入",
-      "目录主来源启用/停用/切换",
-      "待关联目录人员落库（仅登记WP53规则）"
+      "SSO、登录、寄件、AI、下单",
+      "自动创建账号、按姓名或手机号静默绑定账号",
+      "纷享生产后台写入",
+      "未经批准的生产发布、迁移或数据写入"
     ],
     "started_at": "2026-11-04T11:07:29.936Z",
-    "reason": "用户确认三项推荐，先完成真实目录范围核验，后续阶段不提前启动"
+    "reason": "用户指出组织架构是整体级联关系；撤回部门/员工分批交付，复用原WP92整批快照、差异与事务。",
+    "scope_revision_basis": "IN-20261105-004",
+    "business_exit": "production_released_with_whole_directory_sync_and_linked_org_readback"
   },
   "execution_queue": {
     "active": {
-      "id": "WP51",
-      "slug": "organization-directory-scope-verification",
-      "name": "全公司组织目录范围核验"
+      "id": "WP92",
+      "slug": "organization-directory-sync",
+      "name": "组织目录整体同步与架构回读"
     },
     "next": {
-      "id": "WP50",
-      "slug": "unified-organization-connection-config",
-      "name": "统一组织连接管理真实验收",
+      "id": "WP53",
+      "slug": "directory-sync-maintenance",
+      "name": "持续同步、变更与恢复验收",
       "depends_on": [
-        "WP51"
+        "WP92"
       ],
-      "entry_gate": "WP51全公司范围与目录内容真实验收通过；代码绿或预览成功不能替代",
-      "entry_gate_status": "waiting_real_scope_evidence",
-      "remaining_acceptance": "保存/回读/失败保留/停用/恢复真实验证，统一存储及旧连接迁移需独立授权"
+      "entry_gate": "WP92完整组织目录同步及联动回读正式站通过",
+      "entry_gate_status": "waiting_previous_business_acceptance"
     },
     "ready": [
-      {
-        "id": "WP53",
-        "slug": "directory-change-review",
-        "name": "目录差异与待关联人员审查",
-        "depends_on": [
-          "WP50"
-        ],
-        "entry_gate": "WP50真实连接验收通过；WP51范围证明仍有效",
-        "entry_gate_status": "waiting_previous_stage",
-        "remaining_acceptance": "完整稳定目录的差异可解释、未关联人员状态、冲突和保护结果、旧计划失效；不应用变更"
-      },
-      {
-        "id": "WP92",
-        "slug": "fxiaoke-primary-source-sync",
-        "name": "纷享组织同步与主来源切换",
-        "depends_on": [
-          "WP53"
-        ],
-        "entry_gate": "WP53差异审查通过且恢复条件与具体生产写入授权具备",
-        "entry_gate_status": "waiting_previous_stage",
-        "remaining_acceptance": "一个已审查计划的真实应用/回读/幂等/失败原子性及恢复"
-      },
       {
         "id": "WP93",
         "slug": "unified-shipping-authorization",
@@ -1820,6 +1811,24 @@
         "remaining_acceptance": "有效成员前置、精确迁移和发布、现有Chrome菜单/直链/API/组织隔离复验",
         "acceptance_owner": "WP82",
         "reconciliation_source": "IN-20261102-028"
+      },
+      {
+        "id": "WP50",
+        "slug": "unified-organization-connection-config",
+        "name": "统一组织连接管理真实验收",
+        "depends_on": [
+          "WP51"
+        ],
+        "entry_gate": "WP51来源管理同步只读核验功能真实验收通过；独立名册与导出不作为前置",
+        "entry_gate_status": "waiting_functional_verification",
+        "remaining_acceptance": "保存/回读/失败保留/停用/恢复真实验证，统一存储及旧连接迁移需独立授权",
+        "reason": "统一连接必要存储依赖纳入WP51；完整连接生命周期验收后置，不阻塞首个部门用户任务"
+      },
+      {
+        "id": "WP51",
+        "slug": "directory-inspection",
+        "name": "目录只读核验",
+        "reason": "作为WP92内部诊断步骤吸收，不再单独要求业务交付；部门单独同步草稿撤回，不计完成"
       }
     ],
     "completed": [

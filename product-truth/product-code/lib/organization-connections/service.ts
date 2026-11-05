@@ -154,14 +154,22 @@ function normalizeRow(value: unknown, storageMode: ConnectionStorageMode = 'unif
 }
 
 export function mapLegacyFxiaokeConnectionRow(source: LegacySourceRow, legacy: LegacyFxiaokeRow): StoredConnectionRow {
-  if (source.external_tenant_id !== legacy.expected_ea) {
+  const sameTenantKey = source.external_tenant_id === legacy.expected_ea
+  // Legacy sources may store corpId while the saved application uses EA. This
+  // projection only exposes the existing configuration; it grants no validity.
+  // The active read must prove both identifiers in one provider response.
+  const differentIdentifierKinds = source.external_tenant_id.startsWith('FSCID_')
+    && Boolean(legacy.expected_ea)
+    && !legacy.expected_ea.startsWith('FSCID_')
+    && !legacy.expected_ea.startsWith('pending-')
+  if (source.system_org_id !== legacy.system_org_id || (!sameTenantKey && !differentIdentifierKinds)) {
     throw new OrganizationConnectionError(
       'CONNECTION_AMBIGUOUS',
       '旧纷享连接与当前企业来源不一致，已停止自动选择。',
       409,
     )
   }
-  const draftCheckStatus = legacy.last_check_status
+  const draftCheckStatus = sameTenantKey ? legacy.last_check_status : 'not_checked'
   const verified = draftCheckStatus === 'preview_ready' && source.status !== 'disabled'
   const connectionState: ConnectionState = source.status === 'disabled'
     ? 'disabled'
@@ -209,6 +217,18 @@ export function mapLegacyFxiaokeConnectionRow(source: LegacySourceRow, legacy: L
     created_at: source.created_at,
     updated_at: legacy.updated_at || source.updated_at,
     storage_mode: 'legacy_fxiaoke_read_only',
+  }
+}
+
+function assertVerifiedTenant(row: StoredConnectionRow, verification: {
+  externalTenantId: string
+  verifiedTenantIds?: string[]
+}) {
+  const verifiedIds = [verification.externalTenantId, ...(verification.verifiedTenantIds || [])]
+  const legacyEaMatches = row.storage_mode !== 'legacy_fxiaoke_read_only'
+    || row.draft_metadata.expectedEa === verification.externalTenantId
+  if (!legacyEaMatches || !verifiedIds.includes(row.external_tenant_id)) {
+    throw new OrganizationConnectionError('ENTERPRISE_MISMATCH', '读取到的企业与保存的连接不一致，本次核验结果已拒绝。', 409)
   }
 }
 
@@ -445,6 +465,7 @@ async function previewLegacyReadOnlyConnection(
   try {
     const credentials = decryptDraft(row)
     const verification = await connectionAdapter.verifyConnection(credentials, { systemOrgId: input.orgId })
+    assertVerifiedTenant(row, verification)
     connectionVerified = true
     const verifiedCredentials = verification.credentialPatch
       ? { ...credentials, ...verification.credentialPatch }
@@ -458,7 +479,7 @@ async function previewLegacyReadOnlyConnection(
     return {
       connection: toConnectionSummary({
         ...row,
-        external_tenant_id: verification.externalTenantId,
+        external_tenant_id: row.external_tenant_id,
         draft_metadata: { ...row.draft_metadata, ...(verification.metadata || {}) },
         draft_check_status: 'preview_ready',
         draft_checked_at: directory.checkedAt,
@@ -470,7 +491,7 @@ async function previewLegacyReadOnlyConnection(
       preview: {
         checkedAt: directory.checkedAt,
         provider: input.provider,
-        externalTenantId: verification.externalTenantId,
+        externalTenantId: row.external_tenant_id,
         complete: directory.complete,
         scopeVerified: directory.scopeVerified,
         scopeEvidence: directory.scopeEvidence,
@@ -493,13 +514,12 @@ async function previewLegacyReadOnlyConnection(
 /** WP51: does not persist connection verification or organization business data.
  * Existing provider transport may use its established transient request queue.
  */
-export async function inspectOrganizationDirectory(input: {
+export async function readOrganizationDirectory(input: {
   orgId: string
   provider: string
   sourceId: string
   revision: string
 }) {
-  const { buildDirectoryInspection } = await import('./directory-inspection')
   const provider = validateProvider(input.provider)
   const row = await rowBySource(input.orgId, provider)
   if (!row || row.id !== input.sourceId || row.configuration_revision !== input.revision) {
@@ -509,9 +529,7 @@ export async function inspectOrganizationDirectory(input: {
   const directoryAdapter = getDirectoryAdapter(provider)
   const credentials = decryptDraft(row)
   const verification = await connectionAdapter.verifyConnection(credentials, { systemOrgId: input.orgId })
-  if (verification.externalTenantId !== row.external_tenant_id) {
-    throw new OrganizationConnectionError('ENTERPRISE_MISMATCH', '读取到的企业与保存的连接不一致，本次核验结果已拒绝。', 409)
-  }
+  assertVerifiedTenant(row, verification)
   const directory = await directoryAdapter.readDirectory(
     { ...credentials, ...(verification.credentialPatch || {}) },
     { systemOrgId: input.orgId },
@@ -524,18 +542,26 @@ export async function inspectOrganizationDirectory(input: {
     || current.draft_credentials_ciphertext !== row.draft_credentials_ciphertext) {
     throw new OrganizationConnectionError('CONFIG_CHANGED', '读取期间连接或来源发生变化，本次结果已失效，请重新核验。', 409)
   }
-  return buildDirectoryInspection({
-    organizationId: input.orgId,
-    sourceId: row.id,
-    provider,
-    externalTenantId: verification.externalTenantId,
-    connectionRevision: row.configuration_revision,
-    sourceState: row.connection_state,
-  }, {
-    ...directory,
-    departments: directory.departments.map(department => ({ ...department, status: directoryAdapter.normalizeDirectoryStatus(department.status) })),
-    employees: directory.employees.map(employee => ({ ...employee, status: directoryAdapter.normalizeDirectoryStatus(employee.status) })),
-  })
+  return {
+    binding: {
+      organizationId: input.orgId, sourceId: row.id, provider,
+      externalTenantId: row.external_tenant_id,
+      connectionRevision: row.configuration_revision,
+      sourceState: row.connection_state,
+    },
+    sourceUpdatedAt: row.updated_at,
+    directory: {
+      ...directory,
+      departments: directory.departments.map(department => ({ ...department, status: directoryAdapter.normalizeDirectoryStatus(department.status) })),
+      employees: directory.employees.map(employee => ({ ...employee, status: directoryAdapter.normalizeDirectoryStatus(employee.status) })),
+    },
+  }
+}
+
+export async function inspectOrganizationDirectory(input: Parameters<typeof readOrganizationDirectory>[0]) {
+  const { buildDirectoryInspection } = await import('./directory-inspection')
+  const { binding, directory } = await readOrganizationDirectory(input)
+  return buildDirectoryInspection(binding, directory)
 }
 
 export async function previewOrganizationConnection(input: {

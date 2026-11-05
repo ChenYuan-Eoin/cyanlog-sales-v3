@@ -6,13 +6,13 @@ import {
   resolveIdentityMatch,
   type IdentityCandidate,
 } from '@/lib/organization-source-identity'
-import { getConnectionAdapter, getDirectoryAdapter, hasDirectoryAdapter, isConfigurableProvider } from './adapters'
+import { getConnectionAdapter, getDirectoryAdapter, isConfigurableProvider } from './adapters'
 import { OrganizationConnectionError } from './errors'
-import { loadOrganizationConnection, loadVerifiedConnection } from './service'
+import { loadOrganizationConnection, readOrganizationDirectory } from './service'
 import { assertDirectoryCutoverStorage } from './storage'
 import type { OrganizationConnectionProvider, DirectoryPreview } from './types'
 
-export const DIRECTORY_CUTOVER_CONTRACT = 'f003-directory-cutover-v1'
+export const DIRECTORY_CUTOVER_CONTRACT = 'f003-directory-cutover-v2'
 const PLAN_LIFETIME_MS = 30 * 60 * 1000
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -58,6 +58,7 @@ export type DirectoryUserRow = IdentityCandidate & {
   orgId: string
   status: string | null
   primaryDepartmentId: string | null
+  loginEnabled: boolean
   updatedAt: string
 }
 
@@ -86,6 +87,16 @@ export type DirectoryMembershipRow = {
   joinedAt: string
 }
 
+export type DirectoryOrganizationMembership = {
+  userId: string
+  orgId: string
+  primaryDepartmentId: string | null
+  status: string
+  employmentStatus: string
+  isDefault: boolean
+  createdAt: string
+}
+
 export type DirectoryCutoverConflict = {
   kind: string
   externalId: string | null
@@ -108,8 +119,9 @@ export type DirectoryCutoverIdentityChange = {
   externalUserId: string
   existingIdentityId: string | null
   canonicalUserId: string
+  createsMember: boolean
   displayName: string
-  matchMethod: 'provider_id' | 'employee_id' | 'email' | 'phone' | 'manual'
+  matchMethod: 'none' | 'provider_id' | 'employee_id' | 'email' | 'phone' | 'manual'
   confidence: number
   departmentExternalIds: string[]
   active: boolean
@@ -145,6 +157,7 @@ export type DirectoryCutoverPlanPayload = {
   snapshot: {
     checkedAt: string
     complete: boolean
+    connectionVerified: boolean
     scopeVerified: boolean
     scopeEvidence: string | null
     directoryHash: string
@@ -188,9 +201,11 @@ export type DirectoryStateSnapshot = {
     id: string
     primaryDepartmentId: string | null
     status: string | null
+    loginEnabled: boolean
     updatedAt: string
   }>
   memberships: DirectoryMembershipRow[]
+  organizationMemberships: DirectoryOrganizationMembership[]
 }
 
 export type DirectoryCutoverInput = {
@@ -198,11 +213,14 @@ export type DirectoryCutoverInput = {
   targetSourceId: string
   connectionRevision: string
   snapshot: DirectoryPreview
+  /** Only set after current server-side connection verification and a bound directory read. */
+  connectionVerified: boolean
   sources: DirectorySourceRow[]
   departments: DirectoryDepartmentRow[]
   users: DirectoryUserRow[]
   identities: DirectoryIdentityRow[]
   memberships: DirectoryMembershipRow[]
+  organizationMemberships: DirectoryOrganizationMembership[]
 }
 
 export type DirectoryCutoverClientPlan = {
@@ -244,7 +262,7 @@ export type DirectoryCutoverRunResult = {
   members: number
 }
 
-type CurrentState = Omit<DirectoryCutoverInput, 'connectionRevision' | 'targetSourceId' | 'snapshot'>
+type CurrentState = Omit<DirectoryCutoverInput, 'connectionRevision' | 'targetSourceId' | 'snapshot' | 'connectionVerified'>
 
 function storageFailure() {
   return new OrganizationConnectionError(
@@ -333,6 +351,7 @@ function userRow(value: unknown): DirectoryUserRow {
     avatarUrl: optionalString(row.avatar_url),
     status: optionalString(row.status),
     primaryDepartmentId: optionalString(row.primary_dept_id),
+    loginEnabled: row.login_enabled === true,
     updatedAt: stringValue(row.updated_at, 'users.updated_at'),
   }
 }
@@ -391,10 +410,6 @@ function normalizeSnapshotStatus(
   provider: OrganizationConnectionProvider,
 ) {
   return getDirectoryAdapter(provider).normalizeDirectoryStatus(value)
-}
-
-function matchMethodFromResolution(method: string): DirectoryCutoverIdentityChange['matchMethod'] {
-  return method === 'employee_id' || method === 'email' || method === 'phone' ? method : 'provider_id'
 }
 
 function conflict(
@@ -467,6 +482,18 @@ function isEmployeeActive(employee: DirectoryPreview['employees'][number], provi
   return normalizeSnapshotStatus(employee.status, provider) === 'active'
 }
 
+// A new directory person receives a stable internal UUID before the immutable plan is confirmed.
+// It never adopts an existing account by name, phone or email.
+function directoryMemberId(orgId: string, sourceId: string, externalUserId: string) {
+  const bytes = createHash('sha1')
+    .update(Buffer.from('6ba7b8129dad11d180b400c04fd430c8', 'hex'))
+    .update(`price-v3:directory-person:${orgId}:${sourceId}:${externalUserId}`).digest().subarray(0, 16)
+  bytes[6] = (bytes[6] & 0x0f) | 0x50
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = bytes.toString('hex')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): DirectoryCutoverPlanPayload {
   const targetProvider = input.snapshot.provider
   const targetLabel = getConnectionAdapter(targetProvider).label
@@ -481,8 +508,8 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
     if (targetSource.configurationRevision !== input.connectionRevision) {
       conflicts.push(conflict('connection_changed', null, '连接配置已改变，请重新验证并生成计划。'))
     }
-    if (targetSource.status === 'disabled' || targetSource.connectionState !== 'verified' || targetSource.draftCheckStatus !== 'preview_ready' || targetSource.effectiveRevision !== input.connectionRevision) {
-      conflicts.push(conflict('connection_not_effective', null, `${targetLabel}连接必须完成只读验证并显式设为当前连接后才能生成切源计划。`))
+    if (!input.connectionVerified) {
+      conflicts.push(conflict('connection_not_effective', null, `${targetLabel}连接必须通过本次企业验证及完整目录读取后才能生成同步计划。`))
     }
     if (targetSource.externalTenantId !== input.snapshot.externalTenantId) {
       conflicts.push(conflict('external_tenant_mismatch', null, '连接企业标识与目录快照不一致，请重新验证。'))
@@ -492,15 +519,8 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
   if (!input.snapshot.complete) {
     conflicts.push(conflict('incomplete_snapshot', null, '部门或成员快照结构不完整，不能生成可执行的切源计划。'))
   }
-  if (!input.snapshot.scopeVerified) {
-    conflicts.push(conflict(
-      'scope_unverified',
-      null,
-      '只读取完授权范围内的分页，尚不能证明该连接可读取全公司通讯录；目录切源保持阻断。',
-    ))
-  }
-
-  const activePrimaries = input.sources.filter(source => source.status === 'active' && source.priority === 1)
+  const declaredDirectorySources = input.sources.filter(source => source.authorityScope.directory === 'authoritative' || source.authorityScope.directory === true)
+  const activePrimaries = declaredDirectorySources.length ? declaredDirectorySources : input.sources.filter(source => source.status === 'active' && source.priority === 1 && source.syncMode === 'authoritative')
   if (activePrimaries.length > 1) {
     conflicts.push(conflict('ambiguous_primary_source', null, '当前组织存在多个主来源，必须先人工处理。'))
   }
@@ -549,12 +569,11 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
       changedFields,
     }
   })
-  const staleTargetDepartmentIds = targetDepartments
-    .filter(department => department.externalId && !incomingDepartmentIds.has(department.externalId))
-    .map(department => department.id)
-    .sort()
-  if (staleTargetDepartmentIds.length) {
-    notices.push(`${staleTargetDepartmentIds.length} 个未出现在新快照中的${targetLabel}部门会保留并停用，不会删除。`)
+  // Absence in a returned directory is not a lifecycle instruction.
+  const staleTargetDepartmentIds: string[] = []
+  const missingDepartments = targetDepartments.filter(department => department.externalId && !incomingDepartmentIds.has(department.externalId))
+  if (missingDepartments.length) {
+    notices.push(`${missingDepartments.length} 个历史部门未出现在本次读取中，保留现状供核对；不会仅凭缺失删除或停用。`)
   }
 
   const usersById = new Map(input.users.map(user => [user.id, user]))
@@ -603,7 +622,7 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
       phone: employee.phone,
     })
     let canonicalUserId: string | null = null
-    let matchMethod: DirectoryCutoverIdentityChange['matchMethod'] | undefined
+    let matchMethod: DirectoryCutoverIdentityChange['matchMethod'] = 'none'
     let confidence = 0
 
     if (existingIdentity && ['conflict', 'ignored'].includes(existingIdentity.matchStatus)) {
@@ -619,7 +638,7 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
       canonicalUserId = existingIdentity.canonicalUserId
       matchMethod = existingIdentity.matchMethod === 'manual' ? 'manual' : 'provider_id'
       confidence = existingIdentity.matchMethod === 'manual' ? existingIdentity.matchConfidence : 1
-      if (evidenceMatch.kind === 'unique' && evidenceMatch.userId !== canonicalUserId) {
+      if (existingIdentity.profileSnapshot.provisionedMemberId !== canonicalUserId && evidenceMatch.kind === 'unique' && evidenceMatch.userId !== canonicalUserId) {
         conflicts.push(conflict(
           'identity_mapping_changed',
           employee.id,
@@ -628,36 +647,29 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
         ))
         canonicalUserId = null
       }
-    } else if (evidenceMatch.kind === 'unique') {
-      canonicalUserId = evidenceMatch.userId
-      matchMethod = matchMethodFromResolution(evidenceMatch.method)
-      confidence = evidenceMatch.method === 'employee_id' ? 1 : 0.95
-    } else if (evidenceMatch.kind === 'conflict') {
-      conflicts.push(conflict(
-        'identity_ambiguous',
-        employee.id,
-        `员工“${employee.name}”的受信资料命中了多个系统成员。`,
-        evidenceMatch.candidateIds,
-      ))
-    } else {
-      conflicts.push(conflict(
-        'identity_unresolved',
-        employee.id,
-        `员工“${employee.name}”没有唯一工号、邮箱或手机号匹配；系统不会按姓名或静默创建成员。`,
-      ))
     }
 
-    if (!canonicalUserId || !matchMethod) continue
-    const user = usersById.get(canonicalUserId)
-    if (!user) {
-      conflicts.push(conflict('identity_user_missing', employee.id, `员工“${employee.name}”匹配到的系统成员不存在于当前组织。`, [canonicalUserId]))
+    if (canonicalUserId && !usersById.has(canonicalUserId)) {
+      conflicts.push(conflict('identity_user_missing', employee.id, `员工“${employee.name}”关联的系统成员不属于当前组织。`, [canonicalUserId]))
       continue
     }
-
+    const createsMember = canonicalUserId === null
+    if (createsMember) {
+      canonicalUserId = directoryMemberId(input.organizationId, input.targetSourceId, employee.id)
+      if (usersById.has(canonicalUserId)) {
+        conflicts.push(conflict('directory_member_collision', employee.id, '目录人员标识已被占用，请核对既有来源映射。'))
+        continue
+      }
+      matchMethod = 'none'
+      confidence = 0
+    }
+    if (!canonicalUserId) continue
     const canonicalEmployees = employeesByCanonicalUser.get(canonicalUserId) || []
     canonicalEmployees.push(employee.id)
     employeesByCanonicalUser.set(canonicalUserId, canonicalEmployees)
     const incomingProfileSnapshot = {
+      directorySyncVersion: DIRECTORY_CUTOVER_CONTRACT,
+      ...(createsMember ? { provisionedMemberId: canonicalUserId } : {}),
       provider: targetProvider,
       externalUserId: employee.id,
       displayName: employee.name,
@@ -666,7 +678,7 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
       phone: employee.phone || null,
       departmentExternalIds: [...employee.departmentIds].sort(),
       primaryDepartmentExternalId: employee.primaryDepartmentId,
-      status: employee.status,
+      status: normalizeSnapshotStatus(employee.status, targetProvider),
       loginDisabled: employee.loginDisabled,
     }
     const profileSnapshot = existingIdentity
@@ -685,6 +697,7 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
       externalUserId: employee.id,
       existingIdentityId: existingIdentity?.id || null,
       canonicalUserId,
+      createsMember,
       displayName: employee.name,
       matchMethod,
       confidence,
@@ -694,7 +707,7 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
       changedFields,
     })
     userDepartmentChanges.push({
-      userId: user.id,
+      userId: canonicalUserId,
       externalUserId: employee.id,
       departmentExternalIds: [...employee.departmentIds],
       primaryDepartmentExternalId: employee.primaryDepartmentId,
@@ -727,6 +740,7 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
       id: user.id,
       primaryDepartmentId: user.primaryDepartmentId,
       status: user.status,
+      loginEnabled: user.loginEnabled,
       updatedAt: user.updatedAt,
     }))
     .sort((left, right) => left.id.localeCompare(right.id))
@@ -740,6 +754,7 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
     targetIdentities: [...targetIdentities].sort((left, right) => left.id.localeCompare(right.id)),
     users: affectedUsers,
     memberships: affectedMemberships,
+    organizationMemberships: input.organizationMemberships.filter(row => affectedUserIds.has(row.userId)).sort((a, b) => a.userId.localeCompare(b.userId)),
   }
   const preserved = {
     manualDepartmentCount: input.departments.filter(department => department.source === 'manual').length,
@@ -792,6 +807,7 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
     snapshot: {
       checkedAt: input.snapshot.checkedAt,
       complete: input.snapshot.complete,
+      connectionVerified: input.connectionVerified,
       scopeVerified: input.snapshot.scopeVerified,
       scopeEvidence: input.snapshot.scopeEvidence,
       directoryHash,
@@ -808,13 +824,13 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
     userDepartmentChanges,
     preserved,
     beforeState,
-    applyable: conflicts.length === 0 && input.snapshot.complete && input.snapshot.scopeVerified,
+    applyable: conflicts.length === 0 && input.snapshot.complete && input.connectionVerified,
   } as Omit<DirectoryCutoverPlanPayload, 'planHash'>
   return { ...body, planHash: sha256DirectoryValue(body) }
 }
 
 async function loadCurrentState(orgId: string): Promise<CurrentState> {
-  const [sourceResult, departmentResult, userResult, identityResult, membershipResult] = await Promise.all([
+  const [sourceResult, departmentResult, userResult, identityResult, membershipResult, organizationMembershipResult] = await Promise.all([
     supabaseAdmin.from('organization_sources').select([
       'id', 'system_org_id', 'provider', 'external_tenant_id', 'priority', 'status',
       'authority_scope', 'sync_mode', 'configuration_revision', 'connection_state',
@@ -822,11 +838,12 @@ async function loadCurrentState(orgId: string): Promise<CurrentState> {
       'last_error', 'last_error_at', 'updated_at',
     ].join(',')).eq('system_org_id', orgId),
     supabaseAdmin.from('departments').select('id, org_id, parent_id, name, code, path, depth, external_id, source, status, sort_order, member_count, updated_at').eq('org_id', orgId),
-    supabaseAdmin.from('users').select('id, org_id, email, phone, employee_id, display_name, title, avatar_url, status, primary_dept_id, updated_at').eq('org_id', orgId),
+    supabaseAdmin.from('users').select('id, org_id, email, phone, employee_id, display_name, title, avatar_url, status, primary_dept_id, login_enabled, updated_at').eq('org_id', orgId),
     supabaseAdmin.from('external_identities').select('id, source_id, system_org_id, external_user_id, external_union_id, external_open_id, canonical_user_id, match_status, match_method, match_confidence, profile_snapshot, observed_at, updated_at').eq('system_org_id', orgId),
     supabaseAdmin.from('user_departments').select('user_id, department_id, org_id, is_primary, source, joined_at').eq('org_id', orgId),
+    supabaseAdmin.from('user_organizations').select('user_id, org_id, primary_department_id, status, employment_status, is_default, created_at').eq('org_id', orgId),
   ])
-  for (const result of [sourceResult, departmentResult, userResult, identityResult, membershipResult]) {
+  for (const result of [sourceResult, departmentResult, userResult, identityResult, membershipResult, organizationMembershipResult]) {
     if (result.error) throw storageFailure()
   }
   return {
@@ -836,6 +853,15 @@ async function loadCurrentState(orgId: string): Promise<CurrentState> {
     users: (userResult.data || []).map(userRow),
     identities: (identityResult.data || []).map(identityRow),
     memberships: (membershipResult.data || []).map(membershipRow),
+    organizationMemberships: (organizationMembershipResult.data || []).map(value => {
+      const row = objectValue(value)
+      return {
+        userId: stringValue(row.user_id, 'membership.user_id'), orgId: stringValue(row.org_id, 'membership.org_id'),
+        primaryDepartmentId: optionalString(row.primary_department_id), status: stringValue(row.status, 'membership.status'),
+        employmentStatus: stringValue(row.employment_status, 'membership.employment_status'), isDefault: row.is_default === true,
+        createdAt: stringValue(row.created_at, 'membership.created_at'),
+      }
+    }),
   }
 }
 
@@ -901,43 +927,33 @@ export async function prepareDirectoryCutoverPlan(input: {
   provider: string
 }) {
   await assertDirectoryCutoverStorage()
-  const verified = await loadVerifiedConnection({ orgId: input.orgId, provider: input.provider })
-  if (!hasDirectoryAdapter(verified.provider)) {
-    throw new OrganizationConnectionError('SYNC_NOT_SUPPORTED', '该提供方尚未完成可验证的目录适配，不能生成切源计划。', 400)
+  const connection = await loadOrganizationConnection(input.orgId, input.provider)
+  if (!connection) {
+    throw new OrganizationConnectionError('CONFIGURATION_REQUIRED', '请先保存来源连接。', 409)
   }
-  const connectionAdapter = getConnectionAdapter(verified.provider)
-  const directoryAdapter = getDirectoryAdapter(verified.provider)
-  const connection = await connectionAdapter.verifyConnection(verified.credentials, { systemOrgId: input.orgId })
-  if (connection.externalTenantId !== verified.summary.externalTenantId) {
-    throw new OrganizationConnectionError('ENTERPRISE_MISMATCH', '提供方返回的企业与已保存连接不一致。', 409)
-  }
-  const directory = await directoryAdapter.readDirectory(verified.credentials, { systemOrgId: input.orgId })
-  const preview: DirectoryPreview = {
-    checkedAt: directory.checkedAt,
-    provider: verified.provider,
-    externalTenantId: connection.externalTenantId,
-    complete: directory.complete,
-    scopeVerified: directory.scopeVerified,
-    scopeEvidence: directory.scopeEvidence,
-    departments: directory.departments,
-    employees: directory.employees,
-    warnings: directory.warnings,
-    applied: false,
-  }
+  const read = await readOrganizationDirectory({
+    orgId: input.orgId, provider: input.provider,
+    sourceId: connection.sourceId, revision: connection.revision,
+  })
   const current = await loadCurrentState(input.orgId)
+  const target = current.sources.find(source => source.id === read.binding.sourceId)
+  if (!target || target.updatedAt !== read.sourceUpdatedAt
+    || target.configurationRevision !== read.binding.connectionRevision
+    || target.externalTenantId !== read.binding.externalTenantId) {
+    throw new OrganizationConnectionError('CONFIG_CHANGED', '读取后连接发生变化，请重新生成计划。', 409)
+  }
   const payload = buildDirectoryCutoverPlan({
-    ...current,
-    targetSourceId: verified.sourceId,
-    connectionRevision: verified.revision,
-    snapshot: preview,
+    ...current, targetSourceId: read.binding.sourceId,
+    connectionRevision: read.binding.connectionRevision, connectionVerified: true,
+    snapshot: { ...read.directory, provider: read.binding.provider, externalTenantId: read.binding.externalTenantId, applied: false },
   })
   const now = new Date()
   const expiresAt = new Date(now.getTime() + PLAN_LIFETIME_MS).toISOString()
   const result = await supabaseAdmin
     .rpc('store_organization_directory_cutover_plan_v1', {
       p_system_org_id: input.orgId,
-      p_target_source_id: verified.sourceId,
-      p_connection_revision: verified.revision,
+      p_target_source_id: read.binding.sourceId,
+      p_connection_revision: read.binding.connectionRevision,
       p_previous_primary_source_id: payload.previousPrimarySourceId,
       p_directory_hash: payload.snapshot.directoryHash,
       p_plan_hash: payload.planHash,

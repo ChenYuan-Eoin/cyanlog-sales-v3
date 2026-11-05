@@ -46,11 +46,14 @@ describe('read-only directory observation', () => {
     expect(buildDirectoryInspection({ ...binding, externalTenantId: 'another-tenant' }, directory()).contentHash).not.toBe(first.contentHash)
   })
 
-  it('never upgrades a provider flag, text assertion or matching totals into independent company scope proof', () => {
+  it('reports data availability without a manual evidence gate or inferred write authority', () => {
     const input = directory()
     input.scopeVerified = true
     input.scopeEvidence = 'all pages complete, count matches'
-    expect(buildDirectoryInspection(binding, input).scope).toMatchObject({ verified: false, evidence: null, status: 'independent_evidence_required' })
+    const report = buildDirectoryInspection(binding, input)
+    expect(report).toMatchObject({ dataStatus: 'present', readOnly: true, applied: false })
+    expect(report).not.toHaveProperty('scope')
+    expect(buildDirectoryInspection(binding, { ...input, departments: [], employees: [] })).toMatchObject({ dataStatus: 'empty', structure: { complete: true } })
   })
 
   it('explains cycles, missing parents, duplicates, unknown status and invalid personnel relationships', () => {
@@ -65,7 +68,7 @@ describe('read-only directory observation', () => {
       'department_cycle', 'missing_parent', 'unknown_status', 'duplicate_or_empty_id',
       'department_not_read', 'duplicate_department_relation', 'missing_department', 'invalid_primary_department',
     ]))
-    expect(report.scope.verified).toBe(false)
+    expect(report.dataStatus).toBe('present')
   })
 
   it('rejects incomplete reads and unusable observation times', () => {

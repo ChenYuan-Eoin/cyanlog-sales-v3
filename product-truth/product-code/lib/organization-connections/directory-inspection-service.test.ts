@@ -13,7 +13,7 @@ vi.mock('./adapters', () => ({
   getConnectionAdapter: () => ({ verifyConnection: mocks.verify }),
   getDirectoryAdapter: () => ({ readDirectory: mocks.read, normalizeDirectoryStatus: (status: string) => status === 'resigned' ? 'inactive' : status }),
 }))
-import { inspectOrganizationDirectory } from './service'
+import { inspectOrganizationDirectory, loadOrganizationConnection } from './service'
 
 const input = { orgId: 'org-1', provider: 'fxiaoke', sourceId: 'source-1', revision: 'revision-1' }
 const source = {
@@ -21,12 +21,16 @@ const source = {
   configuration_revision: input.revision, draft_credentials_ciphertext: 'encrypted', draft_credential_envelope: 'v1',
   connection_state: 'disabled', status: 'disabled', updated_at: '2026-11-04T10:00:00.000Z',
 }
+let beforeRead: Record<string, unknown>
+let legacyEa: string
 let sourceReads: number
 let afterRead: Record<string, unknown> | null
 const filters: Array<[string, unknown]> = []
 beforeEach(() => {
   vi.clearAllMocks()
   sourceReads = 0
+  beforeRead = source
+  legacyEa = 'tenant-1'
   afterRead = source
   filters.length = 0
   mocks.mode.mockResolvedValue('unified')
@@ -39,12 +43,12 @@ beforeEach(() => {
       eq: vi.fn((column: string, value: unknown) => { filters.push([column, value]); return query }),
       update: mocks.write, insert: mocks.write, upsert: mocks.write, delete: mocks.write,
       maybeSingle: vi.fn(async () => ({ data: {
-        system_org_id: input.orgId, expected_ea: 'tenant-1', revision: input.revision,
+        system_org_id: input.orgId, expected_ea: legacyEa, revision: input.revision,
         credentials_ciphertext: 'encrypted', last_check_status: 'preview_ready', updated_at: source.updated_at,
       }, error: null })),
       then: (resolve: (value: unknown) => unknown) => {
         if (table !== 'organization_sources') throw new Error(`unexpected table ${table}`)
-        const row = sourceReads++ === 0 ? source : afterRead
+        const row = sourceReads++ === 0 ? beforeRead : afterRead
         return Promise.resolve({ data: row ? [row] : [], error: null }).then(resolve)
       },
     }
@@ -56,13 +60,42 @@ describe('inspection service read-only boundaries', () => {
   it.each(['unified', 'legacy_fxiaoke_read_only'])('reads %s without reviving a disabled source or persisting verification', async mode => {
     mocks.mode.mockResolvedValue(mode)
     const report = await inspectOrganizationDirectory(input)
-    expect(report).toMatchObject({ binding: { sourceState: 'disabled', connectionRevision: input.revision }, scope: { verified: false }, applied: false })
+    expect(report).toMatchObject({ binding: { sourceState: 'disabled', connectionRevision: input.revision }, dataStatus: 'empty', applied: false })
     expect(mocks.read).toHaveBeenCalledWith({ savedCredential: 'private-fixture', ephemeralToken: 'example-ephemeral-token' }, { systemOrgId: input.orgId })
     expect(filters).toContainEqual(['system_org_id', input.orgId])
     expect(filters).toContainEqual(['provider', 'fxiaoke'])
     expect(mocks.write).not.toHaveBeenCalled()
     expect(JSON.stringify(report)).not.toContain('private-fixture')
     expect(JSON.stringify(report)).not.toContain('example-ephemeral-token')
+  })
+
+  it('matches legacy EA and source corpId only through the same current provider verification', async () => {
+    mocks.mode.mockResolvedValue('legacy_fxiaoke_read_only')
+    legacyEa = 'ones001'
+    beforeRead = afterRead = { ...source, external_tenant_id: 'FSCID_company' }
+    await expect(loadOrganizationConnection(input.orgId, input.provider)).resolves.toMatchObject({
+      sourceId: input.sourceId, externalTenantId: 'FSCID_company', configured: true, state: 'disabled', effectiveVerified: false,
+    })
+    expect(mocks.verify).not.toHaveBeenCalled()
+    mocks.verify.mockResolvedValue({ externalTenantId: 'ones001', verifiedTenantIds: ['ones001', 'FSCID_company'] })
+    const report = await inspectOrganizationDirectory(input)
+    expect(report.binding).toMatchObject({ externalTenantId: 'FSCID_company', sourceState: 'disabled' })
+    expect(mocks.read).toHaveBeenCalledOnce()
+    expect(mocks.write).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { externalTenantId: 'ones001' },
+    { externalTenantId: 'ones001', verifiedTenantIds: ['ones001', 'FSCID_foreign'] },
+    { externalTenantId: 'foreign-ea', verifiedTenantIds: ['foreign-ea', 'FSCID_company'] },
+  ])('rejects a missing or mismatched current EA/corpId pair before reading: %o', async verification => {
+    mocks.mode.mockResolvedValue('legacy_fxiaoke_read_only')
+    legacyEa = 'ones001'
+    beforeRead = afterRead = { ...source, external_tenant_id: 'FSCID_company' }
+    mocks.verify.mockResolvedValue(verification)
+    await expect(inspectOrganizationDirectory(input)).rejects.toMatchObject({ code: 'ENTERPRISE_MISMATCH' })
+    expect(mocks.read).not.toHaveBeenCalled()
+    expect(mocks.write).not.toHaveBeenCalled()
   })
 
   it.each([{ sourceId: 'other-source' }, { revision: 'old-revision' }])('rejects stale binding %o before using credentials', async change => {

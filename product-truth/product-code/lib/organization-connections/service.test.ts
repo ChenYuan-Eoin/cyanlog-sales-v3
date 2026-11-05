@@ -107,6 +107,21 @@ describe('legacy Fxiaoke compatibility projection', () => {
     })
   })
 
+  it.each(['active', 'disabled'] as const)('exposes an EA/corpId legacy connection as unverified and preserves %s state', status => {
+    const row = mapLegacyFxiaokeConnectionRow({ ...legacySource, status }, { ...legacyConnection, expected_ea: 'ones001' })
+    expect(toConnectionSummary(row)).toMatchObject({
+      externalTenantId: 'FSCID_company', configured: true, effectiveVerified: false,
+      draftCheckStatus: 'not_checked', state: status === 'disabled' ? 'disabled' : 'configured',
+      metadata: { expectedEa: 'ones001' },
+    })
+    expect(row.effective_credentials_ciphertext).toBeNull()
+  })
+
+  it('rejects a legacy connection from another system organization even with matching external identifiers', () => {
+    expect(() => mapLegacyFxiaokeConnectionRow(legacySource, { ...legacyConnection, system_org_id: 'foreign-org' }))
+      .toThrowError(expect.objectContaining({ code: 'CONNECTION_AMBIGUOUS' }))
+  })
+
   it('fails closed when the legacy record belongs to another enterprise', () => {
     expect(() => mapLegacyFxiaokeConnectionRow(legacySource, {
       ...legacyConnection,

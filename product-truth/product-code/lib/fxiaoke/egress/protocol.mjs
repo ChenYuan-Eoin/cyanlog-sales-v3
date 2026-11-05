@@ -8,6 +8,7 @@ const departmentProjection = ['_id','name','parent_id','status'];
 const directoryProjections = {
   DepartmentObj: [departmentProjection],
   PersonnelObj: [
+    ['_id','user_id','name','main_department','vice_departments','status','is_pause_login','employee_number','email','phone'],
     ['_id','user_id','name','data_own_department','vice_departments','status','is_pause_login','employee_number','email','phone'],
     // Transitional compatibility for the already-deployed website during the
     // atomic worker rollout. Remove only after the old Production SHA is no

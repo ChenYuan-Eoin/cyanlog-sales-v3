@@ -41,6 +41,12 @@ type Source = {
   lastError: string | null
 }
 
+function primaryDirectorySource(sources: Source[]) {
+  return sources.find(source => source.authorityScope.directory === 'authoritative' || source.authorityScope.directory === true)
+    || sources.find(source => source.status === 'active' && source.priority === 1 && source.syncMode === 'authoritative')
+    || null
+}
+
 type SourcePayload = {
   sources?: Source[]
   providers?: ProviderCapability[]
@@ -88,6 +94,7 @@ function providerBadgeVariant(source: Source | undefined): 'default' | 'secondar
 
 function methodLabel(method: DirectoryCutoverClientPlan['identityChanges'][number]['matchMethod']) {
   return {
+    none: '待关联账号',
     provider_id: '既有外部身份',
     employee_id: '工号',
     email: '邮箱',
@@ -149,7 +156,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
       }
       const nextSources = sourceBody.data.sources
       const nextProviders = sourceBody.data.providers
-      const activeSource = nextSources.find(item => item.status === 'active' && item.priority === 1)
+      const activeSource = primaryDirectorySource(nextSources)
       const currentProvider = selectedProviderRef.current
       const configurableProviderKeys = new Set(
         nextProviders
@@ -265,9 +272,9 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
     if (!latestPlan) return
     const providerLabel = providers.find(item => item.key === latestPlan.provider)?.label || latestPlan.provider
     const accepted = await confirmAction(
-      `确认把${providerLabel}切换为唯一组织目录主来源？`
-      + `本计划新增 ${latestPlan.summary.departmentsAdded} 个部门、更新 ${latestPlan.summary.identitiesUpdated} 条身份映射，`
-      + '旧外部来源与手工部门会保留但不再作为目录主来源。',
+      `确认整体同步${providerLabel}组织目录，并将其作为目录主来源？`
+      + `本次包含 ${latestPlan.snapshot.departmentCount} 个部门、${latestPlan.snapshot.employeeCount} 位员工及其归属，`
+      + '旧来源与手工数据保留；未关联员工仍会显示，不会自动开账号或改变登录状态。',
       { confirmText: '确认切换目录', danger: true },
     )
     if (!accepted) return
@@ -339,7 +346,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
         item.key === selectedProvider && item.configurable
       ))
     : null
-  const activePrimary = sources.find(source => source.status === 'active' && source.priority === 1) || null
+  const activePrimary = primaryDirectorySource(sources)
   const directoryProvider = selectedProvider
   const directorySource = directoryProvider
     ? sources.find(source => source.provider === directoryProvider) || null
@@ -350,8 +357,8 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
   const directoryLabel = directoryCapability?.label || directoryProvider || '外部系统'
   const directoryReady = Boolean(
     directorySource
-    && directorySource.status !== 'disabled'
-    && directorySource.connectionState === 'verified'
+    && directorySource.connectionState !== 'unconfigured'
+    && directorySource.connectionRevision
     && directoryCapability?.syncAvailable
     && directoryAvailability?.available !== false,
   )
@@ -365,7 +372,8 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
   const canApply = Boolean(
     latestPlan
     && latestPlan.provider === directoryProvider
-    && latestPlan.snapshot.scopeVerified
+    && latestPlan.snapshot.connectionVerified
+    && latestPlan.contractVersion === 'f003-directory-cutover-v2'
     && latestPlan.status === 'planned'
     && latestPlan.applyable
     && !planExpired
@@ -380,16 +388,12 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
   const connectionState = sourceStateLabel(directorySource || undefined)
   const directoryScopeState = !directoryProvider || !directoryCapability?.syncAvailable
     ? '未接入'
-    : latestPlan?.snapshot.scopeVerified
-      ? `全公司范围已证明 · ${latestPlan.snapshot.departmentCount}/${latestPlan.snapshot.employeeCount}`
-      : latestPlan
-        ? `授权范围已读取 · ${latestPlan.snapshot.departmentCount}/${latestPlan.snapshot.employeeCount}`
-        : directoryReady
-          ? '可读取 · 全公司范围未证明'
-          : '待连接验证'
+    : latestPlan
+      ? `${latestPlan.snapshot.departmentCount} 个部门 · ${latestPlan.snapshot.employeeCount} 位员工`
+      : directoryReady ? '待读取组织目录' : '待保存连接'
   const directoryAuthorityState = !directoryProvider || !directoryCapability?.syncAvailable
     ? '未接入'
-    : directorySource?.authorityScope.organization === 'authoritative' && directorySource.status === 'active'
+    : directorySource?.authorityScope.directory === 'authoritative'
       ? '已生效'
       : latestPlan?.applyable && latestPlan.status === 'planned'
         ? '待显式确认'
@@ -458,16 +462,16 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
           <div className="flex items-center justify-between gap-3 py-1.5">
             <span className="flex min-w-0 items-center gap-2 text-xs text-slate-700">
               <Building2Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-              <span>目录读取范围</span>
+              <span>组织目录读取</span>
             </span>
-            <Badge variant={capabilityBadge(Boolean(latestPlan?.snapshot.scopeVerified))}>{directoryScopeState}</Badge>
+            <Badge variant={capabilityBadge(Boolean(latestPlan?.snapshot.complete))}>{directoryScopeState}</Badge>
           </div>
           <div className="flex items-center justify-between gap-3 py-1.5">
             <span className="flex min-w-0 items-center gap-2 text-xs text-slate-700">
               <ArrowLeftRightIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
               <span>目录主来源</span>
             </span>
-            <Badge variant={capabilityBadge(Boolean(directorySource?.authorityScope.organization === 'authoritative' && directorySource.status === 'active'))}>{directoryAuthorityState}</Badge>
+            <Badge variant={capabilityBadge(Boolean(directorySource?.authorityScope.directory === 'authoritative'))}>{directoryAuthorityState}</Badge>
           </div>
           <div className="flex items-center justify-between gap-3 py-1.5">
             <span className="flex min-w-0 items-center gap-2 text-xs text-slate-700">
@@ -532,7 +536,6 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
         {selected && (
           <div className="mt-3">
             <OrganizationConnectionForm key={selected.key} provider={selected} onChanged={refreshAll} />
-            <DirectoryInspectionPanel key={`${selected.key}:${inspectionGeneration}`} provider={selected} />
           </div>
         )}
 
@@ -550,7 +553,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium text-slate-900">{provider?.label || source.provider}</span>
                   <Badge variant={providerBadgeVariant(source)}>{sourceStateLabel(source)}</Badge>
-                  {source.status === 'active' && source.priority === 1 && <Badge variant="secondary">目录主来源</Badge>}
+                  {source.id === activePrimary?.id && <Badge variant="secondary">目录主来源</Badge>}
                 </div>
                 <div className="mt-1 break-all text-xs text-slate-500">{source.externalTenantId}</div>
                 <div className="mt-1 text-[11px] text-slate-400">
@@ -569,11 +572,16 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
           <div>
             <h4 id="directory-authority-title" className="text-sm font-medium text-slate-900">目录同步</h4>
             <p className="mt-0.5 text-[11px] leading-5 text-slate-500">
-              先检查完整读取权限，再冻结差异并确认。冲突、范围不明、过期计划或不完整快照都会整批阻断。
+              读取同一来源的部门、员工及归属，核对一份差异后整体同步。未关联账号的员工也会进入组织架构。
             </p>
           </div>
           <ArrowLeftRightIcon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
         </div>
+
+        {selected && <details className="mt-3 text-xs text-slate-500">
+          <summary className="cursor-pointer">查看连接读取诊断</summary>
+          <DirectoryInspectionPanel key={`${selected.key}:${inspectionGeneration}`} provider={selected} />
+        </details>}
 
         {directoryAvailability?.available === false && directoryAvailability.reason && (
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
@@ -591,7 +599,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
             </span>
           </div>
           <p className="mt-1 text-[11px] leading-5 text-slate-500">
-            手工部门与旧来源会继续保留。切换只更新{directoryLabel}来源部门、身份映射和成员主部门，不创建新成员，也不按姓名合并。
+            手工部门与旧来源会继续保留。同步统一更新{directoryLabel}的部门、目录员工和归属；未关联账号的员工显示为待关联，账号关联和角色保持不变。
           </p>
           <Button
             type="button"
@@ -608,8 +616,8 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
               : directoryAvailability?.available === false
                 ? '目录切源升级后可用'
                 : directoryReady
-                  ? '检查可读范围并生成差异'
-                  : `${directoryLabel}连接验证后可用`}
+                  ? '读取组织目录并生成差异'
+                  : `${directoryLabel}保存连接后可用`}
           </Button>
         </div>
 
@@ -641,26 +649,14 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
               <Metric label="新增部门" value={latestPlan.summary.departmentsAdded} />
               <Metric label="更新部门" value={latestPlan.summary.departmentsUpdated} />
               <Metric label={`停用旧${directoryLabel}部门`} value={latestPlan.summary.departmentsToDeactivate} tone="amber" />
-              <Metric label="新增身份映射" value={latestPlan.summary.identitiesAdded} />
-              <Metric label="更新身份映射" value={latestPlan.summary.identitiesUpdated} />
+              <Metric label="新增目录员工" value={latestPlan.summary.identitiesAdded} />
+              <Metric label="更新目录员工" value={latestPlan.summary.identitiesUpdated} />
               <Metric label="冲突" value={latestPlan.summary.conflicts} tone={latestPlan.summary.conflicts ? 'rose' : 'emerald'} />
             </div>
 
-            <div
-              className={`mt-3 rounded-md border px-2.5 py-2 text-[11px] leading-5 ${
-                latestPlan.snapshot.scopeVerified
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                  : 'border-amber-200 bg-amber-50 text-amber-800'
-              }`}
-              data-testid="directory-scope-evidence"
-            >
-              <div className="font-medium">
-                {latestPlan.snapshot.scopeVerified ? '全公司读取范围已证明' : '仅完成授权范围内分页，尚不能证明全公司读取范围'}
-              </div>
-              <div className="mt-0.5">
-                快照结构：{latestPlan.snapshot.complete ? '完整' : '不完整'}。
-                {latestPlan.snapshot.scopeEvidence ? `证据：${latestPlan.snapshot.scopeEvidence}` : '范围证据缺失，目录切换保持阻断。'}
-              </div>
+            <div className="mt-3 rounded-md border border-slate-200 px-2.5 py-2 text-xs leading-5" data-testid="directory-scope-evidence">
+              <div>本次读取：{latestPlan.snapshot.departmentCount} 个部门，{latestPlan.snapshot.employeeCount} 位员工。</div>
+              <div>部门与人员关系：{latestPlan.snapshot.complete ? '校验通过' : '校验未通过'}；本次新建待关联人员 {latestPlan.identityChanges.filter(employee => employee.createsMember).length} 人。</div>
             </div>
 
             <div className="mt-3 rounded-md bg-slate-50 px-2.5 py-2 text-[11px] leading-5 text-slate-600">

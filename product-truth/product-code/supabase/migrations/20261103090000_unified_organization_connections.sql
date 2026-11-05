@@ -82,21 +82,24 @@ begin
     select * from public.organization_fxiaoke_connections order by system_org_id
   loop
     select count(*)::integer,
-           count(*) filter (where external_tenant_id = legacy.expected_ea)::integer
+           count(*) filter (where external_tenant_id = legacy.expected_ea
+             or (external_tenant_id like 'FSCID\_%' escape '\'
+               and legacy.expected_ea <> ''
+               and legacy.expected_ea not like 'FSCID\_%' escape '\'
+               and legacy.expected_ea not like 'pending-%'))::integer
       into source_count, matching_source_count
       from public.organization_sources
      where system_org_id = legacy.system_org_id
        and provider = 'fxiaoke';
 
-    if source_count > 0 and matching_source_count = 0 then
+    if source_count > 1 or (source_count > 0 and matching_source_count = 0) then
       raise exception 'legacy Fxiaoke enterprise does not match the existing organization source'
         using errcode = '23514';
     end if;
 
     if matching_source_count > 0 then
       update public.organization_sources as source
-         set external_tenant_id = legacy.expected_ea,
-             configuration_revision = legacy.revision,
+         set configuration_revision = legacy.revision,
              draft_credentials_ciphertext = legacy.credentials_ciphertext,
              draft_credential_envelope = 'legacy-fxiaoke-v1',
              draft_credential_schema_version = 1,
@@ -106,28 +109,30 @@ begin
                'expectedEa', legacy.expected_ea
              ),
              draft_check_status = case
+               when source.external_tenant_id <> legacy.expected_ea then 'not_checked'
                when legacy.last_check_status = 'preview_ready' then 'preview_ready'
                when legacy.last_check_status = 'failed' then 'failed'
                else 'not_checked'
              end,
              draft_checked_at = legacy.last_checked_at,
              verification_started_at = legacy.preview_started_at,
-             effective_revision = legacy.revision,
-             effective_credentials_ciphertext = legacy.credentials_ciphertext,
-             effective_credential_envelope = 'legacy-fxiaoke-v1',
-             effective_metadata = jsonb_build_object(
+             effective_revision = case when source.external_tenant_id = legacy.expected_ea then legacy.revision else null end,
+             effective_credentials_ciphertext = case when source.external_tenant_id = legacy.expected_ea then legacy.credentials_ciphertext else null end,
+             effective_credential_envelope = case when source.external_tenant_id = legacy.expected_ea then 'legacy-fxiaoke-v1' else null end,
+             effective_metadata = case when source.external_tenant_id = legacy.expected_ea then jsonb_build_object(
                'appId', legacy.app_id,
                'apiUserId', legacy.api_user_id,
                'expectedEa', legacy.expected_ea
-             ),
+             ) else '{}'::jsonb end,
              connection_state = case
                when source.status = 'disabled' then 'disabled'
+               when source.external_tenant_id <> legacy.expected_ea then 'configured'
                when legacy.last_check_status = 'preview_ready' then 'verified'
                when legacy.last_check_status = 'failed' then 'failed'
                else 'configured'
              end,
              last_verified_at = case
-               when legacy.last_check_status = 'preview_ready' then legacy.last_checked_at
+               when source.external_tenant_id = legacy.expected_ea and legacy.last_check_status = 'preview_ready' then legacy.last_checked_at
                else null
              end,
              last_error = legacy.last_error,
@@ -136,9 +141,10 @@ begin
                'actorId', legacy.updated_by,
                'occurredAt', legacy.updated_at,
                'configurationRevision', legacy.revision,
-               'effectiveRevision', legacy.revision,
+               'effectiveRevision', case when source.external_tenant_id = legacy.expected_ea then legacy.revision else null end,
                'state', case
                  when source.status = 'disabled' then 'disabled'
+                 when source.external_tenant_id <> legacy.expected_ea then 'configured'
                  when legacy.last_check_status = 'preview_ready' then 'verified'
                  when legacy.last_check_status = 'failed' then 'failed'
                  else 'configured'
@@ -149,7 +155,7 @@ begin
              updated_at = greatest(source.updated_at, legacy.updated_at)
        where source.system_org_id = legacy.system_org_id
          and source.provider = 'fxiaoke'
-         and source.external_tenant_id = legacy.expected_ea;
+         and (source.external_tenant_id = legacy.expected_ea or matching_source_count = 1);
     else
       insert into public.organization_sources(
         system_org_id,

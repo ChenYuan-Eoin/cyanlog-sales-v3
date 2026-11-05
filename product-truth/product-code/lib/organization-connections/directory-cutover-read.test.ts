@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => {
     id: '00000000-0000-4000-8000-000000000030',
     plan_hash: 'a'.repeat(64),
     plan_payload: {
-      version: 'f003-directory-cutover-v1',
+      version: 'f003-directory-cutover-v2',
       organizationId: '00000000-0000-4000-8000-000000000001',
       targetProvider: 'fxiaoke',
       targetSourceId: organizationSourceId,
@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
       snapshot: {
         checkedAt: '2026-11-03T08:00:00.000Z',
         complete: true,
+        connectionVerified: true,
         scopeVerified: false,
         scopeEvidence: null,
         directoryHash: 'b'.repeat(64),

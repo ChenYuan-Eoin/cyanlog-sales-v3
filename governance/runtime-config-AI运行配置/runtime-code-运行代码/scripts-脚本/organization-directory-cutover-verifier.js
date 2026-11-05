@@ -1,7 +1,7 @@
 // WP92 code-only contract. Verifies the provider-neutral directory plan,
-// scope gate, capability separation and atomic cutover contract. It does not
+// native organization landing, capability separation and atomic cutover contract. It does not
 // authorize a Production migration, directory write, source switch or release.
-const CONTRACT = 'f003-directory-cutover-v1';
+const CONTRACT = 'f003-directory-cutover-v2';
 const ITEMS = Object.freeze([
   'organization_directory_snapshot',
   'organization_directory_cutover',
@@ -9,8 +9,8 @@ const ITEMS = Object.freeze([
 const ASSERTIONS = Object.freeze([
   'shared_connection_truth',
   'provider_adapter_capabilities',
-  'structural_and_scope_completeness_separate',
-  'scope_unverified_blocks_plan',
+  'verified_connection_and_structural_integrity',
+  'native_people_and_department_memberships',
   'immutable_plan_bindings',
   'conflict_batch_failure',
   'atomic_apply_and_rollback',
@@ -23,7 +23,7 @@ const CANDIDATE_ACTIONS = Object.freeze([
   'open_integrations',
   'select_configured_provider',
   'inspect_connection_capability_state',
-  'verify_scope_gate',
+  'verify_native_organization_readback',
   'inspect_directory_plan',
   'verify_no_implicit_sync',
   'verify_directory_and_sso_separation',
@@ -60,9 +60,9 @@ function candidateEvidenceBlockers(payload, expected = {}) {
   if (payload.connection_truth_table !== 'organization_sources') errors.push('organization_sources must be the only runtime connection truth');
   if (!same(payload.assertions, ASSERTIONS)) errors.push('Directory cutover candidate assertions are incomplete or out of order');
   for (const flag of [
-    'directory_synchronized',
-    'primary_source_changed',
-    'scope_unverified_can_apply',
+    'production_directory_synchronized',
+    'production_primary_source_changed',
+    'export_required_for_sync',
     'connection_verify_implies_sso',
     'directory_authority_implies_sso',
     'provider_specific_runtime_path',
@@ -72,7 +72,7 @@ function candidateEvidenceBlockers(payload, expected = {}) {
   }
   for (const flag of [
     'structural_completeness_verified',
-    'scope_completeness_gate_verified',
+    'native_people_and_memberships_verified',
     'immutable_plan_bindings_verified',
     'conflict_batch_failure_verified',
     'atomic_apply_verified',

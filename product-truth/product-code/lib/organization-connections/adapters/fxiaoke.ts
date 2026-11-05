@@ -79,6 +79,7 @@ export const fxiaokeConnectionAdapter: OrganizationConnectionAdapter = {
       return {
         checkedAt: new Date().toISOString(),
         externalTenantId: enterprise.ea,
+        verifiedTenantIds: [enterprise.ea, enterprise.corpId],
         metadata: { appId: parsed.appId, apiUserId: parsed.apiUserId, expectedEa: enterprise.ea },
         credentialPatch: {
           appId: parsed.appId,

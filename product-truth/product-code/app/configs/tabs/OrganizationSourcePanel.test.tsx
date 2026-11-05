@@ -9,7 +9,7 @@ const toast = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/toast', () => toast)
-vi.mock('./DirectoryInspectionPanel', () => ({ DirectoryInspectionPanel: () => <div>目录范围核验</div> }))
+vi.mock('./DirectoryInspectionPanel', () => ({ DirectoryInspectionPanel: () => <div>同步核验入口</div> }))
 vi.mock('./OrganizationConnectionForm', () => ({
   OrganizationConnectionForm: ({ provider }: { provider: { label: string } }) => (
     <div>{provider.label}共享连接表单</div>
@@ -69,7 +69,7 @@ function plan(overrides: Partial<DirectoryCutoverClientPlan> = {}): DirectoryCut
   return {
     id: 'plan-1',
     planHash: 'a'.repeat(64),
-    contractVersion: 'f003-directory-cutover-v1',
+    contractVersion: 'f003-directory-cutover-v2',
     provider: 'feishu',
     targetSourceId: 'source-2',
     targetExternalTenantId: 'tenant-target',
@@ -84,7 +84,7 @@ function plan(overrides: Partial<DirectoryCutoverClientPlan> = {}): DirectoryCut
     status: 'planned',
     applyable: true,
     snapshot: {
-      checkedAt: '2026-11-03T08:00:00.000Z', complete: true, scopeVerified: true,
+      checkedAt: '2026-11-03T08:00:00.000Z', complete: true, connectionVerified: true, scopeVerified: true,
       scopeEvidence: 'provider-admin-scope-proof', directoryHash: 'b'.repeat(64),
       departmentCount: 2, employeeCount: 1, warnings: [],
     },
@@ -155,6 +155,8 @@ describe('OrganizationSourcePanel', () => {
 
     expect(await screen.findByText(/目录读取可继续验收/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '目录切源升级后可用' })).toBeDisabled()
+    const inspection = await screen.findByText('同步核验入口')
+    expect(inspection.closest('section')).toHaveAttribute('aria-labelledby', 'directory-authority-title')
     expect(toast.error).not.toHaveBeenCalled()
   })
 
@@ -169,7 +171,7 @@ describe('OrganizationSourcePanel', () => {
     expect(await screen.findByText('tenant-1')).toBeInTheDocument()
     expect(screen.getByText('连接管理')).toBeInTheDocument()
     expect(screen.getByText('目录同步')).toBeInTheDocument()
-    expect(screen.getByText('目录读取范围')).toBeInTheDocument()
+    expect(screen.getByText('组织目录读取')).toBeInTheDocument()
     expect(screen.getAllByText('目录主来源').length).toBeGreaterThan(0)
     expect(screen.getAllByText(/企业单点登录/).length).toBeGreaterThan(0)
     expect(screen.getByText('身份映射与寄件授权')).toBeInTheDocument()
@@ -250,11 +252,11 @@ describe('OrganizationSourcePanel', () => {
     expect(screen.queryByText('身份权威已启用')).not.toBeInTheDocument()
   })
 
-  it('shows structural completeness separately and blocks an unverified scope plan', async () => {
+  it('allows a verified complete directory without requiring a separate roster proof', async () => {
     const blocked = plan({
-      applyable: false,
-      conflicts: [{ kind: 'scope_unverified', externalId: null, message: '不能证明该连接可读取全公司通讯录。' }],
-      snapshot: { ...plan().snapshot, complete: true, scopeVerified: false, scopeEvidence: null },
+      applyable: true,
+      conflicts: [],
+      snapshot: { ...plan().snapshot, complete: true, connectionVerified: true, scopeVerified: false, scopeEvidence: null },
     })
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
       ? json({ data: { plan: blocked } })
@@ -263,10 +265,9 @@ describe('OrganizationSourcePanel', () => {
 
     render(<OrganizationSourcePanel />)
 
-    expect(await screen.findByText('仅完成授权范围内分页，尚不能证明全公司读取范围')).toBeInTheDocument()
-    expect(screen.getByText(/快照结构：完整/)).toBeInTheDocument()
-    expect(screen.getByText(/范围证据缺失/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '确认切换目录主来源' })).not.toBeInTheDocument()
+    expect(await screen.findByText(/部门与人员关系：校验通过/)).toBeInTheDocument()
+    expect(screen.queryByText(/范围证据缺失/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '确认切换目录主来源' })).toBeEnabled()
   })
 
   it('renders the immutable plan, preservation counts and blocks conflicted plans', async () => {

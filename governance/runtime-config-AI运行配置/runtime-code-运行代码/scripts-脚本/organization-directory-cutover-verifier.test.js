@@ -18,15 +18,15 @@ const proof = {
   test_log: { path: 'artifacts/organization-directory-cutover-target.log', sha256: 'c'.repeat(64) },
   connection_truth_table: 'organization_sources',
   assertions: [...verifier.ASSERTIONS],
-  directory_synchronized: false,
-  primary_source_changed: false,
-  scope_unverified_can_apply: false,
+  production_directory_synchronized: false,
+  production_primary_source_changed: false,
+  export_required_for_sync: false,
   connection_verify_implies_sso: false,
   directory_authority_implies_sso: false,
   provider_specific_runtime_path: false,
   legacy_runtime_fallback: false,
   structural_completeness_verified: true,
-  scope_completeness_gate_verified: true,
+  native_people_and_memberships_verified: true,
   immutable_plan_bindings_verified: true,
   conflict_batch_failure_verified: true,
   atomic_apply_verified: true,
@@ -46,21 +46,21 @@ test('accepts only the WP92 code-only directory-cutover contract', () => {
   };
   assert.deepEqual(verifier.contractScopeBlockers(scope), []);
   assert.deepEqual(verifier.candidateEvidenceBlockers(proof, expected), []);
-  assert.equal(verifier.CONTRACT, 'f003-directory-cutover-v1');
+  assert.equal(verifier.CONTRACT, 'f003-directory-cutover-v2');
   assert.deepEqual(verifier.ITEMS, ['organization_directory_snapshot', 'organization_directory_cutover']);
 });
 
-test('rejects writes, source switches, conflated capabilities and incomplete scope proof', () => {
+test('rejects writes, source switches, conflated capabilities and incomplete native organization evidence', () => {
   for (const patch of [
-    { directory_synchronized: true },
-    { primary_source_changed: true },
-    { scope_unverified_can_apply: true },
+    { production_directory_synchronized: true },
+    { production_primary_source_changed: true },
+    { export_required_for_sync: true },
     { connection_verify_implies_sso: true },
     { directory_authority_implies_sso: true },
     { provider_specific_runtime_path: true },
     { legacy_runtime_fallback: true },
     { structural_completeness_verified: false },
-    { scope_completeness_gate_verified: false },
+    { native_people_and_memberships_verified: false },
     { immutable_plan_bindings_verified: false },
     { conflict_batch_failure_verified: false },
     { atomic_apply_verified: false },

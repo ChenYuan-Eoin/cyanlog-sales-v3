@@ -45,6 +45,7 @@ function targetSource(overrides: Partial<DirectorySourceRow> = {}): DirectorySou
     provider: 'fxiaoke',
     externalTenantId: 'FSCID_target',
     priority: 2,
+    authorityScope: {},
     status: 'draft',
     syncMode: 'read_only',
     configurationRevision: fxiaokeRevision,
@@ -58,6 +59,7 @@ function input(overrides: Partial<DirectoryCutoverInput> = {}): DirectoryCutover
     organizationId: org,
     targetSourceId: fxiaokeSource,
     connectionRevision: fxiaokeRevision,
+    connectionVerified: true,
     snapshot: {
       checkedAt: '2026-11-03T08:00:00.000Z',
       provider: 'fxiaoke',
@@ -85,15 +87,21 @@ function input(overrides: Partial<DirectoryCutoverInput> = {}): DirectoryCutover
       },
     ],
     users: [
-      { id: alice, orgId: org, employeeId: 'E001', email: 'alice@example.com', phone: null, displayName: '张三', title: null, avatarUrl: null, status: 'active', primaryDepartmentId: feishuDepartment, updatedAt: '2026-11-01T00:00:00.000Z' },
-      { id: bob, orgId: org, employeeId: 'E002', email: 'bob@example.com', phone: null, displayName: '李四', title: null, avatarUrl: null, status: 'active', primaryDepartmentId: null, updatedAt: '2026-11-01T00:00:00.000Z' },
+      { id: alice, orgId: org, employeeId: 'E001', email: 'alice@example.com', phone: null, displayName: '张三', title: null, avatarUrl: null, status: 'active', loginEnabled: true, primaryDepartmentId: feishuDepartment, updatedAt: '2026-11-01T00:00:00.000Z' },
+      { id: bob, orgId: org, employeeId: 'E002', email: 'bob@example.com', phone: null, displayName: '李四', title: null, avatarUrl: null, status: 'active', loginEnabled: true, primaryDepartmentId: null, updatedAt: '2026-11-01T00:00:00.000Z' },
     ],
     identities: [{
+      id: '00000000-0000-4000-8000-000000000303', sourceId: fxiaokeSource, systemOrgId: org,
+      externalUserId: 'employee-1', externalUnionId: null, externalOpenId: null,
+      canonicalUserId: alice, matchStatus: 'matched', matchMethod: 'employee_id', matchConfidence: 1,
+      profileSnapshot: {}, observedAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z',
+    }, {
       id: '00000000-0000-4000-8000-000000000301', sourceId: feishuSource, systemOrgId: org,
       externalUserId: 'fs-employee-1', externalUnionId: null, externalOpenId: null,
       canonicalUserId: alice, matchStatus: 'matched', matchMethod: 'employee_id', matchConfidence: 1,
       profileSnapshot: { displayName: '张三' }, observedAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z',
     }],
+    organizationMemberships: [],
     memberships: [{
       userId: alice, departmentId: feishuDepartment, orgId: org, isPrimary: true,
       source: 'feishu', joinedAt: '2026-11-01T00:00:00.000Z',
@@ -103,7 +111,7 @@ function input(overrides: Partial<DirectoryCutoverInput> = {}): DirectoryCutover
 }
 
 describe('directory cutover plan', () => {
-  it('treats structural completeness as separate from company-wide scope proof', () => {
+  it('accepts a verified whole directory without a separate export or scope proof', () => {
     const base = input()
     const plan = buildDirectoryCutoverPlan(input({
       snapshot: {
@@ -115,10 +123,8 @@ describe('directory cutover plan', () => {
     }))
 
     expect(plan.snapshot).toMatchObject({ complete: true, scopeVerified: false, scopeEvidence: null })
-    expect(plan.applyable).toBe(false)
-    expect(plan.conflicts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: 'scope_unverified' }),
-    ]))
+    expect(plan.applyable).toBe(true)
+    expect(plan.conflicts).toEqual([])
   })
 
   it('creates a deterministic applyable plan with evidence matching and preserves manual and old-source data', () => {
@@ -129,7 +135,7 @@ describe('directory cutover plan', () => {
     expect(first.applyable).toBe(true)
     expect(first.conflicts).toEqual([])
     expect(first.identityChanges).toEqual([expect.objectContaining({
-      externalUserId: 'employee-1', canonicalUserId: alice, matchMethod: 'employee_id',
+      externalUserId: 'employee-1', canonicalUserId: alice, matchMethod: 'provider_id',
     })])
     expect(first.userDepartmentChanges).toEqual([expect.objectContaining({
       userId: alice, primaryDepartmentExternalId: 'dept-sales', active: true,
@@ -237,6 +243,7 @@ describe('directory cutover plan', () => {
   it('never matches by display name and never creates a missing member', () => {
     const base = input()
     const plan = buildDirectoryCutoverPlan(input({
+      identities: [],
       users: [input().users[0]],
       snapshot: {
         ...base.snapshot,
@@ -244,13 +251,14 @@ describe('directory cutover plan', () => {
       },
     }))
 
-    expect(plan.applyable).toBe(false)
-    expect(plan.identityChanges).toEqual([])
-    expect(plan.userDepartmentChanges).toEqual([])
-    expect(plan.conflicts).toEqual([expect.objectContaining({ kind: 'identity_unresolved' })])
+    expect(plan.applyable).toBe(true)
+    expect(plan.identityChanges).toEqual([expect.objectContaining({ canonicalUserId: expect.any(String), createsMember: true, matchMethod: 'none', departmentExternalIds: ['dept-sales'] })])
+    expect(plan.userDepartmentChanges).toHaveLength(1)
+    expect(plan.userDepartmentChanges[0].userId).not.toBe(alice)
+    expect(plan.conflicts).toEqual([])
   })
 
-  it('blocks ambiguous identity evidence instead of choosing a member', () => {
+  it('keeps ambiguous account candidates unlinked without dropping the directory employee', () => {
     const base = input()
     const plan = buildDirectoryCutoverPlan(input({
       users: [input().users[0], { ...input().users[1], employeeId: 'E001' }],
@@ -260,9 +268,11 @@ describe('directory cutover plan', () => {
       },
     }))
 
-    expect(plan.applyable).toBe(false)
-    expect(plan.identityChanges).toEqual([])
-    expect(plan.conflicts).toEqual([expect.objectContaining({ kind: 'identity_ambiguous' })])
+    expect(plan.applyable).toBe(true)
+    expect(plan.identityChanges).toEqual([expect.objectContaining({ canonicalUserId: expect.any(String), createsMember: true, matchMethod: 'none' })])
+    expect(plan.userDepartmentChanges).toHaveLength(1)
+    expect(plan.userDepartmentChanges[0].userId).not.toBe(alice)
+    expect(plan.conflicts).toEqual([])
   })
 
   it('preserves an explicit manual identity binding until trusted evidence conflicts with it', () => {

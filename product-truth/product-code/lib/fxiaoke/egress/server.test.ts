@@ -67,10 +67,10 @@ it('carries enterprise discovery through encrypted jobs and only broadcasts an e
   expect(fake.tables.organization_fxiaoke_egress_jobs).toHaveLength(0)
   expect(JSON.stringify(fake.inserts)).not.toContain(credentials.appSecret)
 })
-it('carries ownership and supplementary departments through the worker protocol', async () => {
+it('carries primary and supplementary departments through the worker protocol', async () => {
   const previewCredentials = { ...credentials, expectedEa: 'fixture-enterprise', apiUserId: 'fixture-user' }
   const departmentProjection = ['_id','name','parent_id','status']
-  const personnelProjection = ['_id','user_id','name','data_own_department','vice_departments','status','is_pause_login','employee_number','email','phone']
+  const personnelProjection = ['_id','user_id','name','main_department','vice_departments','status','is_pause_login','employee_number','email','phone']
   let requestIndex = 0
   fake.wake.mockImplementation(async () => {
     const claim = await workerClaim(egressConfig()!, ip)
@@ -91,7 +91,7 @@ it('carries ownership and supplementary departments through the worker protocol'
       expect(body.data.search_query_info.fieldProjection).toEqual(personnelProjection)
       response = { errorCode: 0, data: { total: 1, dataList: [{
         _id: 'record-1', user_id: 'employee-1', name: '员工甲',
-        data_own_department: ['100'], vice_departments: ['200'], status: '0', is_pause_login: false,
+        main_department: ['100'], data_own_department: ['200'], vice_departments: ['200'], status: '0', is_pause_login: false,
       }] } }
     }
     await workerComplete(egressConfig()!, { id: claim.job!.id, lease: claim.job!.lease, result: { status: 200, body: JSON.stringify(response) } })

@@ -100,7 +100,7 @@ it('allows only the exact PersonnelObj directory projection and rejects arbitrar
         search_query_info: {
           limit: 100,
           offset: 0,
-          fieldProjection: ['_id','user_id','name','data_own_department','vice_departments','status','is_pause_login','employee_number','email','phone'],
+          fieldProjection: ['_id','user_id','name','main_department','vice_departments','status','is_pause_login','employee_number','email','phone'],
           filters: [],
           orders: [{ fieldName: '_id', isAsc: true }],
         },
@@ -108,6 +108,7 @@ it('allows only the exact PersonnelObj directory projection and rejects arbitrar
     }),
   }
   expect(validRequest(query)).toBe(true)
+  expect(validRequest({ ...query, body: query.body.replace('main_department','data_own_department') })).toBe(true)
   expect(validRequest({ ...query, body: query.body.replace('vice_departments','password') })).toBe(false)
   expect(validRequest({ ...query, body: query.body.replace('email','password') })).toBe(false)
 })

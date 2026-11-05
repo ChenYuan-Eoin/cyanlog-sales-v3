@@ -87,6 +87,8 @@ export type NormalizedDirectoryStatus = 'active' | 'inactive' | 'deleted' | 'unk
 export type AdapterVerification = {
   checkedAt: string
   externalTenantId: string
+  /** Alternate identifiers returned for this same tenant by the current provider verification. Never copied from client input. */
+  verifiedTenantIds?: string[]
   metadata?: Record<string, unknown>
   credentialPatch?: Record<string, unknown>
 }
