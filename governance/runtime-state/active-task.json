@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-05T09:28:25.519492+00:00",
+  "updated_at": "2026-11-05T11:30:00.000000+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -242,13 +242,22 @@
       "product-truth/product-code/app/shipping/config-drawer.tsx",
       "product-truth/product-code/app/shipping/config-drawer.test.tsx",
       "product-truth/product-code/app/shipping/config-drawer.module.css",
-      "product-truth/product-code/app/configs/ConfigsClient.tsx"
+      "product-truth/product-code/app/configs/ConfigsClient.tsx",
+      "product-truth/feature-packets/F054-sf-self-service-order.md",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-settings-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-settings-verifier.test.js"
     ],
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -263,13 +272,36 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "shipping_workspace",
+        "shipping_settings",
         "shipping_access"
       ],
       "runtime_profile": "shipping_workspace",
-      "runtime_contract_version": "f054-config-ui-v1",
+      "runtime_contract_version": "f054-shipping-settings-v1",
       "production_database_mode": "read_only",
-      "note": "本轮先交付可审查代码候选；新候选推送与Production发布须遵循用户直接提供的AGENTS明确授权。正式站复验不得保存业务配置、同步成员或停用服务。"
+      "required_production_runtime_evidence": [
+        "shipping_settings",
+        "shipping_access"
+      ],
+      "production_release_authorization": {
+        "status": "approved_code_only",
+        "micro_fix_approval_id": "IN-20261105-030",
+        "clarification_id": "IN-20261105-030",
+        "final_release_approval_id": "IN-20261105-030",
+        "micro_fix_scope": "合并寄件设置单页，保留顺丰连接、月结/服务、默认寄件地址、提报规则及组织权限入口，移除旧企微应用、机器人和旧员工范围界面。",
+        "final_scope": "发布WP40寄件设置单页合并候选78f396730c3b4dfc9ed42d75b7516de432e30be5及其必要的交付合同/测试治理变更；保留顺丰连接、月结/服务、默认寄件地址、提报规则和组织权限入口，移除旧企微自建应用、机器人与旧员工范围界面。允许推送并集成main/production、部署现有网站和发布治理记录；正式域名只做页面与组织权限入口的现有Chrome只读复验，不保存配置、不调用顺丰、不写业务数据、不同步或改写组织、不停止服务、不改账号或角色。",
+        "database_write_authorized": false,
+        "production_database_write_authorized": false,
+        "carrier_calls_authorized": false,
+        "organization_sync_authorized": false,
+        "service_retirement_authorized": false,
+        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
+      },
+      "final_acceptance": {
+        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+        "production_database_mode": "read_only"
+      },
+      "note": "IN-20261105-030 明确批准发布78f39673候选并做只读正式站UI回读；合同/测试治理变更必须与产品候选同SHA验证。禁止保存配置、顺丰调用、组织同步、服务停用和业务写入。"
     },
     "acceptance_checks": [
       "单页包含顺丰、月结/服务、默认寄件地址、提报规则与组织权限入口",

@@ -19,6 +19,7 @@ const {
   ORGANIZATION_CONNECTIONS_ITEMS,
   FXIAOKE_SSO_CONTRACT,
   SHIPPING_SERVICE_SELECTION_CONTRACT,
+  SHIPPING_SETTINGS_CONTRACT,
   SHIPPING_COLLABORATION_ACTIONS,
   SHIPPING_CONFIG_UI_ITEMS,
   SHIPPING_CONFIG_UI_ACTIONS,
@@ -1278,6 +1279,48 @@ function runConfigurationUiSelftest(repoRoot) {
   fs.appendFileSync(path.join(deliveryRuntimeRoot(repoRoot), permissionLog.path), 'tampered');
   assert.strictEqual(checkDeliveryStage('clean_preview_green', { ...options, status }).ok, false);
   console.log('configuration UI Preview contract selftest ok');
+}
+
+function runShippingSettingsContractSelftest(repoRoot) {
+  const verifier = require('./shipping-settings-verifier');
+  const state = { active_task: { id: 'WP40', feature_id: 'F054', delivery_contract: {
+    runtime_profile: 'shipping_workspace', runtime_contract_version: SHIPPING_SETTINGS_CONTRACT
+  } } };
+  assert.deepStrictEqual(requiredReplayActions(state), verifier.ACTIONS);
+  const approved = {
+    activeId: 'WP40', featureId: 'F054', runtimeProfile: 'shipping_workspace',
+    runtimeContractVersion: SHIPPING_SETTINGS_CONTRACT, targetState: 'production_released',
+    productionDatabaseMode: 'read_only', productionReleaseAuthorization: {
+      status: 'approved_code_only', database_write_authorized: false,
+      production_database_write_authorized: false, carrier_calls_authorized: false,
+      organization_sync_authorized: false, service_retirement_authorized: false,
+    },
+  };
+  assert.deepStrictEqual(shippingProductionVerifierScopeBlockers(approved), []);
+  for (const patch of [
+    { activeId: 'WP52' },
+    { productionDatabaseMode: 'controlled_write_approved' },
+    { productionReleaseAuthorization: { ...approved.productionReleaseAuthorization, carrier_calls_authorized: true } },
+    { productionReleaseAuthorization: { ...approved.productionReleaseAuthorization, organization_sync_authorized: true } },
+    { productionReleaseAuthorization: { ...approved.productionReleaseAuthorization, service_retirement_authorized: true } },
+  ]) {
+    assert.ok(shippingProductionVerifierScopeBlockers({ ...approved, ...patch }).length);
+  }
+  const preview = {
+    shipping_settings: { payload: { contract_version: SHIPPING_SETTINGS_CONTRACT, environment: 'preview', one_page_merged: true,
+      carrier_controls_visible: true, billing_service_controls_visible: true, default_sender_visible: true,
+      intake_rules_visible: true, organization_permission_entry_visible: true, legacy_enterprise_ui_absent: true,
+      save_clicked: false, no_business_mutations: true, carrier_calls_observed: false,
+      organization_sync_requests_observed: false, service_state_changes_observed: false } },
+    shipping_access: { payload: { contract_version: SHIPPING_SETTINGS_CONTRACT, environment: 'preview',
+      anonymous_access_denied: true, application_response: true, anonymous_status: 401, no_business_mutations: true } },
+  };
+  assert.deepStrictEqual(shippingWorkspaceEvidenceBlockers(preview, 'preview', SHIPPING_SETTINGS_CONTRACT), []);
+  const missingProduction = productionRuntimeEvidenceBlockers({}, verifier.ITEMS, repoRoot, {
+    commit: 'a'.repeat(40), deploymentId: 'dpl_settings', runtimeContractVersion: SHIPPING_SETTINGS_CONTRACT,
+  });
+  assert.ok(missingProduction.some(message => message.includes('Shipping settings controlled evidence')));
+  console.log('shipping settings read-only contract selftest ok');
 }
 
 function makeTestVercelApiResponses(productionCommit) {
@@ -2705,7 +2748,7 @@ function main() {
       runConfigurationUiSelftest(repoRoot);
       return;
     }
-    const verifierTests = spawnSync(process.execPath, ['--test', path.join(__dirname, 'shipping-workspace-verifier.test.js'), path.join(__dirname, 'shipping-parser-verifier.test.js'), path.join(__dirname, 'shipping-service-selection-verifier.test.js')], {
+    const verifierTests = spawnSync(process.execPath, ['--test', path.join(__dirname, 'shipping-workspace-verifier.test.js'), path.join(__dirname, 'shipping-parser-verifier.test.js'), path.join(__dirname, 'shipping-service-selection-verifier.test.js'), path.join(__dirname, 'shipping-settings-verifier.test.js')], {
       encoding: 'utf8', timeout: 60000
     });
     assert.strictEqual(verifierTests.status, 0, verifierTests.stderr || verifierTests.stdout || 'Shipping verifier offline tests failed');
@@ -2718,6 +2761,10 @@ function main() {
     fs.mkdirSync(configurationRoot);
     process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(configurationRoot, '.runtime', 'harness');
     runConfigurationUiSelftest(configurationRoot);
+    const settingsRoot = path.join(repoRoot, 'settings-fixture');
+    fs.mkdirSync(settingsRoot);
+    process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(settingsRoot, '.runtime', 'harness');
+    runShippingSettingsContractSelftest(settingsRoot);
     const selectionRoot = path.join(repoRoot, 'selection-fixture');
     fs.mkdirSync(selectionRoot);
     process.env.PRICE_V3_HARNESS_RUNTIME_DIR = path.join(selectionRoot, '.runtime', 'harness');
