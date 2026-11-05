@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CheckCircle2, LoaderCircle, Plus, Settings, ShieldCheck, X } from 'lucide-react'
 import type { ShippingConfiguration } from '@/lib/shipping/connections'
 import { emptyContact, type Contact } from '@/lib/shipping/types'
@@ -8,7 +8,6 @@ import styles from './config-drawer.module.css'
 import { contactSchema } from '@/lib/shipping/validation'
 import { parseAddress } from '@/lib/shipping/address'
 import IntakeConfiguration from './intake-configuration'
-import WecomConfiguration from './wecom-configuration'
 import { SF_SERVICE_CATALOG, DEFAULT_INTAKE_SERVICES } from '@/lib/shipping/sf-service-catalog'
 
 async function request<T>(init?: RequestInit): Promise<T> {
@@ -35,11 +34,6 @@ type OperatorAccess = {
   legacyImportCompleted: boolean
 }
 
-const CONFIG_SECTIONS = [
-  { id: 'carrier', label: '顺丰接入' },
-  { id: 'enterprise', label: '企业接入' },
-] as const
-type ConfigSection = typeof CONFIG_SECTIONS[number]['id']
 type Environment = 'sandbox' | 'production'
 type Service = { id: number; name: string; preference: 'standard' | 'urgent' }
 
@@ -49,8 +43,6 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   const [deploymentEnvironment, setDeploymentEnvironment] = useState<NonNullable<ConfigurationReply['deploymentEnvironment']>>('unknown')
   const [saveFailed, setSaveFailed] = useState(false)
   const [credentialStorageReady, setCredentialStorageReady] = useState(true)
-  const [section, setSection] = useState<ConfigSection>('carrier')
-  const panelTitle = useRef<HTMLHeadingElement>(null)
   const [partnerId, setPartnerId] = useState('')
   const [checkWord, setCheckWord] = useState('')
   const [serviceDrafts, setServiceDrafts] = useState<Partial<Record<Environment, Service[]>>>({})
@@ -101,12 +93,6 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   }
 
   useEffect(() => { if (open || embedded) { setAccessState('checking'); setMessage(''); void refresh().catch(error => { setAccessState('unavailable'); setMessage((error as Error).message) }) } }, [open, embedded])
-
-  function selectSection(next: ConfigSection) {
-    setSection(next)
-    setMessage('')
-    window.requestAnimationFrame(() => panelTitle.current?.focus())
-  }
 
   function changeEnvironment(next: Environment) {
     setEnvironment(next)
@@ -193,7 +179,6 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
     </section>
   }
   const environmentAccounts = configuration.billingAccounts.filter(account => account.environment === environment)
-  const currentSection = CONFIG_SECTIONS.find(item => item.id === section)!
   return <div className={embedded ? styles.embedded : styles.backdrop} role={embedded ? 'region' : 'presentation'} onMouseDown={event => { if (!embedded && event.target === event.currentTarget) onClose?.() }}>
     <aside className={styles.drawer} role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true} aria-labelledby="shipping-config-title">
       <header className={styles.header}>
@@ -208,12 +193,8 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
           {deploymentEnvironment !== 'production' && <a href="https://sales.cyanlog.icu/configs?tab=shipping">前往正式站 →</a>}
           <a href="/shipping">返回收寄工作台 →</a>
         </div>
-        <nav className={styles.sectionNav} aria-label="寄件设置分区">
-          {CONFIG_SECTIONS.map(item => <button type="button" key={item.id} aria-current={section === item.id ? 'page' : undefined} aria-controls={`shipping-panel-${item.id}`} onClick={() => selectSection(item.id)}>{item.label}</button>)}
-        </nav>
-        <div className={styles.panelHeading}><h3 ref={panelTitle} tabIndex={-1}>{currentSection.label}</h3></div>
-
-        <section id="shipping-panel-carrier" hidden={section !== 'carrier'} aria-label="顺丰接入内容">
+        <section aria-label="顺丰接入内容">
+          <div className={styles.panelHeading}><h3>顺丰接入</h3></div>
           {!credentialStorageReady && <p className={styles.message} role="alert">当前站点暂时无法保存应用密钥和月结账号，请联系管理员修复。已保存的信息仍显示在下方，无需重新填写。</p>}
           <div className={styles.environmentBar}>
             <label>顺丰接口环境<select aria-label="运行环境" value={environment} disabled={!!busy} onChange={event => changeEnvironment(event.target.value as Environment)}><option value="production">生产</option><option value="sandbox">沙盒</option></select></label>
@@ -286,8 +267,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
           </details>
         </section>
 
-        <section id="shipping-panel-enterprise" hidden={section !== 'enterprise'} aria-label="企业接入内容">
-          <WecomConfiguration onMessage={setMessage}/>
+        <section aria-label="寄件业务设置">
           <section className={styles.section} aria-label="默认寄件人内容">
             <div className={styles.sectionTitle}><div><Settings size={16}/><h3>公司默认寄件人</h3></div></div>
             <div className={styles.addressImport}>

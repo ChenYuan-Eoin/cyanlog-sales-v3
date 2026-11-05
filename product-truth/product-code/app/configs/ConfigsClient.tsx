@@ -197,7 +197,7 @@ const CONFIG_SECTIONS: Array<{
   {
     id: 'shipping',
     label: '寄件配置',
-    description: '顺丰、企业微信与寄件资料。',
+    description: '顺丰、寄件地址、提报规则与下单权限。',
     tabs: ['shipping'],
   },
   {
