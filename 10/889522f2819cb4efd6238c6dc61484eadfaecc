@@ -84,25 +84,113 @@
       },
       "summary": "WP92-M2: directory activation with CAS; shared configuration/directory status, read retry, stale-plan and provider-race protection. Full3279 passed+5 skipped; native PG17.6 36 passed; strict10/10; lint/typecheck/build; fresh Production DDL matches unchanged migrations.",
       "boundary": "Local candidate only. Production still1d766f34 with disabled source and previously applied native directory. No deployment, activation, migrations, or new directory apply this turn; production operator replay pending."
+    },
+    "production": {
+      "commit": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+      "deployment_id": "dpl_7n1kFu6ggZuMwaTfhzDCzcVXUQvU",
+      "domain": "sales.cyanlog.icu",
+      "ready": true,
+      "browser_acceptance": {
+        "artifact_path": "/Users/nsss/Documents/ChatGPT/Price-v3/.git/worktrees/Price-v31/codex-runtime/wp92-native-organization-correction/m2-production-operator-attestation.json",
+        "sha256": "8eba0e8f2de4a1667a89baa6391ba8c630310f1bc10c2e82f53425f0911c785b",
+        "payload": {
+          "url": "https://sales.cyanlog.icu/configs?tab=integrations",
+          "environment": "production",
+          "attestation_type": "trusted_operator_browser",
+          "trust_boundary": "operator_attestation_not_machine_proof",
+          "attestation_method": "codex_chrome_control_existing_session",
+          "attested_by": "Codex operating existing authenticated user Chrome through CUA",
+          "attested_at": "2026-11-05T07:26:05.906651+00:00",
+          "existing_tab_id": "1110517622",
+          "browser_context": "existing_user_chrome",
+          "new_browser_contexts": 0,
+          "new_tabs": 0,
+          "result": "pass",
+          "commit": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+          "deployment_id": "dpl_7n1kFu6ggZuMwaTfhzDCzcVXUQvU",
+          "actions": [
+            "reload production",
+            "check existing directory configuration",
+            "enable checked directory connection",
+            "reload and observe persisted enabled state",
+            "generate whole directory difference without apply",
+            "open organization structure",
+            "select ONES then platform department then legal group",
+            "return to source management and read persisted difference"
+          ],
+          "observations": {
+            "connection": "enabled after reload",
+            "sourceEmployeeCount": 405,
+            "nativeDepartmentCount": 88,
+            "nativeVisibleMemberCount": 444,
+            "platformDepartmentMemberCount": 25,
+            "legalGroupMemberCount": 6,
+            "legalGroupEmploymentStates": {
+              "active": 2,
+              "inactive": 4
+            },
+            "legalGroupSecondaryRelationshipsVisible": true,
+            "newDifferenceApplied": false
+          },
+          "attachments": [
+            {
+              "path": "/Users/nsss/Documents/ChatGPT/Price-v3/.git/worktrees/Price-v31/codex-runtime/wp92-native-organization-correction/m2-production-connection-enabled.png",
+              "sha256": "f643147f16877922eb38aeabb594512784cd71f7c6ab580d61040bafd21e7dc7",
+              "bytes": 282820,
+              "imageSize": [
+                2976,
+                3119
+              ]
+            },
+            {
+              "path": "/Users/nsss/Documents/ChatGPT/Price-v3/.git/worktrees/Price-v31/codex-runtime/wp92-native-organization-correction/m2-production-connection-after-refresh.txt",
+              "sha256": "6b6c06775723e436a3218c3f1350ab288cda24263a2d04e363ba74da8923ebd4",
+              "bytes": 8243
+            },
+            {
+              "path": "/Users/nsss/Documents/ChatGPT/Price-v3/.git/worktrees/Price-v31/codex-runtime/wp92-native-organization-correction/m2-production-native-org-readback.png",
+              "sha256": "fdc8c734150e4f46e11e0542d5ce96bc0b79f12eac0de60b4301253dc8b13c6b",
+              "bytes": 161897,
+              "imageSize": [
+                2976,
+                1501
+              ]
+            },
+            {
+              "path": "/Users/nsss/Documents/ChatGPT/Price-v3/.git/worktrees/Price-v31/codex-runtime/wp92-native-organization-correction/m2-production-native-org-readback.txt",
+              "sha256": "f357c310d7e8f669df4303ff260c2e2fb56b9612a2b49d6b96edb1e7170b0d27",
+              "bytes": 9340
+            }
+          ]
+        }
+      },
+      "activation_readback": {
+        "artifact_path": "/Users/nsss/Documents/ChatGPT/Price-v3/.git/worktrees/Price-v31/codex-runtime/wp92-native-organization-correction/m2-production-activation-readback.json",
+        "sha256": "cf1d4a234a94d315b62ad87b95a819c5c141ef9a78283be2841bdfc4d98592f1"
+      },
+      "release_authorization": "IN-20261105-024",
+      "scope": "Publish approved 10889522, enable checked existing ONES directory connection, generate unapplied difference and verify existing organization data",
+      "formal_completion_state": "code_green",
+      "formal_completion_limitation": "The tracked WP92 verifier remains code-only. These are actual Production facts, not a claim that missing formal stages passed."
     }
   },
-  "updatedAt": "2026-11-05T06:47:35.293Z",
+  "updatedAt": "2026-11-05T07:26:36.679Z",
   "completionState": "code_green",
   "gateSnapshots": {
     "code_green": {
       "stage": "code_green",
-      "checkedAt": "2026-11-05T06:47:35.271Z",
+      "checkedAt": "2026-11-05T07:26:36.661Z",
       "head": "10889522f2819cb4efd6238c6dc61484eadfaecc",
       "originMain": "a11e185aea372af97428d0c70fe768dd2720067d",
-      "remoteMain": "a11e185aea372af97428d0c70fe768dd2720067d",
-      "remoteProduction": "1d766f34831884d88c2b9c2bcbc9788568364623",
-      "defaultBranch": "main",
-      "originMainFresh": true,
-      "originMainIsAncestor": true,
+      "remoteMain": null,
+      "remoteProduction": null,
+      "defaultBranch": null,
+      "originMainFresh": false,
+      "originMainIsAncestor": false,
       "mainIntegrated": false,
-      "localAttestationRefOid": "6bda4eb24beab5700739d939d5f0c69f9d351091",
-      "remoteAttestationRefOid": "6bda4eb24beab5700739d939d5f0c69f9d351091",
-      "remoteSnapshotCheckedAt": "2026-11-05T06:47:30.807Z",
+      "localAttestationRefOid": "35668d573f8e8df9a1b6f68367c56dfaa2ccb21c",
+      "remoteAttestationRefOid": null,
+      "remoteSnapshotCheckedAt": "2026-11-05T07:26:31.194Z",
       "vercelProduction": null,
       "verifier": {
         "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
@@ -112,10 +200,148 @@
       }
     }
   },
-  "previousAttestationDigest": null,
-  "previousAttestation": null,
-  "revision": 1,
-  "contentDigest": "34b56994b3145009c969fb81d5a3e980132429422df52c7fb16fe221be9bb498",
-  "sealedAt": "2026-11-05T06:47:35.293Z",
-  "attestationDigest": "67249cd6d41fc3b5dfe4d2f9eaae29f05c1f106f202408c245db7781b1f0e00f"
+  "releaseControl": {
+    "production_branch": "production",
+    "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+    "production_commit_before": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+    "production_deployment_id_before": "dpl_7n1kFu6ggZuMwaTfhzDCzcVXUQvU",
+    "production_release_approval_id": "IN-20261105-024",
+    "production_release_scope": "publish_enable_directory_and_generate_unapplied_diff",
+    "production_release_commit_authorized": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+    "production_release_method": "vercel_git_production_branch",
+    "production_released_at": "2026-11-05T07:19:10.032Z",
+    "production_commit_released": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+    "production_deployment_id_released": "dpl_7n1kFu6ggZuMwaTfhzDCzcVXUQvU",
+    "production_domain_released": "sales.cyanlog.icu",
+    "rollback_commit": "1d766f34831884d88c2b9c2bcbc9788568364623",
+    "rollback_deployment_id": "dpl_25ieGw6YCVehvsnyruyFxsrtaUfm",
+    "source_activation_authorized": true,
+    "new_directory_apply_authorized": false
+  },
+  "previousAttestationDigest": "67249cd6d41fc3b5dfe4d2f9eaae29f05c1f106f202408c245db7781b1f0e00f",
+  "previousAttestation": {
+    "version": 1,
+    "activeId": "WP92",
+    "commit": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+    "evidence": {
+      "code": {
+        "commit": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+        "tree": "0c71908cbbd9e0910babc346c78e85c504408ddb",
+        "checks": {
+          "full_tests": true,
+          "lint": true,
+          "typecheck": true,
+          "target_tests": true,
+          "build": true
+        },
+        "commands": [
+          {
+            "name": "full_tests",
+            "command": [
+              "bash",
+              "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh"
+            ],
+            "artifact_path": "check-logs/0c71908cbbd9e0910babc346c78e85c504408ddb/check-03-test.log",
+            "sha256": "eb1fc7020824df2c91994f187bffe0cdf9060d2e1b0023a5ffcc89cf8179e5c3",
+            "exit_code": 0,
+            "timeout": false,
+            "log_sha256": "eb1fc7020824df2c91994f187bffe0cdf9060d2e1b0023a5ffcc89cf8179e5c3"
+          },
+          {
+            "name": "lint",
+            "command": [
+              "bash",
+              "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-02-lint.sh"
+            ],
+            "artifact_path": "check-logs/0c71908cbbd9e0910babc346c78e85c504408ddb/check-02-lint.log",
+            "sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c",
+            "exit_code": 0,
+            "timeout": false,
+            "log_sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c"
+          },
+          {
+            "name": "typecheck",
+            "command": [
+              "bash",
+              "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-01-typecheck.sh"
+            ],
+            "artifact_path": "check-logs/0c71908cbbd9e0910babc346c78e85c504408ddb/check-01-typecheck.log",
+            "sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+            "exit_code": 0,
+            "timeout": false,
+            "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+          },
+          {
+            "name": "target_tests",
+            "command": [
+              "pnpm",
+              "test:run",
+              "app/configs/tabs/OrganizationConnectionForm.test.tsx",
+              "app/configs/tabs/OrganizationSourcePanel.test.tsx"
+            ],
+            "artifact_path": "wp92-native-organization-correction/m2-state-path-final-target.log",
+            "log_sha256": "e28d48004d9d42190a46351cf0585a5a07fc272cc826ea564436baee6efbc64b",
+            "exit_code": 0,
+            "timeout": false,
+            "tree": "0c71908cbbd9e0910babc346c78e85c504408ddb"
+          },
+          {
+            "name": "build",
+            "command": [
+              "pnpm",
+              "build"
+            ],
+            "artifact_path": "wp92-native-organization-correction/m2-state-path-build.log",
+            "log_sha256": "221deabdf7ea8c5585bf9e32f46496178b704f780005a73575cfb3e8c934bfd4",
+            "exit_code": 0,
+            "timeout": false,
+            "tree": "0c71908cbbd9e0910babc346c78e85c504408ddb"
+          }
+        ],
+        "behavior_log": {
+          "artifact_path": "behavior-log.jsonl",
+          "sha256": "b8e15b6ca853ff687410c6f0011d3a6a8b5e4d7f93c3590dd3d9540bf9c2fa8b",
+          "entry_sha256": "c068c9119e3ee409ffa99e1e88b6cce66b3a957d8c17fd8a485e06392010b945"
+        },
+        "summary": "WP92-M2: directory activation with CAS; shared configuration/directory status, read retry, stale-plan and provider-race protection. Full3279 passed+5 skipped; native PG17.6 36 passed; strict10/10; lint/typecheck/build; fresh Production DDL matches unchanged migrations.",
+        "boundary": "Local candidate only. Production still1d766f34 with disabled source and previously applied native directory. No deployment, activation, migrations, or new directory apply this turn; production operator replay pending."
+      }
+    },
+    "updatedAt": "2026-11-05T06:47:35.293Z",
+    "completionState": "code_green",
+    "gateSnapshots": {
+      "code_green": {
+        "stage": "code_green",
+        "checkedAt": "2026-11-05T06:47:35.271Z",
+        "head": "10889522f2819cb4efd6238c6dc61484eadfaecc",
+        "originMain": "a11e185aea372af97428d0c70fe768dd2720067d",
+        "remoteMain": "a11e185aea372af97428d0c70fe768dd2720067d",
+        "remoteProduction": "1d766f34831884d88c2b9c2bcbc9788568364623",
+        "defaultBranch": "main",
+        "originMainFresh": true,
+        "originMainIsAncestor": true,
+        "mainIntegrated": false,
+        "localAttestationRefOid": "6bda4eb24beab5700739d939d5f0c69f9d351091",
+        "remoteAttestationRefOid": "6bda4eb24beab5700739d939d5f0c69f9d351091",
+        "remoteSnapshotCheckedAt": "2026-11-05T06:47:30.807Z",
+        "vercelProduction": null,
+        "verifier": {
+          "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+          "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+          "worktree": "git status --porcelain=v1 --untracked-files=all",
+          "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+        }
+      }
+    },
+    "previousAttestationDigest": null,
+    "previousAttestation": null,
+    "revision": 1,
+    "contentDigest": "34b56994b3145009c969fb81d5a3e980132429422df52c7fb16fe221be9bb498",
+    "sealedAt": "2026-11-05T06:47:35.293Z",
+    "attestationDigest": "67249cd6d41fc3b5dfe4d2f9eaae29f05c1f106f202408c245db7781b1f0e00f"
+  },
+  "revision": 2,
+  "contentDigest": "6fc5a31c19cea7ee895940d7483498f8d1ecd57cee8b476c5cdb92c86b091b67",
+  "sealedAt": "2026-11-05T07:26:36.680Z",
+  "attestationDigest": "618a168e7931566abbbee6653702a7534b82189ac40674c14a84c7250dc143d2"
 }
