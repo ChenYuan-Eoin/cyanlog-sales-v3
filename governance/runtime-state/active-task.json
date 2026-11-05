@@ -278,7 +278,9 @@
       "product-truth/product-code/app/api/admin/organization-sources/connection",
       "product-truth/product-code/app/configs/tabs/OrganizationConnectionForm.test.tsx",
       "AGENTS.md",
-      "product-truth/product-code/lib/organization-sources.ts"
+      "product-truth/product-code/lib/organization-sources.ts",
+      "product-truth/product-code/tailwind.config.ts",
+      "product-truth/product-code/tailwind.config.test.ts"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -305,7 +307,7 @@
       "runtime_profile": "application",
       "runtime_contract_version": "f003-directory-cutover-v2",
       "production_database_mode": "read_only",
-      "note": "code_green为既有候选状态；IN-20261105-014批准完整目录应用及回读，运行事实单独留存。WP92-M2连接生效缺口未关闭，不推进WP53。",
+      "note": "code_green为既有候选状态；生产发布与目录授权分别以IN-20261105-014/024及独立运行证据为准。IN-20261105-025确认框UI缺陷纳入WP92-M3，不推进WP53。",
       "production_release_authorization": {
         "status": "approved_release_migrations_and_plan_only",
         "approval_id": "IN-20261105-007",
@@ -351,7 +353,16 @@
     "blocking_items": [
       "系统组织与外部企业的显示资料对应须在真实同步前明确，不按名称自动新建或改绑组织",
       "IN-20261105-012：允许具备实证降级路径的轻度依赖；主机关机不得阻断已有组织架构查看和管理。验证网站直连及来源读取失败处理后，再决定是否保留既有转发，不新增常驻基础设施或付费出口。",
-      "WP92-M2：连接草稿验证与生效状态未闭合；补齐明确的目录连接启用及刷新回读，不得随目录启用授予企业登录或账号权限。"
+      "WP92-M3：同步确认框的确认按钮、遮罩和层级样式缺失，修正共享工具的CSS构建扫描；精确版本发布并在现有Chrome仅打开/取消确认框回读前不关闭。"
+    ],
+    "micro_fixes": [
+      {
+        "id": "WP92-M3",
+        "source": "IN-20261105-025",
+        "objective": "修复整体同步确认框的按钮可见性与遮罩层级；复用现有确认工具，不改变同步行为。",
+        "reproduction_capsule": "codex-runtime/wp92-confirm-dialog-ui/reproduction.json",
+        "scope": "仅Tailwind扫描配置与真实CSS产物回归测试；不应用组织数据，不扩展到通用弹窗重构。"
+      }
     ],
     "non_goals": [
       "SSO、登录、寄件、AI、下单",
