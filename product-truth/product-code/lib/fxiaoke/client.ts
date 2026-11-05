@@ -103,10 +103,14 @@ export async function previewDirectory(credentials: Credentials, request: typeof
         } },
       }, headers)
       const page = object(response.data)
-      if (!Array.isArray(page.dataList) || !Number.isSafeInteger(page.total) || Number(page.total) < 0 || Number(page.total) > MAX_RECORDS || (total !== null && page.total !== total)) {
+      // `total` counts the current query's matches. With an _id > cursor
+      // filter it is the remaining count, not the first page's directory total.
+      // Keep the first total frozen and reject additions/deletions that make
+      // the remaining count disagree with the records already collected.
+      if (!Array.isArray(page.dataList) || !Number.isSafeInteger(page.total) || Number(page.total) < 0 || Number(page.total) > MAX_RECORDS || (total !== null && result.length + Number(page.total) !== total)) {
         throw new FxiaokeError('INCOMPLETE_DIRECTORY', '通讯录数量变化、超出预览上限或分页信息不完整，请缩小读取范围后重试。', 409)
       }
-      total = Number(page.total)
+      total ??= Number(page.total)
       for (const raw of page.dataList) {
         const row = object(raw); const recordId = id(row._id)
         if (seen.has(recordId)) throw new FxiaokeError('INCOMPLETE_DIRECTORY', '通讯录分页出现重复记录，请稍后重试。', 409)

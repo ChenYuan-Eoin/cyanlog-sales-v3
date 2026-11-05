@@ -6,6 +6,9 @@ import { PGlite } from '@electric-sql/pglite'
 import { renderBaseline } from '../../../scripts/organization-schema-gate.mjs'
 
 export const baseline = JSON.parse(readFileSync(join(process.cwd(), 'lib/organization-connections/schema-baseline/production.json'), 'utf8'))
+// Retain the captured predecessor so upgrade/rollback rehearsal still starts
+// before the migration, while drift checks compare against current Production.
+export const preCutoverBaseline = JSON.parse(readFileSync(join(process.cwd(), 'lib/organization-connections/schema-baseline/pre-cutover-20261105.json'), 'utf8'))
 export const connectionMigration = readFileSync(join(process.cwd(), 'supabase/migrations/20261103090000_unified_organization_connections.sql'), 'utf8')
 export const directoryMigration = readFileSync(join(process.cwd(), 'supabase/migrations/20261103120000_organization_directory_cutover.sql'), 'utf8')
 
@@ -17,7 +20,7 @@ export interface OrganizationTestDatabase {
 
 // The exact same production-derived schema and tests run in both engines.
 // Release rehearsal requires native PostgreSQL 17.6; PGlite is only a fast unit lane.
-export async function productionSchemaDatabase(): Promise<OrganizationTestDatabase> {
+export async function productionSchemaDatabase(schema = baseline): Promise<OrganizationTestDatabase> {
   const url = process.env.ORGANIZATION_TEST_DATABASE_URL
   let db: OrganizationTestDatabase
   let databaseName: string | undefined
@@ -64,7 +67,7 @@ export async function productionSchemaDatabase(): Promise<OrganizationTestDataba
   try {
     const bootstrapRole = (await db.query<{ role: string }>('select current_user as role')).rows[0].role
     if (url && bootstrapRole === 'postgres') throw new Error('Use a separate local bootstrap superuser so the production postgres role is tested without superuser bypass')
-    await db.exec(renderBaseline(baseline, { bootstrapRole }))
+    await db.exec(renderBaseline(schema, { bootstrapRole }))
     if (databaseName) {
       await db.exec(`alter database "${databaseName}" owner to postgres; set role postgres;`)
     }

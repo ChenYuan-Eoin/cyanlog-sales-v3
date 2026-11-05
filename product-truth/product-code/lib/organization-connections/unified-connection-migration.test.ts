@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { productionSchemaDatabase } from './schema-baseline/database'
+import { preCutoverBaseline, productionSchemaDatabase } from './schema-baseline/database'
 import { describe, expect, it } from 'vitest'
 
 const migration = readFileSync(join(process.cwd(), 'supabase/migrations/20261103090000_unified_organization_connections.sql'), 'utf8')
@@ -9,7 +9,7 @@ const orgId = '22222222-2222-4222-8222-222222222222'
 const revision = '33333333-3333-4333-8333-333333333333'
 
 async function fixture(tenant: string, status: string) {
-  const db = await productionSchemaDatabase()
+  const db = await productionSchemaDatabase(preCutoverBaseline)
   await db.exec(`
     insert into public.organizations(id,name) values ('${orgId}','Test organization');
     insert into public.users(id,org_id,display_name) values ('${sourceId}','${orgId}','Test operator');

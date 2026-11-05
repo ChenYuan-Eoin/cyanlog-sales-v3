@@ -47,7 +47,7 @@ describe('Fxiaoke direct directory preview', () => {
   })
   it('reads all pages rather than silently showing the first 100 records', async () => {
     const rows = Array.from({ length: 100 }, (_, i) => ({ ...department, _id: String(i) }))
-    const request = fixture(token, page(rows, 101), page([department], 101), page([employee]))
+    const request = fixture(token, page(rows, 101), page([department], 1), page([employee]))
     const result = await previewDirectory(credentials, request)
     expect(result.departments).toHaveLength(101)
     const first = JSON.parse(String(request.mock.calls[1][1]?.body))
@@ -64,6 +64,21 @@ describe('Fxiaoke direct directory preview', () => {
       filters: [{ field_name: '_id', field_values: ['99'], operator: 'GT' }],
       orders: [{ fieldName: '_id', isAsc: true }],
     })
+  })
+  it('uses the remaining filtered total across a five-page employee directory', async () => {
+    const rows = Array.from({ length: 405 }, (_, i) => ({ ...employee, _id: `record-${i}`, user_id: String(i) }))
+    const request = fixture(token, page([department]),
+      ...[0, 100, 200, 300, 400].map(offset => page(rows.slice(offset, offset + 100), rows.length - offset)),
+    )
+    const result = await previewDirectory(credentials, request)
+    expect(result.employees).toHaveLength(405)
+    expect(result.complete).toBe(true)
+    expect(request).toHaveBeenCalledTimes(7)
+  })
+  it.each([0, 2, 101])('rejects a cursor total inconsistent with the initial total: %s', async remaining => {
+    const rows = Array.from({ length: 100 }, (_, i) => ({ ...department, _id: String(i) }))
+    await expect(previewDirectory(credentials, fixture(token, page(rows, 101), page([department], remaining))))
+      .rejects.toMatchObject({ code: 'INCOMPLETE_DIRECTORY' })
   })
   it('rejects incomplete and changing snapshots', async () => {
     await expect(previewDirectory(credentials, fixture(token, page([department], 10)))).rejects.toMatchObject({ code: 'INCOMPLETE_DIRECTORY' })

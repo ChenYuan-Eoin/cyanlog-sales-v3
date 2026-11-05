@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { productionSchemaDatabase, connectionMigration } from './schema-baseline/database'
+import { preCutoverBaseline, productionSchemaDatabase, connectionMigration } from './schema-baseline/database'
 import { describe, expect, it } from 'vitest'
 import { buildDirectoryCutoverPlan, type DirectoryStateSnapshot } from './directory-cutover'
 
@@ -15,7 +15,7 @@ const previousSource = '55555555-5555-4555-8555-555555555555'
 const manualDepartment = '66666666-6666-4666-8666-666666666666'
 
 async function database() {
-  const db = await productionSchemaDatabase()
+  const db = await productionSchemaDatabase(preCutoverBaseline)
   await db.exec(connectionMigration)
   await db.exec(`
     insert into public.organizations (id,name) values ('${org}','Test organization'), ('${otherOrg}','Other organization');

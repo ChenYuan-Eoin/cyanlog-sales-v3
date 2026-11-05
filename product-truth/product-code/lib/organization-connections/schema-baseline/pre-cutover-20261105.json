@@ -1,0 +1,4047 @@
+{
+  "format": 1,
+  "projectId": "wfawwhphfqqwfwrrkogy",
+  "capturedAt": "2026-11-05T03:48:44.140Z",
+  "catalog": {
+    "roles": [
+      {
+        "name": "anon",
+        "inherit": true,
+        "createDb": false,
+        "bypassRls": false,
+        "superuser": false,
+        "createRole": false
+      },
+      {
+        "name": "authenticated",
+        "inherit": true,
+        "createDb": false,
+        "bypassRls": false,
+        "superuser": false,
+        "createRole": false
+      },
+      {
+        "name": "dashboard_user",
+        "inherit": true,
+        "createDb": true,
+        "bypassRls": false,
+        "superuser": false,
+        "createRole": true
+      },
+      {
+        "name": "pg_database_owner",
+        "inherit": true,
+        "createDb": false,
+        "bypassRls": false,
+        "superuser": false,
+        "createRole": false
+      },
+      {
+        "name": "postgres",
+        "inherit": true,
+        "createDb": true,
+        "bypassRls": true,
+        "superuser": false,
+        "createRole": true
+      },
+      {
+        "name": "service_role",
+        "inherit": true,
+        "createDb": false,
+        "bypassRls": true,
+        "superuser": false,
+        "createRole": false
+      },
+      {
+        "name": "supabase_admin",
+        "inherit": true,
+        "createDb": true,
+        "bypassRls": true,
+        "superuser": true,
+        "createRole": true
+      },
+      {
+        "name": "supabase_auth_admin",
+        "inherit": false,
+        "createDb": false,
+        "bypassRls": false,
+        "superuser": false,
+        "createRole": true
+      }
+    ],
+    "tables": [
+      {
+        "rls": true,
+        "name": "departments",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "UPDATE"
+          }
+        ],
+        "schema": "public",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "default": "gen_random_uuid()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "org_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "parent_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "code",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "path",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "depth",
+            "type": "integer",
+            "default": "0",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "leader_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "external_id",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "source",
+            "type": "text",
+            "default": "'manual'::text",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "member_count",
+            "type": "integer",
+            "default": "0",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "default": "'active'::text",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "sort_order",
+            "type": "integer",
+            "default": "0",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          }
+        ],
+        "indexes": [
+          "CREATE INDEX idx_departments_org ON public.departments USING btree (org_id)",
+          "CREATE INDEX idx_departments_org_depth_sort ON public.departments USING btree (org_id, depth, sort_order)",
+          "CREATE INDEX idx_departments_parent ON public.departments USING btree (parent_id)",
+          "CREATE INDEX idx_departments_parent_id ON public.departments USING btree (parent_id) WHERE (parent_id IS NOT NULL)",
+          "CREATE INDEX idx_departments_path ON public.departments USING btree (path)",
+          "CREATE UNIQUE INDEX departments_id_org_key ON public.departments USING btree (id, org_id)"
+        ],
+        "forceRls": false,
+        "policies": [
+          {
+            "name": "Same org reads departments",
+            "check": null,
+            "roles": [
+              "authenticated"
+            ],
+            "using": "((org_id)::text = ( SELECT (users.org_id)::text AS org_id\n   FROM users\n  WHERE (users.id = auth.uid())))",
+            "command": "r",
+            "permissive": true
+          }
+        ],
+        "triggers": [
+          {
+            "name": "trg_departments_path",
+            "enabled": "O",
+            "definition": "CREATE TRIGGER trg_departments_path BEFORE INSERT OR UPDATE ON public.departments FOR EACH ROW EXECUTE FUNCTION update_department_path()"
+          }
+        ],
+        "constraints": [
+          {
+            "name": "departments_org_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE"
+          },
+          {
+            "name": "departments_parent_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (parent_id) REFERENCES departments(id) ON DELETE CASCADE"
+          },
+          {
+            "name": "departments_pkey",
+            "type": "p",
+            "definition": "PRIMARY KEY (id)"
+          },
+          {
+            "name": "departments_source_check",
+            "type": "c",
+            "definition": "CHECK ((source = ANY (ARRAY['manual'::text, 'feishu'::text, 'dingtalk'::text, 'csv'::text])))"
+          }
+        ]
+      },
+      {
+        "rls": true,
+        "name": "external_identities",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "UPDATE"
+          }
+        ],
+        "schema": "public",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "default": "gen_random_uuid()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "source_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "system_org_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "external_user_id",
+            "type": "text",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "external_union_id",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "external_open_id",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "canonical_user_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "match_status",
+            "type": "text",
+            "default": "'unresolved'::text",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "match_method",
+            "type": "text",
+            "default": "'none'::text",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "match_confidence",
+            "type": "numeric(5,4)",
+            "default": "0",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "profile_snapshot",
+            "type": "jsonb",
+            "default": "'{}'::jsonb",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "observed_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          }
+        ],
+        "indexes": [
+          "CREATE INDEX external_identities_canonical_user ON public.external_identities USING btree (canonical_user_id, system_org_id) WHERE (canonical_user_id IS NOT NULL)",
+          "CREATE INDEX external_identities_org_match ON public.external_identities USING btree (system_org_id, match_status, observed_at DESC)",
+          "CREATE UNIQUE INDEX external_identities_source_canonical_unique ON public.external_identities USING btree (source_id, canonical_user_id) WHERE ((match_status = 'matched'::text) AND (canonical_user_id IS NOT NULL))"
+        ],
+        "forceRls": false,
+        "policies": [],
+        "triggers": [],
+        "constraints": [
+          {
+            "name": "external_identities_canonical_user_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (canonical_user_id) REFERENCES users(id) ON DELETE SET NULL"
+          },
+          {
+            "name": "external_identities_external_user_id_check",
+            "type": "c",
+            "definition": "CHECK (((char_length(btrim(external_user_id)) >= 1) AND (char_length(btrim(external_user_id)) <= 255)))"
+          },
+          {
+            "name": "external_identities_match_confidence_check",
+            "type": "c",
+            "definition": "CHECK (((match_confidence >= (0)::numeric) AND (match_confidence <= (1)::numeric)))"
+          },
+          {
+            "name": "external_identities_match_method_check",
+            "type": "c",
+            "definition": "CHECK ((match_method = ANY (ARRAY['none'::text, 'provider_id'::text, 'employee_id'::text, 'email'::text, 'phone'::text, 'manual'::text])))"
+          },
+          {
+            "name": "external_identities_match_status_check",
+            "type": "c",
+            "definition": "CHECK ((match_status = ANY (ARRAY['unresolved'::text, 'matched'::text, 'conflict'::text, 'ignored'::text])))"
+          },
+          {
+            "name": "external_identities_pkey",
+            "type": "p",
+            "definition": "PRIMARY KEY (id)"
+          },
+          {
+            "name": "external_identities_profile_snapshot_check",
+            "type": "c",
+            "definition": "CHECK ((jsonb_typeof(profile_snapshot) = 'object'::text))"
+          },
+          {
+            "name": "external_identities_source_id_external_user_id_key",
+            "type": "u",
+            "definition": "UNIQUE (source_id, external_user_id)"
+          },
+          {
+            "name": "external_identities_source_id_system_org_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (source_id, system_org_id) REFERENCES organization_sources(id, system_org_id) ON DELETE CASCADE"
+          }
+        ]
+      },
+      {
+        "rls": true,
+        "name": "organization_fxiaoke_connections",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "UPDATE"
+          }
+        ],
+        "schema": "public",
+        "columns": [
+          {
+            "name": "system_org_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "app_id",
+            "type": "text",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "expected_ea",
+            "type": "text",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "api_user_id",
+            "type": "text",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "credentials_ciphertext",
+            "type": "text",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "revision",
+            "type": "uuid",
+            "default": "gen_random_uuid()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "last_checked_at",
+            "type": "timestamp with time zone",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "last_check_status",
+            "type": "text",
+            "default": "'not_checked'::text",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "last_error",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "preview_started_at",
+            "type": "timestamp with time zone",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "updated_by",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          }
+        ],
+        "indexes": [],
+        "forceRls": false,
+        "policies": [],
+        "triggers": [],
+        "constraints": [
+          {
+            "name": "organization_fxiaoke_connections_api_user_id_check",
+            "type": "c",
+            "definition": "CHECK (((length(api_user_id) >= 1) AND (length(api_user_id) <= 128)))"
+          },
+          {
+            "name": "organization_fxiaoke_connections_app_id_check",
+            "type": "c",
+            "definition": "CHECK (((length(app_id) >= 1) AND (length(app_id) <= 128)))"
+          },
+          {
+            "name": "organization_fxiaoke_connections_credentials_ciphertext_check",
+            "type": "c",
+            "definition": "CHECK ((credentials_ciphertext ~~ 'v1.%'::text))"
+          },
+          {
+            "name": "organization_fxiaoke_connections_expected_ea_check",
+            "type": "c",
+            "definition": "CHECK (((length(expected_ea) >= 1) AND (length(expected_ea) <= 128)))"
+          },
+          {
+            "name": "organization_fxiaoke_connections_last_check_status_check",
+            "type": "c",
+            "definition": "CHECK ((last_check_status = ANY (ARRAY['not_checked'::text, 'preview_ready'::text, 'failed'::text])))"
+          },
+          {
+            "name": "organization_fxiaoke_connections_pkey",
+            "type": "p",
+            "definition": "PRIMARY KEY (system_org_id)"
+          },
+          {
+            "name": "organization_fxiaoke_connections_system_org_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (system_org_id) REFERENCES organizations(id)"
+          },
+          {
+            "name": "organization_fxiaoke_connections_updated_by_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (updated_by) REFERENCES users(id)"
+          }
+        ]
+      },
+      {
+        "rls": true,
+        "name": "organization_sources",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "UPDATE"
+          }
+        ],
+        "schema": "public",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "default": "gen_random_uuid()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "system_org_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "provider",
+            "type": "text",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "external_tenant_id",
+            "type": "text",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "priority",
+            "type": "integer",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "default": "'active'::text",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "authority_scope",
+            "type": "jsonb",
+            "default": "'{}'::jsonb",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "sync_mode",
+            "type": "text",
+            "default": "'read_only'::text",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "last_successful_sync_at",
+            "type": "timestamp with time zone",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "last_error",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "created_by",
+            "type": "uuid",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "updated_by",
+            "type": "uuid",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          }
+        ],
+        "indexes": [
+          "CREATE INDEX organization_sources_org_status ON public.organization_sources USING btree (system_org_id, status, priority)",
+          "CREATE UNIQUE INDEX organization_sources_active_priority ON public.organization_sources USING btree (system_org_id, priority) WHERE (status = 'active'::text)"
+        ],
+        "forceRls": false,
+        "policies": [],
+        "triggers": [],
+        "constraints": [
+          {
+            "name": "organization_sources_authority_scope_check",
+            "type": "c",
+            "definition": "CHECK ((jsonb_typeof(authority_scope) = 'object'::text))"
+          },
+          {
+            "name": "organization_sources_created_by_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (created_by) REFERENCES users(id)"
+          },
+          {
+            "name": "organization_sources_external_tenant_id_check",
+            "type": "c",
+            "definition": "CHECK (((char_length(btrim(external_tenant_id)) >= 1) AND (char_length(btrim(external_tenant_id)) <= 255)))"
+          },
+          {
+            "name": "organization_sources_id_system_org_id_key",
+            "type": "u",
+            "definition": "UNIQUE (id, system_org_id)"
+          },
+          {
+            "name": "organization_sources_pkey",
+            "type": "p",
+            "definition": "PRIMARY KEY (id)"
+          },
+          {
+            "name": "organization_sources_priority_check",
+            "type": "c",
+            "definition": "CHECK (((priority >= 1) AND (priority <= 100)))"
+          },
+          {
+            "name": "organization_sources_provider_check",
+            "type": "c",
+            "definition": "CHECK (((char_length(btrim(provider)) >= 1) AND (char_length(btrim(provider)) <= 50)))"
+          },
+          {
+            "name": "organization_sources_status_check",
+            "type": "c",
+            "definition": "CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'disabled'::text])))"
+          },
+          {
+            "name": "organization_sources_sync_mode_check",
+            "type": "c",
+            "definition": "CHECK ((sync_mode = ANY (ARRAY['read_only'::text, 'authoritative'::text, 'enrichment'::text])))"
+          },
+          {
+            "name": "organization_sources_system_org_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (system_org_id) REFERENCES organizations(id) ON DELETE CASCADE"
+          },
+          {
+            "name": "organization_sources_system_org_id_provider_external_tenant_key",
+            "type": "u",
+            "definition": "UNIQUE (system_org_id, provider, external_tenant_id)"
+          },
+          {
+            "name": "organization_sources_updated_by_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (updated_by) REFERENCES users(id)"
+          }
+        ]
+      },
+      {
+        "rls": true,
+        "name": "organizations",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "UPDATE"
+          }
+        ],
+        "schema": "public",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "default": "gen_random_uuid()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "slug",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "logo_url",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "settings",
+            "type": "jsonb",
+            "default": "'{}'::jsonb",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "default": "'active'::text",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          }
+        ],
+        "indexes": [],
+        "forceRls": false,
+        "policies": [
+          {
+            "name": "Anyone reads orgs",
+            "check": null,
+            "roles": [
+              "authenticated"
+            ],
+            "using": "true",
+            "command": "r",
+            "permissive": true
+          }
+        ],
+        "triggers": [],
+        "constraints": [
+          {
+            "name": "organizations_pkey",
+            "type": "p",
+            "definition": "PRIMARY KEY (id)"
+          },
+          {
+            "name": "organizations_slug_key",
+            "type": "u",
+            "definition": "UNIQUE (slug)"
+          },
+          {
+            "name": "organizations_status_check",
+            "type": "c",
+            "definition": "CHECK ((status = ANY (ARRAY['active'::text, 'suspended'::text])))"
+          }
+        ]
+      },
+      {
+        "rls": true,
+        "name": "roles",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "UPDATE"
+          }
+        ],
+        "schema": "public",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "default": "gen_random_uuid()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "code",
+            "type": "text",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "description",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "permissions",
+            "type": "jsonb",
+            "default": "'[]'::jsonb",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "sort_order",
+            "type": "integer",
+            "default": "0",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          }
+        ],
+        "indexes": [],
+        "forceRls": false,
+        "policies": [
+          {
+            "name": "Anyone reads roles",
+            "check": null,
+            "roles": [
+              "authenticated"
+            ],
+            "using": "true",
+            "command": "r",
+            "permissive": true
+          }
+        ],
+        "triggers": [],
+        "constraints": [
+          {
+            "name": "roles_code_key",
+            "type": "u",
+            "definition": "UNIQUE (code)"
+          },
+          {
+            "name": "roles_pkey",
+            "type": "p",
+            "definition": "PRIMARY KEY (id)"
+          }
+        ]
+      },
+      {
+        "rls": true,
+        "name": "sales_space_members",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "UPDATE"
+          }
+        ],
+        "schema": "public",
+        "columns": [
+          {
+            "name": "space_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "space_role",
+            "type": "text",
+            "default": "'MEMBER'::text",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "joined_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "org_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          }
+        ],
+        "indexes": [],
+        "forceRls": false,
+        "policies": [
+          {
+            "name": "Members read space_members",
+            "check": null,
+            "roles": [
+              "authenticated"
+            ],
+            "using": "(user_id = auth.uid())",
+            "command": "r",
+            "permissive": true
+          }
+        ],
+        "triggers": [],
+        "constraints": [
+          {
+            "name": "sales_space_members_org_space_fk",
+            "type": "f",
+            "definition": "FOREIGN KEY (space_id, org_id) REFERENCES sales_spaces(id, org_id) ON DELETE CASCADE"
+          },
+          {
+            "name": "sales_space_members_org_user_membership_fk",
+            "type": "f",
+            "definition": "FOREIGN KEY (user_id, org_id) REFERENCES user_organizations(user_id, org_id) ON DELETE CASCADE"
+          },
+          {
+            "name": "sales_space_members_pkey",
+            "type": "p",
+            "definition": "PRIMARY KEY (space_id, user_id)"
+          },
+          {
+            "name": "sales_space_members_space_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (space_id) REFERENCES sales_spaces(id) ON DELETE CASCADE"
+          },
+          {
+            "name": "sales_space_members_space_role_check",
+            "type": "c",
+            "definition": "CHECK ((space_role = ANY (ARRAY['OWNER'::text, 'MEMBER'::text, 'VIEWER'::text])))"
+          },
+          {
+            "name": "sales_space_members_user_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+          }
+        ]
+      },
+      {
+        "rls": true,
+        "name": "sales_spaces",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "UPDATE"
+          }
+        ],
+        "schema": "public",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "default": "gen_random_uuid()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "org_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "department_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "description",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "owner_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "active_opportunities",
+            "type": "integer",
+            "default": "0",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "pending_milestones",
+            "type": "integer",
+            "default": "0",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "default": "'active'::text",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          }
+        ],
+        "indexes": [
+          "CREATE INDEX idx_sales_spaces_dept ON public.sales_spaces USING btree (department_id)",
+          "CREATE INDEX idx_sales_spaces_org ON public.sales_spaces USING btree (org_id)",
+          "CREATE INDEX idx_sales_spaces_org_dept ON public.sales_spaces USING btree (org_id, department_id)",
+          "CREATE UNIQUE INDEX sales_spaces_id_org_key ON public.sales_spaces USING btree (id, org_id)"
+        ],
+        "forceRls": false,
+        "policies": [
+          {
+            "name": "Members read sales_spaces",
+            "check": null,
+            "roles": [
+              "authenticated"
+            ],
+            "using": "((id IN ( SELECT sales_space_members.space_id\n   FROM sales_space_members\n  WHERE (sales_space_members.user_id = auth.uid()))) OR (owner_id = auth.uid()))",
+            "command": "r",
+            "permissive": true
+          }
+        ],
+        "triggers": [],
+        "constraints": [
+          {
+            "name": "sales_spaces_department_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (department_id) REFERENCES departments(id)"
+          },
+          {
+            "name": "sales_spaces_org_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE"
+          },
+          {
+            "name": "sales_spaces_owner_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (owner_id) REFERENCES users(id)"
+          },
+          {
+            "name": "sales_spaces_pkey",
+            "type": "p",
+            "definition": "PRIMARY KEY (id)"
+          }
+        ]
+      },
+      {
+        "rls": true,
+        "name": "user_departments",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "UPDATE"
+          }
+        ],
+        "schema": "public",
+        "columns": [
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "department_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "is_primary",
+            "type": "boolean",
+            "default": "false",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "joined_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "org_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          }
+        ],
+        "indexes": [],
+        "forceRls": false,
+        "policies": [
+          {
+            "name": "Same org reads user_departments",
+            "check": null,
+            "roles": [
+              "authenticated"
+            ],
+            "using": "true",
+            "command": "r",
+            "permissive": true
+          }
+        ],
+        "triggers": [
+          {
+            "name": "trg_user_dept_count",
+            "enabled": "O",
+            "definition": "CREATE TRIGGER trg_user_dept_count AFTER INSERT OR DELETE ON public.user_departments FOR EACH ROW EXECUTE FUNCTION update_dept_member_count()"
+          }
+        ],
+        "constraints": [
+          {
+            "name": "user_departments_department_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE"
+          },
+          {
+            "name": "user_departments_org_department_fk",
+            "type": "f",
+            "definition": "FOREIGN KEY (department_id, org_id) REFERENCES departments(id, org_id) ON DELETE CASCADE"
+          },
+          {
+            "name": "user_departments_org_user_membership_fk",
+            "type": "f",
+            "definition": "FOREIGN KEY (user_id, org_id) REFERENCES user_organizations(user_id, org_id) ON DELETE CASCADE"
+          },
+          {
+            "name": "user_departments_pkey",
+            "type": "p",
+            "definition": "PRIMARY KEY (user_id, department_id)"
+          },
+          {
+            "name": "user_departments_user_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+          }
+        ]
+      },
+      {
+        "rls": true,
+        "name": "user_organizations",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "UPDATE"
+          }
+        ],
+        "schema": "public",
+        "columns": [
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "org_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "is_default",
+            "type": "boolean",
+            "default": "false",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "membership_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "default": "'active'::text",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "joined_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "left_at",
+            "type": "timestamp with time zone",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "membership_version",
+            "type": "bigint",
+            "default": "1",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "created_by",
+            "type": "uuid",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "updated_by",
+            "type": "uuid",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "primary_department_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "employment_status",
+            "type": "text",
+            "default": "'active'::text",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "employment_started_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "employment_ended_at",
+            "type": "timestamp with time zone",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "offboard_reason",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          }
+        ],
+        "indexes": [
+          "CREATE INDEX idx_user_organizations_org ON public.user_organizations USING btree (org_id)",
+          "CREATE INDEX idx_user_orgs_user_default ON public.user_organizations USING btree (user_id, is_default) WHERE (is_default = true)",
+          "CREATE INDEX user_organizations_active_user_org ON public.user_organizations USING btree (user_id, org_id) WHERE (status = 'active'::text)",
+          "CREATE UNIQUE INDEX idx_user_organizations_default ON public.user_organizations USING btree (user_id) WHERE (is_default = true)",
+          "CREATE UNIQUE INDEX user_organizations_membership_id_key ON public.user_organizations USING btree (membership_id)"
+        ],
+        "forceRls": false,
+        "policies": [
+          {
+            "name": "Current user reads own user_organizations",
+            "check": null,
+            "roles": [
+              "authenticated"
+            ],
+            "using": "((user_id = ( SELECT auth.uid() AS uid)) AND (org_id = ( SELECT private.current_user_org_id() AS current_user_org_id)))",
+            "command": "r",
+            "permissive": true
+          }
+        ],
+        "triggers": [],
+        "constraints": [
+          {
+            "name": "user_organizations_created_by_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (created_by) REFERENCES users(id)"
+          },
+          {
+            "name": "user_organizations_employment_status_check",
+            "type": "c",
+            "definition": "CHECK ((employment_status = ANY (ARRAY['active'::text, 'suspended'::text, 'ended'::text])))"
+          },
+          {
+            "name": "user_organizations_left_at_check",
+            "type": "c",
+            "definition": "CHECK ((((status = 'ended'::text) AND (left_at IS NOT NULL)) OR ((status <> 'ended'::text) AND (left_at IS NULL))))"
+          },
+          {
+            "name": "user_organizations_org_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE"
+          },
+          {
+            "name": "user_organizations_pkey",
+            "type": "p",
+            "definition": "PRIMARY KEY (user_id, org_id)"
+          },
+          {
+            "name": "user_organizations_primary_department_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (primary_department_id) REFERENCES departments(id)"
+          },
+          {
+            "name": "user_organizations_status_check",
+            "type": "c",
+            "definition": "CHECK ((status = ANY (ARRAY['invited'::text, 'active'::text, 'suspended'::text, 'ended'::text])))"
+          },
+          {
+            "name": "user_organizations_updated_by_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (updated_by) REFERENCES users(id)"
+          },
+          {
+            "name": "user_organizations_user_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+          },
+          {
+            "name": "user_organizations_version_check",
+            "type": "c",
+            "definition": "CHECK ((membership_version > 0))"
+          }
+        ]
+      },
+      {
+        "rls": true,
+        "name": "user_roles",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "UPDATE"
+          }
+        ],
+        "schema": "public",
+        "columns": [
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "role_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "scope_type",
+            "type": "text",
+            "default": "'org'::text",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "scope_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "granted_by",
+            "type": "uuid",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "granted_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "org_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          }
+        ],
+        "indexes": [
+          "CREATE INDEX idx_user_roles_scope ON public.user_roles USING btree (scope_type, scope_id) WHERE (scope_type = 'org'::text)",
+          "CREATE INDEX idx_user_roles_user_id ON public.user_roles USING btree (user_id, scope_type, scope_id)"
+        ],
+        "forceRls": false,
+        "policies": [
+          {
+            "name": "Same org reads user_roles",
+            "check": null,
+            "roles": [
+              "authenticated"
+            ],
+            "using": "true",
+            "command": "r",
+            "permissive": true
+          }
+        ],
+        "triggers": [
+          {
+            "name": "trg_validate_user_role_scope",
+            "enabled": "O",
+            "definition": "CREATE TRIGGER trg_validate_user_role_scope BEFORE INSERT OR UPDATE OF user_id, role_id, scope_type, scope_id, org_id ON public.user_roles FOR EACH ROW EXECUTE FUNCTION private.validate_user_role_scope_v1()"
+          }
+        ],
+        "constraints": [
+          {
+            "name": "user_roles_granted_by_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (granted_by) REFERENCES users(id)"
+          },
+          {
+            "name": "user_roles_org_user_membership_fk",
+            "type": "f",
+            "definition": "FOREIGN KEY (user_id, org_id) REFERENCES user_organizations(user_id, org_id) ON DELETE CASCADE"
+          },
+          {
+            "name": "user_roles_pkey",
+            "type": "p",
+            "definition": "PRIMARY KEY (user_id, role_id, scope_type, scope_id)"
+          },
+          {
+            "name": "user_roles_role_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE"
+          },
+          {
+            "name": "user_roles_scope_type_check",
+            "type": "c",
+            "definition": "CHECK ((scope_type = ANY (ARRAY['org'::text, 'department'::text, 'space'::text])))"
+          },
+          {
+            "name": "user_roles_user_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+          }
+        ]
+      },
+      {
+        "rls": true,
+        "name": "users",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "UPDATE"
+          }
+        ],
+        "schema": "public",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "default": "gen_random_uuid()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "org_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "email",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "phone",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "employee_id",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "display_name",
+            "type": "text",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "avatar_url",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "title",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "password_hash",
+            "type": "text",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "default": "'active'::text",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "primary_dept_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "email_verified",
+            "type": "boolean",
+            "default": "false",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "phone_verified",
+            "type": "boolean",
+            "default": "false",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "last_login_at",
+            "type": "timestamp with time zone",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "must_change_password",
+            "type": "boolean",
+            "default": "false",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "login_enabled",
+            "type": "boolean",
+            "default": "true",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "report_to_user_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          }
+        ],
+        "indexes": [
+          "CREATE INDEX idx_users_dept ON public.users USING btree (primary_dept_id)",
+          "CREATE INDEX idx_users_org ON public.users USING btree (org_id)",
+          "CREATE INDEX idx_users_org_id_created_at ON public.users USING btree (org_id, created_at DESC)",
+          "CREATE INDEX idx_users_org_primary_dept ON public.users USING btree (org_id, primary_dept_id) WHERE (primary_dept_id IS NOT NULL)"
+        ],
+        "forceRls": false,
+        "policies": [],
+        "triggers": [],
+        "constraints": [
+          {
+            "name": "users_org_id_email_key",
+            "type": "u",
+            "definition": "UNIQUE (org_id, email)"
+          },
+          {
+            "name": "users_org_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE"
+          },
+          {
+            "name": "users_pkey",
+            "type": "p",
+            "definition": "PRIMARY KEY (id)"
+          },
+          {
+            "name": "users_primary_dept_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (primary_dept_id) REFERENCES departments(id)"
+          },
+          {
+            "name": "users_report_to_user_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (report_to_user_id) REFERENCES users(id) ON DELETE SET NULL"
+          },
+          {
+            "name": "users_status_check",
+            "type": "c",
+            "definition": "CHECK ((status = ANY (ARRAY['active'::text, 'inactive'::text, 'suspended'::text])))"
+          }
+        ]
+      }
+    ],
+    "schemas": [
+      {
+        "name": "auth",
+        "owner": "supabase_admin",
+        "grants": [
+          {
+            "role": "supabase_admin",
+            "grantable": false,
+            "privilege": "CREATE"
+          },
+          {
+            "role": "supabase_admin",
+            "grantable": false,
+            "privilege": "USAGE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "USAGE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "USAGE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "USAGE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "USAGE"
+          },
+          {
+            "role": "supabase_auth_admin",
+            "grantable": false,
+            "privilege": "CREATE"
+          },
+          {
+            "role": "supabase_auth_admin",
+            "grantable": false,
+            "privilege": "USAGE"
+          },
+          {
+            "role": "dashboard_user",
+            "grantable": false,
+            "privilege": "CREATE"
+          },
+          {
+            "role": "dashboard_user",
+            "grantable": false,
+            "privilege": "USAGE"
+          }
+        ]
+      },
+      {
+        "name": "private",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "CREATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "USAGE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "USAGE"
+          }
+        ]
+      },
+      {
+        "name": "public",
+        "owner": "pg_database_owner",
+        "grants": [
+          {
+            "role": "PUBLIC",
+            "grantable": false,
+            "privilege": "USAGE"
+          },
+          {
+            "role": "pg_database_owner",
+            "grantable": false,
+            "privilege": "CREATE"
+          },
+          {
+            "role": "pg_database_owner",
+            "grantable": false,
+            "privilege": "USAGE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "USAGE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "USAGE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "USAGE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "USAGE"
+          }
+        ]
+      }
+    ],
+    "functions": [
+      {
+        "name": "uid",
+        "owner": "supabase_auth_admin",
+        "grants": [
+          {
+            "role": "PUBLIC",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "supabase_auth_admin",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "dashboard_user",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          }
+        ],
+        "schema": "auth",
+        "arguments": "",
+        "definition": "CREATE OR REPLACE FUNCTION auth.uid()\n RETURNS uuid\n LANGUAGE sql\n STABLE\nAS $function$\n  select \n  coalesce(\n    nullif(current_setting('request.jwt.claim.sub', true), ''),\n    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')\n  )::uuid\n$function$\n"
+      },
+      {
+        "name": "current_user_org_id",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          }
+        ],
+        "schema": "private",
+        "arguments": "",
+        "definition": "CREATE OR REPLACE FUNCTION private.current_user_org_id()\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select profile.org_id\n    from public.users as profile\n   where profile.id = (select auth.uid())\n     and profile.status = 'active'\n     and profile.login_enabled is true\n   limit 1\n$function$\n"
+      },
+      {
+        "name": "validate_user_role_scope_v1",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "PUBLIC",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          }
+        ],
+        "schema": "private",
+        "arguments": "",
+        "definition": "CREATE OR REPLACE FUNCTION private.validate_user_role_scope_v1()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nbegin\n  if not exists (\n    select 1\n    from public.user_organizations as membership\n    where membership.user_id = new.user_id\n      and membership.org_id = new.org_id\n      and membership.status = 'active'\n  ) then\n    raise exception 'user role requires an active organization membership';\n  end if;\n\n  if new.scope_type = 'org' then\n    if new.scope_id is not null and new.scope_id <> new.org_id then\n      raise exception 'organization role scope does not match membership tenant';\n    end if;\n  elsif new.scope_type = 'department' then\n    if new.scope_id is not null and not exists (\n      select 1\n      from public.departments as department\n      where department.id = new.scope_id\n        and department.org_id = new.org_id\n    ) then\n      raise exception 'department role scope does not match membership tenant';\n    end if;\n  elsif new.scope_type = 'space' then\n    if new.scope_id is not null and not exists (\n      select 1\n      from public.sales_spaces as space\n      where space.id = new.scope_id\n        and space.org_id = new.org_id\n    ) then\n      raise exception 'space role scope does not match membership tenant';\n    end if;\n  end if;\n\n  return new;\nend;\n$function$\n"
+      },
+      {
+        "name": "get_org_admin_payload_v1",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          }
+        ],
+        "schema": "public",
+        "arguments": "p_org_id uuid",
+        "definition": "CREATE OR REPLACE FUNCTION public.get_org_admin_payload_v1(p_org_id uuid)\n RETURNS jsonb\n LANGUAGE sql\n SET search_path TO 'public'\nAS $function$\nwith department_rows as (\n  select\n    d.id,\n    d.name,\n    d.code,\n    coalesce(d.depth, 0) as depth,\n    coalesce(d.member_count, 0) as member_count,\n    d.parent_id,\n    parent.name as parent_name,\n    d.leader_id,\n    leader.display_name as leader_name,\n    coalesce(d.sort_order, 0) as sort_order\n  from departments d\n  left join departments parent\n    on parent.id = d.parent_id\n   and coalesce(parent.status, 'active') = 'active'\n  left join users leader\n    on leader.id = d.leader_id\n   and coalesce(leader.status, 'active') <> 'inactive'\n  where d.org_id = p_org_id\n    and coalesce(d.status, 'active') = 'active'\n),\nspace_rows as (\n  select\n    s.id,\n    s.name,\n    s.description,\n    s.department_id,\n    d.name as department_name,\n    s.owner_id\n  from sales_spaces s\n  left join departments d\n    on d.id = s.department_id\n   and coalesce(d.status, 'active') = 'active'\n  where s.org_id = p_org_id\n),\norg_memberships as (\n  select\n    uo.user_id,\n    uo.org_id,\n    uo.status,\n    uo.primary_department_id,\n    uo.employment_status\n  from user_organizations uo\n  where uo.org_id = p_org_id\n    and uo.status in ('invited', 'active', 'suspended')\n),\nuser_rows as (\n  select\n    u.id,\n    u.email,\n    u.display_name,\n    u.title,\n    u.status,\n    u.must_change_password,\n    coalesce(m.primary_department_id, u.primary_dept_id) as primary_dept_id,\n    u.login_enabled,\n    u.report_to_user_id,\n    u.created_at,\n    m.status as membership_status,\n    m.employment_status,\n    pd.name as primary_dept_name,\n    manager.display_name as report_to_user_name\n  from users u\n  join org_memberships m on m.user_id = u.id\n  left join departments pd\n    on pd.id = coalesce(m.primary_department_id, u.primary_dept_id)\n   and coalesce(pd.status, 'active') = 'active'\n  left join users manager on manager.id = u.report_to_user_id\n),\ncurrent_role_rows as (\n  select\n    ur.user_id,\n    ur.scope_type,\n    ur.scope_id,\n    ur.granted_at,\n    r.id as role_id,\n    r.name as role_name,\n    r.code as role_code,\n    coalesce(r.sort_order, 0) as sort_order,\n    case\n      when ur.scope_type = 'department' then coalesce(d.name, '部门')\n      when ur.scope_type = 'space' then coalesce(s.name, '销售空间')\n      else '组织'\n    end as scope_name\n  from user_roles ur\n  join roles r on r.id = ur.role_id\n  left join departments d\n    on ur.scope_type = 'department'\n   and d.id = ur.scope_id\n   and d.org_id = p_org_id\n   and coalesce(d.status, 'active') = 'active'\n  left join sales_spaces s\n    on ur.scope_type = 'space'\n   and s.id = ur.scope_id\n   and s.org_id = p_org_id\n  where ur.org_id = p_org_id\n    and ur.user_id in (select id from user_rows)\n    and (\n      (ur.scope_type = 'org' and (ur.scope_id is null or ur.scope_id = p_org_id))\n      or (ur.scope_type = 'department' and d.id is not null)\n      or (ur.scope_type = 'space' and s.id is not null)\n    )\n),\nrole_payload as (\n  select\n    crr.user_id,\n    coalesce(\n      string_agg(\n        case\n          when crr.scope_type = 'org' then crr.role_name\n          else crr.role_name || '(' || crr.scope_name || ')'\n        end,\n        ', '\n        order by crr.sort_order, crr.role_name, crr.scope_name\n      ),\n      ''\n    ) as role_names,\n    coalesce(\n      jsonb_agg(crr.role_id order by crr.sort_order, crr.role_name)\n        filter (where crr.scope_type = 'org'),\n      '[]'::jsonb\n    ) as role_ids,\n    coalesce(\n      jsonb_agg(crr.role_code order by crr.sort_order, crr.role_name)\n        filter (where crr.scope_type = 'org'),\n      '[]'::jsonb\n    ) as role_codes,\n    coalesce(\n      jsonb_agg(\n        jsonb_build_object(\n          'roleId', crr.role_id,\n          'roleName', crr.role_name,\n          'roleCode', crr.role_code,\n          'scopeType', crr.scope_type,\n          'scopeId', crr.scope_id,\n          'scopeName', crr.scope_name,\n          'grantedAt', crr.granted_at\n        )\n        order by crr.sort_order, crr.role_name, crr.scope_name\n      ),\n      '[]'::jsonb\n    ) as scoped_roles\n  from current_role_rows crr\n  group by crr.user_id\n)\nselect jsonb_build_object(\n  'organization',\n  (\n    select jsonb_build_object(\n      'id', o.id,\n      'name', o.name,\n      'slug', o.slug\n    )\n    from organizations o\n    where o.id = p_org_id\n    limit 1\n  ),\n  'users',\n  coalesce(\n    (\n      select jsonb_agg(\n        jsonb_build_object(\n          'id', u.id,\n          'email', coalesce(u.email, ''),\n          'display_name', u.display_name,\n          'title', coalesce(u.title, ''),\n          'primary_dept_id', u.primary_dept_id,\n          'primary_dept_name', coalesce(u.primary_dept_name, '-'),\n          'role_names', coalesce(rp.role_names, ''),\n          'role_ids', coalesce(rp.role_ids, '[]'::jsonb),\n          'role_codes', coalesce(rp.role_codes, '[]'::jsonb),\n          'scoped_roles', coalesce(rp.scoped_roles, '[]'::jsonb),\n          'status', u.status,\n          'membership_status', u.membership_status,\n          'employment_status', u.employment_status,\n          'must_change_password', coalesce(u.must_change_password, false),\n          'login_enabled', coalesce(u.login_enabled, true),\n          'report_to_user_id', u.report_to_user_id,\n          'report_to_user_name', u.report_to_user_name\n        )\n        order by u.created_at desc nulls last\n      )\n      from user_rows u\n      left join role_payload rp on rp.user_id = u.id\n    ),\n    '[]'::jsonb\n  ),\n  'departments',\n  coalesce(\n    (\n      select jsonb_agg(\n        jsonb_build_object(\n          'id', d.id,\n          'name', d.name,\n          'code', d.code,\n          'depth', d.depth,\n          'member_count', d.member_count,\n          'parent_id', d.parent_id,\n          'parent_name', d.parent_name,\n          'leader_id', d.leader_id,\n          'leader_name', d.leader_name\n        )\n        order by d.depth, d.sort_order, d.name\n      )\n      from department_rows d\n    ),\n    '[]'::jsonb\n  ),\n  'roles',\n  coalesce(\n    (\n      select jsonb_agg(\n        jsonb_build_object(\n          'id', r.id,\n          'code', r.code,\n          'name', r.name\n        )\n        order by coalesce(r.sort_order, 0), r.name\n      )\n      from roles r\n    ),\n    '[]'::jsonb\n  ),\n  'spaces',\n  coalesce(\n    (\n      select jsonb_agg(\n        jsonb_build_object(\n          'id', s.id,\n          'name', s.name,\n          'description', s.description,\n          'department_id', s.department_id,\n          'department_name', coalesce(s.department_name, ''),\n          'owner_id', s.owner_id\n        )\n        order by s.name\n      )\n      from space_rows s\n    ),\n    '[]'::jsonb\n  )\n);\n$function$\n"
+      },
+      {
+        "name": "update_department_path",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "PUBLIC",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          }
+        ],
+        "schema": "public",
+        "arguments": "",
+        "definition": "CREATE OR REPLACE FUNCTION public.update_department_path()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nDECLARE\n  parent_path TEXT;\nBEGIN\n  IF NEW.parent_id IS NULL THEN\n    NEW.path := '/' || NEW.id::text || '/';\n    NEW.depth := 0;\n  ELSE\n    SELECT path, depth INTO parent_path, NEW.depth\n    FROM departments WHERE id = NEW.parent_id;\n    NEW.path := parent_path || NEW.id::text || '/';\n    NEW.depth := NEW.depth + 1;\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n"
+      },
+      {
+        "name": "update_dept_member_count",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "PUBLIC",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          }
+        ],
+        "schema": "public",
+        "arguments": "",
+        "definition": "CREATE OR REPLACE FUNCTION public.update_dept_member_count()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF TG_OP = 'INSERT' THEN\n    UPDATE departments SET member_count = member_count + 1 WHERE id = NEW.department_id;\n  ELSIF TG_OP = 'DELETE' THEN\n    UPDATE departments SET member_count = GREATEST(member_count - 1, 0) WHERE id = OLD.department_id;\n  END IF;\n  RETURN NULL;\nEND;\n$function$\n"
+      }
+    ],
+    "serverVersion": "17.6",
+    "defaultPrivileges": [
+      {
+        "type": "S",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "USAGE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "USAGE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "USAGE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "USAGE"
+          }
+        ],
+        "schema": "public"
+      },
+      {
+        "type": "f",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          }
+        ],
+        "schema": "public"
+      },
+      {
+        "type": "r",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "anon",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "authenticated",
+            "grantable": false,
+            "privilege": "UPDATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "service_role",
+            "grantable": false,
+            "privilege": "UPDATE"
+          }
+        ],
+        "schema": "public"
+      }
+    ]
+  }
+}

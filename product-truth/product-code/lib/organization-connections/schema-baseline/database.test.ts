@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { baseline, productionSchemaDatabase, connectionMigration, directoryMigration } from './database'
+import { baseline, preCutoverBaseline, productionSchemaDatabase, connectionMigration, directoryMigration } from './database'
 import { canonical } from '../../../scripts/organization-schema-gate.mjs'
 
 const org = 'aaaaaaaa-0000-4000-8000-000000000001'
@@ -53,7 +53,7 @@ describe('production DDL database gates', () => {
   }, 15_000)
 
   it('reproduces the old trigger failure and validates both repaired triggers in a hostile schema under the application role', async () => {
-    const db = await productionSchemaDatabase()
+    const db = await productionSchemaDatabase(preCutoverBaseline)
     try {
       await seed(db)
       await db.exec("set search_path = '';")
@@ -83,7 +83,7 @@ describe('production DDL database gates', () => {
   }, 15_000)
 
   it('rolls back all migration DDL on a conflicting legacy tenant and leaves native data intact', async () => {
-    const db = await productionSchemaDatabase()
+    const db = await productionSchemaDatabase(preCutoverBaseline)
     try {
       await seed(db)
       await db.exec(`
@@ -113,7 +113,7 @@ describe('production DDL database gates', () => {
   }, 15_000)
 
   it('rolls back the directory migration, including trigger replacement, when existing department keys conflict', async () => {
-    const db = await productionSchemaDatabase()
+    const db = await productionSchemaDatabase(preCutoverBaseline)
     try {
       await seed(db)
       await db.exec(connectionMigration)

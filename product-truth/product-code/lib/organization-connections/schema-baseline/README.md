@@ -4,6 +4,8 @@
 
 The scope is the directory's 12 native tables and their foreign-key closure, plus the functions and policies those tables use. It is not a backup or drift check of unrelated business tables. The round-trip test recaptures the initialized test database and compares every captured object to Production.
 
+`production.json` now captures the live definitions after the two approved migrations. `pre-cutover-20261105.json` preserves the actual captured predecessor: upgrade, old-defect reproduction and failed-migration rollback tests explicitly initialize from that historical version. Current-catalog and membership-constraint tests initialize from the current version. Both are immutable captures of real Production definitions, not independently handwritten test schemas.
+
 Fast tests use PGlite (PostgreSQL 18.3). **The release lane requires native PostgreSQL 17.6**, matching the captured Production engine. CI uses the `postgres:17.6` service. The bootstrap superuser only builds/disposes isolated databases; migrations execute as Production's non-superuser `postgres` role, while the real plan/store/apply/read/rollback path executes as `service_role`. Browser roles must be denied. The unit lane normalizes its bootstrap role and engine version, plus PostgreSQL 18's duplicate `pg_constraint` representation of NOT NULL (after verifying it matches each captured column flag). The native release lane compares the catalog without these normalizations.
 
 From `product-truth/product-code`, run:
@@ -18,7 +20,7 @@ The local PostgreSQL server must be disposable, bound to localhost, and have a s
 ## Four release gates
 
 1. Read `capture.sql` against Production through the existing read-only database connector. Save `{format:1, projectId, capturedAt, catalog}` in this worktree's `codex-runtime`. Capture time must come from the actual read, not a copied baseline. `pack` binds that fresh export to the current committed SHA, query hash and migration hashes. `drift` rejects any difference, stale export (over one hour), wrong project, query or candidate.
-2. Initialize native 17.6 from the baseline, execute both pending migrations, and test transactional migration failure. The same tests cover legacy encrypted draft import, preserved source/organization identity, the complete native directory and its repeat/rollback path.
+2. Initialize native 17.6 from the appropriate captured version, execute both migrations from their predecessor, and test transactional migration failure. The same tests cover legacy encrypted draft import, preserved source/organization identity, the complete native directory and its repeat/rollback path.
 3. Run missing/explicit membership-ID cases, the real composite membership FK, production unique identity mapping, old-trigger failure and repaired triggers under a hostile `search_path`, service-role RPCs and browser-role denial.
 4. Review SQL and record the exact migration hashes in `sql-review.json`. Any later migration edit invalidates that review. Mechanical checks supplement this recorded review; they do not replace it.
 
