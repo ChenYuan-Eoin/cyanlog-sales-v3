@@ -23,8 +23,43 @@ const URL_VALUE = ORIGIN + '/configs?tab=shipping'
 const PREFIX = 'production-runtime-verifier'
 const HASH = /^[a-f0-9]{64}$/
 const COMMIT = /^[a-f0-9]{40}$/
+const RELEASE_RULE_PATHS = new Set([
+  'governance/runtime-state/active-task.json',
+  'governance/runtime-state/demand-inbox.jsonl',
+  'product-truth/feature-packets/F054-sf-self-service-order.md',
+  'product-truth/feature-packets/F099-current-goal-ledger.md',
+  ...['project-registry.js', 'shipping-settings-verifier.js', 'shipping-settings-verifier.test.js', 'harness-selftest.js']
+    .map(name => `governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/${name}`),
+])
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex')
+
+// This changes prerequisite ordering only. Preview remains explicitly not passed.
+function productionFirstExceptionBlockers({ approval, activeId, featureId, runtimeProfile, contractVersion, productTree, changedPaths, candidateIsAncestor } = {}) {
+  const errors = []
+  if (activeId !== 'WP40' || featureId !== 'F054' || runtimeProfile !== 'shipping_workspace' || contractVersion !== CONTRACT) {
+    errors.push('Shipping settings release ordering is limited to WP40 F054')
+  }
+  if (approval?.type !== 'final_production_release_authorization' || approval?.source !== 'user_explicit' || approval?.state !== 'approved'
+    || approval?.preview_order_exception !== true || approval?.preview_status !== 'not_passed') {
+    errors.push('Explicit user release authority must preserve Preview as not passed')
+  }
+  const authorization = approval?.production_release_authorization || approval
+  if (approval?.code_release_authorized !== true || authorization?.database_write_authorized !== false
+    || authorization?.production_database_write_authorized !== false || authorization?.carrier_calls_authorized !== false
+    || authorization?.organization_sync_authorized !== false || authorization?.service_retirement_authorized !== false) {
+    errors.push('Shipping settings ordering exception permits no database writes, carrier calls, organization synchronization, or service retirement')
+  }
+  if (!COMMIT.test(approval?.approved_candidate || '') || candidateIsAncestor !== true
+    || !COMMIT.test(approval?.approved_product_tree || '') || productTree !== approval?.approved_product_tree) {
+    errors.push('Shipping settings release must retain the approved product tree and candidate ancestry')
+  }
+  if (!Array.isArray(changedPaths) || changedPaths.some(file => !RELEASE_RULE_PATHS.has(file))) {
+    errors.push('Only scoped shipping-settings delivery rules may follow the approved candidate')
+  }
+  if (!COMMIT.test(approval?.rollback_commit || '')) errors.push('Concrete rollback commit required')
+  return errors
+}
 const json = value => JSON.stringify(value, null, 2) + '\n'
 const canonical = value => Array.isArray(value)
   ? value.map(canonical)
@@ -276,6 +311,6 @@ async function verify(options) {
 }
 
 module.exports = {
-  CONTRACT, ITEMS, ACTIONS, ROUTES, operatorPayload, runtimeEvidenceBlockers,
+  CONTRACT, ITEMS, ACTIONS, ROUTES, productionFirstExceptionBlockers, operatorPayload, runtimeEvidenceBlockers,
   productionEvidenceBlockers, productionOperatorBlockers, verify,
 }

@@ -497,16 +497,18 @@ function getPreviewOrderException(state, repoRoot, inboxRecords) {
   const base = /^[a-f0-9]{40}$/.test(approval?.approved_candidate || '') ? approval.approved_candidate : null;
   const changed = base ? runGit(repoRoot, ['diff', '--name-only', '-z', base, 'HEAD'], { allowFailure: true }) : null;
   const contractVersion = runtimeContractVersionOf(state);
-  const verifier = contractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT
-    ? './shipping-service-selection-verifier'
-    : contractVersion === SHIPPING_PARSER_CONTRACT
-      ? './shipping-parser-verifier'
-      : contractVersion === FXIAOKE_SSO_CONTRACT
-        ? './fxiaoke-sso-verifier'
-        : './fxiaoke-connection-verifier';
+  const verifier = contractVersion === SHIPPING_SETTINGS_CONTRACT
+    ? './shipping-settings-verifier'
+    : contractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT
+      ? './shipping-service-selection-verifier'
+      : contractVersion === SHIPPING_PARSER_CONTRACT
+        ? './shipping-parser-verifier'
+        : contractVersion === FXIAOKE_SSO_CONTRACT
+          ? './fxiaoke-sso-verifier'
+          : './fxiaoke-connection-verifier';
   const blockers = require(verifier).productionFirstExceptionBlockers({
     approval, activeId: state.active_task?.id, contractVersion,
-    ...(contractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT ? { featureId: state.active_task?.feature_id, runtimeProfile: runtimeProfileOf(state) } : {}),
+    ...([SHIPPING_SETTINGS_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT].includes(contractVersion) ? { featureId: state.active_task?.feature_id, runtimeProfile: runtimeProfileOf(state) } : {}),
     productTree: runGit(repoRoot, ['rev-parse', 'HEAD:product-truth/product-code'], { allowFailure: true }),
     candidateIsAncestor: Boolean(base && runGit(repoRoot, ['merge-base', '--is-ancestor', base, 'HEAD'], { allowFailure: true }) !== null),
     changedPaths: changed === null ? null : changed.split('\0').filter(Boolean),

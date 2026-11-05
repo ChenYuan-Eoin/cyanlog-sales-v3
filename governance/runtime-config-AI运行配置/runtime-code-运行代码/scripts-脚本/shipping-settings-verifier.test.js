@@ -130,3 +130,28 @@ test('Preview evidence proves one page, legacy UI absence, and zero business mut
   const changed = structuredClone(preview); changed.shipping_settings.payload.legacy_enterprise_ui_absent = false
   assert.ok(v.runtimeEvidenceBlockers(changed, 'preview').length)
 })
+
+test('Production-first exception is bounded to the approved WP40 release', () => {
+  const approval = {
+    type: 'final_production_release_authorization', source: 'user_explicit', state: 'approved',
+    code_release_authorized: true, database_write_authorized: false, production_database_write_authorized: false,
+    carrier_calls_authorized: false, organization_sync_authorized: false, service_retirement_authorized: false,
+    preview_order_exception: true, preview_status: 'not_passed',
+    approved_candidate: 'a'.repeat(40), approved_product_tree: 'b'.repeat(40), rollback_commit: 'c'.repeat(40),
+  }
+  const scope = {
+    approval, activeId: 'WP40', featureId: 'F054', runtimeProfile: 'shipping_workspace', contractVersion: v.CONTRACT,
+    productTree: approval.approved_product_tree, candidateIsAncestor: true,
+    changedPaths: ['governance/runtime-state/demand-inbox.jsonl'],
+  }
+  assert.deepEqual(v.productionFirstExceptionBlockers(scope), [])
+  for (const patch of [
+    { approval: { ...approval, preview_order_exception: false } },
+    { approval: { ...approval, preview_status: 'passed' } },
+    { approval: { ...approval, production_database_write_authorized: true } },
+    { approval: { ...approval, carrier_calls_authorized: true } },
+    { activeId: 'WP53' }, { featureId: 'F003' }, { runtimeProfile: 'application' },
+    { productTree: 'f'.repeat(40) }, { candidateIsAncestor: false },
+    { changedPaths: ['product-truth/product-code/app/shipping/config-drawer.tsx'] },
+  ]) assert.ok(v.productionFirstExceptionBlockers({ ...scope, ...patch }).length)
+})

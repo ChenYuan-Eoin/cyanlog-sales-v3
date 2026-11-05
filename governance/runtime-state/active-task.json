@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-05T11:30:00.000000+00:00",
+  "updated_at": "2026-11-05T13:45:00.000000+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -277,6 +277,7 @@
       ],
       "runtime_profile": "shipping_workspace",
       "runtime_contract_version": "f054-shipping-settings-v1",
+      "preview_order_exception_approval_id": "IN-20261105-030",
       "production_database_mode": "read_only",
       "required_production_runtime_evidence": [
         "shipping_settings",
@@ -301,7 +302,7 @@
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
         "production_database_mode": "read_only"
       },
-      "note": "IN-20261105-030 明确批准发布78f39673候选并做只读正式站UI回读；合同/测试治理变更必须与产品候选同SHA验证。禁止保存配置、顺丰调用、组织同步、服务停用和业务写入。"
+      "note": "IN-20261105-030 明确批准发布78f39673候选并做只读正式站UI回读；合同/测试治理变更必须与产品候选同SHA验证。Preview因现有Chrome会话不跨域而保持not_passed，按已批准的Production-first机制推进，不得伪记Preview通过。禁止保存配置、顺丰调用、组织同步、服务停用和业务写入。"
     },
     "acceptance_checks": [
       "单页包含顺丰、月结/服务、默认寄件地址、提报规则与组织权限入口",
