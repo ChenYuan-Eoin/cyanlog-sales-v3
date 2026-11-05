@@ -42,7 +42,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd 'pg_isready -U wp92_bootstrap'
+          --health-cmd "pg_isready -U wp92_bootstrap -d postgres"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       ORGANIZATION_TEST_DATABASE_URL: postgres://wp92_bootstrap:disposable-ci-only@127.0.0.1:5432/postgres
