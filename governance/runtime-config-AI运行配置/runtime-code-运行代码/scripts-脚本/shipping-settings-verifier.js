@@ -296,18 +296,25 @@ async function verify(options) {
     source_operator_artifact: sourceOperatorReference, probes,
     attachments: [sourceOperatorReference, ...copiedAttachments, regressionReference, ...probes.map(item => item.response_artifact)],
   }
-  return {
-    shipping_settings: {
+  const make = (name, payload) => {
+    const reference = write(runtime, name + '.json', payload)
+    return { artifact_path: reference.path, sha256: reference.sha256, payload }
+  }
+  const result = {
+    shipping_settings: make('settings', {
       ...common, source: 'trusted_existing_chrome_operator', read_only: true, result: 'pass',
       source_operator_sha256: operator.sha256, operator_attestation: input,
       attachments: [...copiedAttachments, regressionReference],
-    },
-    shipping_access: {
+    }),
+    shipping_access: make('access', {
       ...common, source: verifier.source, read_only: true, anonymous_access_denied: true, result: 'pass',
       source_operator_sha256: operator.sha256, probes, attachments: probes.map(item => item.response_artifact),
-    },
-    verifier,
+    }),
+    verifier: make('verifier', verifier),
   }
+  const blockers = productionEvidenceBlockers(result, expected)
+  check(blockers.length === 0, blockers.join('; '))
+  return result
 }
 
 module.exports = {

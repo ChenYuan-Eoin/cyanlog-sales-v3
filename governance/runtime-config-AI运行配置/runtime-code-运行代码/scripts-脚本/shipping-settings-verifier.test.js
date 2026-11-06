@@ -84,11 +84,14 @@ test('exports the finite merged-settings contract and rejects mutation-shaped op
 test('collects one anonymous 401 read and seals operator plus access dependencies', async t => {
   const f = fixture(t); mockFetch(t)
   const proof = await v.verify({ runtime: f.runtime, operator: f.save(), ...expected })
-  assert.equal(proof.shipping_settings.source, 'trusted_existing_chrome_operator')
-  assert.equal(proof.shipping_access.anonymous_access_denied, true)
-  assert.equal(proof.verifier.source, 'live_shipping_settings_verifier')
-  assert.equal(proof.verifier.probes.length, 1)
-  for (const item of Object.values(proof)) assert.ok(fs.existsSync(path.join(f.runtime, item.attachments?.[0]?.path || item.source_operator_artifact.path)))
+  assert.equal(proof.shipping_settings.payload.source, 'trusted_existing_chrome_operator')
+  assert.equal(proof.shipping_access.payload.anonymous_access_denied, true)
+  assert.equal(proof.verifier.payload.source, 'live_shipping_settings_verifier')
+  assert.equal(proof.verifier.payload.probes.length, 1)
+  assert.deepEqual(v.productionEvidenceBlockers(proof, expected), [])
+  for (const item of Object.values(proof)) {
+    assert.equal(sha(fs.readFileSync(path.join(f.runtime, item.artifact_path))), item.sha256)
+  }
 })
 
 test('Production evidence stays verifiable after collection and rejects rebinding or mutation claims', t => {
