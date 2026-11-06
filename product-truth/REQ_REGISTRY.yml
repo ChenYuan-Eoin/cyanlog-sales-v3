@@ -41,12 +41,12 @@ goal_governance:
       password_physical_removal: "后置；过渡退出、替代登录/恢复证据与独立写入批准满足后执行，本批不做。"
       release_boundary: "IN010只绑定旧固定出口产品树；不得继承为新增受限入口/依赖锁/开关启用的发布授权。"
   delivery_outcome_contract:
-    version: "2026-10-28.2"
-    source: IN-20261028-010
+    version: "2026-11-06.1"
+    source: "IN-20261028-010 + IN-20261106-001"
     objective: "销售一次填写真实收件信息，形成归属正确的待确认工单；授权人员确认后顺丰只下单一次，单号回到原销售与原CRM记录。共享组织权限，数据隔离，原单可恢复。"
     ledger: product-truth/feature-packets/F099-current-goal-ledger.md
-    active: WP92
-    next: WP53
+    active: WP97
+    next: WP92
     directory_stage_sequence: [WP92, WP53]
     directory_stage_authority: IN-20261105-004
     directory_stage_gate: "部门、员工和主属/附属关系整体同步并联动回读；前一批无真实证据，后一批不启动；代码、Preview和部署不能代替业务验收。"
@@ -59,11 +59,11 @@ goal_governance:
     WP51: {name: 来源管理只读诊断基础, primary_goals: [G5, G7, G10], state: parked_reused_by_wp92}
     WP53: {name: 持续同步、变更与恢复验收, primary_goals: [G5, G7, G10], state: waiting_previous_stage}
     WP98: {name: 真实运单结果回填原CRM记录, primary_goals: [], state: queued_goal_registered}
-    WP97: {name: CRM审批生成唯一待确认工单, primary_goals: [], state: queued_goal_registered}
+    WP97: {name: ICU面向CRM的寄件受理网关, primary_goals: [], state: executing_current_batch}
     WP96: {name: CRM审批寄件字段映射预览, primary_goals: [], state: queued_goal_registered}
     WP95: {name: 寄件信息正确解析与无门牌地址提交, primary_goals: [], state: production_released, closed_scope: "解析与无门牌地址校验；真实履约移交WP99"}
     WP91: {name: 纷享应用配置与通讯录预览, primary_goals: [G5, G7, G10], state: production_released}
-    WP92: {name: 组织目录整体同步与架构回读, primary_goals: [G5, G7, G10], state: executing}
+    WP92: {name: 组织目录整体同步与架构回读, primary_goals: [G5, G7, G10], state: queued_next}
     WP93: {name: 统一成员身份与寄件许可, primary_goals: [G5, G7, G10], state: queued}
     WP94: {name: 纷享SSO与联合身份门禁, primary_goals: [G5, G7, G10], state: blocked_by_directory_scope_and_identity_authority}
     WP99: {name: 顺丰真实履约端到端闭环, primary_goals: [G5, G7, G10], state: queued}

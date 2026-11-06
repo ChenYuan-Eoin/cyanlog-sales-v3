@@ -32,7 +32,7 @@ type ShipmentRow = {
   shipping_config_snapshot?: Record<string, unknown> | null
   shipping_waybills?: { waybill_no: string }[] | { waybill_no: string } | null
 }
-function receiptFor(key: string, env: Record<string, string | undefined> = process.env) {
+export function createShipmentReceiptToken(key: string, env: Record<string, string | undefined> = process.env) {
   const secret = env.SHIPPING_RECEIPT_SECRET
   if (!secret || secret.length < 32) throw new ShippingError(503, '匿名寄件回执尚未配置。')
   return createHmac('sha256', secret).update(`shipment:${key}`).digest('base64url')
@@ -46,7 +46,7 @@ export function nextShippingReviewAt(now = new Date()) {
   return new Date(shanghai.getTime() - 8 * 60 * 60 * 1000).toISOString()
 }
 
-function orderNo(now = new Date()) {
+export function newShippingOrderNo(now = new Date()) {
   const ymd = now.toISOString().slice(0, 10).replaceAll('-', '')
   return `SO-${ymd}-${randomBytes(5).toString('hex').slice(0, 8).toUpperCase()}`
 }
@@ -68,7 +68,7 @@ export async function createAnonymousShipment(args: { orgId: string; key: string
   const relation = signed || resolveBusinessContext(args.businessCode)
   const digest = args.employee ? hash(JSON.stringify(['employee-workorder-v1', args.orgId, args.employee.id, args.key])) : null
   const key = digest ? `${digest.slice(0, 8)}-${digest.slice(8, 12)}-8${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}` : args.key
-  const receiptToken = receiptFor(key)
+  const receiptToken = createShipmentReceiptToken(key)
   const payloadHash = hash(JSON.stringify({ ...args.input, serviceName: undefined }))
   if (args.employee) {
     const prior = await supabaseAdmin.from('shipping_orders').select(select).eq('org_id', args.orgId).eq('employee_profile_id', args.employee.id).eq('intake_source', 'anonymous_web').eq('idempotency_key', key).maybeSingle()
@@ -82,7 +82,7 @@ export async function createAnonymousShipment(args: { orgId: string; key: string
     if (!senderMatches || args.input.submittedBy?.name !== args.employee.sender.name || args.input.submittedBy?.phone !== args.employee.sender.phone || args.input.submittedBy?.team !== args.employee.team) throw new ShippingError(409, '个人寄件资料已变化，请刷新资料后重新预览。')
     }
   }
-  const row = { order_no: orderNo(), org_id: args.orgId, created_by: null, employee_profile_id: args.employee?.id || null, identity_snapshot: args.employee?.identity || {}, intake_source: 'anonymous_web', confirmation_policy: 'scheduled_review', status: 'awaiting_confirmation', sales_ref: relation?.salesRef || args.input.submittedBy?.name || null, customer_ref: relation?.customerRef || args.input.customerName || null, assignment_status: relation ? 'assigned' : 'unassigned', raw_input: args.rawInput || null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: key, receipt_token_hash: hash(receiptToken), next_review_at: nextShippingReviewAt() }
+  const row = { order_no: newShippingOrderNo(), org_id: args.orgId, created_by: null, employee_profile_id: args.employee?.id || null, identity_snapshot: args.employee?.identity || {}, intake_source: 'anonymous_web', confirmation_policy: 'scheduled_review', status: 'awaiting_confirmation', sales_ref: relation?.salesRef || args.input.submittedBy?.name || null, customer_ref: relation?.customerRef || args.input.customerName || null, assignment_status: relation ? 'assigned' : 'unassigned', raw_input: args.rawInput || null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: key, receipt_token_hash: hash(receiptToken), next_review_at: nextShippingReviewAt() }
   let result = await supabaseAdmin.from('shipping_orders').insert(row).select(select).single()
   if (result.error?.code === '23505') {
     result = await supabaseAdmin.from('shipping_orders').select(select).eq('org_id', args.orgId).eq('intake_source', 'anonymous_web').eq('idempotency_key', key).single()
@@ -95,12 +95,12 @@ export async function createAnonymousShipment(args: { orgId: string; key: string
 }
 
 export async function createOwnerShipment(args: { orgId: string; userId: string; key: string; input: ShippingInput; usesDefaultSender?: boolean }) {
-  const receiptToken = receiptFor(args.key)
+  const receiptToken = createShipmentReceiptToken(args.key)
   requireOrganization(args.orgId)
   // Derived defaults may change after a lost response. The same original input
   // must still retrieve its first work order and sender snapshot without dispatch.
   const payloadHash = hash(JSON.stringify({ ...args.input, sender: args.usesDefaultSender ? null : args.input.sender }))
-  const row = { order_no: orderNo(), org_id: args.orgId, carrier_connection_id: null, billing_account_id: null, sender_profile_id: null, connection_environment: null, billing_account_tail: null, shipping_config_snapshot: {}, created_by: args.userId, intake_source: 'owner_web', confirmation_policy: 'scheduled_review', status: 'awaiting_confirmation', sales_ref: null, customer_ref: null, assignment_status: 'unassigned', raw_input: null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: args.key, receipt_token_hash: hash(receiptToken), next_review_at: nextShippingReviewAt() }
+  const row = { order_no: newShippingOrderNo(), org_id: args.orgId, carrier_connection_id: null, billing_account_id: null, sender_profile_id: null, connection_environment: null, billing_account_tail: null, shipping_config_snapshot: {}, created_by: args.userId, intake_source: 'owner_web', confirmation_policy: 'scheduled_review', status: 'awaiting_confirmation', sales_ref: null, customer_ref: null, assignment_status: 'unassigned', raw_input: null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: args.key, receipt_token_hash: hash(receiptToken), next_review_at: nextShippingReviewAt() }
   let result = await supabaseAdmin.from('shipping_orders').insert(row).select(select).single()
   if (result.error?.code === '23505') {
     result = await supabaseAdmin.from('shipping_orders').select(select).eq('org_id', args.orgId).eq('created_by', args.userId).eq('intake_source', 'owner_web').eq('idempotency_key', args.key).single()

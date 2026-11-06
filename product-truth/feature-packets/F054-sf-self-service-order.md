@@ -297,6 +297,21 @@
 
 官方能力依据（只支持能力边界，不代表当前租户已配置）：[审批后动作](https://help.fxiaoke.com/c449/584d/a560/64da/eb77)、[读取审批实例](https://developer.fxiaoke.com/openapi_v2/common/process/approval/instance.html)、[更新业务对象](https://developer.fxiaoke.com/openapi_v2/common/system/other/other/batchUpdate.html)。
 
+### 2026-11-06 ICU CRM 受理网关合同（WP97，IN-20261106-001）
+
+本批先提供可被 APL 包装调用的服务端接口，不把 APL、纷享后台点击、SSO、组织持续同步、承运商调用或生产迁移混进来。接口只有两个入口：
+
+- `POST /api/shipping/crm/preflight`：验证集成客户端后读取组织默认寄件人、服务目录和当前规则，返回标准化后的申请人、客户、寄件人、收件人、服务与逐字段缺项；不创建工单、不调用承运商。
+- `POST /api/shipping/crm/orders`：使用同一合同重新校验，只创建一张 `intake_source=crm`、`status=awaiting_confirmation` 的待确认工单；同一事件重放返回原单，同一事件内容变化返回 `409`。
+
+请求头固定为 `x-shipping-crm-client-id`、`x-shipping-crm-timestamp`（Unix 秒）与 `x-shipping-crm-signature: sha256=<hex>`。签名原文为 `timestamp + "\n" + uppercaseMethod + "\n" + pathname + "\n" + exactRawBody`，HMAC-SHA256 密钥只存在服务端环境。时间窗为五分钟；路径进入签名，因此预检签名不能重放到受理入口。客户端配置 `SHIPPING_CRM_CLIENTS_JSON` 将客户端唯一映射到 ONES 组织并可选绑定 CRM enterprise；请求正文不得包含组织选择字段。
+
+请求正文只接受 `event`、`applicant`、`customer`、`shipment`。事件身份由 `enterpriseId + workflowInstanceId + objectApiName + recordId + shipmentDetailId + taskId + stageId + revisionId` 稳定组成；原始申请人、客户、业务对象、子行、任务/阶段、修订、事件键和当次原始请求体分别落表，不把来源证据只塞进订单 JSON。工单保存真实申请人快照，销售引用取 CRM employee ID，客户引用取 CRM account ID。
+
+预检结构不完整时返回 `200 + ready:false + missing[]`；受理结构或组织默认值不完整时返回 `422 + CRM_INTAKE_INCOMPLETE`；签名错误、超时、未知客户端或租户不匹配在写入前拒绝。`202` 只表示 ICU 已受理并生成待确认工单，`waybill` 必为 `null`，不得表述为顺丰已下单或已出号。
+
+本批当前只允许到 `code_green`。APL 薄调用、真实申请人授权策略、人工确认与顺丰调用、单号回写、组织目录和逐人权限推广均按 F099 后续阶段另行验收。
+
 
 ## WP52：逐票服务核对与批量确认隔离（IN-20261103-001）
 

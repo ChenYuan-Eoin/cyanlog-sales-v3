@@ -1,5 +1,13 @@
 # F099-正式站业务交付目标与未完成账本
 
+## 2026-11-06 ICU 侧先行：CRM/APL 受理网关（IN-20261106-001）
+
+用户明确纠正排期：不再等待组织、SSO 或全量 SOP 完成后才验证纷享，先完成 ICU 侧可被 APL 安全调用的受理能力。当前唯一 Active 为 WP97；WP92 在 WP97 code_green 后返回，组织目录未完成的真实事实不变。
+
+本批只做服务端契约和隔离验证：已配置客户端使用 HMAC 调用 preflight 与 create-pending；签名映射决定组织，请求不能自选任意租户；申请人的企业、流程实例、对象、记录、寄件明细、任务/阶段、修订共同组成稳定事件身份。预检只读并返回缺项；受理只创建一张 `intake_source=crm` 的 `awaiting_confirmation` 工单，重复请求返回原单，内容变化拒绝。本批不得调用顺丰、写回纷享或发布生产。
+
+后续顺序固定为：ICU受理底座 → APL薄调用层 → 用户现有顺丰账号受控确认/真实下单 → 单号写回 → 组织与逐人授权推广。shared_executor 只作为试运行模式，真实申请人始终独立记录。
+
 2026-11-05 Release-order clarification：IN-20261105-030的发布批准保持Preview为`not_passed`；跨域Preview要求独立登录且当前页面显示企业统一登录未就绪，因此采用项目已有的Production-first例外，不把部署READY记作Preview通过。正式域名仍必须用现有Chrome完成只读操作链并绑定精确SHA、Vercel Production部署和域名；任何Test/Preview/本地证据不能替代。
 
 ## 2026-11-05 寄件设置页面收敛（IN-20261105-027/028）
