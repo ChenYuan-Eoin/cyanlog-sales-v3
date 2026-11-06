@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-06T00:00:00.000000+00:00",
+  "updated_at": "2026-11-06T08:23:54.157Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -235,32 +235,40 @@
     }
   },
   "active_task": {
-    "id": "WP97",
-    "slug": "crm-intake-icu-gateway",
-    "name": "ICU 面向 CRM 的寄件受理网关",
+    "id": "WP92",
+    "slug": "fxiaoke-primary-source-sync",
+    "name": "纷享组织同步与主来源切换",
     "kind": "product",
     "status": "active",
-    "objective": "先让 ICU 提供一个只面向已配置组织的 CRM 服务端受理能力：验证来源，预检客户、申请人、收件地址、服务与缺项，按稳定事件标识幂等生成唯一待确认工单并保留真实申请人；APL 接入、人工确认和顺丰调用在后续小批继续。",
-    "feature_id": "F054",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
-    "activation_basis": "IN-20261106-001：用户明确要求先搞定 ICU 侧，再验证 APL；允许首轮使用固定组织与管理员顺丰账号作为受控执行身份。",
+    "objective": "把外部组织接入拆成同一条提供方连接记录上的独立能力：连接凭据、目录读取、目录权威、企业登录、身份映射与业务授权分别判定，相应用户在同一连接上只配置提供方差异的凭据格式和协议适配。管理员先验证提供方对全公司目录的读取范围，再看到绑定目录hash、连接revision和当前来源revisions的不可变差异计划，并显式确认以目标提供方完成组织切源；范围未证明、结构不完整、冲突或过期计划整批阻断。应用与回滚使用事务和幂等运行，保留旧来源、手工部门、成员资料、历史身份与关联，禁止按姓名合并或静默创建成员。企业登录只绑定既有稳定身份，不能由目录主来源、连接验证或登录按钮自动启用。",
+    "feature_id": "F003",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/REQ_REGISTRY.yml",
+      "governance/runtime-state/main-chain-governance-charter.md",
+      "governance/runtime-state/identity-authorization-blueprint.md",
+      "product-truth/feature-packets/F003-account-auth.md",
       "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "product-truth/feature-packets/F054-sf-self-service-order.md",
-      "product-truth/product-code/.env.example",
-      "product-truth/product-code/lib/shipping/collaboration.ts",
-      "product-truth/product-code/lib/shipping/crm-intake.ts",
-      "product-truth/product-code/lib/shipping/crm-intake.test.ts",
-      "product-truth/product-code/lib/shipping/types.ts",
-      "product-truth/product-code/lib/shipping/validation.ts",
-      "product-truth/product-code/app/api/shipping/crm/preflight/route.ts",
-      "product-truth/product-code/app/api/shipping/crm/orders/route.ts",
-      "product-truth/product-code/app/api/shipping/crm/crm-routes.test.ts",
-      "product-truth/product-code/supabase/migrations/20261106000001_shipping_crm_intake.sql",
-      "product-truth/product-code/lib/shipping/shipping-crm-intake-migration.test.ts"
+      "product-truth/REQ_REGISTRY.yml",
+      "product-truth/product-code/lib/organization-sources.ts",
+      "product-truth/product-code/lib/organization-sources.test.ts",
+      "product-truth/product-code/lib/organization-sources-migration.test.ts",
+      "product-truth/product-code/lib/organization-source-identity.ts",
+      "product-truth/product-code/lib/organization-source-identity.test.ts",
+      "product-truth/product-code/lib/organization-connections",
+      "product-truth/product-code/lib/fxiaoke",
+      "product-truth/product-code/lib/admin/org-membership.ts",
+      "product-truth/product-code/lib/schema-check.ts",
+      "product-truth/product-code/app/api/admin/organization-sources",
+      "product-truth/product-code/app/api/access/feishu/sync",
+      "product-truth/product-code/app/configs",
+      "product-truth/product-code/app/admin/org",
+      "product-truth/product-code/supabase/migrations/20261103090000_unified_organization_connections.sql",
+      "product-truth/product-code/supabase/migrations/20261103120000_organization_directory_cutover.sql",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-directory-cutover-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-directory-cutover-verifier.test.js"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -281,54 +289,47 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "shipping_workspace",
-        "shipping_tracking",
-        "shipping_access"
+        "organization_directory_snapshot",
+        "organization_directory_cutover"
       ],
-      "runtime_profile": "shipping_workspace",
+      "runtime_profile": "application",
+      "runtime_contract_version": "f003-directory-cutover-v2",
       "production_database_mode": "read_only",
-      "note": "本批只实现 ICU 侧可调用能力及隔离验证；不发布Production、不执行生产迁移、不点击纷享、不调用顺丰。"
+      "note": "本批只验证完整目录快照、不可变差异、部门/人员/主属附属关系原子应用与回读的代码合同；不发布Production、不执行生产迁移、不写生产目录数据、不点击纷享、不改账号角色或登录状态。"
     },
     "acceptance_checks": [
-      "未签名、过期、重复或未知客户端 ID 的 CRM 请求被拒绝",
-      "预检返回缺项、稳定来源标识、客户与真实申请人，不生成工单",
-      "同一来源事件重复提交返回同一张待确认工单，内容变化返回冲突",
-      "成功受理创建 intake_source=crm 的待确认工单，记录 workflow/object/record/detail/task/revision/applicant",
-      "本批不调用承运商，不把202受理写成顺丰已出号"
+      "目录预览从固定provider快照计算新增、更新、未变化、冲突和保留手工数据，并分别展示部门与身份映射结果",
+      "确认计划绑定plan hash、连接revision、当前来源revisions及目录快照；stale、重复或篡改计划拒绝",
+      "任一冲突或部门/成员快照不完整时整批阻断，不发生部分写入",
+      "确认后在单一事务内将目标提供方设为priority 1 active目录/组织权威，旧主来源停止权威同步但不删除历史组织、成员、部门或身份映射；不设置身份权威",
+      "手工部门、人员字段和历史关联不覆盖；成员匹配只使用工号/邮箱/手机号等受信证据，姓名不参与合并，登录不JIT创建成员",
+      "成功应用幂等重试返回同一运行，回滚原子恢复来源状态与本次目录变化，并在后续变更发生后拒绝旧回滚",
+      "API和组织来源页展示先预览差异、再确认、应用状态与回滚能力，连接配置、目录主来源和登录状态保持分离",
+      "连接验证、目录读取完整、目录权威、企业登录开关和系统业务授权分别计算；任一能力不得由另一能力自动推导为已启用",
+      "企业登录能力由独立EnterpriseLoginAdapter注册表计算；目录适配器不得用ssoAvailable自报登录能力，未注册登录协议的提供方必须失败关闭",
+      "SSO仅在企业登录适配器可用、连接已验证、来源已启用且identity权威明确开启时展示为可用；目录同步的主来源选择不自动开启SSO",
+      "目录分页与关系自洽只证明快照结构完整；未取得全公司范围证据时scopeVerified=false且差异计划不可应用",
+      "目录切源入口按提供方能力注册表选择适配器，只有声明syncAvailable的提供方可用；提供方线值生命周期映射只在适配器内完成，共享差异服务不包含 provider 名称分支；递归分页完成仍只证明返回范围结构，不得把分页结束伪报为全公司范围已证明",
+      "历史飞书直写接口返回DIRECTORY_CUTOVER_REQUIRED且不产生数据库或外部写入；飞书与纷享目录变更只能进入同一不可变计划、原子应用和回滚服务",
+      "目标/受影响/全量测试、lint、typecheck、build、安全门禁和严格Harness通过；仅code_green，不宣称生产目录已切换"
     ],
-    "historical_scope": {
-      "scheduling_group": "CRM审批寄件",
-      "source_records": [
-        "IN-20261028-009"
-      ],
-      "reconciliation_source": "IN-20261028-010",
-      "deferred_acceptance": [
-        "通过指定审批节点后只生成 1 张待确认工单",
-        "重复通知、撤回、重审、跨人、跨租户均有明确处理"
-      ],
-      "note": "原 Ready/WP97 的审批唯一工单条件保留为后续阶段验收；本批仅完成 ICU 服务端受理底座，不宣称审批、撤回复审和跨租户链路已通过。"
-    },
-    "non_goals": [
-      "纷享界面点击或 APL 正式配置",
-      "逐人身份绑定、SSO或登录改造",
-      "组织目录持续同步",
-      "顺丰真实下单或运单回写",
-      "生产数据库迁移或 Production 发布"
-    ],
-    "started_at": "2026-11-06T00:00:00.000000+00:00"
+    "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
+    "started_at": "2026-11-06T08:12:22.935Z",
+    "activation_basis": "IN-20261105-004、005、007、009、012、025；WP97 于 2026-11-06 达到 code_green 后按队列进入 WP92；IN-20261106-003 修复调度绑定。",
+    "reason": "IN-20261104-010：全公司范围和人员承接前置；既有代码保留，切源业务未验收"
   },
   "execution_queue": {
     "active": {
-      "id": "WP97",
-      "slug": "crm-intake-icu-gateway",
-      "name": "ICU 面向 CRM 的寄件受理网关"
+      "id": "WP92",
+      "slug": "fxiaoke-primary-source-sync",
+      "name": "纷享组织同步与主来源切换"
     },
     "next": {
-      "id": "WP92",
-      "slug": "organization-directory-sync",
-      "name": "组织目录整体同步与架构回读",
-      "entry_gate": "WP97 的 ICU 侧受理契约完成 code_green 后，返回未完成的组织目录主线；不得把代码通过写成组织已闭环。",
-      "entry_gate_status": "waiting_current_scoped_batch"
+      "id": "WP97",
+      "slug": "crm-intake-icu-gateway",
+      "name": "ICU 面向 CRM 的寄件受理网关",
+      "entry_gate": "WP92 完整组织目录代码候选完成 code_green 后返回 ICU；后续扩围前重新核对 APL、人工确认与承运商授权。",
+      "entry_gate_status": "waiting_previous_code_green"
     },
     "ready": [
       {
@@ -5274,41 +5275,33 @@
       "reason": "Production code and existing-Chrome two-order service-selection acceptance completed; actual orders and carrier calls were not authorized or performed.",
       "completed_at": "2026-11-03T05:01:31.520Z"
     },
-    "WP92": {
-      "id": "WP92",
-      "slug": "fxiaoke-primary-source-sync",
-      "name": "纷享组织同步与主来源切换",
+    "WP97": {
+      "id": "WP97",
+      "slug": "crm-intake-icu-gateway",
+      "name": "ICU 面向 CRM 的寄件受理网关",
       "kind": "product",
       "status": "parked",
-      "objective": "把外部组织接入拆成同一条提供方连接记录上的独立能力：连接凭据、目录读取、目录权威、企业登录、身份映射与业务授权分别判定，相应用户在同一连接上只配置提供方差异的凭据格式和协议适配。管理员先验证提供方对全公司目录的读取范围，再看到绑定目录hash、连接revision和当前来源revisions的不可变差异计划，并显式确认以目标提供方完成组织切源；范围未证明、结构不完整、冲突或过期计划整批阻断。应用与回滚使用事务和幂等运行，保留旧来源、手工部门、成员资料、历史身份与关联，禁止按姓名合并或静默创建成员。企业登录只绑定既有稳定身份，不能由目录主来源、连接验证或登录按钮自动启用。",
-      "feature_id": "F003",
+      "objective": "先让 ICU 提供一个只面向已配置组织的 CRM 服务端受理能力：验证来源，预检客户、申请人、收件地址、服务与缺项，按稳定事件标识幂等生成唯一待确认工单并保留真实申请人；APL 接入、人工确认和顺丰调用在后续小批继续。",
+      "feature_id": "F054",
+      "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
+      "activation_basis": "IN-20261106-001：用户明确要求先搞定 ICU 侧，再验证 APL；允许首轮使用固定组织与管理员顺丰账号作为受控执行身份。",
       "allowed_paths": [
         "governance/runtime-state/active-task.json",
         "governance/runtime-state/demand-inbox.jsonl",
-        "governance/runtime-state/main-chain-governance-charter.md",
-        "governance/runtime-state/identity-authorization-blueprint.md",
-        "product-truth/feature-packets/F003-account-auth.md",
-        "product-truth/feature-packets/F099-current-goal-ledger.md",
         "product-truth/REQ_REGISTRY.yml",
-        "product-truth/product-code/lib/organization-sources.ts",
-        "product-truth/product-code/lib/organization-sources.test.ts",
-        "product-truth/product-code/lib/organization-sources-migration.test.ts",
-        "product-truth/product-code/lib/organization-source-identity.ts",
-        "product-truth/product-code/lib/organization-source-identity.test.ts",
-        "product-truth/product-code/lib/organization-connections",
-        "product-truth/product-code/lib/fxiaoke",
-        "product-truth/product-code/lib/admin/org-membership.ts",
-        "product-truth/product-code/lib/schema-check.ts",
-        "product-truth/product-code/app/api/admin/organization-sources",
-        "product-truth/product-code/app/api/access/feishu/sync",
-        "product-truth/product-code/app/configs",
-        "product-truth/product-code/app/admin/org",
-        "product-truth/product-code/supabase/migrations/20261103090000_unified_organization_connections.sql",
-        "product-truth/product-code/supabase/migrations/20261103120000_organization_directory_cutover.sql",
-        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
-        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-directory-cutover-verifier.js",
-        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/organization-directory-cutover-verifier.test.js"
+        "product-truth/feature-packets/F099-current-goal-ledger.md",
+        "product-truth/feature-packets/F054-sf-self-service-order.md",
+        "product-truth/product-code/.env.example",
+        "product-truth/product-code/lib/shipping/collaboration.ts",
+        "product-truth/product-code/lib/shipping/crm-intake.ts",
+        "product-truth/product-code/lib/shipping/crm-intake.test.ts",
+        "product-truth/product-code/lib/shipping/types.ts",
+        "product-truth/product-code/lib/shipping/validation.ts",
+        "product-truth/product-code/app/api/shipping/crm/preflight/route.ts",
+        "product-truth/product-code/app/api/shipping/crm/orders/route.ts",
+        "product-truth/product-code/app/api/shipping/crm/crm-routes.test.ts",
+        "product-truth/product-code/supabase/migrations/20261106000001_shipping_crm_intake.sql",
+        "product-truth/product-code/lib/shipping/shipping-crm-intake-migration.test.ts"
       ],
       "delivery_contract": {
         "target_state": "code_green",
@@ -5329,34 +5322,43 @@
           "build"
         ],
         "required_runtime_evidence": [
-          "organization_directory_snapshot",
-          "organization_directory_cutover"
+          "shipping_workspace",
+          "shipping_tracking",
+          "shipping_access"
         ],
-        "runtime_profile": "application",
-        "runtime_contract_version": "f003-directory-cutover-v1",
+        "runtime_profile": "shipping_workspace",
         "production_database_mode": "read_only",
-        "note": "WP92目录切源代码候选已完成并通过全量门禁；用户明确授权将精确提交整合到main/production、更新现有固定出口worker并部署网站供阶段验收。Production数据库仍只读；不执行迁移、目录写入或切源、成员/角色写入、凭据变更或承运商调用。"
+        "note": "本批只实现 ICU 侧可调用能力及隔离验证；不发布Production、不执行生产迁移、不点击纷享、不调用顺丰。"
       },
       "acceptance_checks": [
-        "目录预览从固定provider快照计算新增、更新、未变化、冲突和保留手工数据，并分别展示部门与身份映射结果",
-        "确认计划绑定plan hash、连接revision、当前来源revisions及目录快照；stale、重复或篡改计划拒绝",
-        "任一冲突或部门/成员快照不完整时整批阻断，不发生部分写入",
-        "确认后在单一事务内将目标提供方设为priority 1 active目录/组织权威，旧主来源停止权威同步但不删除历史组织、成员、部门或身份映射；不设置身份权威",
-        "手工部门、人员字段和历史关联不覆盖；成员匹配只使用工号/邮箱/手机号等受信证据，姓名不参与合并，登录不JIT创建成员",
-        "成功应用幂等重试返回同一运行，回滚原子恢复来源状态与本次目录变化，并在后续变更发生后拒绝旧回滚",
-        "API和组织来源页展示先预览差异、再确认、应用状态与回滚能力，连接配置、目录主来源和登录状态保持分离",
-        "连接验证、目录读取完整、目录权威、企业登录开关和系统业务授权分别计算；任一能力不得由另一能力自动推导为已启用",
-        "企业登录能力由独立EnterpriseLoginAdapter注册表计算；目录适配器不得用ssoAvailable自报登录能力，未注册登录协议的提供方必须失败关闭",
-        "SSO仅在企业登录适配器可用、连接已验证、来源已启用且identity权威明确开启时展示为可用；目录同步的主来源选择不自动开启SSO",
-        "目录分页与关系自洽只证明快照结构完整；未取得全公司范围证据时scopeVerified=false且差异计划不可应用",
-        "目录切源入口按提供方能力注册表选择适配器，只有声明syncAvailable的提供方可用；提供方线值生命周期映射只在适配器内完成，共享差异服务不包含 provider 名称分支；递归分页完成仍只证明返回范围结构，不得把分页结束伪报为全公司范围已证明",
-        "历史飞书直写接口返回DIRECTORY_CUTOVER_REQUIRED且不产生数据库或外部写入；飞书与纷享目录变更只能进入同一不可变计划、原子应用和回滚服务",
-        "目标/受影响/全量测试、lint、typecheck、build、安全门禁和严格Harness通过；仅code_green，不宣称生产目录已切换"
+        "未签名、过期、重复或未知客户端 ID 的 CRM 请求被拒绝",
+        "预检返回缺项、稳定来源标识、客户与真实申请人，不生成工单",
+        "同一来源事件重复提交返回同一张待确认工单，内容变化返回冲突",
+        "成功受理创建 intake_source=crm 的待确认工单，记录 workflow/object/record/detail/task/revision/applicant",
+        "本批不调用承运商，不把202受理写成顺丰已出号"
       ],
-      "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
-      "started_at": "2026-11-03T08:03:02.300Z",
-      "activation_basis": "IN-20261103-004, IN-20261103-006, IN-20261103-007",
-      "reason": "IN-20261104-010：全公司范围和人员承接前置；既有代码保留，切源业务未验收"
+      "historical_scope": {
+        "scheduling_group": "CRM审批寄件",
+        "source_records": [
+          "IN-20261028-009"
+        ],
+        "reconciliation_source": "IN-20261028-010",
+        "deferred_acceptance": [
+          "通过指定审批节点后只生成 1 张待确认工单",
+          "重复通知、撤回、重审、跨人、跨租户均有明确处理"
+        ],
+        "note": "原 Ready/WP97 的审批唯一工单条件保留为后续阶段验收；本批仅完成 ICU 服务端受理底座，不宣称审批、撤回复审和跨租户链路已通过。"
+      },
+      "non_goals": [
+        "纷享界面点击或 APL 正式配置",
+        "逐人身份绑定、SSO或登录改造",
+        "组织目录持续同步",
+        "顺丰真实下单或运单回写",
+        "生产数据库迁移或 Production 发布"
+      ],
+      "started_at": "2026-11-06T00:00:00.000000+00:00",
+      "parked_at": "2026-11-06T08:12:22.935Z",
+      "reason": "WP97 已完成 code_green；按队列入口门禁返回未完成的 WP92 组织目录主线。"
     }
   },
   "suspended_wp77": {
