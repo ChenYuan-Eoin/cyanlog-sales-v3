@@ -1,0 +1,733 @@
+{
+  "version": 1,
+  "activeId": "WP40",
+  "commit": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+  "evidence": {
+    "code": {
+      "commit": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+      "tree": "ede3e5d20fdbb7c2748b5bb10475d70a719f7b51",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "app/shipping/config-drawer.test.tsx"
+          ],
+          "exit_code": 0,
+          "artifact_path": "wp40-shipping-settings-consolidation/operator-replay/target-payload-regression-9391710c.log",
+          "log_sha256": "97845639e0f2bbcfbc40d3c64b360382db203702cdfd12899f3c5f2e1a25c1c5"
+        },
+        {
+          "name": "full_tests",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh"
+          ],
+          "exit_code": 0,
+          "artifact_path": "check-logs/ede3e5d20fdbb7c2748b5bb10475d70a719f7b51/check-03-test.log",
+          "log_sha256": "c5252fd758953541733100b53f2e7040efa76880e0e721784a0b45cda69008de"
+        },
+        {
+          "name": "lint",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-02-lint.sh"
+          ],
+          "exit_code": 0,
+          "artifact_path": "check-logs/ede3e5d20fdbb7c2748b5bb10475d70a719f7b51/check-02-lint.log",
+          "log_sha256": "72df479ddc2c7571b9fa84ddf25c9fdf7e465e4826be77af483927985267850c"
+        },
+        {
+          "name": "typecheck",
+          "command": [
+            "bash",
+            "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3/governance/ai-behavior-准则/checks/check-01-typecheck.sh"
+          ],
+          "exit_code": 0,
+          "artifact_path": "check-logs/ede3e5d20fdbb7c2748b5bb10475d70a719f7b51/check-01-typecheck.log",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+        },
+        {
+          "name": "build",
+          "command": [
+            "pnpm",
+            "run",
+            "build"
+          ],
+          "exit_code": 0,
+          "artifact_path": "wp40-shipping-settings-consolidation/release-contract/build-9391710c.log",
+          "log_sha256": "0e9782811f2f80d21d7653ce122238cb2c03cdd4c21e71b914c3b4b142e32af4"
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "750cc81ab1bd68aefc41427b33b16793c2a2554c70996626e0b2294e98e6fefd",
+        "entry_sha256": "c2055b5138a0d906394b82a0cb5e8c9251f45f4bda0625ad526cb961dbe73cd7"
+      }
+    },
+    "production": {
+      "commit": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+      "deployment_id": "dpl_4JYnTbQVkxKYHmTVF4MDpoVqk6Mp",
+      "domain": "sales.cyanlog.icu",
+      "browser_acceptance": {
+        "artifact_path": "wp40-shipping-settings-consolidation/operator-replay/operator-attestation-9391710c.json",
+        "sha256": "118e77996b5e7d13ceceac306e44af4c800edd9334b623a391782532a8ac5cdc",
+        "payload": {
+          "contract_version": "f054-shipping-settings-v1",
+          "source": "trusted_existing_chrome_operator",
+          "environment": "production",
+          "origin": "https://sales.cyanlog.icu",
+          "url": "https://sales.cyanlog.icu/configs?tab=shipping",
+          "commit": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+          "deployment_id": "dpl_4JYnTbQVkxKYHmTVF4MDpoVqk6Mp",
+          "browser_context": "existing_user_chrome",
+          "existing_tab_id": "1110517622",
+          "new_tabs": 0,
+          "new_browser_contexts": 0,
+          "attestation_type": "trusted_operator_browser",
+          "trust_boundary": "operator_attestation_not_machine_proof",
+          "attestation_method": "codex_chrome_control_existing_session",
+          "attested_by": "codex-existing-chrome",
+          "attested_at": "2026-11-06T02:40:01Z",
+          "viewport": {
+            "width": 2977,
+            "height": 1364
+          },
+          "org_id": "00000001-0000-0000-0000-000000000000",
+          "operator_id": "30000001-0000-0000-0000-000000000000",
+          "actions": [
+            "open_shipping_settings",
+            "inspect_carrier_controls",
+            "inspect_billing_service_controls",
+            "inspect_default_sender",
+            "inspect_intake_rules",
+            "inspect_organization_permission_entry",
+            "verify_legacy_enterprise_ui_absent",
+            "leave_without_saving"
+          ],
+          "observations": [
+            {
+              "action": "open_shipping_settings",
+              "observed_at": "2026-11-06T02:39:31Z",
+              "result": "pass",
+              "checks": {
+                "page_accessible": true,
+                "merged_settings_page": true
+              }
+            },
+            {
+              "action": "inspect_carrier_controls",
+              "observed_at": "2026-11-06T02:39:32Z",
+              "result": "pass",
+              "checks": {
+                "sf_connection_section_visible": true
+              }
+            },
+            {
+              "action": "inspect_billing_service_controls",
+              "observed_at": "2026-11-06T02:39:33Z",
+              "result": "pass",
+              "checks": {
+                "billing_accounts_visible": true,
+                "services_visible": true
+              }
+            },
+            {
+              "action": "inspect_default_sender",
+              "observed_at": "2026-11-06T02:39:34Z",
+              "result": "pass",
+              "checks": {
+                "default_sender_visible": true
+              }
+            },
+            {
+              "action": "inspect_intake_rules",
+              "observed_at": "2026-11-06T02:39:35Z",
+              "result": "pass",
+              "checks": {
+                "intake_rules_visible": true
+              }
+            },
+            {
+              "action": "inspect_organization_permission_entry",
+              "observed_at": "2026-11-06T02:39:36Z",
+              "result": "pass",
+              "checks": {
+                "organization_permission_entry_visible": true
+              }
+            },
+            {
+              "action": "verify_legacy_enterprise_ui_absent",
+              "observed_at": "2026-11-06T02:39:37Z",
+              "result": "pass",
+              "checks": {
+                "enterprise_tab_absent": true,
+                "wecom_app_absent": true,
+                "robot_section_absent": true,
+                "legacy_employee_count_absent": true
+              }
+            },
+            {
+              "action": "leave_without_saving",
+              "observed_at": "2026-11-06T02:39:38Z",
+              "result": "pass",
+              "checks": {
+                "save_clicked": false,
+                "carrier_api_clicked": false,
+                "organization_sync_clicked": false,
+                "service_state_change_clicked": false
+              }
+            }
+          ],
+          "clicked_save": false,
+          "clicked_carrier_api": false,
+          "clicked_organization_sync": false,
+          "clicked_service_control": false,
+          "business_write_requests_observed": [],
+          "result": "pass",
+          "attachments": [
+            {
+              "path": "wp40-shipping-settings-consolidation/operator-replay/01-open-carrier-9391710c.png",
+              "sha256": "50c01087237619645cc5f0d19a66f743710d1fe9dd010530a4318d0aba256793"
+            },
+            {
+              "path": "wp40-shipping-settings-consolidation/operator-replay/02-billing-service-9391710c.png",
+              "sha256": "1000ce70659009a595ceb6444928a7eac97f762fdf84a3d1517411538793035e"
+            },
+            {
+              "path": "wp40-shipping-settings-consolidation/operator-replay/03-default-sender-9391710c.png",
+              "sha256": "6c455012632cb2ae09a19ec835aca4055dd0c5be0d9fffab5183875a3373d024"
+            },
+            {
+              "path": "wp40-shipping-settings-consolidation/operator-replay/04-intake-organization-9391710c.png",
+              "sha256": "8e1f26ae9a47a4a087f6d2a1113a2246ca4008c4ef22b15749e28d3bb782c87a"
+            },
+            {
+              "path": "wp40-shipping-settings-consolidation/operator-replay/05b-organization-permission-expanded-9391710c.png",
+              "sha256": "d8ee38aca39f36f015b580df6a9deb0f8cfeeeb7f797e4d226524d36b498421e"
+            },
+            {
+              "path": "wp40-shipping-settings-consolidation/operator-replay/ax-9391710c.txt",
+              "sha256": "d1261b5e03d0ffa19ad2522bd5333d81b0df4d5a345def0d46bf2ce217e5c967"
+            },
+            {
+              "path": "wp40-shipping-settings-consolidation/operator-replay/07-left-without-saving-9391710c.png",
+              "sha256": "0b0a9e4dfcdb93a39dc175ff4ab2fd5d739c458b2344f202c8850f625b86bf39"
+            }
+          ],
+          "payload_regression": {
+            "contract_version": "f054-shipping-settings-v1",
+            "source": "local_target_payload_regression",
+            "commit": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+            "result": "pass",
+            "production_requests_exercised": false,
+            "test_file": "product-truth/product-code/app/shipping/config-drawer.test.tsx",
+            "test_file_sha256": "7ce79d76886ed6c5e54f5e9546e55850c40f5ba8d7483d4b03da61fb22868284",
+            "exit_code": 0,
+            "timeout": false,
+            "assertions": [
+              "one_page_merged",
+              "legacy_wecom_ui_removed",
+              "no_business_mutation"
+            ],
+            "test_log": {
+              "path": "wp40-shipping-settings-consolidation/operator-replay/target-payload-regression-9391710c.log",
+              "sha256": "97845639e0f2bbcfbc40d3c64b360382db203702cdfd12899f3c5f2e1a25c1c5"
+            }
+          }
+        }
+      }
+    },
+    "production_runtime": {
+      "shipping_settings": {
+        "artifact_path": "production-runtime-verifier/settings.json",
+        "sha256": "d6d1c3ea1a1144491a9441ce2831f6a16fc02a964b2b478ce6baa71336e21b0c",
+        "payload": {
+          "contract_version": "f054-shipping-settings-v1",
+          "environment": "production",
+          "origin": "https://sales.cyanlog.icu",
+          "commit": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+          "deployment_id": "dpl_4JYnTbQVkxKYHmTVF4MDpoVqk6Mp",
+          "source": "trusted_existing_chrome_operator",
+          "read_only": true,
+          "result": "pass",
+          "source_operator_sha256": "118e77996b5e7d13ceceac306e44af4c800edd9334b623a391782532a8ac5cdc",
+          "operator_attestation": {
+            "contract_version": "f054-shipping-settings-v1",
+            "source": "trusted_existing_chrome_operator",
+            "environment": "production",
+            "origin": "https://sales.cyanlog.icu",
+            "url": "https://sales.cyanlog.icu/configs?tab=shipping",
+            "commit": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+            "deployment_id": "dpl_4JYnTbQVkxKYHmTVF4MDpoVqk6Mp",
+            "browser_context": "existing_user_chrome",
+            "existing_tab_id": "1110517622",
+            "new_tabs": 0,
+            "new_browser_contexts": 0,
+            "attestation_type": "trusted_operator_browser",
+            "trust_boundary": "operator_attestation_not_machine_proof",
+            "attestation_method": "codex_chrome_control_existing_session",
+            "attested_by": "codex-existing-chrome",
+            "attested_at": "2026-11-06T02:40:01Z",
+            "viewport": {
+              "width": 2977,
+              "height": 1364
+            },
+            "org_id": "00000001-0000-0000-0000-000000000000",
+            "operator_id": "30000001-0000-0000-0000-000000000000",
+            "actions": [
+              "open_shipping_settings",
+              "inspect_carrier_controls",
+              "inspect_billing_service_controls",
+              "inspect_default_sender",
+              "inspect_intake_rules",
+              "inspect_organization_permission_entry",
+              "verify_legacy_enterprise_ui_absent",
+              "leave_without_saving"
+            ],
+            "observations": [
+              {
+                "action": "open_shipping_settings",
+                "observed_at": "2026-11-06T02:39:31Z",
+                "result": "pass",
+                "checks": {
+                  "page_accessible": true,
+                  "merged_settings_page": true
+                }
+              },
+              {
+                "action": "inspect_carrier_controls",
+                "observed_at": "2026-11-06T02:39:32Z",
+                "result": "pass",
+                "checks": {
+                  "sf_connection_section_visible": true
+                }
+              },
+              {
+                "action": "inspect_billing_service_controls",
+                "observed_at": "2026-11-06T02:39:33Z",
+                "result": "pass",
+                "checks": {
+                  "billing_accounts_visible": true,
+                  "services_visible": true
+                }
+              },
+              {
+                "action": "inspect_default_sender",
+                "observed_at": "2026-11-06T02:39:34Z",
+                "result": "pass",
+                "checks": {
+                  "default_sender_visible": true
+                }
+              },
+              {
+                "action": "inspect_intake_rules",
+                "observed_at": "2026-11-06T02:39:35Z",
+                "result": "pass",
+                "checks": {
+                  "intake_rules_visible": true
+                }
+              },
+              {
+                "action": "inspect_organization_permission_entry",
+                "observed_at": "2026-11-06T02:39:36Z",
+                "result": "pass",
+                "checks": {
+                  "organization_permission_entry_visible": true
+                }
+              },
+              {
+                "action": "verify_legacy_enterprise_ui_absent",
+                "observed_at": "2026-11-06T02:39:37Z",
+                "result": "pass",
+                "checks": {
+                  "enterprise_tab_absent": true,
+                  "wecom_app_absent": true,
+                  "robot_section_absent": true,
+                  "legacy_employee_count_absent": true
+                }
+              },
+              {
+                "action": "leave_without_saving",
+                "observed_at": "2026-11-06T02:39:38Z",
+                "result": "pass",
+                "checks": {
+                  "save_clicked": false,
+                  "carrier_api_clicked": false,
+                  "organization_sync_clicked": false,
+                  "service_state_change_clicked": false
+                }
+              }
+            ],
+            "clicked_save": false,
+            "clicked_carrier_api": false,
+            "clicked_organization_sync": false,
+            "clicked_service_control": false,
+            "business_write_requests_observed": [],
+            "result": "pass",
+            "attachments": [
+              {
+                "path": "wp40-shipping-settings-consolidation/operator-replay/01-open-carrier-9391710c.png",
+                "sha256": "50c01087237619645cc5f0d19a66f743710d1fe9dd010530a4318d0aba256793"
+              },
+              {
+                "path": "wp40-shipping-settings-consolidation/operator-replay/02-billing-service-9391710c.png",
+                "sha256": "1000ce70659009a595ceb6444928a7eac97f762fdf84a3d1517411538793035e"
+              },
+              {
+                "path": "wp40-shipping-settings-consolidation/operator-replay/03-default-sender-9391710c.png",
+                "sha256": "6c455012632cb2ae09a19ec835aca4055dd0c5be0d9fffab5183875a3373d024"
+              },
+              {
+                "path": "wp40-shipping-settings-consolidation/operator-replay/04-intake-organization-9391710c.png",
+                "sha256": "8e1f26ae9a47a4a087f6d2a1113a2246ca4008c4ef22b15749e28d3bb782c87a"
+              },
+              {
+                "path": "wp40-shipping-settings-consolidation/operator-replay/05b-organization-permission-expanded-9391710c.png",
+                "sha256": "d8ee38aca39f36f015b580df6a9deb0f8cfeeeb7f797e4d226524d36b498421e"
+              },
+              {
+                "path": "wp40-shipping-settings-consolidation/operator-replay/ax-9391710c.txt",
+                "sha256": "d1261b5e03d0ffa19ad2522bd5333d81b0df4d5a345def0d46bf2ce217e5c967"
+              },
+              {
+                "path": "wp40-shipping-settings-consolidation/operator-replay/07-left-without-saving-9391710c.png",
+                "sha256": "0b0a9e4dfcdb93a39dc175ff4ab2fd5d739c458b2344f202c8850f625b86bf39"
+              }
+            ],
+            "payload_regression": {
+              "contract_version": "f054-shipping-settings-v1",
+              "source": "local_target_payload_regression",
+              "commit": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+              "result": "pass",
+              "production_requests_exercised": false,
+              "test_file": "product-truth/product-code/app/shipping/config-drawer.test.tsx",
+              "test_file_sha256": "7ce79d76886ed6c5e54f5e9546e55850c40f5ba8d7483d4b03da61fb22868284",
+              "exit_code": 0,
+              "timeout": false,
+              "assertions": [
+                "one_page_merged",
+                "legacy_wecom_ui_removed",
+                "no_business_mutation"
+              ],
+              "test_log": {
+                "path": "wp40-shipping-settings-consolidation/operator-replay/target-payload-regression-9391710c.log",
+                "sha256": "97845639e0f2bbcfbc40d3c64b360382db203702cdfd12899f3c5f2e1a25c1c5"
+              }
+            }
+          },
+          "attachments": [
+            {
+              "path": "production-runtime-verifier/operator-01-open-carrier-9391710c.png",
+              "sha256": "50c01087237619645cc5f0d19a66f743710d1fe9dd010530a4318d0aba256793"
+            },
+            {
+              "path": "production-runtime-verifier/operator-02-billing-service-9391710c.png",
+              "sha256": "1000ce70659009a595ceb6444928a7eac97f762fdf84a3d1517411538793035e"
+            },
+            {
+              "path": "production-runtime-verifier/operator-03-default-sender-9391710c.png",
+              "sha256": "6c455012632cb2ae09a19ec835aca4055dd0c5be0d9fffab5183875a3373d024"
+            },
+            {
+              "path": "production-runtime-verifier/operator-04-intake-organization-9391710c.png",
+              "sha256": "8e1f26ae9a47a4a087f6d2a1113a2246ca4008c4ef22b15749e28d3bb782c87a"
+            },
+            {
+              "path": "production-runtime-verifier/operator-05b-organization-permission-expanded-9391710c.png",
+              "sha256": "d8ee38aca39f36f015b580df6a9deb0f8cfeeeb7f797e4d226524d36b498421e"
+            },
+            {
+              "path": "production-runtime-verifier/operator-ax-9391710c.txt",
+              "sha256": "d1261b5e03d0ffa19ad2522bd5333d81b0df4d5a345def0d46bf2ce217e5c967"
+            },
+            {
+              "path": "production-runtime-verifier/operator-07-left-without-saving-9391710c.png",
+              "sha256": "0b0a9e4dfcdb93a39dc175ff4ab2fd5d739c458b2344f202c8850f625b86bf39"
+            },
+            {
+              "path": "production-runtime-verifier/payload-regression.log",
+              "sha256": "97845639e0f2bbcfbc40d3c64b360382db203702cdfd12899f3c5f2e1a25c1c5"
+            }
+          ]
+        }
+      },
+      "shipping_access": {
+        "artifact_path": "production-runtime-verifier/access.json",
+        "sha256": "5eb94346ec69ec16a179fd20fcf2a6d0e5041f4061e6d2305b8c2cedb0c6b7cc",
+        "payload": {
+          "contract_version": "f054-shipping-settings-v1",
+          "environment": "production",
+          "origin": "https://sales.cyanlog.icu",
+          "commit": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+          "deployment_id": "dpl_4JYnTbQVkxKYHmTVF4MDpoVqk6Mp",
+          "source": "live_shipping_settings_verifier",
+          "read_only": true,
+          "anonymous_access_denied": true,
+          "result": "pass",
+          "source_operator_sha256": "118e77996b5e7d13ceceac306e44af4c800edd9334b623a391782532a8ac5cdc",
+          "probes": [
+            {
+              "method": "GET",
+              "path": "/api/shipping/settings",
+              "credentials": "omit",
+              "status": 401,
+              "content_type": "application/json",
+              "error": "Unauthorized",
+              "observed_at": "2026-11-06T03:02:57.717Z",
+              "response_body_sha256": "3be5b8e53fdc8b0a2996590589456db33504977f3d1ce9bb75016c8a707e1a71",
+              "response_artifact": {
+                "path": "production-runtime-verifier/anonymous-0.json",
+                "sha256": "3be5b8e53fdc8b0a2996590589456db33504977f3d1ce9bb75016c8a707e1a71"
+              }
+            }
+          ],
+          "attachments": [
+            {
+              "path": "production-runtime-verifier/anonymous-0.json",
+              "sha256": "3be5b8e53fdc8b0a2996590589456db33504977f3d1ce9bb75016c8a707e1a71"
+            }
+          ]
+        }
+      },
+      "verifier": {
+        "artifact_path": "production-runtime-verifier/verifier.json",
+        "sha256": "cbc368071a295b7d5b7b89951b5686d813a1bf914834a36e0455bee5f5445abf",
+        "payload": {
+          "contract_version": "f054-shipping-settings-v1",
+          "environment": "production",
+          "origin": "https://sales.cyanlog.icu",
+          "commit": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+          "deployment_id": "dpl_4JYnTbQVkxKYHmTVF4MDpoVqk6Mp",
+          "source": "live_shipping_settings_verifier",
+          "read_only": true,
+          "result": "pass",
+          "source_operator_sha256": "118e77996b5e7d13ceceac306e44af4c800edd9334b623a391782532a8ac5cdc",
+          "observed_at": "2026-11-06T03:02:57.718Z",
+          "source_operator_artifact": {
+            "path": "production-runtime-verifier/source-operator.json",
+            "sha256": "118e77996b5e7d13ceceac306e44af4c800edd9334b623a391782532a8ac5cdc"
+          },
+          "probes": [
+            {
+              "method": "GET",
+              "path": "/api/shipping/settings",
+              "credentials": "omit",
+              "status": 401,
+              "content_type": "application/json",
+              "error": "Unauthorized",
+              "observed_at": "2026-11-06T03:02:57.717Z",
+              "response_body_sha256": "3be5b8e53fdc8b0a2996590589456db33504977f3d1ce9bb75016c8a707e1a71",
+              "response_artifact": {
+                "path": "production-runtime-verifier/anonymous-0.json",
+                "sha256": "3be5b8e53fdc8b0a2996590589456db33504977f3d1ce9bb75016c8a707e1a71"
+              }
+            }
+          ],
+          "attachments": [
+            {
+              "path": "production-runtime-verifier/source-operator.json",
+              "sha256": "118e77996b5e7d13ceceac306e44af4c800edd9334b623a391782532a8ac5cdc"
+            },
+            {
+              "path": "production-runtime-verifier/operator-01-open-carrier-9391710c.png",
+              "sha256": "50c01087237619645cc5f0d19a66f743710d1fe9dd010530a4318d0aba256793"
+            },
+            {
+              "path": "production-runtime-verifier/operator-02-billing-service-9391710c.png",
+              "sha256": "1000ce70659009a595ceb6444928a7eac97f762fdf84a3d1517411538793035e"
+            },
+            {
+              "path": "production-runtime-verifier/operator-03-default-sender-9391710c.png",
+              "sha256": "6c455012632cb2ae09a19ec835aca4055dd0c5be0d9fffab5183875a3373d024"
+            },
+            {
+              "path": "production-runtime-verifier/operator-04-intake-organization-9391710c.png",
+              "sha256": "8e1f26ae9a47a4a087f6d2a1113a2246ca4008c4ef22b15749e28d3bb782c87a"
+            },
+            {
+              "path": "production-runtime-verifier/operator-05b-organization-permission-expanded-9391710c.png",
+              "sha256": "d8ee38aca39f36f015b580df6a9deb0f8cfeeeb7f797e4d226524d36b498421e"
+            },
+            {
+              "path": "production-runtime-verifier/operator-ax-9391710c.txt",
+              "sha256": "d1261b5e03d0ffa19ad2522bd5333d81b0df4d5a345def0d46bf2ce217e5c967"
+            },
+            {
+              "path": "production-runtime-verifier/operator-07-left-without-saving-9391710c.png",
+              "sha256": "0b0a9e4dfcdb93a39dc175ff4ab2fd5d739c458b2344f202c8850f625b86bf39"
+            },
+            {
+              "path": "production-runtime-verifier/payload-regression.log",
+              "sha256": "97845639e0f2bbcfbc40d3c64b360382db203702cdfd12899f3c5f2e1a25c1c5"
+            },
+            {
+              "path": "production-runtime-verifier/anonymous-0.json",
+              "sha256": "3be5b8e53fdc8b0a2996590589456db33504977f3d1ce9bb75016c8a707e1a71"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "updatedAt": "2026-11-06T03:03:51.706Z",
+  "releaseControl": {
+    "production_branch": "production",
+    "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+    "production_branch_evidence": {
+      "artifact_path": "wp40-shipping-settings-consolidation/production-branch-before-v3.json",
+      "sha256": "12dcb6d8e10f7e0f14f19d47b2e05de9997ebefd27ac399a64c2b16040f7c9e3",
+      "payload": {
+        "project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "branch": "production",
+        "observed_at": "2026-11-05T14:12:19.863Z",
+        "source": "live-vercel-api",
+        "attachments": [
+          {
+            "path": "vercel-production-verifier/integration_ready/2026-11-05T14-12-19-863Z-8030-project.json",
+            "sha256": "ea54fc0969d194bf58071d41354447c6fc0f9f588be136159884d3e3bec8bfe0"
+          },
+          {
+            "path": "vercel-production-verifier/integration_ready/2026-11-05T14-12-19-863Z-8030-domain.json",
+            "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+          },
+          {
+            "path": "vercel-production-verifier/integration_ready/2026-11-05T14-12-19-863Z-8030-alias.json",
+            "sha256": "d5c40af1f175fbb94e5fb7e6a65867865aab52e85333555f501491c53a424fcb"
+          },
+          {
+            "path": "vercel-production-verifier/integration_ready/2026-11-05T14-12-19-863Z-8030-deployment.json",
+            "sha256": "1f9a99bef7f66a7d0dc6de364adc828b2f699b283ecbab7c010e6a30192b2cc7"
+          }
+        ]
+      }
+    },
+    "production_commit_before": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+    "production_deployment_id_before": "dpl_4JYnTbQVkxKYHmTVF4MDpoVqk6Mp",
+    "production_commit_after": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+    "production_deployment_id_after": "dpl_4JYnTbQVkxKYHmTVF4MDpoVqk6Mp",
+    "production_commit_released": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+    "production_deployment_id_released": "dpl_4JYnTbQVkxKYHmTVF4MDpoVqk6Mp",
+    "production_domain_released": "sales.cyanlog.icu",
+    "production_release_approval_id": "IN-20261105-030",
+    "production_release_clarification_id": "IN-20261105-030",
+    "production_release_scope": "发布WP40寄件设置单页合并候选78f396730c3b4dfc9ed42d75b7516de432e30be5及其必要的交付合同/测试治理变更；保留顺丰连接、月结/服务、默认寄件地址、提报规则和组织权限入口，移除旧企微自建应用、机器人与旧员工范围界面。允许推送并集成main/production、部署现有网站和发布治理记录；正式域名只做页面与组织权限入口的现有Chrome只读复验，不保存配置、不调用顺丰、不写业务数据、不同步或改写组织、不停止服务、不改账号或角色。",
+    "production_release_commit_authorized": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+    "production_release_method": "vercel_git_production_branch",
+    "production_released_at": "2026-11-06T02:07:05Z"
+  },
+  "completionState": "production_released",
+  "gateSnapshots": {
+    "production_released": {
+      "stage": "production_released",
+      "checkedAt": "2026-11-06T03:03:51.687Z",
+      "head": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+      "originMain": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+      "remoteMain": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+      "remoteProduction": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": true,
+      "localAttestationRefOid": "368afb965f88f4607eff129a841f98c40cf2c38f",
+      "remoteAttestationRefOid": "368afb965f88f4607eff129a841f98c40cf2c38f",
+      "remoteSnapshotCheckedAt": "2026-11-06T03:03:41.716Z",
+      "vercelProduction": {
+        "version": 1,
+        "source": "live-vercel-api",
+        "checkedAt": "2026-11-06T03:03:42.200Z",
+        "contract": {
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "projectName": "cyanlog-sales-v3",
+          "rootDirectory": "product-truth/product-code",
+          "domain": "sales.cyanlog.icu",
+          "productionBranch": "production"
+        },
+        "endpoints": {
+          "project": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "domain": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF/domains/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "alias": "/v4/aliases/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "deployment": "/v13/deployments/dpl_4JYnTbQVkxKYHmTVF4MDpoVqk6Mp?teamId=team_xayPRcgRTNOgdPdNf7bOV017"
+        },
+        "project": {
+          "id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "name": "cyanlog-sales-v3",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "rootDirectory": "product-truth/product-code",
+          "productionBranch": "production",
+          "productionDeploymentId": "dpl_4JYnTbQVkxKYHmTVF4MDpoVqk6Mp"
+        },
+        "domain": {
+          "name": "sales.cyanlog.icu",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "verified": true
+        },
+        "alias": {
+          "name": "sales.cyanlog.icu",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "deploymentId": "dpl_4JYnTbQVkxKYHmTVF4MDpoVqk6Mp",
+          "deploymentReferenceId": "dpl_4JYnTbQVkxKYHmTVF4MDpoVqk6Mp",
+          "redirect": null,
+          "deletedAt": null
+        },
+        "deployment": {
+          "id": "dpl_4JYnTbQVkxKYHmTVF4MDpoVqk6Mp",
+          "name": "cyanlog-sales-v3",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "target": "production",
+          "readyState": "READY",
+          "readySubstate": "PROMOTED",
+          "status": "READY",
+          "gitCommitSha": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+          "gitCommitSources": [
+            "gitSource.sha",
+            "meta.githubCommitSha"
+          ]
+        },
+        "remoteProduction": "9391710cc9c499ca6765c6c0cf98a008837f1b12",
+        "raw": {
+          "project": {
+            "artifact_path": "vercel-production-verifier/production_released/2026-11-06T03-03-42-200Z-5507-project.json",
+            "sha256": "ffca2bc7a1c95b947a632feac4e12067ad9143486fb1580b2a57f6b427261d0d"
+          },
+          "domain": {
+            "artifact_path": "vercel-production-verifier/production_released/2026-11-06T03-03-42-200Z-5507-domain.json",
+            "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+          },
+          "alias": {
+            "artifact_path": "vercel-production-verifier/production_released/2026-11-06T03-03-42-200Z-5507-alias.json",
+            "sha256": "5a0d98171a29401bfaa066c48bc273bbbd7e9c7358cefffc824c87ff6ad95f6d"
+          },
+          "deployment": {
+            "artifact_path": "vercel-production-verifier/production_released/2026-11-06T03-03-42-200Z-5507-deployment.json",
+            "sha256": "97c0ad0148a5f9bf9c3a1994f8a5d720551022546c59d23fc58fc33bdcee8896"
+          }
+        }
+      },
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "c9df1bc7e563d9916b4525a5aa067a5c0147ec4e5b1c2b52c53f76db786df895",
+  "sealedAt": "2026-11-06T03:03:51.707Z",
+  "attestationDigest": "2d2f160b94b90b7eef5bf97430f2e8d904bba5ded05e919b012ec2beeec396f7"
+}
