@@ -59,7 +59,7 @@ goal_governance:
     WP51: {name: 来源管理只读诊断基础, primary_goals: [G5, G7, G10], state: parked_reused_by_wp92}
     WP53: {name: 持续同步、变更与恢复验收, primary_goals: [G5, G7, G10], state: waiting_previous_stage}
     WP98: {name: 真实运单结果回填原CRM记录, primary_goals: [], state: queued_goal_registered}
-    WP97: {name: ICU面向CRM的寄件受理网关, primary_goals: [], state: executing_current_batch}
+    WP97: {name: ICU面向CRM的寄件受理网关, primary_goals: [], state: code_green_current_batch}
     WP96: {name: CRM审批寄件字段映射预览, primary_goals: [], state: queued_goal_registered}
     WP95: {name: 寄件信息正确解析与无门牌地址提交, primary_goals: [], state: production_released, closed_scope: "解析与无门牌地址校验；真实履约移交WP99"}
     WP91: {name: 纷享应用配置与通讯录预览, primary_goals: [G5, G7, G10], state: production_released}
@@ -1085,9 +1085,9 @@ requirements:
     monthly_payment_boundary: 普通获授权寄件按票选择企业月结号；不要求成为月结管理员或财务负责人逐票审批；开发者应用授权与账号管理认证不得无证据当作日常寄件前提
     first_release: 寄件先顺丰真实闭环；收件独立覆盖常用快递，每30分钟更新；员工企微身份、60天会话、资料复用与机器人提报/通知分项验收
     goal_layering_status: user_updated_product_goal_scenarios_under_review
-    source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-008 / IN-20260923-009 / IN-20260923-010 / IN-20260923-011 / IN-20261008-009 / IN-20261008-010 / IN-20261008-011 / IN-20261009-001 / IN-20261009-002
+    source: IN-20260911-002 / IN-20260922-008 / IN-20260923-005 / IN-20260923-008 / IN-20260923-009 / IN-20260923-010 / IN-20260923-011 / IN-20261008-009 / IN-20261008-010 / IN-20261008-011 / IN-20261009-001 / IN-20261009-002 / IN-20261106-001 / IN-20261106-004
     status: in_progress
-    execution_status: WP19_wecom_authorized_shipping_intake_executing
+    execution_status: WP97_crm_intake_apl_contract_code_green
     priority: P1
     feature_packet: product-truth/feature-packets/F054-sf-self-service-order.md
     code_locations:
@@ -1097,7 +1097,7 @@ requirements:
       - app/configs
       - lib/shipping
       - supabase/migrations
-    description: WP19实施单企业企微接入和网页/机器人共同成员校验，寄件页不另建人员部门或角色管理；WP35销售提报体验候选保留，生产是否发布以精确SHA运行证据为准。操作员左栏批量解析纠错后只建待审核工单；员工提报页仅当前企业有效且符合既有范围的成员可用，无需另注册系统账号，提交进入中栏，销售本人为实际寄件人及工单归属人，资料持久化带入且确认时不得被公司默认覆盖。只有中栏运营逐票核对后的批量确认触发顺丰下单/叫件，右栏追踪；出号回填原工单并按原提报人关系回传，通知失败只重发通知，60天会话仍需持续核对成员状态，个人资料复用；整体目标纳入企微身份、机器人提报和单号/变更通知，接入条件及独立批次待评估，不绕过中栏正式确认。连接和月结配置在配置中心维护，服务端OAuth2机器凭据加密保存，无面单打印或新增审批系统。
+    description: WP19实施单企业企微接入和网页/机器人共同成员校验，寄件页不另建人员部门或角色管理；WP35销售提报体验候选保留，生产是否发布以精确SHA运行证据为准。操作员左栏批量解析纠错后只建待审核工单；员工提报页仅当前企业有效且符合既有范围的成员可用，无需另注册系统账号，提交进入中栏，销售本人为实际寄件人及工单归属人，资料持久化带入且确认时不得被公司默认覆盖。只有中栏运营逐票核对后的批量确认触发顺丰下单/叫件，右栏追踪；出号回填原工单并按原提报人关系回传，通知失败只重发通知，60天会话仍需持续核对成员状态，个人资料复用；整体目标纳入企微身份、机器人提报和单号/变更通知，接入条件及独立批次待评估，不绕过中栏正式确认。连接和月结配置在配置中心维护，服务端OAuth2机器凭据加密保存，无面单打印或新增审批系统。WP97 APL薄调用合同要求精确审批实例/记录/明细/任务身份、租户映射、只读预检后幂等受理、确定性raw body与服务端签名；生产APL配置、真实申请人和承运商调用另行验收。
 
 # Maintained PRD index
 sf_self_service_order_prd:

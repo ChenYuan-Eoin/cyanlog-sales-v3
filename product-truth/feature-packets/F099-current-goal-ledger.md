@@ -2,9 +2,17 @@
 
 ## 2026-11-06 ICU 侧先行：CRM/APL 受理网关（IN-20261106-001）
 
-用户明确纠正排期：不再等待组织、SSO 或全量 SOP 完成后才验证纷享，先完成 ICU 侧可被 APL 安全调用的受理能力。WP97 已于 2026-11-06 在 `0e3687ceb0f34320e8baf80860b65446a68634d8` 达到 `code_green`；当前按队列返回唯一 Active WP92，WP97 作为 Next 保留。组织目录未完成的真实事实不变。WP97 的本地代码证据不等于 APL、Preview、生产发布、真实顺丰或回写已完成。
+用户明确纠正排期：不再等待组织、SSO 或全量 SOP 完成后才验证纷享，先完成 ICU 侧可被 APL 安全调用的受理能力。WP97 的服务端受理底座已于 2026-11-06 在 `0e3687ceb0f34320e8baf80860b65446a68634d8` 达到 `code_green`；按 IN-20261106-004，当前唯一 Active 回到 WP97，补完 APL 薄调用合同，WP92 暂存为 Next。组织目录未完成的真实事实不变。WP97 的本地代码证据不等于 APL、Preview、生产发布、真实顺丰或回写已完成。
 
 本批只做服务端契约和隔离验证：已配置客户端使用 HMAC 调用 preflight 与 create-pending；签名映射决定组织，请求不能自选任意租户；申请人的企业、流程实例、对象、记录、寄件明细、任务/阶段、修订共同组成稳定事件身份。预检只读并返回缺项；受理只创建一张 `intake_source=crm` 的 `awaiting_confirmation` 工单，重复请求返回原单，内容变化拒绝。本批不得调用顺丰、写回纷享或发布生产。
+
+APL 薄调用代码以可复用映射合同实现，不写一次性迁移脚本。调用方只能提交精确的 `workflowInstanceId + recordId + shipmentDetailId + taskId`；企业、对象、阶段和修订由租户映射及 `Fx.bpm/Fx.object` 精确回读派生。流程缺失、重复、状态不符、任务身份不符、系统执行人 `-10000`、申请人/任务/记录不匹配、对象不属于业务记录或映射字段缺失时，均在 HTTP 调用前失败关闭。真实申请人来自审批实例和任务，只使用 `Fx.http` 执行身份发起读取与 ICU 调用。
+
+同一事件只序列化一次为确定性的规范 JSON；这份 raw body 原样用于预检和创建，并以 `timestamp + method + pathname + rawBody` 分别签名。创建模式必须先取得 `preflight.ready=true`、无缺项且事件身份完全一致，才允许调用受理；`429/5xx` 才做受控重试，`Fx.http` 原生重试固定关闭，重试仍复用同一 raw body 并只重新签名。成功回执必须是 `awaiting_confirmation` 且 `waybill=null`，不得把 ICU 受理描述成顺丰已下单。
+
+2026-11-06 提交前代码证据：APL 目标测试 8/8 通过；全量测试 440 个文件通过、1 个跳过，3308 项通过、5 项跳过；lint、typecheck、build 通过。该全量测试采用最多 2 个 worker；首轮高并发运行曾使 3 个既有 PGlite 用例触及 5 秒超时，单文件顺序重跑分别 14/14、7/7 通过，因此保留两类证据，不能抹去首轮失败。精确提交 SHA 的 `code_green` 仍以提交后门禁和 delivery 记录为准。
+
+本批仍未证明：租户实际对象/字段 API 名与审批任务/阶段映射；目标审批流程是否具备可执行 APL 的节点；生产 `Fx.http` 是否按 `application/json` 原样传送 raw body；APL 配置、真实申请人回调、生产受理、Preview、Production 或顺丰履约。以上任一未知均不得由本地 fake runtime 测试替代。
 
 后续顺序固定为：ICU受理底座 → APL薄调用层 → 用户现有顺丰账号受控确认/真实下单 → 单号写回 → 组织与逐人授权推广。shared_executor 只作为试运行模式，真实申请人始终独立记录。
 
