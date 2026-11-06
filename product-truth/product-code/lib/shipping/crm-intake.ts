@@ -83,15 +83,21 @@ const clientsSchema = z.array(z.object({
 })
 
 export type CrmMissingField = { field: string; message: string; issue: string }
+export type CrmIntakeSourceEvidence = {
+  event: CrmEventIdentity | null
+  applicant: CrmIntakePayload['applicant'] | null
+  customer: CrmIntakePayload['customer'] | null
+}
 export type CrmIntakeInspection =
-  | { ok: true; payload: CrmIntakePayload; missing: [] }
-  | { ok: false; payload: null; missing: CrmMissingField[] }
+  | { ok: true; payload: CrmIntakePayload; source: CrmIntakeSourceEvidence; missing: [] }
+  | { ok: false; payload: null; source: CrmIntakeSourceEvidence; missing: CrmMissingField[] }
 
 export type CrmIntakePreflight = {
   ready: boolean
   organization: { orgId: string; integrationClientId: string }
   event: CrmEventIdentity
   eventKey: string
+  source: CrmIntakeSourceEvidence & { eventKey: string | null }
   normalized: null | {
     applicant: CrmIntakePayload['applicant']
     customer: CrmIntakePayload['customer']
@@ -215,6 +221,14 @@ export function inspectCrmIntakeRequest(rawBody: string): CrmIntakeInspection {
   } catch {
     throw new CrmIntakeError(400, 'CRM_REQUEST_INVALID_JSON', 'CRM 请求不是有效 JSON。')
   }
+  const record = typeof decoded === 'object' && decoded !== null && !Array.isArray(decoded)
+    ? decoded as Record<string, unknown>
+    : null
+  const source: CrmIntakeSourceEvidence = {
+    event: crmEventIdentitySchema.safeParse(record?.event).data || null,
+    applicant: crmApplicantSchema.safeParse(record?.applicant).data || null,
+    customer: crmCustomerSchema.safeParse(record?.customer).data || null,
+  }
   const parsed = crmIntakeBodySchema.safeParse(decoded)
   if (!parsed.success) {
     const missing = zodMissing('', parsed.error)
@@ -224,9 +238,9 @@ export function inspectCrmIntakeRequest(rawBody: string): CrmIntakeInspection {
     if (shipment && typeof shipment === 'object' && !shipment.serviceId && !shipment.servicePreference && !missing.some(item => item.field === 'shipment.service')) {
       missing.push({ field: 'shipment.service', message: '请选择寄件服务', issue: 'custom' })
     }
-    return { ok: false, payload: null, missing }
+    return { ok: false, payload: null, source, missing }
   }
-  return { ok: true, payload: parsed.data, missing: [] }
+  return { ok: true, payload: parsed.data, source, missing: [] }
 }
 
 export function crmEventKey(client: CrmIntakeClient, event: CrmEventIdentity) {
@@ -261,6 +275,7 @@ export async function preflightCrmIntake(client: CrmIntakeClient, payload: CrmIn
       organization: { orgId: client.orgId, integrationClientId: client.clientId },
       event: payload.event,
       eventKey,
+      source: { event: payload.event, applicant: payload.applicant, customer: payload.customer, eventKey },
       normalized: null,
       missing,
     }
@@ -271,6 +286,7 @@ export async function preflightCrmIntake(client: CrmIntakeClient, payload: CrmIn
     organization: { orgId: client.orgId, integrationClientId: client.clientId },
     event: payload.event,
     eventKey,
+    source: { event: payload.event, applicant: payload.applicant, customer: payload.customer, eventKey },
     normalized: {
       applicant: payload.applicant,
       customer: payload.customer,
@@ -288,7 +304,30 @@ export async function preflightCrmIntake(client: CrmIntakeClient, payload: CrmIn
   }
 }
 
-function shippingInputFromPreflight(payload: CrmIntakePayload, preflight: CrmIntakePreflight): ShippingInput {
+async function preflightCrmIntakeInspection(client: CrmIntakeClient, inspection: CrmIntakeInspection): Promise<CrmIntakePreflight> {
+  if (inspection.ok) return preflightCrmIntake(client, inspection.payload)
+
+  const event = inspection.source.event
+  if (event) assertEnterpriseScope(client, event)
+  const eventKey = event ? crmEventKey(client, event) : null
+  return {
+    ready: false,
+    organization: { orgId: client.orgId, integrationClientId: client.clientId },
+    event: event || {
+      enterpriseId: '', workflowInstanceId: '', objectApiName: '', recordId: '', shipmentDetailId: '', taskId: '', stageId: '', revisionId: '',
+    },
+    eventKey: eventKey || '',
+    source: { ...inspection.source, eventKey },
+    normalized: null,
+    missing: inspection.missing,
+  }
+}
+
+export async function preflightCrmIntakeRequest(client: CrmIntakeClient, rawBody: string): Promise<CrmIntakePreflight> {
+  return preflightCrmIntakeInspection(client, inspectCrmIntakeRequest(rawBody))
+}
+
+function shippingInputFromPreflight(preflight: CrmIntakePreflight): ShippingInput {
   if (!preflight.ready || !preflight.normalized) throw new CrmIntakeIncompleteError(preflight)
   const normalized = preflight.normalized
   return {
@@ -339,16 +378,7 @@ async function existingReceipt(orgId: string, event: { payload_hash: string; shi
 export async function createCrmIntake(client: CrmIntakeClient, rawBody: string): Promise<CrmIntakeReceipt> {
   const inspection = inspectCrmIntakeRequest(rawBody)
   if (!inspection.ok) {
-    throw new CrmIntakeIncompleteError({
-      ready: false,
-      organization: { orgId: client.orgId, integrationClientId: client.clientId },
-      event: {
-        enterpriseId: '', workflowInstanceId: '', objectApiName: '', recordId: '', shipmentDetailId: '', taskId: '', stageId: '', revisionId: '',
-      },
-      eventKey: '',
-      normalized: null,
-      missing: inspection.missing,
-    })
+    throw new CrmIntakeIncompleteError(await preflightCrmIntakeInspection(client, inspection))
   }
   const payload = inspection.payload
   assertEnterpriseScope(client, payload.event)
@@ -366,7 +396,7 @@ export async function createCrmIntake(client: CrmIntakeClient, rawBody: string):
 
   const preflight = await preflightCrmIntake(client, payload)
   if (!preflight.ready || !preflight.normalized) throw new CrmIntakeIncompleteError(preflight)
-  const input = shippingInputFromPreflight(payload, preflight)
+  const input = shippingInputFromPreflight(preflight)
   const receiptToken = createShipmentReceiptToken(eventKey)
   const orderNo = newShippingOrderNo()
   const { data, error } = await supabaseAdmin.rpc('create_shipping_crm_intake', {

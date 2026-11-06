@@ -308,7 +308,7 @@
 
 请求正文只接受 `event`、`applicant`、`customer`、`shipment`。事件身份由 `enterpriseId + workflowInstanceId + objectApiName + recordId + shipmentDetailId + taskId + stageId + revisionId` 稳定组成；原始申请人、客户、业务对象、子行、任务/阶段、修订、事件键和当次原始请求体分别落表，不把来源证据只塞进订单 JSON。工单保存真实申请人快照，销售引用取 CRM employee ID，客户引用取 CRM account ID。
 
-预检结构不完整时返回 `200 + ready:false + missing[]`；受理结构或组织默认值不完整时返回 `422 + CRM_INTAKE_INCOMPLETE`；签名错误、超时、未知客户端或租户不匹配在写入前拒绝。`202` 只表示 ICU 已受理并生成待确认工单，`waybill` 必为 `null`，不得表述为顺丰已下单或已出号。
+预检结构不完整时返回 `200 + ready:false + missing[]`；只要事件身份、申请人和客户本身已通过校验，即使寄件字段缺项，也必须继续返回这些来源证据及稳定事件键，不能把已核验来源清空。签名错误、超时、未知客户端或租户不匹配在字段完整性处理和任何写入前拒绝。受理结构或组织默认值不完整时返回 `422 + CRM_INTAKE_INCOMPLETE`。`202` 只表示 ICU 已受理并生成待确认工单，`waybill` 必为 `null`，不得表述为顺丰已下单或已出号。
 
 APL 薄调用本批作为 WP97 代码合同推进，但不配置或运行生产 APL：调用输入只接受精确流程实例、业务记录、寄件明细和任务；企业、对象、阶段和修订由租户映射与官方 `Fx.bpm/Fx.object` 回读派生。缺失、歧义、过期、执行人伪作、任务/申请人/记录不匹配或字段未映射必须在任何 HTTP 调用前失败关闭。真实申请人独立于 `Fx.http` 执行身份，`-10000` 不得成为申请人。
 

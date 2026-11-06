@@ -9,6 +9,7 @@ import {
   crmIntakeBodySchema,
   inspectCrmIntakeRequest,
   preflightCrmIntake,
+  preflightCrmIntakeRequest,
   type CrmIntakeClient,
 } from './crm-intake'
 
@@ -149,6 +150,46 @@ describe('CRM intake preflight', () => {
     const result = await preflightCrmIntake(client, readyInput)
     expect(result.ready).toBe(false)
     expect(result.missing.map(item => item.field)).toEqual(expect.arrayContaining(['sender.name', 'sender.phone', 'sender.address']))
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('keeps validated CRM source evidence when only shipment fields are incomplete', async () => {
+    const { phone: _phone, ...recipient } = body.shipment.recipient
+    const { servicePreference: _servicePreference, ...shipment } = body.shipment
+    const result = await preflightCrmIntakeRequest(client, rawBody({ ...body, shipment: { ...shipment, recipient } }))
+
+    expect(result).toMatchObject({
+      ready: false,
+      organization: { orgId: client.orgId, integrationClientId: client.clientId },
+      event: body.event,
+      eventKey: crmEventKey(client, body.event),
+      source: {
+        event: body.event,
+        eventKey: crmEventKey(client, body.event),
+        applicant: body.applicant,
+        customer: body.customer,
+      },
+      normalized: null,
+      missing: expect.arrayContaining([
+        expect.objectContaining({ field: 'shipment.recipient.phone' }),
+        expect.objectContaining({ field: 'shipment.service' }),
+      ]),
+    })
+    expect(mocks.options).not.toHaveBeenCalled()
+    expect(mocks.sender).not.toHaveBeenCalled()
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('rejects an enterprise mismatch before field-completeness processing', async () => {
+    const { phone: _phone, ...recipient } = body.shipment.recipient
+    const mismatched = {
+      ...body,
+      event: { ...body.event, enterpriseId: 'ea-other' },
+      shipment: { ...body.shipment, recipient },
+    }
+    await expect(preflightCrmIntakeRequest(client, rawBody(mismatched))).rejects.toMatchObject({ status: 403, code: 'CRM_ENTERPRISE_MISMATCH' })
+    expect(mocks.options).not.toHaveBeenCalled()
+    expect(mocks.sender).not.toHaveBeenCalled()
     expect(mocks.rpc).not.toHaveBeenCalled()
   })
 

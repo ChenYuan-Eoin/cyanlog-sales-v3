@@ -3,10 +3,8 @@ import { NextResponse } from 'next/server'
 import {
   CrmIntakeError,
   authenticateCrmRequest,
-  inspectCrmIntakeRequest,
-  preflightCrmIntake,
+  preflightCrmIntakeRequest,
   readCrmRequestBody,
-  type CrmIntakePreflight,
 } from '@/lib/shipping/crm-intake'
 
 export const runtime = 'nodejs'
@@ -22,20 +20,7 @@ export async function POST(req: NextRequest) {
   try {
     const rawBody = await readCrmRequestBody(req)
     const client = authenticateCrmRequest({ method: req.method, pathname: req.nextUrl.pathname, headers: req.headers, rawBody })
-    const inspection = inspectCrmIntakeRequest(rawBody)
-    let result: CrmIntakePreflight
-    if (inspection.ok) {
-      result = await preflightCrmIntake(client, inspection.payload)
-    } else {
-      result = {
-        ready: false,
-        organization: { orgId: client.orgId, integrationClientId: client.clientId },
-        event: { enterpriseId: '', workflowInstanceId: '', objectApiName: '', recordId: '', shipmentDetailId: '', taskId: '', stageId: '', revisionId: '' },
-        eventKey: '',
-        normalized: null,
-        missing: inspection.missing,
-      }
-    }
+    const result = await preflightCrmIntakeRequest(client, rawBody)
     return NextResponse.json(result, { status: 200, headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     return errorResponse(error)
