@@ -1,6 +1,7 @@
 // REQ: F003 / WP50. Fxiaoke is a thin provider adapter over the shared connection service.
 import {
   loadOrganizationConnection,
+  loadVerifiedConfigurationForReadOnlyMetadata,
   loadVerifiedConnection,
   previewOrganizationConnection,
   saveOrganizationConnection,
@@ -65,6 +66,21 @@ export async function saveConnection(orgId: string, actorId: string, raw: unknow
 export async function loadOAuthCredentials(orgId: string): Promise<Credentials> {
   try {
     const connection = await loadVerifiedConnection({ orgId, provider: 'fxiaoke' })
+    return connection.credentials as unknown as Credentials
+  } catch (error) {
+    return translate(error)
+  }
+}
+
+// Narrow server-only credential source for an administrator-triggered, read-only
+// object/field schema inspection. It does not activate or synchronize the source.
+export async function loadSavedCredentialsForMetadataInspection(orgId: string): Promise<Credentials> {
+  try {
+    const connection = await loadVerifiedConfigurationForReadOnlyMetadata({
+      orgId,
+      provider: 'fxiaoke',
+      purpose: 'read_only_metadata_inspection',
+    })
     return connection.credentials as unknown as Credentials
   } catch (error) {
     return translate(error)

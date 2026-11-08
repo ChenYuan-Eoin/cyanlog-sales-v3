@@ -35,10 +35,18 @@ export function validRequest(input) {
         && body.redirectUrl === 'https://sales.cyanlog.icu/api/auth/fxiaoke/callback'
         && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(url.searchParams.get('thirdTraceId'));
     }
-    if (url.pathname !== '/cgi/crm/v2/data/query') return false;
+    if (!['/cgi/crm/v2/data/query','/cgi/crm/v2/object/list','/cgi/crm/v2/object/describe'].includes(url.pathname)) return false;
     if (!exactKeys(input.headers, ['content-type','authorization','x-fs-ea','x-fs-userid'])
       || input.headers['content-type'] !== 'application/json' || !secret(input.headers.authorization)
       || !input.headers.authorization.startsWith('Bearer ') || !identifier(input.headers['x-fs-ea']) || !identifier(input.headers['x-fs-userid'])) return false;
+    if (url.pathname === '/cgi/crm/v2/object/list') return exactKeys(body, []);
+    if (url.pathname === '/cgi/crm/v2/object/describe') {
+      return exactKeys(body, ['data'])
+        && exactKeys(body.data, ['apiName','includeDetail'])
+        && typeof body.data.apiName === 'string'
+        && /^[A-Za-z][A-Za-z0-9_]*$/.test(body.data.apiName)
+        && body.data.includeDetail === false;
+    }
     const previewEnvelope = exactKeys(body, ['convertUserId','returnTotalNum','data']) && body.returnTotalNum === 1;
     const identityEnvelope = exactKeys(body, ['convertUserId','data']);
     if ((!previewEnvelope && !identityEnvelope) || body.convertUserId !== false || !exactKeys(body.data, ['dataObjectApiName','search_query_info'])) return false;

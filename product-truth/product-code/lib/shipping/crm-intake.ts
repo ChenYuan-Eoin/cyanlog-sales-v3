@@ -7,6 +7,12 @@ import { createShipmentReceiptToken, newShippingOrderNo, nextShippingReviewAt } 
 import { loadDefaultShippingSender } from './sender-profile'
 import { loadIntakeOptionsForOrg } from './intake-options'
 import type { Contact, ShipmentOrderStatus, ShippingInput, ShippingPayment } from './types'
+import {
+  canonicalJson,
+  canonicalJsonText,
+  CRM_JSON_CANONICALIZATION_HEADER,
+  CRM_JSON_CANONICALIZATION_V1,
+} from './fxiaoke-apl/canonical-json'
 
 export const CRM_INTAKE_MAX_CLOCK_SKEW_SECONDS = 5 * 60
 export const CRM_INTAKE_MAX_BODY_BYTES = 32 * 1024
@@ -174,6 +180,10 @@ export function crmSignaturePayload(timestamp: string, method: string, pathname:
   return `${timestamp}\n${method.toUpperCase()}\n${pathname}\n${rawBody}`
 }
 
+export function crmCanonicalSignaturePayload(timestamp: string, method: string, pathname: string, rawBody: string) {
+  return `${CRM_JSON_CANONICALIZATION_V1}\n${timestamp}\n${method.toUpperCase()}\n${pathname}\n${canonicalJsonText(rawBody)}`
+}
+
 export function createCrmSignature(secret: string, timestamp: string, method: string, pathname: string, rawBody: string) {
   return createHmac('sha256', secret).update(crmSignaturePayload(timestamp, method, pathname, rawBody)).digest('hex')
 }
@@ -190,6 +200,7 @@ export function authenticateCrmRequest(args: {
   const clientId = args.headers.get(CRM_CLIENT_HEADER)?.trim()
   const timestamp = args.headers.get(CRM_TIMESTAMP_HEADER)?.trim() || ''
   const provided = (args.headers.get(CRM_SIGNATURE_HEADER)?.trim() || '').replace(/^sha256=/i, '').toLowerCase()
+  const canonicalization = args.headers.get(CRM_JSON_CANONICALIZATION_HEADER)?.trim() || ''
   if (!clientId) throw new CrmIntakeError(401, 'CRM_CLIENT_MISSING', '缺少 CRM 客户端身份。')
   const client = clients.find(item => item.clientId === clientId)
   if (!client) throw new CrmIntakeError(401, 'CRM_CLIENT_UNKNOWN', 'CRM 客户端身份不受信任。')
@@ -199,7 +210,22 @@ export function authenticateCrmRequest(args: {
     throw new CrmIntakeError(401, 'CRM_TIMESTAMP_STALE', 'CRM 请求已超时，请重新签名。')
   }
   if (!/^[a-f0-9]{64}$/.test(provided)) throw new CrmIntakeError(401, 'CRM_SIGNATURE_INVALID', 'CRM 请求签名无效。')
-  const expected = createCrmSignature(client.secret, timestamp, args.method, args.pathname, args.rawBody)
+  if (canonicalization && canonicalization !== CRM_JSON_CANONICALIZATION_V1) {
+    throw new CrmIntakeError(401, 'CRM_CANONICALIZATION_INVALID', 'CRM 请求规范化协议不受支持。')
+  }
+  let signatureBody: string
+  try {
+    signatureBody = canonicalization === CRM_JSON_CANONICALIZATION_V1
+      ? canonicalJsonText(args.rawBody)
+      : args.rawBody
+  } catch {
+    throw new CrmIntakeError(400, 'CRM_REQUEST_INVALID_JSON', 'CRM 请求不是有效 JSON。')
+  }
+  const expected = createHmac('sha256', client.secret)
+    .update(canonicalization === CRM_JSON_CANONICALIZATION_V1
+      ? crmCanonicalSignaturePayload(timestamp, args.method, args.pathname, args.rawBody)
+      : crmSignaturePayload(timestamp, args.method, args.pathname, signatureBody))
+    .digest('hex')
   if (!timingSafeEqual(Buffer.from(provided, 'hex'), Buffer.from(expected, 'hex'))) {
     throw new CrmIntakeError(401, 'CRM_SIGNATURE_INVALID', 'CRM 请求签名无效。')
   }
@@ -383,7 +409,7 @@ export async function createCrmIntake(client: CrmIntakeClient, rawBody: string):
   const payload = inspection.payload
   assertEnterpriseScope(client, payload.event)
   const eventKey = crmEventKey(client, payload.event)
-  const payloadHash = sha256(rawBody)
+  const payloadHash = sha256(canonicalJson(inspection.payload))
 
   const prior = await supabaseAdmin.from('shipping_crm_intake_events')
     .select('payload_hash,shipping_order_id')

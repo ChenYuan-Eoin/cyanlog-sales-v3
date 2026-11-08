@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
-import { discoverEnterprise, previewDirectory, readEmployeeIdentity } from './client'
+import { discoverEnterprise, inspectObjectMetadata, previewDirectory, readEmployeeIdentity } from './client'
 const credentials = { appId: 'FSAID_test', appSecret: 'test-only-secret', permanentCode: 'test-only-code', expectedEa: 'example', apiUserId: '123' }
 const token = { errorCode: 0, appId: credentials.appId, ea: 'example', openUserId: 'FSCID_test', accessToken: 'test-token' }
 const department = { _id: '100', name: '销售部', parent_id: [], status: 0 }
@@ -197,5 +197,74 @@ describe('Fxiaoke direct directory preview', () => {
   it.each([undefined, null, [], {}, { dataList: null }, { dataList: {} }])('rejects an unverifiable profile response using a fixed safe category: %o', async data => {
     await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(token, { errorCode: 0, data })))
       .rejects.toMatchObject({ code: 'IDENTITY_PROFILE_RESPONSE_INVALID', status: 403 })
+  })
+})
+
+describe('Fxiaoke read-only object metadata', () => {
+  it('lists object schema without exposing provider credentials or tokens', async () => {
+    const request = fixture(token, {
+      errorCode: 0,
+      data: { objects: [
+        { describeApiName: 'ApprovalObj', describeDisplayName: '寄件审批', defineType: 'custom', isActive: true },
+        { describeApiName: 'AccountObj', describeDisplayName: '客户', defineType: 'standard', isActive: true },
+      ] },
+    })
+    const result = await inspectObjectMetadata(credentials, { operation: 'list' }, request)
+
+    expect(result).toEqual({
+      ea: 'example',
+      operation: 'list',
+      objects: [
+        { apiName: 'AccountObj', displayName: '客户', defineType: 'standard', active: true },
+        { apiName: 'ApprovalObj', displayName: '寄件审批', defineType: 'custom', active: true },
+      ],
+    })
+    expect(request.mock.calls[1][1]?.headers).toMatchObject({
+      authorization: 'Bearer test-token',
+      'x-fs-ea': 'example',
+      'x-fs-userid': '123',
+    })
+    expect(JSON.parse(String(request.mock.calls[1][1]?.body))).toEqual({})
+    expect(JSON.stringify(result)).not.toContain('test-token')
+    expect(JSON.stringify(result)).not.toContain(credentials.appSecret)
+  })
+
+  it('reads one exact object description with includeDetail disabled', async () => {
+    const request = fixture(token, {
+      errorCode: 0,
+      data: { describe: {
+        describeApiName: 'ApprovalObj',
+        describeDisplayName: '寄件审批',
+        defineType: 'custom',
+        isActive: true,
+        fields: [{ apiName: 'recipient_name__c', label: '收件人', type: 'text' }],
+      } },
+    })
+    const result = await inspectObjectMetadata(credentials, { operation: 'describe', objectApiName: 'ApprovalObj' }, request)
+
+    expect(result).toMatchObject({
+      ea: 'example',
+      operation: 'describe',
+      object: { apiName: 'ApprovalObj', displayName: '寄件审批', active: true },
+      fields: [{ apiName: 'recipient_name__c', label: '收件人' }],
+    })
+    expect(JSON.parse(String(request.mock.calls[1][1]?.body))).toEqual({
+      data: { apiName: 'ApprovalObj', includeDetail: false },
+    })
+  })
+
+  it('rejects a different tenant before object metadata is requested', async () => {
+    const request = fixture({ ...token, ea: 'another-enterprise' })
+    await expect(inspectObjectMetadata(credentials, { operation: 'list' }, request))
+      .rejects.toMatchObject({ code: 'TENANT_MISMATCH' })
+    expect(request).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not reflect provider error text or credential values', async () => {
+    const request = fixture({ errorCode: 20016, errorMessage: credentials.appSecret })
+    await expect(inspectObjectMetadata(credentials, { operation: 'list' }, request))
+      .rejects.toThrow('错误码 20016')
+    await expect(inspectObjectMetadata(credentials, { operation: 'list' }, fixture({ errorCode: 20016, errorMessage: credentials.appSecret })))
+      .rejects.not.toThrow(credentials.appSecret)
   })
 })

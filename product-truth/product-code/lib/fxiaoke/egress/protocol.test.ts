@@ -160,6 +160,21 @@ it('allows only the exact PersonnelObj identity lookup', () => {
   expect(validRequest({ ...query, body: query.body.replace('"field_name":"user_id"','"field_name":"name"') })).toBe(false)
   expect(validRequest({ ...query, body: query.body.replace('"phone"','"password"') })).toBe(false)
 })
+it('allows only exact read-only object metadata requests', () => {
+  const headers = { 'content-type': 'application/json', authorization: 'Bearer fixture-token', 'x-fs-ea': 'enterprise', 'x-fs-userid': '123' }
+  const list = { url: tokenRequest().url.replace('/oauth2.0/token','/cgi/crm/v2/object/list'), headers, body: '{}' }
+  const describe = {
+    url: tokenRequest().url.replace('/oauth2.0/token','/cgi/crm/v2/object/describe'),
+    headers,
+    body: JSON.stringify({ data: { apiName: 'ApprovalObj', includeDetail: false } }),
+  }
+  expect(validRequest(list)).toBe(true)
+  expect(validRequest(describe)).toBe(true)
+  expect(validRequest({ ...list, body: JSON.stringify({ page: 2 }) })).toBe(false)
+  expect(validRequest({ ...describe, body: JSON.stringify({ data: { apiName: 'ApprovalObj', includeDetail: true } }) })).toBe(false)
+  expect(validRequest({ ...describe, body: JSON.stringify({ data: { apiName: '../ApprovalObj', includeDetail: false } }) })).toBe(false)
+  expect(validRequest({ ...describe, url: describe.url.replace('/object/describe','/object/create') })).toBe(false)
+})
 it('caps responses and never serializes provider exceptions', async () => {
   const fetcher = vi.fn().mockResolvedValue(new Response('x'.repeat(MAX_RESPONSE_BYTES + 1)))
   expect(await executeRequest(tokenRequest(), fetcher)).toEqual({ error: 'INVALID_RESPONSE' })

@@ -1,8 +1,9 @@
 // @vitest-environment node
-import { createHash } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   authenticateCrmRequest,
+  crmCanonicalSignaturePayload,
   createCrmIntake,
   createCrmSignature,
   crmEventKey,
@@ -12,6 +13,11 @@ import {
   preflightCrmIntakeRequest,
   type CrmIntakeClient,
 } from './crm-intake'
+import {
+  canonicalJson,
+  CRM_JSON_CANONICALIZATION_HEADER,
+  CRM_JSON_CANONICALIZATION_V1,
+} from './fxiaoke-apl/canonical-json'
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
@@ -95,6 +101,22 @@ describe('CRM server-to-server authentication', () => {
     expect(authenticateCrmRequest({ method: 'POST', pathname: preflightPath, headers: headers(timestamp, `sha256=${signature}`), rawBody: requestBody, now, env })).toEqual(client)
   })
 
+  it('accepts a canonical-map HMAC even when the transport changes key order and whitespace', () => {
+    const reorderedBody = JSON.stringify({
+      shipment: body.shipment,
+      customer: body.customer,
+      applicant: body.applicant,
+      event: body.event,
+    }, null, 2)
+    const signature = createHmac('sha256', client.secret)
+      .update(crmCanonicalSignaturePayload(timestamp, 'POST', preflightPath, reorderedBody))
+      .digest('hex')
+    const canonicalHeaders = headers(timestamp, `sha256=${signature}`)
+    canonicalHeaders.set(CRM_JSON_CANONICALIZATION_HEADER, CRM_JSON_CANONICALIZATION_V1)
+
+    expect(authenticateCrmRequest({ method: 'POST', pathname: preflightPath, headers: canonicalHeaders, rawBody: reorderedBody, now, env })).toEqual(client)
+  })
+
   it('rejects missing, invalid, stale and unknown-client credentials', () => {
     const requestBody = rawBody()
     expect(() => authenticateCrmRequest({ method: 'POST', pathname: preflightPath, headers: new Headers(), rawBody: requestBody, now, env })).toThrow(expect.objectContaining({ status: 401, code: 'CRM_CLIENT_MISSING' }))
@@ -106,6 +128,10 @@ describe('CRM server-to-server authentication', () => {
     const unknownHeaders = headers(timestamp, validSignature)
     unknownHeaders.set('x-shipping-crm-client-id', 'unknown')
     expect(() => authenticateCrmRequest({ method: 'POST', pathname: preflightPath, headers: unknownHeaders, rawBody: requestBody, now, env })).toThrow(expect.objectContaining({ code: 'CRM_CLIENT_UNKNOWN' }))
+
+    const unsupportedHeaders = headers(timestamp, validSignature)
+    unsupportedHeaders.set(CRM_JSON_CANONICALIZATION_HEADER, 'unknown-v2')
+    expect(() => authenticateCrmRequest({ method: 'POST', pathname: preflightPath, headers: unsupportedHeaders, rawBody: requestBody, now, env })).toThrow(expect.objectContaining({ code: 'CRM_CANONICALIZATION_INVALID' }))
   })
 
   it('does not accept a signature for a different method, path or altered body', () => {
@@ -210,7 +236,7 @@ describe('CRM intake preflight', () => {
 
 describe('CRM intake create-pending idempotency', () => {
   it('returns the original order for an exact replay without reading current defaults', async () => {
-    const payloadHash = createHash('sha256').update(rawBody()).digest('hex')
+    const payloadHash = createHash('sha256').update(canonicalJson(body)).digest('hex')
     mocks.from.mockReturnValueOnce(eventLookup({ payload_hash: payloadHash, shipping_order_id: 'order-1' }))
     mocks.from.mockReturnValueOnce(orderLookup({
       id: 'order-1', order_no: 'SO-20261106-ABC12345', status: 'awaiting_confirmation', shipping_waybills: [{ waybill_no: 'SF123' }],
@@ -218,6 +244,29 @@ describe('CRM intake create-pending idempotency', () => {
 
     const receipt = await createCrmIntake(client, rawBody())
     expect(receipt).toMatchObject({ created: false, orderId: 'order-1', orderNo: 'SO-20261106-ABC12345', status: 'awaiting_confirmation' })
+    expect(mocks.options).not.toHaveBeenCalled()
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('treats transport whitespace and key order as the same semantic event payload', async () => {
+    const payloadHash = createHash('sha256').update(canonicalJson(body)).digest('hex')
+    mocks.from.mockReturnValueOnce(eventLookup({ payload_hash: payloadHash, shipping_order_id: 'order-1' }))
+    mocks.from.mockReturnValueOnce(orderLookup({
+      id: 'order-1', order_no: 'SO-20261106-ABC12345', status: 'awaiting_confirmation', shipping_waybills: [],
+    }))
+    const reorderedBody = JSON.stringify({
+      shipment: body.shipment,
+      customer: body.customer,
+      applicant: body.applicant,
+      event: body.event,
+    })
+
+    await expect(createCrmIntake(client, reorderedBody)).resolves.toMatchObject({
+      created: false,
+      orderId: 'order-1',
+      status: 'awaiting_confirmation',
+      waybill: null,
+    })
     expect(mocks.options).not.toHaveBeenCalled()
     expect(mocks.rpc).not.toHaveBeenCalled()
   })

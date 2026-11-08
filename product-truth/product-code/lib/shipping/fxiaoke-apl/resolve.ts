@@ -46,8 +46,12 @@ function parseInstancePage(value: unknown): { total: number; instances: AplWorkf
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new FxiaokeAplContractError('APL_RESPONSE_INVALID', '审批实例返回结构无效')
   }
-  const total = (data as Record<string, unknown>).total
-  const dateList = (data as Record<string, unknown>).dateList
+  const queryResult = (data as Record<string, unknown>).QueryResult
+  if (!queryResult || typeof queryResult !== 'object' || Array.isArray(queryResult)) {
+    throw new FxiaokeAplContractError('APL_RESPONSE_INVALID', '审批实例缺少 QueryResult')
+  }
+  const total = (queryResult as Record<string, unknown>).total
+  const dateList = (queryResult as Record<string, unknown>).dateList
   if (!Number.isInteger(total) || Number(total) < 0 || !Array.isArray(dateList)) {
     throw new FxiaokeAplContractError('APL_RESPONSE_INVALID', '审批实例列表缺失')
   }
@@ -219,7 +223,7 @@ export async function resolveAplIntake(args: {
   const mapping = mappingResult.data
   const source = sourceResult.data
 
-  const taskPromise = Promise.resolve(args.runtime.findTask(source.taskId)).then(
+  const taskPromise = Promise.resolve(args.runtime.findTask(source.taskId, true)).then(
     value => ({ ok: true as const, value }),
     error => ({ ok: false as const, error }),
   )

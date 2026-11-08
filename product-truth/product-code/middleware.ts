@@ -62,6 +62,10 @@ const PUBLIC_API_PATHS = new Set([
   '/api/health',
   '/api/health/flight-ready',
   '/api/cron',
+  // Exact machine-to-machine CRM intake routes. Authentication and tenant
+  // mapping are enforced by the route handlers with an HMAC request contract.
+  '/api/shipping/crm/preflight',
+  '/api/shipping/crm/orders',
   // Scoped machine credential is checked in the handler; no interactive user session.
   '/api/admin/organization-sources/fxiaoke/egress',
 ])

@@ -10,7 +10,7 @@
 #   - 代码中的 REQ 标记必须与之一致
 
 version: "2026-11-04.2"
-last_updated: "2026-11-04T11:07:29Z"
+last_updated: "2026-11-09T05:20:00Z"
 
 goal_governance:
   status: active
@@ -41,29 +41,30 @@ goal_governance:
       password_physical_removal: "后置；过渡退出、替代登录/恢复证据与独立写入批准满足后执行，本批不做。"
       release_boundary: "IN010只绑定旧固定出口产品树；不得继承为新增受限入口/依赖锁/开关启用的发布授权。"
   delivery_outcome_contract:
-    version: "2026-11-06.1"
-    source: "IN-20261028-010 + IN-20261106-001"
-    objective: "销售一次填写真实收件信息，形成归属正确的待确认工单；授权人员确认后顺丰只下单一次，单号回到原销售与原CRM记录。共享组织权限，数据隔离，原单可恢复。"
+    version: "2026-11-09.1"
+    source: "IN-20261028-010 + IN-20261106-001 + IN-20261109-001"
+    objective: "销售一次填写真实收件信息，形成归属正确的待确认工单；授权人员核对具体收寄资料、服务、付款方式和费用并确认后，顺丰只下单一次，单号回到原销售与原CRM记录。共享组织权限，数据隔离，原单可恢复。"
     ledger: product-truth/feature-packets/F099-current-goal-ledger.md
     active: WP97
-    next: WP92
+    next: WP99
+    active_business_chain: [WP97, WP99, WP98]
     directory_stage_sequence: [WP92, WP53]
     directory_stage_authority: IN-20261105-004
     directory_stage_gate: "部门、员工和主属/附属关系整体同步并联动回读；前一批无真实证据，后一批不启动；代码、Preview和部署不能代替业务验收。"
     execution_policy: "目标已建立，按F099顺序保持单一Active，每批一个可演示用户任务；生产实证才可交付，不继承上一WP的发布或数据写入批准。"
     data_boundary: "仅cyanlog-sales-v3；销售填写本票地址；村庄无门牌合法；客户档案已有地址不得覆盖；正式顺丰下单由用户确认。"
-    intake_chain: [WP94, WP92, WP93, WP96, WP97, WP99, WP98]
+    intake_chain: [WP97, WP99, WP98]
     sales_login_chain: [WP91, WP92, WP93, WP94]
     note: "依赖链不等于全部排期；全队列顺序与每项验收以F099为准。"
   work_package_crosswalk:
     WP51: {name: 来源管理只读诊断基础, primary_goals: [G5, G7, G10], state: parked_reused_by_wp92}
     WP53: {name: 持续同步、变更与恢复验收, primary_goals: [G5, G7, G10], state: waiting_previous_stage}
     WP98: {name: 真实运单结果回填原CRM记录, primary_goals: [], state: queued_goal_registered}
-    WP97: {name: ICU面向CRM的寄件受理网关, primary_goals: [], state: code_green_current_batch}
+    WP97: {name: ICU面向CRM的寄件受理网关, primary_goals: [], state: production_pending_real_crm_approval}
     WP96: {name: CRM审批寄件字段映射预览, primary_goals: [], state: queued_goal_registered}
     WP95: {name: 寄件信息正确解析与无门牌地址提交, primary_goals: [], state: production_released, closed_scope: "解析与无门牌地址校验；真实履约移交WP99"}
     WP91: {name: 纷享应用配置与通讯录预览, primary_goals: [G5, G7, G10], state: production_released}
-    WP92: {name: 组织目录整体同步与架构回读, primary_goals: [G5, G7, G10], state: queued_next}
+    WP92: {name: 组织目录整体同步与架构回读, primary_goals: [G5, G7, G10], state: parked_code_green_for_crm_shipping_chain}
     WP93: {name: 统一成员身份与寄件许可, primary_goals: [G5, G7, G10], state: queued}
     WP94: {name: 纷享SSO与联合身份门禁, primary_goals: [G5, G7, G10], state: blocked_by_directory_scope_and_identity_authority}
     WP99: {name: 顺丰真实履约端到端闭环, primary_goals: [G5, G7, G10], state: queued}

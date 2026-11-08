@@ -5,7 +5,7 @@ import { FxiaokeError } from '../contracts'
 const mocks = vi.hoisted(() => ({ factory: vi.fn(), relay: vi.fn() }))
 vi.mock('./server', () => ({ transportForOrganization: mocks.factory }))
 import { directoryTransportForOrganization } from './directory-transport'
-import { previewDirectory } from '../client'
+import { inspectObjectMetadata, previewDirectory } from '../client'
 
 const credentials = { appId: 'app_fixture', appSecret: 'secret', permanentCode: 'permanent', expectedEa: 'company', apiUserId: 'employee' }
 const url = () => `https://open.fxiaoke.com/oauth2.0/token?thirdTraceId=${randomUUID()}`
@@ -30,6 +30,19 @@ it('reads the whole directory directly while the optional host is off, without c
   expect(directory).toMatchObject({ complete: true, applied: false })
   expect(directory.employees[0]).toMatchObject({ id: 'u1', primaryDepartmentId: 'd1' })
   expect(direct).toHaveBeenCalledTimes(3)
+  expect(mocks.factory).not.toHaveBeenCalled()
+})
+
+it('leaves object metadata direct while the optional host is off', async () => {
+  mocks.factory.mockImplementation(() => { throw offline() })
+  const direct = vi.fn().mockResolvedValueOnce(ok()).mockResolvedValueOnce(Response.json({
+    errorCode: 0,
+    data: { objects: [{ describeApiName: 'ApprovalObj', describeDisplayName: '寄件审批', defineType: 'custom', isActive: true }] },
+  }))
+  vi.stubGlobal('fetch', direct)
+  const metadata = await inspectObjectMetadata(credentials, { operation: 'list' }, directoryTransportForOrganization('org-1'))
+  expect(metadata).toMatchObject({ operation: 'list', objects: [{ apiName: 'ApprovalObj' }] })
+  expect(direct).toHaveBeenCalledTimes(2)
   expect(mocks.factory).not.toHaveBeenCalled()
 })
 

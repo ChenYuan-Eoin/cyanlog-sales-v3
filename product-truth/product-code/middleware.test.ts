@@ -218,6 +218,26 @@ describe('middleware public API routing', () => {
     expect(cron.status).toBe(200)
     expect(healthNeighbor.status).toBe(401)
   })
+
+  it('opens only the exact signed CRM intake routes to their handler-level HMAC checks', async () => {
+    const preflight = await middleware(
+      makeRequest('https://sales.cyanlog.icu/api/shipping/crm/preflight', { host: 'sales.cyanlog.icu' }),
+    )
+    const orders = await middleware(
+      makeRequest('https://sales.cyanlog.icu/api/shipping/crm/orders', { host: 'sales.cyanlog.icu' }),
+    )
+    const preflightNeighbor = await middleware(
+      makeRequest('https://sales.cyanlog.icu/api/shipping/crm/preflight-extra', { host: 'sales.cyanlog.icu' }),
+    )
+    const ordersNeighbor = await middleware(
+      makeRequest('https://sales.cyanlog.icu/api/shipping/crm/orders/extra', { host: 'sales.cyanlog.icu' }),
+    )
+
+    expect(preflight.status).toBe(200)
+    expect(orders.status).toBe(200)
+    expect(preflightNeighbor.status).toBe(401)
+    expect(ordersNeighbor.status).toBe(401)
+  })
 })
 
 describe('middleware exact organization authorization', () => {

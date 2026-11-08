@@ -1,5 +1,8 @@
 import { FxiaokeAplContractError } from './contracts'
 
+export const CRM_JSON_CANONICALIZATION_HEADER = 'x-shipping-crm-canonicalization'
+export const CRM_JSON_CANONICALIZATION_V1 = 'crm-json-v1'
+
 export type CanonicalJsonValue =
   | null
   | boolean
@@ -38,4 +41,20 @@ function encode(value: unknown, path: string): string {
  */
 export function canonicalJson(value: CanonicalJsonValue): string {
   return encode(value, '$')
+}
+
+/**
+ * Normalizes a received JSON document to the same semantic byte sequence used
+ * by the Fxiaoke APL map body. Transport whitespace and object key order may
+ * vary, but no field, array order or value can change without changing this
+ * string.
+ */
+export function canonicalJsonText(rawJson: string): string {
+  let decoded: unknown
+  try {
+    decoded = JSON.parse(rawJson)
+  } catch {
+    throw new FxiaokeAplContractError('APL_HTTP_BODY_INVALID', '请求正文不是有效 JSON')
+  }
+  return canonicalJson(decoded as CanonicalJsonValue)
 }

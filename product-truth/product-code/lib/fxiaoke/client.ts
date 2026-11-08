@@ -37,6 +37,125 @@ function optionalText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
+export type FxiaokeObjectSummary = {
+  apiName: string
+  displayName: string
+  defineType: string | null
+  active: boolean | null
+}
+
+export type FxiaokeObjectMetadataResult =
+  | { ea: string; operation: 'list'; objects: FxiaokeObjectSummary[] }
+  | { ea: string; operation: 'describe'; object: FxiaokeObjectSummary; fields: Row[] }
+
+function metadataText(row: Row, keys: string[]) {
+  for (const key of keys) {
+    const value = row[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return null
+}
+
+function metadataBoolean(row: Row, keys: string[]) {
+  for (const key of keys) {
+    const value = row[key]
+    if (typeof value === 'boolean') return value
+  }
+  return null
+}
+
+function objectSummary(value: unknown): FxiaokeObjectSummary {
+  const row = object(value)
+  const apiName = metadataText(row, ['describeApiName', 'apiName', 'objectApiName'])
+  if (!apiName || !/^[A-Za-z][A-Za-z0-9_]*$/.test(apiName)) {
+    throw new FxiaokeError('INVALID_RESPONSE', '纷享对象元数据缺少稳定 API 名称。', 502)
+  }
+  return {
+    apiName,
+    displayName: metadataText(row, ['describeDisplayName', 'displayName', 'label', 'name']) || apiName,
+    defineType: metadataText(row, ['defineType', 'type']),
+    active: metadataBoolean(row, ['isActive', 'active']),
+  }
+}
+
+// Read-only metadata inspection for administrator-controlled integration setup.
+// The result contains schema only; provider tokens and credentials never leave this function.
+export async function inspectObjectMetadata(
+  credentials: Credentials,
+  input: { operation: 'list' } | { operation: 'describe'; objectApiName: string },
+  request: typeof fetch = fetch,
+): Promise<FxiaokeObjectMetadataResult> {
+  const signal = AbortSignal.timeout(30_000)
+  async function post(path: string, body: unknown, headers: Record<string, string> = {}) {
+    let response: Response
+    try {
+      response = await request(`${ORIGIN}${path}?thirdTraceId=${randomUUID()}`, {
+        method: 'POST', redirect: 'error', cache: 'no-store', signal,
+        headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body),
+      })
+    } catch (error) {
+      throw connectionFailure(error)
+    }
+    if (!response.ok) throw new FxiaokeError('PROVIDER_HTTP_ERROR', `纷享接口返回 HTTP ${response.status}，元数据读取未完成。`, 502)
+    let data: Row
+    try { data = object(await response.json()) } catch { throw new FxiaokeError('INVALID_RESPONSE', '纷享接口没有返回有效元数据。', 502) }
+    if (data.errorCode !== 0) {
+      const code = Number.isSafeInteger(data.errorCode) ? String(data.errorCode) : '未知'
+      throw new FxiaokeError('PROVIDER_REJECTED', `纷享拒绝读取对象元数据（错误码 ${code}）。请核对应用权限与固定出口白名单。`, 502)
+    }
+    return data
+  }
+
+  const token = await post('/oauth2.0/token', {
+    appId: credentials.appId,
+    appSecret: credentials.appSecret,
+    permanentCode: credentials.permanentCode,
+    grantType: 'app_secret',
+  })
+  if (token.ea !== credentials.expectedEa || token.appId !== credentials.appId) {
+    throw new FxiaokeError('TENANT_MISMATCH', '授权返回的企业或应用与配置不一致。', 409)
+  }
+  if (typeof token.accessToken !== 'string' || !token.accessToken) {
+    throw new FxiaokeError('INVALID_TOKEN_RESPONSE', '纷享未返回有效的企业授权信息。', 502)
+  }
+  const headers = {
+    authorization: `Bearer ${token.accessToken}`,
+    'x-fs-ea': credentials.expectedEa,
+    'x-fs-userid': credentials.apiUserId,
+  }
+
+  if (input.operation === 'list') {
+    const response = await post('/cgi/crm/v2/object/list', {}, headers)
+    const data = object(response.data)
+    if (!Array.isArray(data.objects)) {
+      throw new FxiaokeError('INVALID_RESPONSE', '纷享对象目录缺少 objects 列表。', 502)
+    }
+    return {
+      ea: credentials.expectedEa,
+      operation: 'list',
+      objects: data.objects.map(objectSummary).sort((a, b) => a.apiName.localeCompare(b.apiName, 'en')),
+    }
+  }
+
+  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(input.objectApiName)) {
+    throw new FxiaokeError('INVALID_INPUT', '业务对象 API 名称格式无效。', 400)
+  }
+  const response = await post('/cgi/crm/v2/object/describe', {
+    data: { apiName: input.objectApiName, includeDetail: false },
+  }, headers)
+  const data = object(response.data)
+  const describe = object(data.describe)
+  if (!Array.isArray(describe.fields)) {
+    throw new FxiaokeError('INVALID_RESPONSE', '纷享对象描述缺少 fields 列表。', 502)
+  }
+  return {
+    ea: credentials.expectedEa,
+    operation: 'describe',
+    object: objectSummary(describe),
+    fields: describe.fields.map(object),
+  }
+}
+
 // Classify known transport failures without returning upstream error text, URLs or credentials.
 function connectionFailure(error: unknown): FxiaokeError {
   if (error instanceof FxiaokeError) return error

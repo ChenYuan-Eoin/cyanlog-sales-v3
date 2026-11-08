@@ -7,7 +7,11 @@ import type {
   FxiaokeAplMapping,
   FxiaokeAplRuntime,
 } from './contracts'
-import { canonicalJson } from './canonical-json'
+import {
+  canonicalJson,
+  CRM_JSON_CANONICALIZATION_HEADER,
+  CRM_JSON_CANONICALIZATION_V1,
+} from './canonical-json'
 import { runFxiaokeAplContract } from './client'
 import { buildAplHttpRequest, crmAplSignaturePayload } from './signature'
 
@@ -130,8 +134,10 @@ function runtime(options: RuntimeOptions = {}) {
     },
   }
   const instanceData = options.instances ?? success({
-    total: 1,
-    dateList: [{ instanceId: 'instance-1', workflowName: '寄件审批', state: 'in_progress', applicantId: '1093' }],
+    QueryResult: {
+      total: 1,
+      dateList: [{ instanceId: 'instance-1', workflowName: '寄件审批', state: 'in_progress', applicantId: '1093' }],
+    },
   })
   const taskData = options.task ?? success({
     name: '审批通过',
@@ -243,17 +249,19 @@ describe('Fxiaoke APL contract', () => {
   })
 
   it('fails closed when the requested workflow instance is absent or ambiguous', async () => {
-    const absent = runtime({ instances: success({ total: 1, dateList: [{ instanceId: 'other', state: 'in_progress', applicantId: '1093' }] }) })
+    const absent = runtime({ instances: success({ QueryResult: { total: 1, dateList: [{ instanceId: 'other', state: 'in_progress', applicantId: '1093' }] } }) })
     await expect(runFxiaokeAplContract({ runtime: absent.value, mapping, endpoint, secret, source, mode: 'preflight' }))
       .resolves.toMatchObject({ status: 'error', code: 'APL_WORKFLOW_NOT_FOUND', stage: 'resolve' })
 
     const duplicate = runtime({
       instances: success({
-        total: 2,
-        dateList: [
-          { instanceId: 'instance-1', state: 'in_progress', applicantId: '1093' },
-          { instanceId: 'instance-1', state: 'in_progress', applicantId: '1093' },
-        ],
+        QueryResult: {
+          total: 2,
+          dateList: [
+            { instanceId: 'instance-1', state: 'in_progress', applicantId: '1093' },
+            { instanceId: 'instance-1', state: 'in_progress', applicantId: '1093' },
+          ],
+        },
       }),
     })
     await expect(runFxiaokeAplContract({ runtime: duplicate.value, mapping, endpoint, secret, source, mode: 'preflight' }))
@@ -333,7 +341,7 @@ describe('Fxiaoke APL contract', () => {
 })
 
 describe('canonical APL request identity', () => {
-  it('sorts keys once and signs the exact raw body with path separation', async () => {
+  it('sorts keys once and signs a canonical map body with path separation', async () => {
     const rawBody = canonicalJson({ b: 2, a: { z: 'x', y: 1 } })
     expect(rawBody).toBe('{"a":{"y":1,"z":"x"},"b":2}')
     const request = await buildAplHttpRequest({
@@ -345,8 +353,11 @@ describe('canonical APL request identity', () => {
       timestamp: '1760000000',
       hmacSha256Hex: (key, data) => createHmac('sha256', key).update(data).digest('hex'),
     })
-    expect(request.headers['x-shipping-crm-signature'])
-      .toBe('sha256=b70697c66f3640295d14cd8a793795957963eabdbd6057f5571c6183a297e470')
+    const expectedSignature = createHmac('sha256', secret)
+      .update(crmAplSignaturePayload('1760000000', '/api/shipping/crm/preflight', rawBody))
+      .digest('hex')
+    expect(request.headers['x-shipping-crm-signature']).toBe(`sha256=${expectedSignature}`)
+    expect(request.headers[CRM_JSON_CANONICALIZATION_HEADER]).toBe(CRM_JSON_CANONICALIZATION_V1)
     expect(request.headers['Content-Type']).toBe('application/json')
     expect(request.rawBody).toBe(rawBody)
     expect(request.retryCount).toBe(0)
@@ -354,6 +365,6 @@ describe('canonical APL request identity', () => {
     const createSignature = createHmac('sha256', secret)
       .update(crmAplSignaturePayload('1760000000', '/api/shipping/crm/orders', rawBody))
       .digest('hex')
-    expect(createSignature).not.toContain('b70697c66f3640295d14cd8a793795957963eabdbd6057f5571c6183a297e470')
+    expect(createSignature).not.toBe(expectedSignature)
   })
 })

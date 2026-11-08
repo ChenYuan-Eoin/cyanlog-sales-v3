@@ -724,6 +724,36 @@ export async function previewOrganizationConnection(input: {
   }
 }
 
+// Narrow read-only credential access for administrator-controlled integration
+// schema inspection. It never enables a disabled source, refreshes a directory,
+// or changes connection state; the provider tenant is re-verified by the caller.
+export async function loadVerifiedConfigurationForReadOnlyMetadata(input: {
+  orgId: string
+  provider: string
+  purpose: 'read_only_metadata_inspection'
+}) {
+  const provider = validateProvider(input.provider)
+  const row = await rowBySource(input.orgId, provider)
+  const verifiedEvidence = Boolean(
+    row
+    && (
+      (row.effective_revision && row.effective_credentials_ciphertext)
+      || row.draft_check_status === 'preview_ready'
+    )
+  )
+  if (!row || !verifiedEvidence) {
+    throw new OrganizationConnectionError('CONFIGURATION_REQUIRED', '当前组织连接尚无已核验配置，不能读取对象元数据。', 409)
+  }
+  return {
+    sourceId: row.id,
+    provider,
+    revision: row.effective_revision || row.configuration_revision,
+    sourceStatus: row.status,
+    credentials: row.effective_credentials_ciphertext ? decryptEffective(row) : decryptDraft(row),
+    summary: toConnectionSummary(row),
+  }
+}
+
 export async function loadVerifiedConnection(input: {
   orgId: string
   provider: string

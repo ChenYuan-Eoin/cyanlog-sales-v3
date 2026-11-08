@@ -167,7 +167,7 @@ export interface FxiaokeAplRuntime {
     pageSize: 100
     pageNumber: number
   }): Promise<unknown> | unknown
-  findTask(taskId: string): Promise<unknown> | unknown
+  findTask(taskId: string, notGetData: true): Promise<unknown> | unknown
   findObject(input: { objectApiName: string; id: string; fields: string[] }): Promise<Record<string, unknown>> | Record<string, unknown>
   executeHttp(request: AplHttpRequest): Promise<AplHttpResult> | AplHttpResult
   hmacSha256Hex(secret: string, data: string): Promise<string> | string
@@ -189,6 +189,7 @@ export type AplContractErrorCode =
   | 'APL_MAPPING_VALUE_INVALID'
   | 'APL_ADDRESS_INVALID'
   | 'APL_SIGNATURE_INVALID'
+  | 'APL_HTTP_BODY_INVALID'
   | 'APL_HTTP_PREFLIGHT_FAILED'
   | 'APL_HTTP_CREATE_FAILED'
   | 'APL_RESPONSE_INVALID'

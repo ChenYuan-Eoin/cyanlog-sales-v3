@@ -40,8 +40,10 @@ export function directoryTransportForOrganization(orgId: string): typeof fetch {
     if (init?.method !== 'POST' || !validRequest(input)) {
       throw new FxiaokeError('EGRESS_REQUEST_DENIED', '此纷享接口不在组织同步允许范围内。', 403)
     }
-    const body = JSON.parse(input.body)
-    if (body.grantType !== 'app_secret' && body.returnTotalNum !== 1) {
+    // validRequest() is the complete allowlist for the fixed token, directory
+    // query, and read-only object metadata shapes. Directory/metadata relays
+    // never accept the superset protocol's OAuth authorization-code grant.
+    if (JSON.parse(input.body).grantType === 'authorization_code') {
       throw new FxiaokeError('EGRESS_REQUEST_DENIED', '此纷享接口不在组织同步允许范围内。', 403)
     }
     init?.signal?.throwIfAborted()

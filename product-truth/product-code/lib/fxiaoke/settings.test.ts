@@ -5,6 +5,7 @@ const shared = vi.hoisted(() => ({
   load: vi.fn(),
   save: vi.fn(),
   credentials: vi.fn(),
+  metadataCredentials: vi.fn(),
   preview: vi.fn(),
 }))
 
@@ -12,10 +13,11 @@ vi.mock('@/lib/organization-connections', () => ({
   loadOrganizationConnection: shared.load,
   saveOrganizationConnection: shared.save,
   loadVerifiedConnection: shared.credentials,
+  loadVerifiedConfigurationForReadOnlyMetadata: shared.metadataCredentials,
   previewOrganizationConnection: shared.preview,
 }))
 
-import { loadConnection, loadOAuthCredentials, previewSavedConnection, saveConnection } from './settings'
+import { loadConnection, loadOAuthCredentials, loadSavedCredentialsForMetadataInspection, previewSavedConnection, saveConnection } from './settings'
 
 const summary = {
   sourceId: 'source-1',
@@ -40,6 +42,20 @@ beforeEach(() => {
     sourceId: 'source-1',
     provider: 'fxiaoke',
     revision: 'effective-revision',
+    credentials: {
+      appId: 'FSAID_test',
+      appSecret: 'secret',
+      permanentCode: 'permanent',
+      expectedEa: 'FSCID_primary',
+      apiUserId: '10001',
+    },
+    summary,
+  })
+  shared.metadataCredentials.mockResolvedValue({
+    sourceId: 'source-1',
+    provider: 'fxiaoke',
+    revision: 'effective-revision',
+    sourceStatus: 'disabled',
     credentials: {
       appId: 'FSAID_test',
       appSecret: 'secret',
@@ -103,6 +119,21 @@ describe('Fxiaoke shared connection wrapper', () => {
       expectedEa: 'FSCID_primary',
     })
     expect(shared.credentials).toHaveBeenCalledWith({ orgId: 'org-1', provider: 'fxiaoke' })
+    expect(shared.load).not.toHaveBeenCalled()
+  })
+
+  it('uses a previously verified saved configuration only through the read-only metadata purpose', async () => {
+    await expect(loadSavedCredentialsForMetadataInspection('org-1')).resolves.toMatchObject({
+      appId: 'FSAID_test',
+      appSecret: 'secret',
+      expectedEa: 'FSCID_primary',
+    })
+    expect(shared.metadataCredentials).toHaveBeenCalledWith({
+      orgId: 'org-1',
+      provider: 'fxiaoke',
+      purpose: 'read_only_metadata_inspection',
+    })
+    expect(shared.credentials).not.toHaveBeenCalled()
     expect(shared.load).not.toHaveBeenCalled()
   })
 
