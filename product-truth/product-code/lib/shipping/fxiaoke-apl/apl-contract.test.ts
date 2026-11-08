@@ -13,6 +13,7 @@ import {
   CRM_JSON_CANONICALIZATION_V1,
 } from './canonical-json'
 import { runFxiaokeAplContract } from './client'
+import { fxiaokeAplMappingSchema } from './contracts'
 import { buildAplHttpRequest, crmAplSignaturePayload } from './signature'
 
 const secret = '0123456789abcdef0123456789abcdef'
@@ -230,6 +231,35 @@ describe('Fxiaoke APL contract', () => {
     ])
     expect(fake.calls[0].rawBody).toBe(fake.calls[1].rawBody)
     expect(fake.calls.every(call => call.retryCount === 0)).toBe(true)
+  })
+
+  it('maps a stable approval task name to the configured semantic stage', async () => {
+    const fake = runtime()
+    const byTaskName: FxiaokeAplMapping = {
+      ...mapping,
+      workflow: {
+        ...mapping.workflow,
+        stages: [{ taskName: '审批通过', stageId: 'stage-approved', acceptedTaskStates: ['completed'] }],
+      },
+    }
+    const result = await runFxiaokeAplContract({ runtime: fake.value, mapping: byTaskName, endpoint, secret, source, mode: 'preflight' })
+
+    expect(result).toMatchObject({ status: 'preflight_ready', source: { taskId: 'task-1', stageId: 'stage-approved' } })
+    expect(JSON.parse(fake.calls[0].rawBody)).toMatchObject({ event: { taskId: 'task-1', stageId: 'stage-approved' } })
+  })
+
+  it('requires exactly one task ID or stable task name per stage', () => {
+    for (const stage of [
+      { taskId: 'task-1', taskName: '审批通过', stageId: 'stage-approved', acceptedTaskStates: ['completed'] },
+      { stageId: 'stage-approved', acceptedTaskStates: ['completed'] },
+    ]) {
+      const result = fxiaokeAplMappingSchema.safeParse({
+        ...mapping,
+        workflow: { ...mapping.workflow, stages: [stage] },
+      })
+      expect(result.success).toBe(false)
+      if (!result.success) expect(result.error.issues.some(issue => issue.message === 'taskId 与 taskName 必须且只能配置一个')).toBe(true)
+    }
   })
 
   it('stops before create when preflight returns missing fields', async () => {

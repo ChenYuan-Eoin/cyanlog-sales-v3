@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "1.0",
+  "enterpriseId": "__CONFIGURE_FXIAOKE_ENTERPRISE_ID__",
+  "endpoint": {
+    "baseUrl": "https://sales.cyanlog.icu",
+    "clientId": "__CONFIGURE_CRM_CLIENT_ID__",
+    "clientSecret": "REPLACE_WITH_AT_LEAST_32_RANDOM_CHARACTERS",
+    "preflightPath": "/api/shipping/crm/preflight",
+    "createPath": "/api/shipping/crm/orders",
+    "timeoutMs": 15000,
+    "preflightRetryCount": 1,
+    "createRetryCount": 1
+  },
+  "workflow": {
+    "objectApiName": "__CONFIGURE_WORKFLOW_OBJECT_API_NAME__",
+    "acceptedInstanceStates": ["in_progress", "pass"],
+    "stages": [
+      {
+        "taskName": "__CONFIGURE_APPROVAL_TASK_NAME__",
+        "stageId": "__CONFIGURE_APPROVAL_STAGE_ID__",
+        "acceptedTaskStates": ["pass"]
+      }
+    ]
+  },
+  "applicant": {
+    "objectApiName": "PersonnelObj",
+    "employeeId": {"kind": "field", "path": "_id", "select": "raw"},
+    "name": {"kind": "field", "path": "name", "select": "raw"},
+    "phone": {"kind": "field", "path": "mobile", "select": "raw"},
+    "departmentId": {"kind": "field", "path": "department_id", "select": "raw"},
+    "departmentName": {"kind": "field", "path": "department_name", "select": "raw"}
+  },
+  "rootObject": {
+    "objectApiName": "__CONFIGURE_WORKFLOW_OBJECT_API_NAME__",
+    "customerId": {"kind": "field", "path": "account__c", "select": "id"},
+    "customerName": {"kind": "field", "path": "account__c", "select": "name"},
+    "revisionId": {"kind": "field", "path": "modified_time", "select": "raw"}
+  },
+  "shipmentDetailObject": {
+    "objectApiName": "__CONFIGURE_SHIPMENT_DETAIL_OBJECT_API_NAME__",
+    "parentRecordId": {"kind": "field", "path": "__CONFIGURE_PARENT_FIELD__", "select": "id"},
+    "shipment": {
+      "recipient": {
+        "kind": "fields",
+        "name": {"kind": "field", "path": "recipient_name", "select": "raw"},
+        "phone": {"kind": "field", "path": "recipient_phone", "select": "raw"},
+        "province": {"kind": "field", "path": "province", "select": "raw"},
+        "city": {"kind": "field", "path": "city", "select": "raw"},
+        "county": {"kind": "field", "path": "county", "select": "raw"},
+        "address": {"kind": "field", "path": "address", "select": "raw"}
+      },
+      "cargo": {"kind": "field", "path": "cargo", "select": "raw"},
+      "weight": {"kind": "field", "path": "weight", "select": "raw"},
+      "servicePreference": {"kind": "field", "path": "service_preference", "select": "raw"},
+      "payment": {"kind": "literal", "value": "sender_monthly"},
+      "remark": {"kind": "literal", "value": ""}
+    }
+  }
+}

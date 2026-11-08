@@ -280,10 +280,17 @@ export async function resolveAplIntake(args: {
   if (task.applicantId !== workflow.applicantId) {
     throw new FxiaokeAplContractError('APL_TASK_APPLICANT_MISMATCH', '审批实例与任务的真实申请人不一致')
   }
-  const stage = mapping.workflow.stages.find(item => item.taskId === source.taskId)
-  if (!stage) {
-    throw new FxiaokeAplContractError('APL_STAGE_MAPPING_MISSING', '指定任务没有核准的阶段映射', { taskId: source.taskId })
+  const stages = mapping.workflow.stages.filter(item => item.taskId
+    ? item.taskId === source.taskId
+    : Boolean(item.taskName && task.name && item.taskName === task.name))
+  if (stages.length !== 1) {
+    throw new FxiaokeAplContractError('APL_STAGE_MAPPING_MISSING', '指定任务没有唯一核准的阶段映射', {
+      taskId: source.taskId,
+      taskName: task.name,
+      matches: stages.length,
+    })
   }
+  const stage = stages[0]
   if (!stage.acceptedTaskStates.includes(task.state)) {
     throw new FxiaokeAplContractError('APL_WORKFLOW_STATE_INVALID', '审批任务状态不在核准阶段内', { state: task.state })
   }

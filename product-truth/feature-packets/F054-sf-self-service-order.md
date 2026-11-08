@@ -301,22 +301,22 @@
 
 2026-11-09 当前门禁覆盖本节的 code-only 停点：WP97 必须推进到生产纷享指定审批节点经 APL/Fx.http 生成唯一 `awaiting_confirmation` 工单且 `waybill=null`。代码通过、部署 READY、预检 200、受理 202 或 Preview 均只是过程证据；真实业务证据成立后才进入 WP99，顺丰出号后由 WP98 回填。
 
-本批先提供可被 APL 包装调用的服务端接口，不把 APL、纷享后台点击、SSO、组织持续同步、承运商调用或生产迁移混进来。接口只有两个入口：
+本批提供可被 APL 调用的服务端接口，并在已审核的纷享审批节点完成生产接入；SSO、组织持续同步、承运商调用与结果回填不混入本阶段。接口只有两个入口：
 
 - `POST /api/shipping/crm/preflight`：验证集成客户端后读取组织默认寄件人、服务目录和当前规则，返回标准化后的申请人、客户、寄件人、收件人、服务与逐字段缺项；不创建工单、不调用承运商。
 - `POST /api/shipping/crm/orders`：使用同一合同重新校验，只创建一张 `intake_source=crm`、`status=awaiting_confirmation` 的待确认工单；同一事件重放返回原单，同一事件内容变化返回 `409`。
 
-请求头固定为 `x-shipping-crm-client-id`、`x-shipping-crm-timestamp`（Unix 秒）与 `x-shipping-crm-signature: sha256=<hex>`。签名原文为 `timestamp + "\n" + uppercaseMethod + "\n" + pathname + "\n" + exactRawBody`，HMAC-SHA256 密钥只存在服务端环境。时间窗为五分钟；路径进入签名，因此预检签名不能重放到受理入口。客户端配置 `SHIPPING_CRM_CLIENTS_JSON` 将客户端唯一映射到 ONES 组织并可选绑定 CRM enterprise；请求正文不得包含组织选择字段。
+请求头固定为 `x-shipping-crm-client-id`、`x-shipping-crm-timestamp`（Unix 秒）、`x-shipping-crm-canonicalization: crm-json-v1` 与 `x-shipping-crm-signature: sha256=<hex>`。签名原文为 `crm-json-v1 + "\n" + timestamp + "\n" + uppercaseMethod + "\n" + pathname + "\n" + canonicalJson(exactRawBody)`，HMAC-SHA256 密钥只存在服务端环境。时间窗为五分钟；路径进入签名，因此预检签名不能重放到受理入口。客户端配置 `SHIPPING_CRM_CLIENTS_JSON` 将客户端唯一映射到 ONES 组织并可选绑定 CRM enterprise；请求正文不得包含组织选择字段。
 
 请求正文只接受 `event`、`applicant`、`customer`、`shipment`。事件身份由 `enterpriseId + workflowInstanceId + objectApiName + recordId + shipmentDetailId + taskId + stageId + revisionId` 稳定组成；原始申请人、客户、业务对象、子行、任务/阶段、修订、事件键和当次原始请求体分别落表，不把来源证据只塞进订单 JSON。工单保存真实申请人快照，销售引用取 CRM employee ID，客户引用取 CRM account ID。
 
 预检结构不完整时返回 `200 + ready:false + missing[]`；只要事件身份、申请人和客户本身已通过校验，即使寄件字段缺项，也必须继续返回这些来源证据及稳定事件键，不能把已核验来源清空。签名错误、超时、未知客户端或租户不匹配在字段完整性处理和任何写入前拒绝。受理结构或组织默认值不完整时返回 `422 + CRM_INTAKE_INCOMPLETE`。`202` 只表示 ICU 已受理并生成待确认工单，`waybill` 必为 `null`，不得表述为顺丰已下单或已出号。
 
-APL 薄调用本批作为 WP97 代码合同推进，但不配置或运行生产 APL：调用输入只接受精确流程实例、业务记录、寄件明细和任务；企业、对象、阶段和修订由租户映射与官方 `Fx.bpm/Fx.object` 回读派生。缺失、歧义、过期、执行人伪作、任务/申请人/记录不匹配或字段未映射必须在任何 HTTP 调用前失败关闭。真实申请人独立于 `Fx.http` 执行身份，`-10000` 不得成为申请人。
+APL 薄调用必须在已审核的纷享审批节点实际运行。正常运行从 `context.data` 取得业务记录，再通过官方 BPM 与对象接口回读精确流程实例、申请人、唯一任务和唯一寄件子行；`context.arg` 不是审批后动作的必经输入，显式实例、子行、任务与记录 ID 只允许作为受控调试约束。BPM 接口按 `{isError,data,message}` 包络处理，不能按三元组直接解构。缺失、歧义、过期、执行人伪作、任务/申请人/记录不匹配或字段未映射必须在任何 HTTP 调用前失败关闭。真实申请人独立于 `Fx.http` 执行身份，`-10000` 不得成为申请人。
 
 代码合同把同一事件只序列化一次，规范 raw body 原样复用于预检和创建，并分别构造路径隔离的服务端签名。创建只能在只读预检 ready、没有缺项且事件完全一致后发生；原生重试关闭，受控重试仅覆盖 `429/5xx`，创建成功回执必须仍是 `awaiting_confirmation` 且 `waybill=null`。
 
-本批当前只允许到 `code_green`。租户对象/字段与任务/阶段映射、审批节点能否执行 APL、生产 `Fx.http` raw body 透传均未被本批证明；APL 生产配置、真实申请人授权策略、人工确认与顺丰调用、单号回写、组织目录和逐人权限推广继续按 F099 后续阶段另行验收。
+WP97 的生产完成线是：指定审批节点经 APL/Fx.http 完成真实预检和受理，生产 ICU 新增且只新增一张 `awaiting_confirmation` 工单，`waybill=null`；重复触发返回同一单；真实申请人、客户、流程实例、业务记录、寄件子行、任务、阶段和修订均有独立可回读证据，且没有承运商调用。代码、部署、预检 200、受理 202、Preview 或数据库回执都只是过程证据。公开文档已经证明官方接口形状；当前租户对象字段、任务名称与状态、审批节点可执行性和实网 raw body 透传必须由上述生产证据确认。真实申请人授权策略、人工确认后的顺丰调用、单号回写、组织目录和逐人权限推广继续按 F099 后续阶段另行验收。
 
 
 ## WP52：逐票服务核对与批量确认隔离（IN-20261103-001）

@@ -53,10 +53,15 @@ const shipmentMappingSchema = z.object({
 })
 
 const stageMappingSchema = z.object({
-  taskId: identifier(),
+  taskId: identifier().optional(),
+  taskName: z.string().trim().min(1).max(200).optional(),
   stageId: identifier(),
   acceptedTaskStates: z.array(identifier(40)).min(1),
-}).strict()
+}).strict().superRefine((value, ctx) => {
+  if (Boolean(value.taskId) === Boolean(value.taskName)) {
+    ctx.addIssue({ code: 'custom', path: ['taskId'], message: 'taskId 与 taskName 必须且只能配置一个' })
+  }
+})
 
 export const fxiaokeAplMappingSchema = z.object({
   schemaVersion: z.literal('1.0'),
@@ -89,12 +94,13 @@ export const fxiaokeAplMappingSchema = z.object({
   if (value.rootObject.objectApiName !== value.workflow.objectApiName) {
     ctx.addIssue({ code: 'custom', path: ['rootObject', 'objectApiName'], message: '根业务对象必须与审批对象一致' })
   }
-  const taskIds = new Set<string>()
+  const taskKeys = new Set<string>()
   const stageIds = new Set<string>()
   for (const [index, stage] of value.workflow.stages.entries()) {
-    if (taskIds.has(stage.taskId)) ctx.addIssue({ code: 'custom', path: ['workflow', 'stages', index, 'taskId'], message: '任务映射不能重复' })
+    const taskKey = stage.taskId ? `id:${stage.taskId}` : `name:${stage.taskName}`
+    if (taskKeys.has(taskKey)) ctx.addIssue({ code: 'custom', path: ['workflow', 'stages', index, 'taskId'], message: '任务映射不能重复' })
     if (stageIds.has(stage.stageId)) ctx.addIssue({ code: 'custom', path: ['workflow', 'stages', index, 'stageId'], message: '阶段映射不能重复' })
-    taskIds.add(stage.taskId)
+    taskKeys.add(taskKey)
     stageIds.add(stage.stageId)
   }
 })
