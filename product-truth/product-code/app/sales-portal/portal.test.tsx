@@ -2,6 +2,7 @@ import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import SalesPortal, { SalesRequestForm } from './portal'
+vi.mock('./my-workorders', () => ({default: () => <p>全部快递记录</p>}))
 const employee = { id: 'employee-1', email: 'person@ones.cn', team: '大客户部', updatedAt: '2026-10-09T00:00:00.000Z', sender: { name: '李娜', phone: '13800138000', province: '广东省', city: '广州市', county: '天河区', address: '销售路88号' } }
 
 const fetcher = vi.fn()
@@ -88,7 +89,7 @@ it('submits a complete anonymous workorder without asking for a code or saving a
   render(<SalesRequestForm employee={{...employee,wecom:true,companyName:'员工所属企业'}}/>)
   expect(screen.getByLabelText('客户公司名称')).toHaveProperty('value','')
   expect(screen.getByLabelText('客户公司名称')).toHaveProperty('disabled',false)
-  expect(screen.getByRole('complementary',{name:'我的提报记录'})).toBeTruthy()
+  expect(screen.getByRole('complementary',{name:'提报记录'})).toBeTruthy()
  })
 
 it('shows validation only after trying to preview, then focuses the first invalid field',()=>{
@@ -109,4 +110,15 @@ it('requires another preview after the chosen pickup address changes',()=>{
  fireEvent.click(screen.getByRole('button',{name:'预览工单'}))
  expect(screen.getByRole('region',{name:'寄出预览'}).textContent).toContain('新揽收地址66号')
  expect(fetcher).not.toHaveBeenCalled()
+})
+
+it('keeps the current shipment summary and records navigation for anonymous visitors',()=>{
+ render(<SalesRequestForm employee={null} draftSender={employee.sender}/>)
+ expect(screen.getByRole('region',{name:'本次寄件摘要'}).textContent).toContain(employee.sender.address)
+ expect(screen.getByRole('complementary',{name:'提报记录'})).toBeTruthy()
+ fireEvent.click(screen.getByRole('button',{name:'提报记录'}))
+ expect(screen.getByRole('button',{name:'提报记录'}).getAttribute('aria-pressed')).toBe('true')
+ fireEvent.change(screen.getByLabelText('收件人'),{target:{value:'摘要收件人'}})
+ expect(screen.getByRole('region',{name:'本次寄件摘要'}).textContent).toContain('摘要收件人')
+ expect(screen.queryByText('使用企业微信验证身份')).toBeNull()
 })

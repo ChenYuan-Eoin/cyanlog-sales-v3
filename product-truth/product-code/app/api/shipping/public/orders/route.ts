@@ -4,11 +4,12 @@ import { ZodError } from 'zod'
 import { shippingJson } from '@/lib/shipping/http'
 import { ShippingError } from '@/lib/shipping/config'
 import { makeAnonymousShipmentSchema } from '@/lib/shipping/validation'
-import { createAnonymousShipment, publicShipmentReceipt, listEmployeeShipmentReceipts } from '@/lib/shipping/collaboration'
+import { createAnonymousShipment, publicShipmentReceipt, listPublicShipmentReceipts } from '@/lib/shipping/collaboration'
 import { enforceAnonymousShippingRate } from '@/lib/shipping/rate-limit'
 import { getWecomSession } from '@/lib/shipping/wecom-session'
 
 import { loadPublicIntakeOptions } from '@/lib/shipping/intake-options'
+import { resolvePublicShippingOrgId } from '@/lib/shipping/runtime-config'
 
 export const runtime = 'nodejs'
 
@@ -38,10 +39,11 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const employee = await getWecomSession(req)
-    if (!employee) throw new ShippingError(401, '请先通过企业微信验证身份。')
-    return NextResponse.json({ orders: await listEmployeeShipmentReceipts(employee.orgId, employee.id) }, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } })
+    const page = Number(req.nextUrl.searchParams.get('page') || '0')
+    if (!Number.isSafeInteger(page) || page < 0 || !Number.isSafeInteger((page + 1) * 50)) throw new ShippingError(400, '记录页码无效。')
+    const orgId = await resolvePublicShippingOrgId()
+    return NextResponse.json(await listPublicShipmentReceipts(orgId, page), { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
-    return NextResponse.json({ error: error instanceof ShippingError ? error.message : '个人工单暂不可用。' }, { status: error instanceof ShippingError ? error.status : 500, headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } })
+    return NextResponse.json({ error: error instanceof ShippingError ? error.message : '提报记录暂不可用。' }, { status: error instanceof ShippingError ? error.status : 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }

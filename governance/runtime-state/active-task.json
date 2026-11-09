@@ -241,7 +241,7 @@
     "kind": "product",
     "status": "active",
     "feature_id": "F054",
-    "objective": "恢复销售入口匿名填写、提交待审核工单与私密回执查询；不依赖企微身份/白名单，不开放后台或他人工单。",
+    "objective": "恢复匿名销售提报的本次寄件摘要与提报记录；按用户临时方案展示当前公开入口组织的全部快递回执，保留后台操作权限，待纷享接入后重新调整归属。",
     "started_at": "2026-11-09T08:38:28.810881+00:00",
     "activation_basis": "IN-20261109-019：用户明确纠正匿名访问产品基线，线上配置接口仍返回强制验证，按生产阻断及证据推翻旧方向例外修复。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/anonymous-sales-intake/Price-v3",
@@ -257,13 +257,16 @@
       "AGENTS.md",
       "product-truth/product-code/lib/fxiaoke/egress/README.md",
       "product-truth/product-code/lib/fxiaoke/egress/directory-transport.ts",
-      "product-truth/product-code/lib/fxiaoke/egress/directory-transport.test.ts"
+      "product-truth/product-code/lib/fxiaoke/egress/directory-transport.test.ts",
+      "product-truth/product-code/lib/shipping/collaboration.ts",
+      "product-truth/product-code/lib/shipping/collaboration.org.test.ts"
     ],
     "acceptance_checks": [
       "无企微会话直接打开并填写销售提报",
       "匿名 POST 到待确认工单且不附员工认证身份",
-      "回执 token 查询可用，匿名列表仍拒绝",
-      "旧企微会话或服务故障不阻断匿名提报"
+      "回执 token 查询可用；匿名列表显示当前公开入口组织全部快递的最小回执字段并可加载全部页",
+      "旧企微会话或服务故障不阻断匿名提报",
+      "匿名桌面与手机均可见本次寄件及提报记录，不调用企微身份接口"
     ],
     "delivery_contract": {
       "target_state": "production_released",
@@ -305,7 +308,9 @@
         "final_release_approval_id": "IN-20261109-021",
         "code_release_authorized": true,
         "production_database_write_authorized": false,
-        "formal_gate_note": "IN-20261109-021 explicitly approves this release and legacy-contract/order exception. The legacy status enum cannot represent anonymous intake; preserve pending formal gate rather than pretending it passed."
+        "formal_gate_note": "IN-20261109-021 explicitly approves this release and legacy-contract/order exception. The legacy status enum cannot represent anonymous intake; preserve pending formal gate rather than pretending it passed.",
+        "followup_approval_id": "IN-20261109-022",
+        "followup_scope": "恢复两个区域并临时公开当前组织全部快递的工单号、状态、运单号和创建时间；用户明确要求放上去，不含完整姓名电话地址、后台操作、数据库迁移或承运商调用。"
       },
       "runtime_profile": "shipping_workspace",
       "runtime_contract_version": "f054-intake-v1",

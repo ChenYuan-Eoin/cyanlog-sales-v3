@@ -5,7 +5,7 @@ import type { ShippingInput } from './types'
 const mocks = vi.hoisted(() => ({ from: vi.fn(), recipients: vi.fn() }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from } }))
 vi.mock('./operator-access', () => ({ listShippingOperatorRecipients: mocks.recipients }))
-import { assignShipmentRelation, createAnonymousShipment, createOwnerShipment, createDueShipmentReviewReminders, listShipmentLedger, listEmployeeShipmentReceipts } from './collaboration'
+import { assignShipmentRelation, createAnonymousShipment, createOwnerShipment, createDueShipmentReviewReminders, listShipmentLedger, listEmployeeShipmentReceipts, listPublicShipmentReceipts } from './collaboration'
 
 type Row = Record<string, unknown>
 let tables: Record<string, Row[]>
@@ -15,6 +15,8 @@ function row(id: string, org_id: string | null): Row { return { id, org_id, orde
 function query(table: string) {
   const filters: Array<(row: Row) => boolean> = []
   let patch: Row | undefined, inserts: Row[] | undefined
+  let bounds: [number,number] | undefined
+  const ordering: Array<{key:string;ascending:boolean}> = []
   const finish = (single = false) => {
     const data = tables[table] ||= []
     if (inserts) {
@@ -23,7 +25,9 @@ function query(table: string) {
       const added = data.slice(-inserts.length)
       return { data: single ? added[0] : added, error: null }
     }
-    const matched = data.filter(item => filters.every(filter => filter(item)))
+    let matched = data.filter(item => filters.every(filter => filter(item)))
+    if (ordering.length) matched.sort((a,b) => { for (const {key,ascending} of ordering) { const diff=String(a[key]).localeCompare(String(b[key])); if(diff)return ascending?diff:-diff } return 0 })
+    if (bounds) matched=matched.slice(bounds[0],bounds[1]+1)
     if (patch) matched.forEach(item => Object.assign(item, patch))
     return { data: single ? matched[0] || null : matched, error: null }
   }
@@ -33,7 +37,8 @@ function query(table: string) {
     is: (key: string, value: unknown) => { filters.push(item => item[key] === value); return builder },
     in: (key: string, values: unknown[]) => { filters.push(item => values.includes(item[key])); return builder },
     lte: (key: string, value: string) => { filters.push(item => String(item[key]) <= value); return builder },
-    order: () => builder, limit: () => builder,
+    order: (key:string,{ascending}:{ascending:boolean}) => {ordering.push({key,ascending});return builder}, limit: () => builder,
+    range: (from:number,to:number) => {bounds=[from,to];return builder},
     update: (value: Row) => { patch = value; return builder },
     insert: (value: Row | Row[]) => { inserts = Array.isArray(value) ? value : [value]; return builder },
     single: async () => finish(true), maybeSingle: async () => finish(true),
@@ -127,4 +132,15 @@ describe('shipping collaboration organization boundary', () => {
     expect(b.description).toContain('B-order'); expect(b.description).not.toContain('A-order')
     expect(tables.shipping_orders[2].review_notified_at).toBeNull()
   })
+})
+
+it('pages every source and employee in one organization with only public receipt fields',async()=>{
+ tables.shipping_orders=[...Array.from({length:53},(_,i)=>({...row(`A-${String(i).padStart(3,'0')}`,'org-A'),employee_profile_id:`employee-${i}`,intake_source:i%2?'crm':'owner',shipping_waybills:[{waybill_no:`SF-${i}`}]})),row('B-order','org-B'),row('legacy',null)]
+ const first=await listPublicShipmentReceipts('org-A',0),second=await listPublicShipmentReceipts('org-A',1)
+ expect(first.orders).toHaveLength(50);expect(first.nextPage).toBe(1)
+ expect(second.orders).toHaveLength(3);expect(second.nextPage).toBeNull()
+ expect(new Set([...first.orders,...second.orders].map(o=>o.orderNo)).size).toBe(53)
+ expect(first.orders[0]).toEqual({orderNo:'A-052',status:'awaiting_confirmation',waybill:'SF-52',createdAt:'2026-09-27T00:00:00Z',nextReviewAt:'2026-09-27T01:00:00Z'})
+ expect((await listPublicShipmentReceipts('org-A',2)).orders).toEqual([])
+ await expect(listPublicShipmentReceipts('',0)).rejects.toMatchObject({status:403})
 })

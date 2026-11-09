@@ -3,30 +3,33 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { ShippingError } from '@/lib/shipping/config'
 
-const { create, enforceRate, getEmployee, listMine, options } = vi.hoisted(() => ({ create: vi.fn(), enforceRate: vi.fn(), getEmployee: vi.fn(), listMine: vi.fn(), options: vi.fn() }))
+const { create, enforceRate, getEmployee, listAll, options } = vi.hoisted(() => ({ create: vi.fn(), enforceRate: vi.fn(), getEmployee: vi.fn(), listAll: vi.fn(), options: vi.fn() }))
 vi.mock('@/lib/shipping/collaboration', () => ({
   createAnonymousShipment: create,
-  listEmployeeShipmentReceipts: listMine,
+  listPublicShipmentReceipts: listAll,
   publicShipmentReceipt: (order: { orderNo: string; status: string; waybill: string | null; nextReviewAt: string | null; createdAt: string }) => ({ orderNo: order.orderNo, status: order.status, waybill: order.waybill, nextReviewAt: order.nextReviewAt, createdAt: order.createdAt }),
 }))
 vi.mock('@/lib/shipping/rate-limit', () => ({ enforceAnonymousShippingRate: enforceRate }))
 vi.mock('@/lib/shipping/wecom-session', () => ({ getWecomSession: getEmployee }))
 vi.mock('@/lib/shipping/intake-options', () => ({ loadPublicIntakeOptions: options }))
+vi.mock('@/lib/shipping/runtime-config', () => ({ resolvePublicShippingOrgId: async () => 'org-1' }))
 import { GET, POST } from './orders/route'
 
 const contact = { name: '测试联系人', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '测试街道1号测试楼' }
 const input = { sender: { ...contact, name: '张三', address: '销售本人寄件路9号' }, recipient: contact, cargo: '文件', weight: 1, remark: '', servicePreference: 'standard', source: 'manual', customerName: '星河科技', submittedBy: { name: '张三', phone: '13800000000', team: '华南销售部' }, specialRequirements: '样品易碎' }
 const body = { key: '43a0b4bb-cf88-4593-9fc9-85b3a9d0d1b0', input }
 
-beforeEach(() => { options.mockReset(); options.mockResolvedValue({ orgId: 'org-1', requireVerification: true, emailAvailable: false, services: [{ id: 2, name: '顺丰标快', preference: 'standard' }, { id: 6, name: '顺丰即日', preference: 'urgent' }] }); create.mockReset(); listMine.mockReset(); enforceRate.mockReset(); enforceRate.mockResolvedValue(undefined); getEmployee.mockReset(); getEmployee.mockResolvedValue({ id: 'employee-1', orgId: 'org-1', userId: 'staff-a', name: input.sender.name, phone: input.sender.phone, phoneSource: 'wecom', companyName: '提报人所属企业', sender: input.sender, team: input.submittedBy.team }); create.mockResolvedValue({ order: { orderNo: 'SO-20260922-ABC12345', status: 'awaiting_confirmation', waybill: null, nextReviewAt: '2026-09-22T09:00:00.000Z', createdAt: '2026-09-22T08:00:00.000Z' }, receiptToken: 'a'.repeat(43) }) })
+beforeEach(() => { options.mockReset(); options.mockResolvedValue({ orgId: 'org-1', requireVerification: true, emailAvailable: false, services: [{ id: 2, name: '顺丰标快', preference: 'standard' }, { id: 6, name: '顺丰即日', preference: 'urgent' }] }); create.mockReset(); listAll.mockReset(); enforceRate.mockReset(); enforceRate.mockResolvedValue(undefined); getEmployee.mockReset(); getEmployee.mockResolvedValue({ id: 'employee-1', orgId: 'org-1', userId: 'staff-a', name: input.sender.name, phone: input.sender.phone, phoneSource: 'wecom', companyName: '提报人所属企业', sender: input.sender, team: input.submittedBy.team }); create.mockResolvedValue({ order: { orderNo: 'SO-20260922-ABC12345', status: 'awaiting_confirmation', waybill: null, nextReviewAt: '2026-09-22T09:00:00.000Z', createdAt: '2026-09-22T08:00:00.000Z' }, receiptToken: 'a'.repeat(43) }) })
 
 describe('employee shipment intake', () => {
-  it('lists only receipts scoped by the verified identity, ignoring query overrides', async () => {
-    listMine.mockResolvedValue([{ orderNo: 'SO-MINE', status: 'awaiting_confirmation' }])
-    const response = await GET(new NextRequest('http://localhost/api/shipping/public/orders?employeeId=foreign&orgId=foreign'))
-    expect(listMine).toHaveBeenCalledWith('org-1', 'employee-1')
-    expect(await response.json()).toEqual({ orders: [{ orderNo: 'SO-MINE', status: 'awaiting_confirmation' }] })
-    expect(response.headers.get('cache-control')).toBe('private, no-store')
+  it('lists all sources in the server-resolved organization without WeCom, ignoring ownership overrides', async () => {
+    getEmployee.mockRejectedValue(new Error('WeCom unavailable'))
+    listAll.mockResolvedValue({ orders: [{ orderNo: 'SO-ALL', status: 'awaiting_confirmation' }], nextPage: 2 })
+    const response = await GET(new NextRequest('http://localhost/api/shipping/public/orders?page=1&employeeId=foreign&orgId=foreign'))
+    expect(listAll).toHaveBeenCalledWith('org-1', 1)
+    expect(getEmployee).not.toHaveBeenCalled()
+    expect(await response.json()).toEqual({ orders: [{ orderNo: 'SO-ALL', status: 'awaiting_confirmation' }], nextPage: 2 })
+    expect(response.headers.get('cache-control')).toBe('no-store')
   })
   it('rejects an unverified caller before creating a workorder', async () => {
     getEmployee.mockResolvedValue(null); options.mockResolvedValue({ orgId: 'org-1', requireVerification: true, services: [{ id: 2, name: '顺丰标快', preference: 'standard' }] })
@@ -73,7 +76,7 @@ it('rejects consistently forged sender identity against the authenticated WeCom 
 
 it('does not require a current valid phone to read existing owned orders',async()=>{
  getEmployee.mockResolvedValue({id:'employee-1',orgId:'org-1',phoneSource:'unavailable'})
- listMine.mockResolvedValue([])
+ listAll.mockResolvedValue({orders:[],nextPage:null})
  expect((await GET(new NextRequest('http://localhost/api/shipping/public/orders'))).status).toBe(200)
  expect((await POST(new NextRequest('http://localhost/api/shipping/public/orders',{method:'POST',headers:{origin:'http://localhost'},body:JSON.stringify(body)}))).status).toBe(422)
  expect(create).not.toHaveBeenCalled()
@@ -88,4 +91,16 @@ it('does not require a current valid phone to read existing owned orders',async(
   expect(create.mock.calls[0][0].input.customerName).toBe('客户公司')
  })
 
-it('keeps the employee order list private for anonymous visitors',async()=>{getEmployee.mockResolvedValue(null);expect((await GET(new NextRequest('http://localhost/api/shipping/public/orders'))).status).toBe(401);expect(listMine).not.toHaveBeenCalled()})
+it('allows an anonymous visitor to read shared shipment receipts', async () => {
+ getEmployee.mockResolvedValue(null);listAll.mockResolvedValue({orders:[],nextPage:null})
+ const response=await GET(new NextRequest('http://localhost/api/shipping/public/orders'))
+ expect(response.status).toBe(200);expect(listAll).toHaveBeenCalledWith('org-1',0);expect(getEmployee).not.toHaveBeenCalled()
+})
+it.each(['-1','1.5','abc','1e30'])('rejects invalid record page %s before querying',async page=>{
+ expect((await GET(new NextRequest(`http://localhost/api/shipping/public/orders?page=${page}`))).status).toBe(400)
+ expect(listAll).not.toHaveBeenCalled()
+})
+it('preserves a retryable records error',async()=>{
+ listAll.mockRejectedValue(new ShippingError(503,'提报记录暂时无法读取，请稍后刷新。'))
+ expect((await GET(new NextRequest('http://localhost/api/shipping/public/orders'))).status).toBe(503)
+})
