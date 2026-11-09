@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "activeId": "WP97",
+  "commit": "f2cb0211bf0b37ea4bfe2dc2cf58fce94e3106af",
+  "evidence": {
+    "code": {
+      "commit": "f2cb0211bf0b37ea4bfe2dc2cf58fce94e3106af",
+      "branch": "codex/wp97-apl-live-bridge",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "command": "npm run test:run -- lib/shipping/crm-intake.test.ts lib/shipping/shipping-crm-intake-migration.test.ts app/api/shipping/crm/crm-routes.test.ts",
+          "artifact_path": "code-evidence/f2cb0211bf0b37ea4bfe2dc2cf58fce94e3106af/target_tests.log",
+          "log_sha256": "5e930d92d6a9fce4d21bcea8c37679748d6c93adeacfbe1f5de0180c5107a3dc",
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "name": "crm_intake_verifier_tests",
+          "command": "npm test -- crm-intake-verifier.test.js",
+          "artifact_path": "code-evidence/f2cb0211bf0b37ea4bfe2dc2cf58fce94e3106af/crm_intake_verifier_tests.log",
+          "log_sha256": "5832077bb5ef076dcbb730da10287659b211b5242b7397d5b3705f5d1e693d42",
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "name": "full_tests",
+          "command": "bash governance/ai-behavior-准则/checks/check-03-test.sh",
+          "artifact_path": "check-logs/1700a8a36b5fce5b831d78aa5f647e5234e6fa32/check-03-test.log",
+          "log_sha256": "5137ed7e4dbec82cda9d5b874671e5dada10c103409f04e6c5d94825273f5a97",
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "name": "lint",
+          "command": "bash governance/ai-behavior-准则/checks/check-02-lint.sh",
+          "artifact_path": "check-logs/1700a8a36b5fce5b831d78aa5f647e5234e6fa32/check-02-lint.log",
+          "log_sha256": "f910944190ab3363961722b8359ecc2958f6abb77e20cf94211c1904cc1f1733",
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "name": "typecheck",
+          "command": "bash governance/ai-behavior-准则/checks/check-01-typecheck.sh",
+          "artifact_path": "check-logs/1700a8a36b5fce5b831d78aa5f647e5234e6fa32/check-01-typecheck.log",
+          "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "name": "build",
+          "command": "npm run build",
+          "artifact_path": "code-evidence/f2cb0211bf0b37ea4bfe2dc2cf58fce94e3106af/build.log",
+          "log_sha256": "4ee2717f7786f5603ae8c61399e416a239a94b4bcf2945e1b8e96dc556111495",
+          "exit_code": 0,
+          "timeout": false
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "5ac8b623ce052af751f3a35f6188a3f259589506c7e891bf15760566f6cefcbc",
+        "entry_sha256": "e582fb290f3fa11aa5da274812ec506a5af1e8fa87054e433de3de2b0f3964c8"
+      },
+      "summary": {
+        "target_tests": "3 files / 23 tests passed",
+        "crm_intake_verifier_tests": "verifier suite passed; strict pre-commit harness selftest completed with 35/35 tests",
+        "full_tests": "442 files passed, 1 skipped; 3335 tests passed, 5 skipped",
+        "lint": "passed",
+        "typecheck": "passed",
+        "build": "Next.js production build passed; 105/105 static pages generated",
+        "pre_commit_evidence": "10/10 plus harness selftest at exact tree 1700a8a36b5fce5b831d78aa5f647e5234e6fa32"
+      },
+      "recorded_at": "2026-11-09T01:50:03.688Z"
+    }
+  },
+  "updatedAt": "2026-11-09T01:51:46.275Z",
+  "completionState": "code_green",
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-11-09T01:51:46.255Z",
+      "head": "f2cb0211bf0b37ea4bfe2dc2cf58fce94e3106af",
+      "originMain": "edeb8a29bb03dfe0e3340e7f7eb10c656dd758b7",
+      "remoteMain": "edeb8a29bb03dfe0e3340e7f7eb10c656dd758b7",
+      "remoteProduction": "edeb8a29bb03dfe0e3340e7f7eb10c656dd758b7",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "b3d299912ca2cd2f2f2e116d9c9da22c7ee847b9",
+      "remoteAttestationRefOid": "b3d299912ca2cd2f2f2e116d9c9da22c7ee847b9",
+      "remoteSnapshotCheckedAt": "2026-11-09T01:51:43.962Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "af889932dab2735707f20114d6da3cea346f52d3fc86a5982e714e4d04892066",
+  "sealedAt": "2026-11-09T01:51:46.276Z",
+  "attestationDigest": "af604cbfbc3ac25278aa320128b9d05ca1b330131a254e7035ea78ea1e9bd067"
+}
