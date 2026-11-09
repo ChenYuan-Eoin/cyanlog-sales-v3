@@ -63,16 +63,16 @@
       "summary": {
         "full_tests": "443 files passed / 3340 tests passed; 1 file and 5 tests skipped",
         "dev": "10 real Groovy/HTTP/SQL scenarios passed with explicitly simulated Fxiaoke/PostgREST transport",
-        "production": "not released; Preview prerequisites missing"
+        "production": "Not released; full signed Preview preflight returns CRM_PREFLIGHT_FAILED; release-order exception requested, not approved"
       }
     }
   },
-  "updatedAt": "2026-11-09T03:55:38.610Z",
+  "updatedAt": "2026-11-09T03:56:38.560Z",
   "completionState": "code_green",
   "gateSnapshots": {
     "code_green": {
       "stage": "code_green",
-      "checkedAt": "2026-11-09T03:55:38.592Z",
+      "checkedAt": "2026-11-09T03:56:38.543Z",
       "head": "5316651dd42e14e843ca93f16c5f57d252757b6f",
       "originMain": "edeb8a29bb03dfe0e3340e7f7eb10c656dd758b7",
       "remoteMain": "edeb8a29bb03dfe0e3340e7f7eb10c656dd758b7",
@@ -81,9 +81,9 @@
       "originMainFresh": true,
       "originMainIsAncestor": true,
       "mainIntegrated": false,
-      "localAttestationRefOid": "06242c6771b339ad47bbb7ee5c15c275db430454",
+      "localAttestationRefOid": "bb480219f2cbf524eae18e89ab4a370f03cefee7",
       "remoteAttestationRefOid": "06242c6771b339ad47bbb7ee5c15c275db430454",
-      "remoteSnapshotCheckedAt": "2026-11-09T03:55:36.112Z",
+      "remoteSnapshotCheckedAt": "2026-11-09T03:56:36.115Z",
       "vercelProduction": null,
       "verifier": {
         "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
@@ -93,10 +93,111 @@
       }
     }
   },
-  "previousAttestationDigest": null,
-  "previousAttestation": null,
-  "revision": 1,
-  "contentDigest": "556ce30d05d929769bfdb80f4684b7e2691e987bda1a8a750c9dbc4b60cf3943",
-  "sealedAt": "2026-11-09T03:55:38.610Z",
-  "attestationDigest": "6cf09686f085adc0cee74ec08c81fbf0d6ff839faa72d070408d5b51f1fce305"
+  "previousAttestationDigest": "6cf09686f085adc0cee74ec08c81fbf0d6ff839faa72d070408d5b51f1fce305",
+  "previousAttestation": {
+    "version": 1,
+    "activeId": "WP97",
+    "commit": "5316651dd42e14e843ca93f16c5f57d252757b6f",
+    "evidence": {
+      "code": {
+        "commit": "5316651dd42e14e843ca93f16c5f57d252757b6f",
+        "branch": "codex/wp97-apl-live-bridge",
+        "checks": {
+          "target_tests": true,
+          "full_tests": true,
+          "lint": true,
+          "typecheck": true,
+          "build": true
+        },
+        "commands": [
+          {
+            "name": "target_tests",
+            "command": "pnpm test:run lib/shipping/fxiaoke-apl lib/shipping/crm-intake.test.ts lib/shipping/shipping-crm-intake-migration.test.ts app/api/shipping/crm/crm-routes.test.ts",
+            "artifact_path": "wp97-target-current.log",
+            "log_sha256": "bb0fb0873cdd8e0b4bc7fbc76136df4c57e29e13537668c0bd57e44ed1530287",
+            "exit_code": 0,
+            "timeout": false
+          },
+          {
+            "name": "full_tests",
+            "command": "bash /Users/nsss/.codex/worktrees/wp92-directory-resume/Price-v3/governance/ai-behavior-准则/checks/check-03-test.sh",
+            "artifact_path": "check-logs/a20fc373ad6a517c435cab9c81aeabae0c2e605d/check-03-test.log",
+            "log_sha256": "33b09abdb0f33b2cb5c3627941aa5c15f1f8b6de5b207b918e691358541e883c",
+            "exit_code": 0,
+            "timeout": false
+          },
+          {
+            "name": "lint",
+            "command": "bash /Users/nsss/.codex/worktrees/wp92-directory-resume/Price-v3/governance/ai-behavior-准则/checks/check-02-lint.sh",
+            "artifact_path": "check-logs/a20fc373ad6a517c435cab9c81aeabae0c2e605d/check-02-lint.log",
+            "log_sha256": "f910944190ab3363961722b8359ecc2958f6abb77e20cf94211c1904cc1f1733",
+            "exit_code": 0,
+            "timeout": false
+          },
+          {
+            "name": "typecheck",
+            "command": "bash /Users/nsss/.codex/worktrees/wp92-directory-resume/Price-v3/governance/ai-behavior-准则/checks/check-01-typecheck.sh",
+            "artifact_path": "check-logs/a20fc373ad6a517c435cab9c81aeabae0c2e605d/check-01-typecheck.log",
+            "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348",
+            "exit_code": 0,
+            "timeout": false
+          },
+          {
+            "name": "build",
+            "command": "pnpm build",
+            "artifact_path": "wp97-build-current.log",
+            "log_sha256": "3de7f54af97acce8d4fb38f958c4b6d02d774242294092d33da9e40392c2db97",
+            "exit_code": 0,
+            "timeout": false
+          }
+        ],
+        "behavior_log": {
+          "artifact_path": "behavior-log.jsonl",
+          "sha256": "2f64cd564ed820c0a618a37d3a0d00d06f7ed03c3d9b434bd7d4e5e211ef5a3d",
+          "entry_sha256": "d07605afb62eb3016459bf46737fb61a27c1ed2e3334c791a9805f954c8cb944"
+        },
+        "summary": {
+          "full_tests": "443 files passed / 3340 tests passed; 1 file and 5 tests skipped",
+          "dev": "10 real Groovy/HTTP/SQL scenarios passed with explicitly simulated Fxiaoke/PostgREST transport",
+          "production": "not released; Preview prerequisites missing"
+        }
+      }
+    },
+    "updatedAt": "2026-11-09T03:55:38.610Z",
+    "completionState": "code_green",
+    "gateSnapshots": {
+      "code_green": {
+        "stage": "code_green",
+        "checkedAt": "2026-11-09T03:55:38.592Z",
+        "head": "5316651dd42e14e843ca93f16c5f57d252757b6f",
+        "originMain": "edeb8a29bb03dfe0e3340e7f7eb10c656dd758b7",
+        "remoteMain": "edeb8a29bb03dfe0e3340e7f7eb10c656dd758b7",
+        "remoteProduction": "edeb8a29bb03dfe0e3340e7f7eb10c656dd758b7",
+        "defaultBranch": "main",
+        "originMainFresh": true,
+        "originMainIsAncestor": true,
+        "mainIntegrated": false,
+        "localAttestationRefOid": "06242c6771b339ad47bbb7ee5c15c275db430454",
+        "remoteAttestationRefOid": "06242c6771b339ad47bbb7ee5c15c275db430454",
+        "remoteSnapshotCheckedAt": "2026-11-09T03:55:36.112Z",
+        "vercelProduction": null,
+        "verifier": {
+          "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+          "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+          "worktree": "git status --porcelain=v1 --untracked-files=all",
+          "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+        }
+      }
+    },
+    "previousAttestationDigest": null,
+    "previousAttestation": null,
+    "revision": 1,
+    "contentDigest": "556ce30d05d929769bfdb80f4684b7e2691e987bda1a8a750c9dbc4b60cf3943",
+    "sealedAt": "2026-11-09T03:55:38.610Z",
+    "attestationDigest": "6cf09686f085adc0cee74ec08c81fbf0d6ff839faa72d070408d5b51f1fce305"
+  },
+  "revision": 2,
+  "contentDigest": "7c884e80e8fad6ba63920cb59a81e644d4a7e3566b743b84de552ad15343be73",
+  "sealedAt": "2026-11-09T03:56:38.561Z",
+  "attestationDigest": "21bf299b3fe4be16ac2f5fe771e4925f5a01ade343ef220156dc1a7ba0bc7c93"
 }
