@@ -71,24 +71,47 @@
       "rollback_commit": "d9f861f3bf5bb856eb8401378424262ca0f01c69",
       "production_database_write": false,
       "carrier_calls": false
+    },
+    "production": {
+      "commit": "6e99e264632982b7895626a8f21c2db059fd8a5e",
+      "deployment_id": "dpl_6qSyUpsVjeVRpQ3yDTYr4V1HdYMB",
+      "deployment_status": "READY",
+      "environment": "production",
+      "url": "https://sales.cyanlog.icu",
+      "alias_deployment_id": "dpl_6qSyUpsVjeVRpQ3yDTYr4V1HdYMB",
+      "approval": "IN-20261109-022",
+      "release_mode": "approved_anonymous_intake_followup",
+      "legacy_formal_gate": "not_passed_not_claimed",
+      "observed_at": "2026-11-09T09:16:23.750484+00:00",
+      "remote_production_sha": "6e99e264632982b7895626a8f21c2db059fd8a5e",
+      "records_count": 57,
+      "production_database_write": false,
+      "carrier_calls": false,
+      "artifact_sha256": {
+        "production-http.json": "0d88af05603e13dbf12c6ee4a1ec0a48a5fdd7d5a8a7126662c4f6ec2fb8cfca",
+        "production-chrome.json": "b65c5d0d8ae80912bb7ed319694f9895e2c5fc1e2c1b5eef249f458ee7107608",
+        "vercel-production-inspect.log": "125a24773f264e1a5be699efe69f45dcf27aebfddc138533ac681064449c43d3",
+        "production-desktop.jpg": "74775e377373f71240e2f5ae1445ecb263afd36dc74d53fa648d4a61c51391fb",
+        "production-mobile.jpg": "99e80108f3edee378673dc61d663999472d13a06459b514a0d37c76da2a847da"
+      }
     }
   },
-  "updatedAt": "2026-11-09T09:10:13.907Z",
+  "updatedAt": "2026-11-09T09:16:27.091Z",
   "gateSnapshots": {
     "executing": {
       "stage": "executing",
-      "checkedAt": "2026-11-09T09:10:13.886Z",
+      "checkedAt": "2026-11-09T09:16:27.069Z",
       "head": "6e99e264632982b7895626a8f21c2db059fd8a5e",
       "originMain": "d9f861f3bf5bb856eb8401378424262ca0f01c69",
       "remoteMain": "d9f861f3bf5bb856eb8401378424262ca0f01c69",
-      "remoteProduction": "d9f861f3bf5bb856eb8401378424262ca0f01c69",
+      "remoteProduction": "6e99e264632982b7895626a8f21c2db059fd8a5e",
       "defaultBranch": "main",
       "originMainFresh": true,
       "originMainIsAncestor": true,
       "mainIntegrated": false,
-      "localAttestationRefOid": "8cf0e678b3d68221eafd4bb598a32cc4fecc18b1",
-      "remoteAttestationRefOid": "8cf0e678b3d68221eafd4bb598a32cc4fecc18b1",
-      "remoteSnapshotCheckedAt": "2026-11-09T09:10:11.797Z",
+      "localAttestationRefOid": "16ec2c47dbf6660e0184810a6c0212e0fd9e2ba6",
+      "remoteAttestationRefOid": "16ec2c47dbf6660e0184810a6c0212e0fd9e2ba6",
+      "remoteSnapshotCheckedAt": "2026-11-09T09:16:23.968Z",
       "vercelProduction": null,
       "verifier": {
         "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
@@ -98,10 +121,116 @@
       }
     }
   },
-  "previousAttestationDigest": null,
-  "previousAttestation": null,
-  "revision": 1,
-  "contentDigest": "931812bdc33047afe57cf27a4fbd5b964d7091e09712dbc547fbbe4d54a82d46",
-  "sealedAt": "2026-11-09T09:10:13.908Z",
-  "attestationDigest": "ba242c22d305a1944fb8f87e5e02490987bf98f1ae9ac59ad05c49ff874e6f5a"
+  "previousAttestationDigest": "ba242c22d305a1944fb8f87e5e02490987bf98f1ae9ac59ad05c49ff874e6f5a",
+  "previousAttestation": {
+    "version": 1,
+    "activeId": "WP19",
+    "commit": "6e99e264632982b7895626a8f21c2db059fd8a5e",
+    "evidence": {
+      "code": {
+        "commit": "6e99e264632982b7895626a8f21c2db059fd8a5e",
+        "checks": {
+          "target_tests": true,
+          "full_tests": true,
+          "lint": true,
+          "typecheck": true,
+          "build": true,
+          "security": true,
+          "file_gate": true
+        },
+        "commands": [
+          {
+            "name": "target_tests",
+            "exit_code": 0,
+            "artifact_path": "intake-records/target-tests.log",
+            "log_sha256": "dff485b8b7875bdab88b88f04d862c68291c38aca383158d5f9390ae29f887c2"
+          },
+          {
+            "name": "full_tests",
+            "exit_code": 0,
+            "artifact_path": "intake-records/full-tests.log",
+            "log_sha256": "5b2950d745f7cb9d652046f30ec8e12808ef95ab9f904b1560348e2d74ccf54b"
+          },
+          {
+            "name": "lint",
+            "exit_code": 0,
+            "artifact_path": "intake-records/lint.log",
+            "log_sha256": "ca1cfb2b5eb3709f5c86c0e3ccff8ea9b5737bd23bf25b44e45abc6658922361"
+          },
+          {
+            "name": "typecheck",
+            "exit_code": 0,
+            "artifact_path": "intake-records/typecheck.log",
+            "log_sha256": "c79aba33bcec6e0b60e15499955e9cb5391de590a703423629e7f5031a3be04b"
+          },
+          {
+            "name": "build",
+            "exit_code": 0,
+            "artifact_path": "intake-records/build.log",
+            "log_sha256": "ac7dff777d853cf725d5bd8bfdb6ae0e043aa913a4e3d3bde65b3333085e3024"
+          },
+          {
+            "name": "security",
+            "exit_code": 0,
+            "artifact_path": "intake-records/security.log",
+            "log_sha256": "1c3f8b84d12f172f99487a8f82fa4c370a0020f8155ef4d26a6fa881a716dd66"
+          },
+          {
+            "name": "file_gate",
+            "exit_code": 0,
+            "artifact_path": "intake-records/file-gate.log",
+            "log_sha256": "ba17de84dfee5820734560499392ffc37b8961b7408d53b950730570548195bc"
+          }
+        ],
+        "observed_at": "2026-11-09T09:10:11.547918+00:00",
+        "tests": {
+          "passed": 3368,
+          "skipped": 5,
+          "target_passed": 47
+        },
+        "approval": "IN-20261109-022",
+        "limitations": [
+          "User-approved temporary public records supersede the old employee-only list rule. Legacy WeCom/Preview formal contract is not marked passed."
+        ],
+        "rollback_commit": "d9f861f3bf5bb856eb8401378424262ca0f01c69",
+        "production_database_write": false,
+        "carrier_calls": false
+      }
+    },
+    "updatedAt": "2026-11-09T09:10:13.907Z",
+    "gateSnapshots": {
+      "executing": {
+        "stage": "executing",
+        "checkedAt": "2026-11-09T09:10:13.886Z",
+        "head": "6e99e264632982b7895626a8f21c2db059fd8a5e",
+        "originMain": "d9f861f3bf5bb856eb8401378424262ca0f01c69",
+        "remoteMain": "d9f861f3bf5bb856eb8401378424262ca0f01c69",
+        "remoteProduction": "d9f861f3bf5bb856eb8401378424262ca0f01c69",
+        "defaultBranch": "main",
+        "originMainFresh": true,
+        "originMainIsAncestor": true,
+        "mainIntegrated": false,
+        "localAttestationRefOid": "8cf0e678b3d68221eafd4bb598a32cc4fecc18b1",
+        "remoteAttestationRefOid": "8cf0e678b3d68221eafd4bb598a32cc4fecc18b1",
+        "remoteSnapshotCheckedAt": "2026-11-09T09:10:11.797Z",
+        "vercelProduction": null,
+        "verifier": {
+          "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+          "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+          "worktree": "git status --porcelain=v1 --untracked-files=all",
+          "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+        }
+      }
+    },
+    "previousAttestationDigest": null,
+    "previousAttestation": null,
+    "revision": 1,
+    "contentDigest": "931812bdc33047afe57cf27a4fbd5b964d7091e09712dbc547fbbe4d54a82d46",
+    "sealedAt": "2026-11-09T09:10:13.908Z",
+    "attestationDigest": "ba242c22d305a1944fb8f87e5e02490987bf98f1ae9ac59ad05c49ff874e6f5a"
+  },
+  "revision": 2,
+  "contentDigest": "71e7121e3c9ea3caaadf715ba673b2a299e7bf8b9f45eed12919dd687b53388c",
+  "sealedAt": "2026-11-09T09:16:27.092Z",
+  "attestationDigest": "576a95b323f2b6444962171fbb9138456b0769c961e795ea503c1482184ab504"
 }
