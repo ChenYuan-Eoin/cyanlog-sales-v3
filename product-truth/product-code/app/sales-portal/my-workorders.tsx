@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { ShipmentReceipt } from '@/lib/shipping/types'
 import styles from './sales-portal.module.css'
 const labels: Record<string, string> = { awaiting_confirmation: '待审核', returned: '已退回，请联系操作员补充资料', confirmed: '已确认', ordering: '下单中', order_unknown: '下单结果待确认', waybill_created: '运单已生成', in_transit: '运输中', delivered: '已签收', cancelled: '已取消', order_failed: '下单未成功', accepted: '已受理' }
@@ -9,6 +9,8 @@ export default function MyWorkorders() {
   const [orders, setOrders] = useState<ShipmentReceipt[] | null>(null), [busy, setBusy] = useState(true), [error, setError] = useState('')
   const [nextPage, setNextPage] = useState<number | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const [expandedHeight, setExpandedHeight] = useState(720)
+  const listRef = useRef<HTMLDivElement>(null)
   const listId = useId()
   const load = useCallback(async (page = 0) => {
     setBusy(true); setError('')
@@ -33,19 +35,19 @@ export default function MyWorkorders() {
     <p className={styles.hint}>全部快递 · 按提报日期分组</p>
     <div className={styles.recordToolbar}>
       <button type="button" disabled={busy} onClick={() => void load()}>{busy ? '正在读取…' : '刷新提报记录'}</button>
-      {canExpand && <button type="button" aria-expanded={expanded} aria-controls={listId} onClick={() => setExpanded(current => !current)}>{expanded ? '收起 · 最近5条' : '查看更早记录'}</button>}
+      {canExpand && <button type="button" aria-expanded={expanded} aria-controls={listId} onClick={() => { if (!expanded) setExpandedHeight(Math.max(720, (listRef.current?.getBoundingClientRect().height || 0) + 160)); setExpanded(current => !current) }}>{expanded ? '收起 · 最近5条' : '查看更早记录'}</button>}
     </div>
     {error && <p role="alert">{error}</p>}
     {orders && <>
       {orders.length === 0 && <p>尚无提报记录</p>}
-      <div id={listId} role="region" aria-label="按日期分组的提报记录" tabIndex={expanded ? 0 : undefined} className={`${styles.recordGroups} ${expanded ? styles.recordGroupsExpanded : ''}`}>
+      <div ref={listRef} id={listId} role="region" aria-label="按日期分组的提报记录" tabIndex={expanded ? 0 : undefined} style={expanded ? { maxHeight: expandedHeight } : undefined} className={`${styles.recordGroups} ${expanded ? styles.recordGroupsExpanded : ''}`}>
       {[...groups].map(([date, dayOrders]) => <section className={styles.recordGroup} key={date} aria-label={date}>
         <h3>{date}</h3>
         <ul>{dayOrders.map(order => <li key={order.orderNo}>
         <div className={styles.recordMeta}>{order.createdAt && <time dateTime={order.createdAt}>{timeFormat.format(new Date(order.createdAt))}</time>}<span>{labels[order.status] || '处理中'}</span></div>
         <span className={styles.recordCustomer} title={order.customerName || '未填客户'}>{order.customerName || '未填客户'}</span>
         <strong>{order.orderNo}</strong>
-        {order.waybill && <span>顺丰运单号：{order.waybill}</span>}
+        {order.waybill && <span>顺丰运单号：<strong className={styles.waybillNumber}>{order.waybill}</strong></span>}
       </li>)}</ul></section>)}
       </div>
       {expanded && nextPage !== null && <button type="button" disabled={busy} onClick={() => void load(nextPage)}>加载更多快递</button>}

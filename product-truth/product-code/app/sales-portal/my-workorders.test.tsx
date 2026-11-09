@@ -60,3 +60,14 @@ it('groups by Shanghai calendar date and shows the submitted customer badge and 
  expect(within(priorDay).getByText('EARLY')).toBeTruthy();expect(within(priorDay).getByText('23:55')).toBeTruthy()
  expect(within(priorDay).getByText('未填客户')).toBeTruthy()
 })
+
+it('expands beyond the actual height of five records even with many date headers',async()=>{
+ fetcher.mockResolvedValue(response({orders:Array.from({length:8},(_,i)=>order(`HEIGHT-${i}`)),nextPage:null}))
+ render(<MyWorkorders/>);await screen.findByText('HEIGHT-0')
+ const region=screen.getByRole('region',{name:'按日期分组的提报记录'})
+ vi.spyOn(region,'getBoundingClientRect').mockReturnValue({height:900} as DOMRect)
+ fireEvent.click(screen.getByRole('button',{name:'查看更早记录'}))
+ expect(parseFloat(region.style.maxHeight)).toBeGreaterThan(900)
+ fireEvent.click(screen.getByRole('button',{name:'收起 · 最近5条'}))
+ expect(region.style.maxHeight).toBe('')
+})

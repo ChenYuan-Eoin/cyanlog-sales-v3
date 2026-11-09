@@ -122,3 +122,25 @@ it('keeps the current shipment summary and records navigation for anonymous visi
  expect(screen.getByRole('region',{name:'本次寄件摘要'}).textContent).toContain('摘要收件人')
  expect(screen.queryByText('使用企业微信验证身份')).toBeNull()
 })
+
+it('keeps configured company requirements visible after typing and reports trimmed-length errors',()=>{
+ render(<SalesRequestForm employee={employee} rules={{companyName:{enabled:true,required:true,minLength:4},team:{enabled:false,required:false,minLength:0},teamOptions:[]}}/>)
+ const company=screen.getByLabelText('客户公司名称')
+ expect(screen.getByText('必填 · 至少4个字符，最多120个字符（不计首尾空格）')).toBeTruthy()
+ fireEvent.change(company,{target:{value:'  短名  '}});fireEvent.blur(company)
+ expect(company.getAttribute('aria-invalid')).toBe('true');expect(screen.getByText('公司名称至少填写4个字符')).toBeTruthy()
+ fireEvent.change(company,{target:{value:'有效客户名称'}})
+ expect(company.getAttribute('aria-invalid')).toBe('false');expect(screen.queryByText('公司名称至少填写4个字符')).toBeNull()
+ expect(screen.getByText('必填 · 至少4个字符，最多120个字符（不计首尾空格）')).toBeTruthy()
+})
+
+it('passes public company defaults into the anonymous form and retains visible company rules',async()=>{
+ const options={services:[{id:2,name:'顺丰标快',preference:'standard' as const}],requireVerification:false,emailAvailable:false,companySender:employee.sender,rules:{companyName:{enabled:true,required:true,minLength:2},team:{enabled:false,required:false,minLength:0},teamOptions:[]}}
+ fetcher.mockImplementation(async()=>new Response(JSON.stringify(options)))
+ render(<SalesPortal initialOptions={options}/>)
+ expect(screen.getByRole('radio',{name:/公司默认/})).toHaveProperty('checked',true)
+ expect(screen.getByRole('region',{name:'本次寄件摘要'}).textContent).toContain(employee.sender.address)
+ expect(screen.getByText('必填 · 至少2个字符，最多120个字符（不计首尾空格）')).toBeTruthy()
+ await waitFor(()=>expect(fetcher).toHaveBeenCalled())
+ expect(fetcher.mock.calls.every(([url])=>url==='/api/shipping/public/options')).toBe(true)
+})

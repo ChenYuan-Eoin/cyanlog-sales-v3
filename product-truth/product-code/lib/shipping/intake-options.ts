@@ -2,10 +2,17 @@ import { loadIntakeSettings } from './intake-settings'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
 import { resolvePublicShippingOrgId } from './runtime-config'
+import { contactSchema } from './validation'
 import { DEFAULT_INTAKE_SERVICES, SF_SERVICE_CATALOG, type ShippingServiceOption } from './sf-service-catalog'
 
 export async function loadPublicIntakeOptions() {
-  return loadIntakeOptionsForOrg(await resolvePublicShippingOrgId())
+  const orgId = await resolvePublicShippingOrgId()
+  const [options, sender] = await Promise.all([
+    loadIntakeOptionsForOrg(orgId),
+    supabaseAdmin.from('shipping_sender_profiles').select('name,phone,province,city,county,address').eq('org_id', orgId).eq('is_default', true).maybeSingle(),
+  ])
+  const company = contactSchema.strip().safeParse(sender.error ? null : sender.data)
+  return { ...options, companySender: company.success ? company.data : null }
 }
 
 /** Only call with an organization resolved from a trusted session or bot record. */

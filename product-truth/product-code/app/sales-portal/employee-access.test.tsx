@@ -5,7 +5,7 @@ import EmployeeAccess from './employee-access'
 const fetcher=vi.fn()
 const profile={id:'staff-1',email:'',wecom:true,companyName:'示例企业',team:'华南组',updatedAt:'2026-10-10T00:00:00Z',phoneSource:'wecom' as const,sender:{name:'陈源',phone:'13800000000',province:'广东省',city:'深圳市',county:'南山区',address:'示例路88号'}}
 const response=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status})
-beforeEach(()=>{vi.stubGlobal('React',React);vi.stubGlobal('fetch',fetcher);fetcher.mockReset();fetcher.mockImplementation(async()=>response({employee:profile,orders:[]}))})
+beforeEach(()=>{vi.stubGlobal('React',React);vi.stubGlobal('fetch',fetcher);fetcher.mockReset();localStorage.clear();fetcher.mockImplementation(async()=>response({employee:profile,orders:[]}))})
 afterEach(()=>{cleanup();vi.unstubAllGlobals()})
 function mount(required=true){return render(<EmployeeAccess requireVerification={required}>{({controls,identityControls,canSubmit})=><>{identityControls}{controls}<button disabled={!canSubmit}>提报就绪</button></>}</EmployeeAccess>)}
 it('keeps the form hidden before whitelist identity is verified',async()=>{fetcher.mockResolvedValue(response({employee:null}));mount();expect(screen.queryByLabelText('寄件人姓名')).toBeNull();expect(await screen.findByRole('link',{name:'使用企业微信验证身份'})).toBeTruthy();expect(screen.queryByLabelText('公司邮箱')).toBeNull()})
@@ -55,4 +55,38 @@ it('refreshes identity without discarding an edited address and preserves draft 
  await screen.findByText('资料已变化，请重新读取后保存。')
  expect(screen.getByLabelText('详细寄件地址')).toHaveProperty('value','待保存路99号')
  expect(screen.getByRole('button',{name:'提报就绪'})).toHaveProperty('disabled',true)
+})
+
+it('restores anonymous company, device common and custom choices without employee requests',async()=>{
+ const company={...profile.sender,name:'公司前台',address:'公司默认路16号'}
+ const renderForm=()=> <EmployeeAccess companySender={company} rules={{companyName:{enabled:true,required:true,minLength:2},team:{enabled:false,required:false,minLength:0},teamOptions:[]}}>{({controls,sender})=><>{controls}<output aria-label="当前寄件地址">{sender.name}|{sender.address}</output></>}</EmployeeAccess>
+ const view=render(renderForm())
+ expect(screen.getByRole('radio',{name:/公司默认/})).toHaveProperty('checked',true)
+ expect(screen.getByLabelText('当前寄件地址').textContent).toBe('公司前台|公司默认路16号')
+ expect(screen.getByRole('radio',{name:/我的常用/})).toHaveProperty('disabled',true)
+ fireEvent.click(screen.getByRole('radio',{name:/自定义地址/}))
+ fireEvent.change(screen.getByLabelText('寄件人姓名'),{target:{value:'我的姓名'}})
+ fireEvent.change(screen.getByLabelText('详细寄件地址'),{target:{value:'我的常用路99号'}})
+ fireEvent.click(screen.getByLabelText('同时保存为我的常用地址（本设备）'));fireEvent.click(screen.getByRole('button',{name:'使用此地址'}))
+ expect(screen.getByRole('radio',{name:/我的常用/})).toHaveProperty('checked',true)
+ fireEvent.click(screen.getByRole('radio',{name:/公司默认/}))
+ expect(screen.getByLabelText('当前寄件地址').textContent).toBe('公司前台|公司默认路16号')
+ expect(JSON.parse(localStorage.getItem('shipping-anonymous-sender-v1')!).sender.address).toBe('我的常用路99号')
+ fireEvent.click(screen.getByRole('radio',{name:/我的常用/}))
+ expect(screen.getByLabelText('当前寄件地址').textContent).toBe('我的姓名|我的常用路99号')
+ fireEvent.click(screen.getByRole('radio',{name:/自定义地址/}));fireEvent.change(screen.getByLabelText('详细寄件地址'),{target:{value:'临时未保存路8号'}})
+ fireEvent.click(screen.getByRole('radio',{name:/公司默认/}));fireEvent.click(screen.getByRole('radio',{name:/自定义地址/}))
+ expect(screen.getByLabelText('详细寄件地址')).toHaveProperty('value','临时未保存路8号')
+ fireEvent.click(screen.getByRole('button',{name:'取消编辑'}))
+ expect(screen.getByLabelText('当前寄件地址').textContent).toBe('公司前台|公司默认路16号')
+ view.unmount();render(renderForm())
+ expect(screen.getByRole('radio',{name:/我的常用/})).toHaveProperty('checked',true)
+ expect(screen.getByLabelText('当前寄件地址').textContent).toBe('我的姓名|我的常用路99号')
+ expect(fetcher).not.toHaveBeenCalled()
+})
+it('does not overwrite a manual draft when company options arrive late',()=>{
+ const renderForm=(companySender:typeof profile.sender|null)=><EmployeeAccess companySender={companySender}>{({controls})=><>{controls}</>}</EmployeeAccess>
+ const view=render(renderForm(null));fireEvent.change(screen.getByLabelText('寄件人姓名'),{target:{value:'正在填写'}})
+ view.rerender(renderForm(profile.sender))
+ expect(screen.getByLabelText('寄件人姓名')).toHaveProperty('value','正在填写')
 })
