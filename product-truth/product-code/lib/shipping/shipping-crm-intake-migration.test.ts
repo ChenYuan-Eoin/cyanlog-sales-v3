@@ -49,6 +49,17 @@ function callSql(args: { orderId: string; orderNo: string; hash?: string } = { o
   `
 }
 
+function replaySql(hash = payloadHash) {
+  return `
+    select public.replay_shipping_crm_intake(
+      '${orgId}'::uuid,
+      'fxiaoke-prod',
+      '${eventKey}',
+      '${hash}'
+    ) as result
+  `
+}
+
 describe('CRM shipping intake migration', () => {
   let db: PGlite
 
@@ -81,6 +92,12 @@ describe('CRM shipping intake migration', () => {
         created_at timestamptz not null default now(),
         unique (intake_source, idempotency_key)
       );
+      create table public.shipping_waybills (
+        id uuid primary key default gen_random_uuid(),
+        shipping_order_id uuid not null unique references public.shipping_orders(id),
+        waybill_no text not null,
+        provider_order_id text
+      );
       insert into public.organizations (id) values ('${orgId}');
     `)
     await db.exec(migration)
@@ -101,6 +118,8 @@ describe('CRM shipping intake migration', () => {
       customer_ref: string
       identity_snapshot: Record<string, unknown>
       event_count: number
+      replay_count: number
+      last_replayed_at: string | null
       workflow_instance_id: string
       applicant_employee_id: string
       customer_account_id: string
@@ -113,6 +132,8 @@ describe('CRM shipping intake migration', () => {
         orders.customer_ref,
         orders.identity_snapshot,
         (select count(*)::int from public.shipping_crm_intake_events) as event_count,
+        events.replay_count,
+        events.last_replayed_at,
         events.workflow_instance_id,
         events.applicant_snapshot->>'employeeId' as applicant_employee_id,
         events.customer_snapshot->>'accountId' as customer_account_id,
@@ -127,6 +148,8 @@ describe('CRM shipping intake migration', () => {
       sales_ref: 'sales-1093',
       customer_ref: 'account-1',
       event_count: 1,
+      replay_count: 0,
+      last_replayed_at: null,
       workflow_instance_id: 'instance-1',
       applicant_employee_id: 'sales-1093',
       customer_account_id: 'account-1',
@@ -140,14 +163,26 @@ describe('CRM shipping intake migration', () => {
     const replay = await db.query<{ result: { created: boolean; order_id: string } }>(callSql({ orderId: secondOrderId, orderNo: 'SO-20261106-REPLAY01' }))
     expect(replay.rows[0].result).toMatchObject({ created: false, order_id: firstOrderId })
 
-    const counts = await db.query<{ orders: number; events: number }>(`
+    await db.exec(`
+      update public.shipping_orders set status = 'waybill_created' where id = '${firstOrderId}';
+      insert into public.shipping_waybills (shipping_order_id, waybill_no, provider_order_id)
+      values ('${firstOrderId}', 'SF1234567890123', 'provider-order-1');
+    `)
+    const auditedReplay = await db.query<{ result: { created: boolean; order_id: string; status: string; waybill_no: string | null } }>(replaySql())
+    expect(auditedReplay.rows[0].result).toMatchObject({ created: false, order_id: firstOrderId, status: 'waybill_created', waybill_no: 'SF1234567890123' })
+
+    const counts = await db.query<{ orders: number; events: number; replay_count: number; last_replayed_at: string | null }>(`
       select
         (select count(*)::int from public.shipping_orders) as orders,
-        (select count(*)::int from public.shipping_crm_intake_events) as events
+        (select count(*)::int from public.shipping_crm_intake_events) as events,
+        (select replay_count from public.shipping_crm_intake_events limit 1) as replay_count,
+        (select last_replayed_at::text from public.shipping_crm_intake_events limit 1) as last_replayed_at
     `)
-    expect(counts.rows[0]).toEqual({ orders: 1, events: 1 })
+    expect(counts.rows[0]).toMatchObject({ orders: 1, events: 1, replay_count: 2 })
+    expect(counts.rows[0].last_replayed_at).toBeTruthy()
 
     await expect(db.query(callSql({ orderId: secondOrderId, orderNo: 'SO-20261106-CONFLICT', hash: 'd'.repeat(64) }))).rejects.toThrow(/CRM_INTAKE_PAYLOAD_CONFLICT/)
+    await expect(db.query(replaySql('d'.repeat(64)))).rejects.toThrow(/CRM_INTAKE_PAYLOAD_CONFLICT/)
     const afterConflict = await db.query<{ orders: number; events: number }>(`
       select
         (select count(*)::int from public.shipping_orders) as orders,

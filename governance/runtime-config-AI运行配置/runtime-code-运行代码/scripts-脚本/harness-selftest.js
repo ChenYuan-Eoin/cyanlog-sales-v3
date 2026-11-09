@@ -20,6 +20,7 @@ const {
   FXIAOKE_SSO_CONTRACT,
   SHIPPING_SERVICE_SELECTION_CONTRACT,
   SHIPPING_SETTINGS_CONTRACT,
+  CRM_INTAKE_CONTRACT,
   SHIPPING_COLLABORATION_ACTIONS,
   SHIPPING_CONFIG_UI_ITEMS,
   SHIPPING_CONFIG_UI_ACTIONS,
@@ -992,6 +993,80 @@ function runApplicationPermissionReleaseSelftest(repoRoot, scheduler, options) {
     })().catch(error => { console.error(error); process.exitCode = 1; });
   `], { encoding: 'utf8' });
   assert.strictEqual(collectorTest.status, 0, collectorTest.stderr || collectorTest.stdout);
+}
+
+function runCrmIntakeContractSelftest() {
+  const verifier = require('./crm-intake-verifier');
+  const commit = 'a'.repeat(40), deploymentId = 'dpl_CrmIntakeSelftest';
+  const event = {
+    enterpriseId: 'ea-cyanlog', workflowInstanceId: 'instance-1', objectApiName: 'ContractObj',
+    recordId: 'record-1', shipmentDetailId: 'detail-1', taskId: 'task-1', stageId: 'stage-approved', revisionId: 'revision-1'
+  };
+  const eventKey = 'b'.repeat(64), orderId = '22222222-2222-4222-8222-222222222222';
+  assert.strictEqual(verifier.CONTRACT, CRM_INTAKE_CONTRACT);
+  assert.deepStrictEqual(verifier.ITEMS, ['crm_preflight', 'crm_unique_pending_workorder', 'crm_repeat_same_workorder', 'crm_waybill_null']);
+  assert.deepStrictEqual(requiredReplayActions({
+    active_task: { delivery_contract: { runtime_profile: 'shipping_workspace', runtime_contract_version: CRM_INTAKE_CONTRACT } }
+  }), verifier.PREVIEW_ACTIONS);
+  assert.deepStrictEqual(requiredReplayActions({
+    active_task: { delivery_contract: { runtime_profile: 'shipping_workspace', runtime_contract_version: CRM_INTAKE_CONTRACT } }
+  }, 'production'), verifier.PRODUCTION_ACTIONS);
+
+  const scope = {
+    activeId: 'WP97', featureId: 'F054', runtimeProfile: 'shipping_workspace', runtimeContractVersion: CRM_INTAKE_CONTRACT,
+    targetState: 'production_released', productionDatabaseMode: 'controlled_write_approved',
+    productionReleaseAuthorization: {
+      status: 'approved_for_final_release', production_database_write_authorized: true,
+      carrier_calls_authorized: false, organization_sync_authorized: false, identity_or_role_change_authorized: false
+    },
+    requiredRuntimeEvidence: [...verifier.ITEMS], requiredProductionRuntimeEvidence: [...verifier.ITEMS]
+  };
+  assert.deepStrictEqual(verifier.contractScopeBlockers(scope), []);
+  for (const change of [
+    value => { value.activeId = 'WP92' },
+    value => { value.runtimeContractVersion = 'f054-v2' },
+    value => { value.productionReleaseAuthorization.carrier_calls_authorized = true },
+    value => { value.requiredRuntimeEvidence = ['shipping_workspace', ...verifier.ITEMS] },
+    value => { value.requiredProductionRuntimeEvidence = verifier.ITEMS.slice(1) }
+  ]) {
+    const invalid = structuredClone(scope); change(invalid);
+    assert.ok(verifier.contractScopeBlockers(invalid).length);
+  }
+
+  const previewCommon = {
+    contract_version: CRM_INTAKE_CONTRACT, environment: 'preview', origin: 'https://crm-preview.example.invalid',
+    commit, deployment_id: deploymentId, event, event_key: eventKey, production_claimed: false, business_mutations: 0
+  };
+  const preview = {
+    crm_preflight: { payload: { ...previewCommon, source: 'live_preview_crm_intake_verifier', http_status: 200, ready: true, signature_verified: true, missing_count: 0 } },
+    crm_unique_pending_workorder: { payload: { ...previewCommon, source: 'isolated_migration_test', migration_test_passed: true, event_count: 1, order_count: 1, status: 'awaiting_confirmation' } },
+    crm_repeat_same_workorder: { payload: { ...previewCommon, source: 'isolated_migration_test', replay_test_passed: true, created: false, same_order: true, event_count: 1, order_count: 1, replay_count: 1 } },
+    crm_waybill_null: { payload: { ...previewCommon, source: 'isolated_contract_assertion', waybill: null, waybill_rows: 0, tracking_events: 0, carrier_calls_executed: 0 } }
+  };
+  assert.deepStrictEqual(verifier.previewEvidenceBlockers(preview, 'preview', { commit, deploymentId }), []);
+  const duplicatePreview = structuredClone(preview);
+  duplicatePreview.crm_unique_pending_workorder.payload.event_count = 2;
+  assert.ok(verifier.previewEvidenceBlockers(duplicatePreview, 'preview', { commit, deploymentId }).length);
+
+  const productionCommon = {
+    contract_version: CRM_INTAKE_CONTRACT, environment: 'production', origin: verifier.PRODUCTION_ORIGIN,
+    commit, deployment_id: deploymentId, event, event_key: eventKey, order_id: orderId,
+    source_observation_sha256: 'c'.repeat(64)
+  };
+  const production = {
+    crm_preflight: { payload: { ...productionCommon, source: 'live_crm_intake_verifier', http_status: 200, ready: true, signature_verified: true, missing_count: 0 } },
+    crm_unique_pending_workorder: { payload: { ...productionCommon, source: 'live_production_database_read', event_count: 1, order_count: 1, status: 'awaiting_confirmation', intake_source: 'crm', confirmation_policy: 'scheduled_review' } },
+    crm_repeat_same_workorder: { payload: { ...productionCommon, source: 'live_crm_intake_verifier', http_status: 202, created: false, same_order: true, event_count: 1, order_count: 1, replay_count_before: 0, replay_count_after: 1 } },
+    crm_waybill_null: { payload: { ...productionCommon, source: 'live_production_database_read', waybill: null, waybill_rows: 0, tracking_events: 0, carrier_calls_executed: 0, provider_order_id: null } },
+    verifier: { payload: { ...productionCommon, source: 'live_crm_intake_verifier', result: 'pass', actions: [...verifier.PRODUCTION_ACTIONS], attachments: [{}] } }
+  };
+  assert.deepStrictEqual(verifier.productionEvidenceBlockers(production, { commit, deploymentId }), []);
+  const leaked = structuredClone(production); leaked.crm_waybill_null.payload.carrier_calls_executed = 1;
+  assert.ok(verifier.productionEvidenceBlockers(leaked, { commit, deploymentId }).length);
+  assert.throws(
+    () => recordDeliveryEvidence('production_runtime', {}, {}),
+    /controlled live Production verifier/
+  );
 }
 
 function runServiceSelectionContractSelftest(repoRoot) {
@@ -2720,6 +2795,10 @@ function main() {
       runSsoProductionFirstDefectSelftest(legacyRoot);
       return;
     }
+    if (process.argv.includes('--crm-intake-only')) {
+      runCrmIntakeContractSelftest();
+      return;
+    }
     if (process.argv.includes('--service-selection-only')) {
       runServiceSelectionContractSelftest(repoRoot);
       return;
@@ -2735,6 +2814,7 @@ function main() {
     }
     runRemoteSnapshotTransportSelftest(repoRoot);
     runVercelHttpsTransportSelftest(repoRoot);
+    runCrmIntakeContractSelftest();
     if (process.argv.includes('--production-first-only')) {
       runSsoProductionFirstDefectSelftest(repoRoot);
       runShippingContractSelftest(repoRoot);
@@ -2748,7 +2828,7 @@ function main() {
       runConfigurationUiSelftest(repoRoot);
       return;
     }
-    const verifierTests = spawnSync(process.execPath, ['--test', path.join(__dirname, 'shipping-workspace-verifier.test.js'), path.join(__dirname, 'shipping-parser-verifier.test.js'), path.join(__dirname, 'shipping-service-selection-verifier.test.js'), path.join(__dirname, 'shipping-settings-verifier.test.js')], {
+    const verifierTests = spawnSync(process.execPath, ['--test', path.join(__dirname, 'shipping-workspace-verifier.test.js'), path.join(__dirname, 'shipping-parser-verifier.test.js'), path.join(__dirname, 'shipping-service-selection-verifier.test.js'), path.join(__dirname, 'shipping-settings-verifier.test.js'), path.join(__dirname, 'crm-intake-verifier.test.js')], {
       encoding: 'utf8', timeout: 60000
     });
     assert.strictEqual(verifierTests.status, 0, verifierTests.stderr || verifierTests.stdout || 'Shipping verifier offline tests failed');

@@ -59,6 +59,7 @@ const FXIAOKE_SSO_PRODUCTION_ITEMS = Object.freeze(['fxiaoke_sso_login', 'fxiaok
 const SHIPPING_PARSER_CONTRACT = 'f054-parser-v1';
 const SHIPPING_SERVICE_SELECTION_CONTRACT = 'f054-service-selection-v1';
 const SHIPPING_SETTINGS_CONTRACT = 'f054-shipping-settings-v1';
+const CRM_INTAKE_CONTRACT = 'f054-crm-intake-v1';
 const SHIPPING_PARSER_ITEMS = Object.freeze(['shipping_parser']);
 const APPLICATION_PERMISSION_ACTIONS = Object.freeze(['open_roles', 'save_role_permissions', 'verify_saved_permissions', 'revoke_role_permissions', 'verify_access_denied', 'restore_role_permissions']);
 const APPLICATION_PERMISSION_PRODUCTION_ACTIONS = Object.freeze(['open_roles', 'read_effective_permissions', 'edit_role_permissions', 'discard_role_changes', 'verify_no_saved_change']);
@@ -327,6 +328,10 @@ function runtimeContractVersionOf(state) {
   return state.active_task?.delivery_contract?.runtime_contract_version || null;
 }
 function requiredReplayActions(state, environment = 'preview') {
+  if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === CRM_INTAKE_CONTRACT) {
+    const verifier = require('./crm-intake-verifier');
+    return environment === 'production' ? verifier.PRODUCTION_ACTIONS : verifier.PREVIEW_ACTIONS;
+  }
   if (runtimeProfileOf(state) === 'application' && runtimeContractVersionOf(state) === ORGANIZATION_CONNECTIONS_CONTRACT) return require('./organization-connections-verifier').CANDIDATE_ACTIONS;
   if (runtimeProfileOf(state) === 'application' && runtimeContractVersionOf(state) === DIRECTORY_CUTOVER_CONTRACT) return require('./organization-directory-cutover-verifier').CANDIDATE_ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === SHIPPING_SETTINGS_CONTRACT) return require('./shipping-settings-verifier').ACTIONS;
@@ -610,6 +615,7 @@ function validateSchedulerSnapshot(options, candidate) {
   const parserRelease = profile === 'shipping_workspace' && contractVersion === SHIPPING_PARSER_CONTRACT;
   const serviceSelectionRelease = profile === 'shipping_workspace' && contractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT;
   const shippingSettingsRelease = profile === 'shipping_workspace' && contractVersion === SHIPPING_SETTINGS_CONTRACT;
+  const crmIntakeRelease = profile === 'shipping_workspace' && contractVersion === CRM_INTAKE_CONTRACT;
   const fxiaokeProduction = fxiaokeRelease && deliveryContract.target_state === 'production_released';
   const fxiaokeSsoProduction = fxiaokeSsoRelease && deliveryContract.target_state === 'production_released';
   if (!['ai', 'shipping', 'shipping_workspace', 'application'].includes(profile)) errors.push('Unknown runtime evidence profile');
@@ -647,10 +653,23 @@ function validateSchedulerSnapshot(options, candidate) {
   }
   if (['shipping', 'shipping_workspace'].includes(profile) && state.active_task?.feature_id !== 'F054') errors.push('Shipping evidence profile requires the F054 feature binding');
   const applicationRelease = profile === 'application' && [APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, DIRECTORY_SCOPE_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(contractVersion);
-  if (contractVersion && !applicationRelease && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', SHIPPING_PARSER_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_SETTINGS_CONTRACT].includes(contractVersion))) errors.push('Unknown or mismatched runtime contract version');
+  if (contractVersion && !applicationRelease && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', SHIPPING_PARSER_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_SETTINGS_CONTRACT, CRM_INTAKE_CONTRACT].includes(contractVersion))) errors.push('Unknown or mismatched runtime contract version');
   if (parserRelease && (state.active_task.id !== 'WP95' || deliveryContract.production_database_mode !== 'read_only')) errors.push('Parser contract is limited to WP95 without business writes');
   if (serviceSelectionRelease && (state.active_task.id !== 'WP52' || deliveryContract.production_database_mode !== 'read_only')) errors.push('Service selection contract is limited to read-only WP52');
   if (shippingSettingsRelease && (state.active_task.id !== 'WP40' || deliveryContract.production_database_mode !== 'read_only')) errors.push('Shipping settings contract is limited to read-only WP40');
+  if (crmIntakeRelease) {
+    errors.push(...require('./crm-intake-verifier').contractScopeBlockers({
+      activeId: state.active_task?.id,
+      featureId: state.active_task?.feature_id,
+      runtimeProfile: profile,
+      runtimeContractVersion: contractVersion,
+      targetState: deliveryContract.target_state,
+      productionDatabaseMode: deliveryContract.production_database_mode,
+      productionReleaseAuthorization: deliveryContract.production_release_authorization,
+      requiredRuntimeEvidence,
+      requiredProductionRuntimeEvidence: deliveryContract.required_production_runtime_evidence,
+    }));
+  }
   if (fxiaokeSsoRelease && state.active_task.id !== 'WP94') errors.push('Fxiaoke SSO contract is limited to WP94');
   if (contractVersion === 'f054-config-ui-v1' && (!['code_green', 'clean_preview_green'].includes(deliveryContract.target_state) || deliveryContract.production_database_mode !== 'read_only')) errors.push('Configuration UI contract is limited to read-only Preview acceptance');
   const canonicalRuntimeEvidence = organizationConnectionsCode
@@ -663,6 +682,8 @@ function validateSchedulerSnapshot(options, candidate) {
     ? require('./shipping-service-selection-verifier').ITEMS
     : shippingSettingsRelease
       ? require('./shipping-settings-verifier').ITEMS
+    : crmIntakeRelease
+      ? require('./crm-intake-verifier').ITEMS
     : parserRelease
       ? SHIPPING_PARSER_ITEMS
       : fxiaokeRelease
@@ -673,7 +694,8 @@ function validateSchedulerSnapshot(options, candidate) {
             ? APPLICATION_PERMISSION_ITEMS
             : profile === 'shipping_workspace'
               ? (contractVersion === 'f054-config-ui-v1' ? SHIPPING_CONFIG_UI_ITEMS
-                : contractVersion === SHIPPING_SETTINGS_CONTRACT ? require('./shipping-settings-verifier').ITEMS : SHIPPING_WORKSPACE_ITEMS)
+                : contractVersion === SHIPPING_SETTINGS_CONTRACT ? require('./shipping-settings-verifier').ITEMS
+                  : contractVersion === CRM_INTAKE_CONTRACT ? require('./crm-intake-verifier').ITEMS : SHIPPING_WORKSPACE_ITEMS)
               : profile === 'shipping'
                 ? SHIPPING_RUNTIME_ITEMS
                 : ['provider_probe', 'review_run', 'model_invocations', 'tokens'];
@@ -689,6 +711,7 @@ function validateSchedulerSnapshot(options, candidate) {
   }
   if (serviceSelectionRelease && JSON.stringify(requiredRuntimeEvidence) !== JSON.stringify(canonicalRuntimeEvidence)) errors.push('Service selection runtime evidence must contain only the scoped selection and access items');
   if (shippingSettingsRelease && JSON.stringify(requiredRuntimeEvidence) !== JSON.stringify(canonicalRuntimeEvidence)) errors.push('Shipping settings runtime evidence must contain only the scoped settings and access items');
+  if (crmIntakeRelease && JSON.stringify(requiredRuntimeEvidence) !== JSON.stringify(canonicalRuntimeEvidence)) errors.push('CRM intake runtime evidence must contain only the four scoped CRM proofs');
   if (organizationConnectionsCode && JSON.stringify(requiredRuntimeEvidence) !== JSON.stringify(canonicalRuntimeEvidence)) errors.push('Organization connection runtime evidence must contain only the scoped lifecycle and preview items');
   if (deliveryContract?.target_state === 'production_released') {
     const requiredProductionRuntimeEvidence = deliveryContract.required_production_runtime_evidence;
@@ -698,6 +721,8 @@ function validateSchedulerSnapshot(options, candidate) {
         ? FXIAOKE_SSO_PRODUCTION_ITEMS
         : applicationRelease
           ? APPLICATION_PERMISSION_PRODUCTION_ITEMS
+          : crmIntakeRelease
+            ? require('./crm-intake-verifier').ITEMS
           : canonicalRuntimeEvidence;
     if (
       !Array.isArray(requiredProductionRuntimeEvidence)
@@ -708,6 +733,7 @@ function validateSchedulerSnapshot(options, candidate) {
     }
     if (serviceSelectionRelease && JSON.stringify(requiredProductionRuntimeEvidence) !== JSON.stringify(canonicalProductionEvidence)) errors.push('Service selection Production evidence must contain only the scoped selection and access items');
     if (shippingSettingsRelease && JSON.stringify(requiredProductionRuntimeEvidence) !== JSON.stringify(canonicalProductionEvidence)) errors.push('Shipping settings Production evidence must contain only the scoped settings and access items');
+    if (crmIntakeRelease && JSON.stringify(requiredProductionRuntimeEvidence) !== JSON.stringify(canonicalProductionEvidence)) errors.push('CRM intake Production evidence must contain only the four scoped CRM proofs');
     const releaseAuthorization = deliveryContract.production_release_authorization;
     for (const field of ['status', 'micro_fix_approval_id', 'clarification_id', 'micro_fix_scope', 'final_scope']) {
       if (!String(releaseAuthorization?.[field] || '').trim()) {
@@ -720,7 +746,12 @@ function validateSchedulerSnapshot(options, candidate) {
     if (['approved_for_final_release', 'approved_code_only'].includes(releaseAuthorization?.status) && !String(releaseAuthorization?.final_release_approval_id || '').trim()) {
       errors.push('active_task.delivery_contract.production_release_authorization.final_release_approval_id is required for final release');
     }
-    if (deliveryContract.final_acceptance?.browser !== 'trusted_operator_attestation_from_user_existing_chrome_only') {
+    if (crmIntakeRelease && (
+      deliveryContract.final_acceptance?.browser !== 'not_required_for_crm_apl_intake'
+      || deliveryContract.final_acceptance?.trust_source !== 'fxiaoke_apl_execution_log_plus_signed_http_database_evidence'
+    )) {
+      errors.push('CRM intake final acceptance must use the APL execution log plus signed HTTP/database evidence without an unrelated browser requirement');
+    } else if (!crmIntakeRelease && deliveryContract.final_acceptance?.browser !== 'trusted_operator_attestation_from_user_existing_chrome_only') {
       errors.push('active_task.delivery_contract.final_acceptance must distinguish trusted existing-Chrome operator attestation from machine proof');
     }
     const databaseMode = deliveryContract.final_acceptance?.production_database_mode;
@@ -1933,6 +1964,17 @@ function productionRuntimeEvidenceBlockers(evidence, requiredItems, repoRoot, ex
     blockers.push(...verifier.productionEvidenceBlockers(section, { ...expected, runtime: path.dirname(getDeliveryRuntimePath(repoRoot)) }));
     return blockers;
   }
+  if (expected.runtimeContractVersion === CRM_INTAKE_CONTRACT) {
+    const verifier = require('./crm-intake-verifier');
+    for (const item of ['verifier', ...verifier.ITEMS]) {
+      const envelope = section[item];
+      if (!evidenceEnvelopeValid(envelope, repoRoot) || !evidenceEnvelopeUnderPrefix(envelope, 'production-runtime-verifier')) {
+        blockers.push(`CRM intake Production controlled evidence missing or invalid: ${item}`);
+      }
+    }
+    blockers.push(...verifier.productionEvidenceBlockers(section, expected));
+    return blockers;
+  }
   if (expected.runtimeContractVersion === SHIPPING_PARSER_CONTRACT) {
     for (const item of ['verifier', ...SHIPPING_PARSER_ITEMS]) {
       const envelope = section[item];
@@ -2450,36 +2492,39 @@ function checkDeliveryStage(stage, options = {}) {
     }
   }
   if (deliveryStateAtLeast(stage, 'clean_preview_green') && !productionFirst) {
-    const applicationPermissions = status.runtimeProfile === 'application' && [APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(status.runtimeContractVersion);
+    const apiOnlyCrmIntake = status.runtimeProfile === 'shipping_workspace' && status.runtimeContractVersion === CRM_INTAKE_CONTRACT;
     if (evidence.preview?.commit !== status.git.head) blockers.push('Preview commit does not equal HEAD');
     if (evidence.preview?.provider_source_commit !== status.git.head) blockers.push('Preview provider source commit does not equal HEAD');
     if (!/^dpl_[A-Za-z0-9]+$/.test(String(evidence.preview?.deployment_id || ''))) blockers.push('Preview deployment ID is missing');
     if (!/^https:\/\//.test(String(evidence.preview?.url || ''))) blockers.push('Preview URL is missing');
     if (evidence.preview?.ready !== true) blockers.push('Preview is not READY');
     if (evidence.preview?.git_dirty !== false) blockers.push('Preview was built from dirty source');
-    for (const journey of applicationPermissions ? ['desktop', 'blocking_defect_replay'] : ['desktop', 'ipad', 'blocking_defect_replay']) {
-      if (evidence.preview?.journeys?.[journey] !== true) blockers.push(`Preview journey missing: ${journey}`);
+    if (!apiOnlyCrmIntake) {
+      const applicationPermissions = status.runtimeProfile === 'application' && [APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(status.runtimeContractVersion);
+      for (const journey of applicationPermissions ? ['desktop', 'blocking_defect_replay'] : ['desktop', 'ipad', 'blocking_defect_replay']) {
+        if (evidence.preview?.journeys?.[journey] !== true) blockers.push(`Preview journey missing: ${journey}`);
+      }
+      for (const artifact of applicationPermissions ? ['desktop', 'defect_replay'] : ['desktop', 'ipad', 'defect_replay']) {
+        if (!evidenceEnvelopeValid(evidence.preview?.artifacts?.[artifact], repoRoot)) blockers.push(`Preview evidence envelope missing or invalid: ${artifact}`);
+      }
+      if ((evidence.preview?.artifacts?.desktop?.payload?.viewport?.width || 0) < 1200) blockers.push('desktop Preview evidence has no desktop viewport');
+      const ipadWidth = evidence.preview?.artifacts?.ipad?.payload?.viewport?.width || 0;
+      if (!applicationPermissions && (ipadWidth < 768 || ipadWidth > 1366)) blockers.push('iPad Preview evidence has no tablet viewport');
+      if (applicationPermissions) {
+        const desktop = evidence.preview?.artifacts?.desktop?.payload;
+        if (desktop?.browser_context !== 'existing_user_chrome' || desktop?.new_tabs !== 0 || desktop?.new_browser_contexts !== 0
+          || desktop?.result !== 'pass' || !Array.isArray(desktop?.attachments) || !desktop.attachments.length) blockers.push('Application Preview requires the existing-Chrome desktop observation and attachment');
+      }
+      const defectReplayPayload = evidence.preview?.artifacts?.defect_replay?.payload;
+      if (defectReplayPayload?.commit !== status.git.head) blockers.push('defect replay payload commit does not equal HEAD');
+      if (defectReplayPayload?.deployment_id !== evidence.preview?.deployment_id) blockers.push('defect replay payload deployment does not equal Preview deployment');
+      if (!/^https:\/\//.test(String(defectReplayPayload?.url || ''))) blockers.push('defect replay payload has no HTTPS URL');
+      if (JSON.stringify(defectReplayPayload?.actions) !== JSON.stringify(status.requiredReplayActions)) blockers.push('defect replay payload does not contain the complete ordered action sequence');
+      if (defectReplayPayload?.result !== 'pass') blockers.push('defect replay did not pass');
+      if (!applicationPermissions && defectReplayPayload?.overlays_after !== 0) blockers.push('defect replay left overlays behind');
+      if (!applicationPermissions && defectReplayPayload?.body_scroll_lock_released !== true) blockers.push('defect replay did not release body scroll lock');
+      if (!applicationPermissions && defectReplayPayload?.app_inert_after !== false) blockers.push('defect replay left the application inert');
     }
-    for (const artifact of applicationPermissions ? ['desktop', 'defect_replay'] : ['desktop', 'ipad', 'defect_replay']) {
-      if (!evidenceEnvelopeValid(evidence.preview?.artifacts?.[artifact], repoRoot)) blockers.push(`Preview evidence envelope missing or invalid: ${artifact}`);
-    }
-    if ((evidence.preview?.artifacts?.desktop?.payload?.viewport?.width || 0) < 1200) blockers.push('desktop Preview evidence has no desktop viewport');
-    const ipadWidth = evidence.preview?.artifacts?.ipad?.payload?.viewport?.width || 0;
-    if (!applicationPermissions && (ipadWidth < 768 || ipadWidth > 1366)) blockers.push('iPad Preview evidence has no tablet viewport');
-    if (applicationPermissions) {
-      const desktop = evidence.preview?.artifacts?.desktop?.payload;
-      if (desktop?.browser_context !== 'existing_user_chrome' || desktop?.new_tabs !== 0 || desktop?.new_browser_contexts !== 0
-        || desktop?.result !== 'pass' || !Array.isArray(desktop?.attachments) || !desktop.attachments.length) blockers.push('Application Preview requires the existing-Chrome desktop observation and attachment');
-    }
-    const defectReplayPayload = evidence.preview?.artifacts?.defect_replay?.payload;
-    if (defectReplayPayload?.commit !== status.git.head) blockers.push('defect replay payload commit does not equal HEAD');
-    if (defectReplayPayload?.deployment_id !== evidence.preview?.deployment_id) blockers.push('defect replay payload deployment does not equal Preview deployment');
-    if (!/^https:\/\//.test(String(defectReplayPayload?.url || ''))) blockers.push('defect replay payload has no HTTPS URL');
-    if (JSON.stringify(defectReplayPayload?.actions) !== JSON.stringify(status.requiredReplayActions)) blockers.push('defect replay payload does not contain the complete ordered action sequence');
-    if (defectReplayPayload?.result !== 'pass') blockers.push('defect replay did not pass');
-    if (!applicationPermissions && defectReplayPayload?.overlays_after !== 0) blockers.push('defect replay left overlays behind');
-    if (!applicationPermissions && defectReplayPayload?.body_scroll_lock_released !== true) blockers.push('defect replay did not release body scroll lock');
-    if (!applicationPermissions && defectReplayPayload?.app_inert_after !== false) blockers.push('defect replay left the application inert');
     for (const item of status.requiredRuntimeEvidence) {
       const envelope = evidence.runtime?.[item];
       if (!evidenceEnvelopeValid(envelope, repoRoot)) {
@@ -2487,7 +2532,7 @@ function checkDeliveryStage(stage, options = {}) {
       } else {
         if (envelope.payload.commit !== status.git.head) blockers.push(`runtime evidence commit mismatch: ${item}`);
         if (envelope.payload.deployment_id !== evidence.preview?.deployment_id) blockers.push(`runtime evidence deployment mismatch: ${item}`);
-        if (['f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', SHIPPING_SETTINGS_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(status.runtimeContractVersion)) {
+        if (['f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', SHIPPING_SETTINGS_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, CRM_INTAKE_CONTRACT, APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(status.runtimeContractVersion)) {
           try {
             const origin = new URL(envelope.payload.origin);
             if (origin.protocol !== 'https:' || origin.origin !== new URL(evidence.preview.url).origin) blockers.push(`runtime evidence origin mismatch: ${item}`);
@@ -2505,6 +2550,11 @@ function checkDeliveryStage(stage, options = {}) {
       blockers.push(...require('./fxiaoke-connection-verifier').previewBlockers(evidence.runtime?.fxiaoke_connection?.payload, { commit: status.git.head, deploymentId: evidence.preview?.deployment_id }));
     } else if (status.runtimeProfile === 'application' && status.runtimeContractVersion === APPLICATION_PERMISSION_CONTRACT) {
       blockers.push(...require('./application-permissions-verifier').previewBlockers(evidence.runtime || {}));
+    } else if (status.runtimeContractVersion === CRM_INTAKE_CONTRACT) {
+      blockers.push(...require('./crm-intake-verifier').previewEvidenceBlockers(evidence.runtime || {}, 'preview', {
+        commit: status.git.head,
+        deploymentId: evidence.preview?.deployment_id
+      }));
     } else if (status.runtimeProfile === 'shipping_workspace') {
       blockers.push(...shippingWorkspaceEvidenceBlockers(evidence.runtime || {}, 'sandbox', status.runtimeContractVersion));
     } else if (status.runtimeProfile === 'shipping') {
@@ -2671,15 +2721,19 @@ function checkDeliveryStage(stage, options = {}) {
         runtimeContractVersion: status.runtimeContractVersion
       }
     ));
-    blockers.push(...productionBrowserOperatorAttestationBlockers(
-      evidence.production?.browser_acceptance,
-      repoRoot,
-      {
-        commit: status.git.head,
-        deploymentId: liveVercel.snapshot?.deployment?.id
-      }
-    ));
-    if (status.runtimeContractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT) {
+    if (status.runtimeContractVersion !== CRM_INTAKE_CONTRACT) {
+      blockers.push(...productionBrowserOperatorAttestationBlockers(
+        evidence.production?.browser_acceptance,
+        repoRoot,
+        {
+          commit: status.git.head,
+          deploymentId: liveVercel.snapshot?.deployment?.id
+        }
+      ));
+    }
+    if (status.runtimeContractVersion === CRM_INTAKE_CONTRACT) {
+      blockers.push(...require('./crm-intake-verifier').contractScopeBlockers(status));
+    } else if (status.runtimeContractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT) {
       if (JSON.stringify(evidence.production?.browser_acceptance?.payload?.actions) !== JSON.stringify(require('./shipping-service-selection-verifier').ACTIONS)) blockers.push('Service selection Production operator actions are incomplete or out of order');
       if (evidence.production_runtime?.shipping_service_selection?.payload?.source_operator_sha256 !== evidence.production?.browser_acceptance?.sha256) blockers.push('Service selection Production runtime is not bound to the accepted Chrome operator evidence');
     } else if (status.runtimeContractVersion === SHIPPING_SETTINGS_CONTRACT) {
@@ -2744,6 +2798,7 @@ const LIVE_APPLICATION_PERMISSION_RECEIPT = Symbol('live application permission 
 const LIVE_FXIAOKE_CONNECTION_RECEIPT = Symbol('live Fxiaoke connection verifier receipt');
 const LIVE_FXIAOKE_SSO_RECEIPT = Symbol('live Fxiaoke SSO verifier receipt');
 const LIVE_SHIPPING_PARSER_RECEIPT = Symbol('live shipping parser verifier receipt');
+const LIVE_CRM_INTAKE_RECEIPT = Symbol('live CRM intake verifier receipt');
 async function verifyShippingParserProduction(options = {}) {
   const status = getDeliveryStatus(options), repoRoot = status.repoRoot;
   if (!status.scheduler.ok || status.activeId !== 'WP95' || status.featureId !== 'F054' || status.runtimeProfile !== 'shipping_workspace' || status.runtimeContractVersion !== SHIPPING_PARSER_CONTRACT || status.targetState !== 'production_released' || status.productionReleaseAuthorization?.status !== 'approved_code_only' || status.productionDatabaseMode !== 'read_only') throw new Error('Parser verifier requires the scoped code-only WP95 release');
@@ -2823,6 +2878,32 @@ async function verifyApplicationPermissionsProduction(options = {}) {
   if (blockers.length) throw new Error(blockers.join('; '));
   return recordDeliveryEvidence('production_runtime', payload, { repoRoot, liveApplicationPermissionReceipt: LIVE_APPLICATION_PERMISSION_RECEIPT });
 }
+async function verifyCrmIntakeProduction(options = {}) {
+  const status = getDeliveryStatus(options), repoRoot = status.repoRoot;
+  const scopeBlockers = require('./crm-intake-verifier').contractScopeBlockers(status);
+  if (scopeBlockers.length) throw new Error(scopeBlockers.join('; '));
+  if (status.git.remoteProduction !== status.git.head || !status.git.clean) throw new Error('CRM intake verifier requires the clean deployed Production commit');
+  if (!options.observation || typeof options.observation !== 'object') throw new Error('A hashed Fxiaoke APL execution observation envelope is required');
+  const live = verifyVercelProductionState(repoRoot, status.git.head, { stage: 'production_released' });
+  if (live.blockers.length) throw new Error(live.blockers.join('; '));
+  const expected = { commit: status.git.head, deploymentId: live.snapshot.deployment.id, runtimeContractVersion: status.runtimeContractVersion };
+  const { runtimePath } = loadDeliveryMutableBase({ repoRoot });
+  const verifier = require('./crm-intake-verifier');
+  // Production callers cannot choose a host, tenant, client, SQL query, or HTTP
+  // transport. The verifier selects the client from signed environment config
+  // and the database identity from the hashed APL observation.
+  const payload = await verifier.verifyProduction({
+    runtime: path.dirname(runtimePath),
+    observation: options.observation,
+    token: process.env.SUPABASE_ACCESS_TOKEN,
+    clients: verifier.clientsFromEnvironment(process.env),
+    commit: expected.commit,
+    deploymentId: expected.deploymentId,
+  });
+  const blockers = productionRuntimeEvidenceBlockers({ production_runtime: payload }, status.requiredProductionRuntimeEvidence, repoRoot, expected);
+  if (blockers.length) throw new Error(blockers.join('; '));
+  return recordDeliveryEvidence('production_runtime', payload, { repoRoot, liveCrmIntakeReceipt: LIVE_CRM_INTAKE_RECEIPT });
+}
 async function verifyShippingWorkspaceProduction(options = {}) {
   const status = getDeliveryStatus(options), repoRoot = status.repoRoot;
   const scopeBlockers = shippingProductionVerifierScopeBlockers(status);
@@ -2866,6 +2947,7 @@ function recordDeliveryEvidence(section, payload, options = {}) {
       && options.liveFxiaokeConnectionReceipt !== LIVE_FXIAOKE_CONNECTION_RECEIPT
       && options.liveFxiaokeSsoReceipt !== LIVE_FXIAOKE_SSO_RECEIPT
       && options.liveShippingParserReceipt !== LIVE_SHIPPING_PARSER_RECEIPT
+      && options.liveCrmIntakeReceipt !== LIVE_CRM_INTAKE_RECEIPT
       && !(options.testOnlyControlledProductionRuntime === true && loadRegistry(options.repoRoot).registry.version === 'selftest')
     ) {
       throw new Error('production_runtime can only be written by the controlled live Production verifier; generic delivery-record JSON is forbidden');
@@ -3152,6 +3234,7 @@ module.exports = {
   FXIAOKE_SSO_PRODUCTION_ITEMS,
   SHIPPING_SERVICE_SELECTION_CONTRACT,
   SHIPPING_SETTINGS_CONTRACT,
+  CRM_INTAKE_CONTRACT,
   SHIPPING_RUNTIME_ITEMS,
   SHIPPING_REPLAY_ACTIONS,
   SHIPPING_COLLABORATION_ACTIONS,
@@ -3189,6 +3272,7 @@ module.exports = {
   verifyFxiaokeConnectionProduction,
   verifyFxiaokeSsoProduction,
   verifyShippingParserProduction,
+  verifyCrmIntakeProduction,
   productionRuntimeEvidenceBlockers,
   resolveVercelDeploymentCommit,
   sealDeliveryAttestation,

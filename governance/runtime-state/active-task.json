@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-09T05:20:00Z",
+  "updated_at": "2026-11-09T01:39:43Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -273,7 +273,11 @@
       "product-truth/product-code/lib/shipping/shipping-crm-intake-migration.test.ts",
       "product-truth/product-code/lib/shipping/fxiaoke-apl",
       "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/middleware.test.ts"
+      "product-truth/product-code/middleware.test.ts",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/crm-intake-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/crm-intake-verifier.test.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js"
     ],
     "delivery_contract": {
       "target_state": "production_released",
@@ -298,22 +302,17 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "shipping_workspace",
-        "shipping_tracking",
-        "shipping_access",
         "crm_preflight",
         "crm_unique_pending_workorder",
         "crm_repeat_same_workorder",
         "crm_waybill_null"
       ],
       "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-crm-intake-v1",
       "production_database_mode": "controlled_write_approved",
       "production_write_boundary": "仅允许新增 WP97 的 CRM 受理事件及一张 awaiting_confirmation 工单；不得修改既有工单、账号、角色、组织、承运商配置或调用顺丰。",
-      "note": "WP97 的真实完成线是：生产纷享审批节点经 APL 和 Fx.http 调用 ICU，生成一张可追溯的 awaiting_confirmation 工单且 waybill=null；代码、测试、部署、HTTP 202 和 Preview 都不能替代该业务证据。",
+      "note": "WP97 的真实完成线是：生产纷享审批节点经 APL 和 Fx.http 完成签名预检，并在 ICU 生成一张可追溯的 awaiting_confirmation 工单；同一事件精确重放返回原工单，waybill=null 且没有承运商调用。代码、测试、部署、HTTP 200/202 和 Preview 都不能替代该业务证据。",
       "required_production_runtime_evidence": [
-        "shipping_workspace",
-        "shipping_tracking",
-        "shipping_access",
         "crm_preflight",
         "crm_unique_pending_workorder",
         "crm_repeat_same_workorder",
@@ -333,12 +332,13 @@
       },
       "final_acceptance": {
         "origin": "https://sales.cyanlog.icu",
-        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+        "browser": "not_required_for_crm_apl_intake",
+        "trust_source": "fxiaoke_apl_execution_log_plus_signed_http_database_evidence",
         "new_local_browser_or_context_prohibited": true,
         "new_tab_prohibited": true,
         "local_and_preview_role": "diagnostic_only_not_completion",
-        "release_truth_rule": "Git提交、Production迁移、Vercel部署、ICS机器回执与现有Chrome/操作员证明彼此独立；HTTP 202、部署READY或代码测试不能替代唯一待确认工单。",
-        "trust_boundary": "数据库/API和纷享APL返回提供机器证据；现有Chrome或已授权纷享审批实例提供受信操作员证明，Harness只能校验声明绑定。",
+        "release_truth_rule": "Git提交、Production迁移、Vercel部署与CRM业务证据彼此独立；HTTP 202、部署READY或代码测试不能替代唯一待确认工单。",
+        "trust_boundary": "纷享APL执行日志提供真实审批节点触发的操作员证据；签名HTTP响应与Production数据库回读提供机器证据，Harness只能校验声明与哈希绑定。",
         "production_database_mode": "controlled_write_approved"
       }
     },

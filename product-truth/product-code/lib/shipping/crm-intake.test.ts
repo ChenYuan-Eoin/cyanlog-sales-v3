@@ -72,14 +72,6 @@ function eventLookup(data: unknown) {
   return chain
 }
 
-function orderLookup(data: unknown) {
-  const chain: Record<string, ReturnType<typeof vi.fn>> = {}
-  chain.select = vi.fn(() => chain)
-  chain.eq = vi.fn(() => chain)
-  chain.single = vi.fn().mockResolvedValue({ data, error: null })
-  return chain
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.options.mockResolvedValue({
@@ -238,22 +230,38 @@ describe('CRM intake create-pending idempotency', () => {
   it('returns the original order for an exact replay without reading current defaults', async () => {
     const payloadHash = createHash('sha256').update(canonicalJson(body)).digest('hex')
     mocks.from.mockReturnValueOnce(eventLookup({ payload_hash: payloadHash, shipping_order_id: 'order-1' }))
-    mocks.from.mockReturnValueOnce(orderLookup({
-      id: 'order-1', order_no: 'SO-20261106-ABC12345', status: 'awaiting_confirmation', shipping_waybills: [{ waybill_no: 'SF123' }],
-    }))
+    mocks.rpc.mockResolvedValueOnce({ data: { created: false, order_id: 'order-1', order_no: 'SO-20261106-ABC12345', status: 'awaiting_confirmation' }, error: null })
 
     const receipt = await createCrmIntake(client, rawBody())
     expect(receipt).toMatchObject({ created: false, orderId: 'order-1', orderNo: 'SO-20261106-ABC12345', status: 'awaiting_confirmation' })
     expect(mocks.options).not.toHaveBeenCalled()
-    expect(mocks.rpc).not.toHaveBeenCalled()
+    expect(mocks.rpc).toHaveBeenCalledWith('replay_shipping_crm_intake', {
+      p_org_id: client.orgId,
+      p_integration_client_id: client.clientId,
+      p_event_key: crmEventKey(client, body.event),
+      p_payload_hash: payloadHash,
+    })
+  })
+
+  it('returns the real progressed status and waybill for an exact replay', async () => {
+    const payloadHash = createHash('sha256').update(canonicalJson(body)).digest('hex')
+    mocks.from.mockReturnValueOnce(eventLookup({ payload_hash: payloadHash, shipping_order_id: 'order-1' }))
+    mocks.rpc.mockResolvedValueOnce({ data: { created: false, order_id: 'order-1', order_no: 'SO-20261106-ABC12345', status: 'waybill_created', waybill_no: 'SF1234567890123' }, error: null })
+
+    await expect(createCrmIntake(client, rawBody())).resolves.toMatchObject({
+      created: false,
+      orderId: 'order-1',
+      status: 'waybill_created',
+      waybill: 'SF1234567890123',
+      nextAction: 'status_readback',
+    })
+    expect(mocks.options).not.toHaveBeenCalled()
   })
 
   it('treats transport whitespace and key order as the same semantic event payload', async () => {
     const payloadHash = createHash('sha256').update(canonicalJson(body)).digest('hex')
     mocks.from.mockReturnValueOnce(eventLookup({ payload_hash: payloadHash, shipping_order_id: 'order-1' }))
-    mocks.from.mockReturnValueOnce(orderLookup({
-      id: 'order-1', order_no: 'SO-20261106-ABC12345', status: 'awaiting_confirmation', shipping_waybills: [],
-    }))
+    mocks.rpc.mockResolvedValueOnce({ data: { created: false, order_id: 'order-1', order_no: 'SO-20261106-ABC12345', status: 'awaiting_confirmation' }, error: null })
     const reorderedBody = JSON.stringify({
       shipment: body.shipment,
       customer: body.customer,
@@ -268,7 +276,8 @@ describe('CRM intake create-pending idempotency', () => {
       waybill: null,
     })
     expect(mocks.options).not.toHaveBeenCalled()
-    expect(mocks.rpc).not.toHaveBeenCalled()
+    expect(mocks.rpc).toHaveBeenCalledTimes(1)
+    expect(mocks.rpc.mock.calls[0][0]).toBe('replay_shipping_crm_intake')
   })
 
   it('rejects changed content under the same event identity', async () => {

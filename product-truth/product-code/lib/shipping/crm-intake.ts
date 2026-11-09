@@ -128,7 +128,7 @@ export type CrmIntakeReceipt = {
   orderNo: string
   status: ShipmentOrderStatus
   waybill: string | null
-  nextAction: 'operator_confirmation'
+  nextAction: 'operator_confirmation' | 'status_readback'
 }
 
 export class CrmIntakeError extends Error {
@@ -378,26 +378,35 @@ function shippingInputFromPreflight(preflight: CrmIntakePreflight): ShippingInpu
   }
 }
 
-async function existingReceipt(orgId: string, event: { payload_hash: string; shipping_order_id: string }, payloadHash: string, eventKey: string): Promise<CrmIntakeReceipt> {
+async function existingReceipt(client: CrmIntakeClient, event: { payload_hash: string }, payloadHash: string, eventKey: string): Promise<CrmIntakeReceipt> {
   if (event.payload_hash !== payloadHash) {
     throw new CrmIntakeError(409, 'CRM_EVENT_PAYLOAD_CONFLICT', '同一 CRM 事件的内容发生变化，已拒绝覆盖原工单。')
   }
-  const { data, error } = await supabaseAdmin.from('shipping_orders')
-    .select('id,order_no,status,shipping_waybills(waybill_no)')
-    .eq('id', event.shipping_order_id)
-    .eq('org_id', orgId)
-    .single()
-  if (error || !data) throw new CrmIntakeError(503, 'CRM_EVENT_RECOVERY_FAILED', '原 CRM 工单暂时无法读取，请稍后重试。')
-  const waybills = Array.isArray(data.shipping_waybills) ? data.shipping_waybills : data.shipping_waybills ? [data.shipping_waybills] : []
+  const { data, error } = await supabaseAdmin.rpc('replay_shipping_crm_intake', {
+    p_org_id: client.orgId,
+    p_integration_client_id: client.clientId,
+    p_event_key: eventKey,
+    p_payload_hash: payloadHash,
+  })
+  if (error) {
+    if (String(error.message || '').includes('CRM_INTAKE_PAYLOAD_CONFLICT')) {
+      throw new CrmIntakeError(409, 'CRM_EVENT_PAYLOAD_CONFLICT', '同一 CRM 事件的内容发生变化，已拒绝覆盖原工单。')
+    }
+    throw new CrmIntakeError(503, 'CRM_EVENT_RECOVERY_FAILED', '原 CRM 工单暂时无法读取，请稍后重试。')
+  }
+  const result = data as { created?: boolean; order_id?: string; order_no?: string; status?: ShipmentOrderStatus; waybill_no?: string | null } | null
+  if (result?.created !== false || !result.order_id || !result.order_no || !result.status) {
+    throw new CrmIntakeError(503, 'CRM_EVENT_RECOVERY_FAILED', '原 CRM 工单暂时无法读取，请稍后重试。')
+  }
   return {
     accepted: true,
     created: false,
     eventKey,
-    orderId: data.id,
-    orderNo: data.order_no,
-    status: data.status as ShipmentOrderStatus,
-    waybill: waybills[0]?.waybill_no || null,
-    nextAction: 'operator_confirmation',
+    orderId: result.order_id,
+    orderNo: result.order_no,
+    status: result.status,
+    waybill: result.waybill_no ?? null,
+    nextAction: result.status === 'awaiting_confirmation' ? 'operator_confirmation' : 'status_readback',
   }
 }
 
@@ -418,7 +427,7 @@ export async function createCrmIntake(client: CrmIntakeClient, rawBody: string):
     .eq('event_key', eventKey)
     .maybeSingle()
   if (prior.error) throw new CrmIntakeError(503, 'CRM_EVENT_READ_FAILED', 'CRM 事件核对暂不可用。')
-  if (prior.data) return existingReceipt(client.orgId, prior.data, payloadHash, eventKey)
+  if (prior.data) return existingReceipt(client, prior.data, payloadHash, eventKey)
 
   const preflight = await preflightCrmIntake(client, payload)
   if (!preflight.ready || !preflight.normalized) throw new CrmIntakeIncompleteError(preflight)
@@ -457,7 +466,7 @@ export async function createCrmIntake(client: CrmIntakeClient, rawBody: string):
       const retry = await supabaseAdmin.from('shipping_crm_intake_events')
         .select('payload_hash,shipping_order_id')
         .eq('org_id', client.orgId).eq('integration_client_id', client.clientId).eq('event_key', eventKey).single()
-      if (!retry.error && retry.data) return existingReceipt(client.orgId, retry.data, payloadHash, eventKey)
+      if (!retry.error && retry.data) return existingReceipt(client, retry.data, payloadHash, eventKey)
     }
     throw new CrmIntakeError(503, 'CRM_INTAKE_WRITE_FAILED', 'CRM 工单暂未保存，请稍后重试。')
   }
