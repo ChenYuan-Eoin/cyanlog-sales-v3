@@ -46,15 +46,17 @@ it('leaves object metadata direct while the optional host is off', async () => {
   expect(mocks.factory).not.toHaveBeenCalled()
 })
 
-it.each(['network', 'http', 'ip'])('uses the existing scoped relay once after a direct %s availability failure', async kind => {
+it.each(['network', 'http', 'ip'])('reports a direct %s failure without using the cloud relay', async kind => {
   const direct = vi.fn()
   if (kind === 'network') direct.mockRejectedValue(new TypeError('fetch failed'))
   else direct.mockResolvedValue(kind === 'http' ? new Response('unavailable', { status: 503 }) : ipDenied())
   vi.stubGlobal('fetch', direct); mocks.relay.mockResolvedValue(ok())
-  const result = await directoryTransportForOrganization('org-1')(url(), init())
-  expect((await result.json()).errorCode).toBe(0)
-  expect(mocks.factory).toHaveBeenCalledWith('org-1')
-  expect(mocks.relay).toHaveBeenCalledOnce()
+  const result = directoryTransportForOrganization('org-1')(url(), init())
+  if (kind === 'network') await expect(result).rejects.toMatchObject({ code: 'DIRECTORY_SOURCE_UNAVAILABLE' })
+  else if (kind === 'http') expect((await result).status).toBe(503)
+  else expect(await (await result).json()).toEqual({ errorCode: 12345, errorMessage: 'IP 不在白名单' })
+  expect(mocks.factory).not.toHaveBeenCalled()
+  expect(mocks.relay).not.toHaveBeenCalled()
 })
 
 it.each([
@@ -71,34 +73,26 @@ it.each([
   expect(mocks.relay).not.toHaveBeenCalled()
 })
 
-it('returns to direct reads if the relay goes offline between pages, without reusing global route state', async () => {
-  const direct = vi.fn().mockResolvedValueOnce(ipDenied()).mockResolvedValueOnce(ok())
-  vi.stubGlobal('fetch', direct)
-  mocks.relay.mockResolvedValueOnce(ok()).mockRejectedValueOnce(offline())
-  const send = directoryTransportForOrganization('org-1')
-  await send(url(), init())
-  expect((await (await send(url(), init())).json()).errorCode).toBe(0)
-  expect(direct).toHaveBeenCalledTimes(2)
-  expect(mocks.relay).toHaveBeenCalledTimes(2)
-})
-
-it('fails explicitly when all routes are unavailable, never returns an empty successful directory', async () => {
+it('fails explicitly when direct reads are unavailable, never returns an empty successful directory', async () => {
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')))
   mocks.relay.mockRejectedValue(offline())
   await expect(previewDirectory(credentials, directoryTransportForOrganization('org-1')))
     .rejects.toMatchObject({ code: 'DIRECTORY_SOURCE_UNAVAILABLE', status: 503 })
-  expect(mocks.relay).toHaveBeenCalledOnce()
+  expect(mocks.factory).not.toHaveBeenCalled()
+  expect(mocks.relay).not.toHaveBeenCalled()
 })
 
-it('bounds the direct attempt to six seconds before trying the optional relay', async () => {
+it('bounds the direct attempt to six seconds without trying the cloud relay', async () => {
   const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(ms => {
     expect(ms).toBe(6000)
     return AbortSignal.abort(new DOMException('timed out', 'TimeoutError'))
   })
   vi.stubGlobal('fetch', vi.fn((_url, options) => { options.signal.throwIfAborted() }))
   mocks.relay.mockResolvedValue(ok())
-  await directoryTransportForOrganization('org-1')(url(), init())
-  expect(mocks.relay).toHaveBeenCalledOnce()
+  await expect(directoryTransportForOrganization('org-1')(url(), init()))
+    .rejects.toMatchObject({ code: 'DIRECTORY_SOURCE_UNAVAILABLE' })
+  expect(mocks.factory).not.toHaveBeenCalled()
+  expect(mocks.relay).not.toHaveBeenCalled()
   timeout.mockRestore()
 })
 
