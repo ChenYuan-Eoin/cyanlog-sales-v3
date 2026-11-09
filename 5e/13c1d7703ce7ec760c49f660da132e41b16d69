@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "activeId": "WP19",
+  "commit": "5e13c1d7703ce7ec760c49f660da132e41b16d69",
+  "evidence": {
+    "code": {
+      "commit": "5e13c1d7703ce7ec760c49f660da132e41b16d69",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true,
+        "security": true,
+        "file_gate": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "exit_code": 0,
+          "artifact_path": "intake-records/compact-target-tests.log",
+          "log_sha256": "0e6f961c3084da1142897bf1284083d8bfdba73f3b182a6098c85179305b0d2d"
+        },
+        {
+          "name": "full_tests",
+          "exit_code": 0,
+          "artifact_path": "intake-records/compact-full-tests.log",
+          "log_sha256": "4725b6f65b5a974a2d2d305f559f9ff36ebb614e2e24a51e3f1018d9fb512e5d"
+        },
+        {
+          "name": "lint",
+          "exit_code": 0,
+          "artifact_path": "intake-records/compact-lint.log",
+          "log_sha256": "ca1cfb2b5eb3709f5c86c0e3ccff8ea9b5737bd23bf25b44e45abc6658922361"
+        },
+        {
+          "name": "typecheck",
+          "exit_code": 0,
+          "artifact_path": "intake-records/compact-typecheck.log",
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "build",
+          "exit_code": 0,
+          "artifact_path": "intake-records/compact-build.log",
+          "log_sha256": "4a3df48224ca6fd7dd72d386e914b39397360a577e61fec1a4aa64de19543de3"
+        },
+        {
+          "name": "security",
+          "exit_code": 0,
+          "artifact_path": "intake-records/compact-security.log",
+          "log_sha256": "1c3f8b84d12f172f99487a8f82fa4c370a0020f8155ef4d26a6fa881a716dd66"
+        },
+        {
+          "name": "file_gate",
+          "exit_code": 0,
+          "artifact_path": "intake-records/compact-file-gate.log",
+          "log_sha256": "14fbfef4a74070021e3db04b79c07853b4dca3521731aadc4a9f133959da6dbf"
+        }
+      ],
+      "observed_at": "2026-11-09T10:33:04.647224+00:00",
+      "tests": {
+        "passed": 3371,
+        "skipped": 5,
+        "target_passed": 50
+      },
+      "approval": "IN-20261109-022 and scoped acceptance feedback IN-20261109-023/024/025",
+      "rollback_commit": "6e99e264632982b7895626a8f21c2db059fd8a5e",
+      "limitations": [
+        "Same approved production-first acceptance workflow; legacy WeCom/Preview contract is not marked passed."
+      ],
+      "production_database_write": false,
+      "carrier_calls": false
+    }
+  },
+  "updatedAt": "2026-11-09T10:33:06.923Z",
+  "gateSnapshots": {
+    "executing": {
+      "stage": "executing",
+      "checkedAt": "2026-11-09T10:33:06.903Z",
+      "head": "5e13c1d7703ce7ec760c49f660da132e41b16d69",
+      "originMain": "6e99e264632982b7895626a8f21c2db059fd8a5e",
+      "remoteMain": "6e99e264632982b7895626a8f21c2db059fd8a5e",
+      "remoteProduction": "6e99e264632982b7895626a8f21c2db059fd8a5e",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "a4c3f54fd57f0b651b4b7c428bab7a2b4c4e8d50",
+      "remoteAttestationRefOid": "a4c3f54fd57f0b651b4b7c428bab7a2b4c4e8d50",
+      "remoteSnapshotCheckedAt": "2026-11-09T10:33:04.854Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "da08c06e3b6fddcc0f174ca761f7b332e84e43446fd5866f9e757bf1cbc547cb",
+  "sealedAt": "2026-11-09T10:33:06.924Z",
+  "attestationDigest": "8a3718b2a006c84a09885165d6c28a3b28faf01b36f82ad009d9a96b120b1e03"
+}
