@@ -82,6 +82,10 @@ it('restores anonymous company, device common and custom choices without employe
  view.unmount();render(renderForm())
  expect(screen.getByRole('radio',{name:/我的常用/})).toHaveProperty('checked',true)
  expect(screen.getByLabelText('当前寄件地址').textContent).toBe('我的姓名|我的常用路99号')
+ fireEvent.click(screen.getByRole('button',{name:'移除本设备常用地址'}))
+ expect(localStorage.getItem('shipping-anonymous-sender-v1')).toBeNull()
+ expect(screen.getByRole('radio',{name:/我的常用/})).toHaveProperty('disabled',true)
+ expect(screen.getByLabelText('当前寄件地址').textContent).toBe('我的姓名|我的常用路99号')
  expect(fetcher).not.toHaveBeenCalled()
 })
 it('does not overwrite a manual draft when company options arrive late',()=>{
