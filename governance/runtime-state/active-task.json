@@ -296,12 +296,15 @@
         "production_database_mode": "read_only"
       },
       "production_release_authorization": {
-        "status": "pending_security_gate_and_final_write_approval",
+        "status": "approved_code_only",
         "scope": "匿名销售提报代码修复，无数据库迁移、配置写入或承运商调用",
         "micro_fix_approval_id": "IN-20261109-019",
         "clarification_id": "IN-20261109-019",
         "micro_fix_scope": "恢复匿名销售提报与私密回执，不开放后台或列表",
-        "final_scope": "匿名销售提报代码修复，无数据库迁移、配置写入或承运商调用"
+        "final_scope": "发布匿名销售提报纯代码修复；正式站无需企微身份即可填写、预览和提交待审核工单，私密回执查询可用；不迁移、不新建真实寄件、不调用顺丰。",
+        "final_release_approval_id": "IN-20261109-021",
+        "code_release_authorized": true,
+        "production_database_write_authorized": false
       },
       "runtime_profile": "shipping_workspace",
       "runtime_contract_version": "f054-intake-v1",
@@ -314,7 +317,14 @@
         "shipping_workspace",
         "shipping_tracking",
         "shipping_access"
-      ]
+      ],
+      "preview_order_exception_approval_id": "IN-20261109-021",
+      "release_exception": {
+        "authority": "IN-20261109-021",
+        "preview_status": "not_passed",
+        "scope": "用户批准本次生产先修复并在现有Chrome验收；旧企微验收合同不作为匿名验收事实。",
+        "formal_transition": "Do not forge legacy WeCom/tracking proof or mark unrun gates passed."
+      }
     },
     "baseline_preservation": {
       "sha": "15746ca091717851c22c0125014a3ee9c828a9bc",
