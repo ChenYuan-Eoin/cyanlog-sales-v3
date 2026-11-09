@@ -253,7 +253,11 @@
       "product-truth/product-code/app/api/shipping/public/orders",
       "product-truth/product-code/app/api/shipping/public/public-orders.test.ts",
       "product-truth/product-code/lib/shipping/intake-options.ts",
-      "product-truth/product-code/lib/shipping/intake-options.test.ts"
+      "product-truth/product-code/lib/shipping/intake-options.test.ts",
+      "AGENTS.md",
+      "product-truth/product-code/lib/fxiaoke/egress/README.md",
+      "product-truth/product-code/lib/fxiaoke/egress/directory-transport.ts",
+      "product-truth/product-code/lib/fxiaoke/egress/directory-transport.test.ts"
     ],
     "acceptance_checks": [
       "无企微会话直接打开并填写销售提报",
@@ -310,6 +314,16 @@
         "shipping_workspace",
         "shipping_tracking",
         "shipping_access"
+      ]
+    },
+    "baseline_preservation": {
+      "sha": "15746ca091717851c22c0125014a3ee9c828a9bc",
+      "reason": "Vercel current Production deployment dpl_Fbzc6kbQwN6aZ6BeYUcHZheu2dud contains the already-published direct-API fix; rebase must preserve it without modification.",
+      "paths": [
+        "AGENTS.md",
+        "product-truth/product-code/lib/fxiaoke/egress/README.md",
+        "product-truth/product-code/lib/fxiaoke/egress/directory-transport.ts",
+        "product-truth/product-code/lib/fxiaoke/egress/directory-transport.test.ts"
       ]
     }
   },
