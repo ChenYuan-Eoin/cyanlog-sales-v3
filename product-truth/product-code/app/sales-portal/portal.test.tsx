@@ -65,7 +65,7 @@ it('submits a complete anonymous workorder without asking for a code or saving a
     if (init?.method === 'POST') return new Response(JSON.stringify({ orderNo: 'SO-ANON', status: 'awaiting_confirmation', receiptToken: 'a'.repeat(43) }), { status: 202 })
     return new Response(JSON.stringify({ employee: null }))
   })
-  render(<SalesPortal />)
+  render(<SalesPortal initialOptions={{services:[{id:6,name:'顺丰即日',preference:'urgent'}],requireVerification:false,emailAvailable:false}} />)
   await screen.findByLabelText('寄件人姓名')
   for (const [label, value] of [['寄件人姓名','李娜'],['寄件人联系电话','13800138000'],['寄件省份','广东省'],['寄件城市','广州市'],['寄件区县','天河区'],['详细寄件地址','销售路88号'],['所属团队','大客户部']]) fireEvent.change(screen.getByLabelText(label), { target: { value } })
   fireEvent.click(screen.getByRole('button', {name:'使用此地址'}))
@@ -79,6 +79,8 @@ it('submits a complete anonymous workorder without asking for a code or saving a
   const posts = fetcher.mock.calls.filter(call => call[1]?.method === 'POST')
   expect(posts).toHaveLength(1); expect(posts[0][0]).toBe('/api/shipping/public/orders')
   expect(JSON.parse(posts[0][1].body).input).toMatchObject({ serviceId: 6, sender: { name: '李娜' } })
+  expect(posts[0][1].credentials).toBe('omit')
+  expect(fetcher.mock.calls.some(([url])=>url==='/api/shipping/public/employee')).toBe(false)
   expect(screen.getByRole('button', { name: '复制查询链接' })).toBeTruthy()
 })
 

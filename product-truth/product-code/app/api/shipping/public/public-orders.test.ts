@@ -18,7 +18,7 @@ const contact = { name: '测试联系人', phone: '13800000000', province: '广�
 const input = { sender: { ...contact, name: '张三', address: '销售本人寄件路9号' }, recipient: contact, cargo: '文件', weight: 1, remark: '', servicePreference: 'standard', source: 'manual', customerName: '星河科技', submittedBy: { name: '张三', phone: '13800000000', team: '华南销售部' }, specialRequirements: '样品易碎' }
 const body = { key: '43a0b4bb-cf88-4593-9fc9-85b3a9d0d1b0', input }
 
-beforeEach(() => { options.mockReset(); options.mockResolvedValue({ orgId: 'org-1', requireVerification: false, emailAvailable: false, services: [{ id: 2, name: '顺丰标快', preference: 'standard' }, { id: 6, name: '顺丰即日', preference: 'urgent' }] }); create.mockReset(); enforceRate.mockReset(); enforceRate.mockResolvedValue(undefined); getEmployee.mockReset(); getEmployee.mockResolvedValue({ id: 'employee-1', orgId: 'org-1', userId: 'staff-a', name: input.sender.name, phone: input.sender.phone, phoneSource: 'wecom', companyName: '提报人所属企业', sender: input.sender, team: input.submittedBy.team }); create.mockResolvedValue({ order: { orderNo: 'SO-20260922-ABC12345', status: 'awaiting_confirmation', waybill: null, nextReviewAt: '2026-09-22T09:00:00.000Z', createdAt: '2026-09-22T08:00:00.000Z' }, receiptToken: 'a'.repeat(43) }) })
+beforeEach(() => { options.mockReset(); options.mockResolvedValue({ orgId: 'org-1', requireVerification: true, emailAvailable: false, services: [{ id: 2, name: '顺丰标快', preference: 'standard' }, { id: 6, name: '顺丰即日', preference: 'urgent' }] }); create.mockReset(); listMine.mockReset(); enforceRate.mockReset(); enforceRate.mockResolvedValue(undefined); getEmployee.mockReset(); getEmployee.mockResolvedValue({ id: 'employee-1', orgId: 'org-1', userId: 'staff-a', name: input.sender.name, phone: input.sender.phone, phoneSource: 'wecom', companyName: '提报人所属企业', sender: input.sender, team: input.submittedBy.team }); create.mockResolvedValue({ order: { orderNo: 'SO-20260922-ABC12345', status: 'awaiting_confirmation', waybill: null, nextReviewAt: '2026-09-22T09:00:00.000Z', createdAt: '2026-09-22T08:00:00.000Z' }, receiptToken: 'a'.repeat(43) }) })
 
 describe('employee shipment intake', () => {
   it('lists only receipts scoped by the verified identity, ignoring query overrides', async () => {
@@ -45,10 +45,12 @@ describe('employee shipment intake', () => {
   it('rejects forged relation fields', async () => { const response = await POST(new NextRequest('http://localhost/api/shipping/public/orders', { method: 'POST', headers: { origin: 'http://localhost' }, body: JSON.stringify({ ...body, salesRef: 'forged' }) })); expect(response.status).toBe(400); expect(create).not.toHaveBeenCalled() })
   it('rejects caller-supplied organization fields', async () => { const response = await POST(new NextRequest('http://localhost/api/shipping/public/orders', { method: 'POST', headers: { origin: 'http://localhost' }, body: JSON.stringify({ ...body, orgId: 'org-foreign' }) })); expect(response.status).toBe(400); expect(create).not.toHaveBeenCalled() })
   it('enforces the durable anonymous intake rate limit', async () => { enforceRate.mockRejectedValue(new ShippingError(429, '提交过于频繁，请稍后再试。')); const response = await POST(new NextRequest('http://localhost/api/shipping/public/orders', { method: 'POST', headers: { origin: 'http://localhost' }, body: JSON.stringify(body) })); expect(response.status).toBe(429); expect(create).not.toHaveBeenCalled() })
-  it('rejects anonymous intake even if an old options reply advertises open mode', async () => {
-    getEmployee.mockResolvedValue(null)
+  it('accepts anonymous intake without assigning a verified employee identity', async () => {
+    options.mockResolvedValue({orgId:'org-1',requireVerification:false,services:[{id:2,name:'顺丰标快',preference:'standard'}]})
+    getEmployee.mockRejectedValue(new Error('WeCom unavailable'))
     const response = await POST(new NextRequest('http://localhost/api/shipping/public/orders', { method: 'POST', headers: { origin: 'http://localhost' }, body: JSON.stringify(body) }))
-    expect(response.status).toBe(401); expect(create).not.toHaveBeenCalled()
+    expect(response.status).toBe(202); expect(create.mock.calls[0][0].employee).toBeUndefined(); expect(getEmployee).not.toHaveBeenCalled()
+    expect(await response.json()).toMatchObject({status:'awaiting_confirmation',waybill:null,receiptToken:'a'.repeat(43)})
   })
   it('accepts configured products beyond the old standard/urgent choices and rejects unconfigured codes', async () => {
     const req = (serviceId: number) => new NextRequest('http://localhost/api/shipping/public/orders', { method: 'POST', headers: { origin: 'http://localhost' }, body: JSON.stringify({ ...body, input: { ...input, serviceId } }) })
@@ -85,3 +87,5 @@ it('does not require a current valid phone to read existing owned orders',async(
   expect((await POST(request('客户公司'))).status).toBe(202)
   expect(create.mock.calls[0][0].input.customerName).toBe('客户公司')
  })
+
+it('keeps the employee order list private for anonymous visitors',async()=>{getEmployee.mockResolvedValue(null);expect((await GET(new NextRequest('http://localhost/api/shipping/public/orders'))).status).toBe(401);expect(listMine).not.toHaveBeenCalled()})

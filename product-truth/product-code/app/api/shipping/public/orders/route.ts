@@ -18,8 +18,9 @@ export async function POST(req: NextRequest) {
     if (origin !== req.nextUrl.origin) throw new ShippingError(403, '请求来源不受信任。')
     await enforceAnonymousShippingRate(req)
     const options = await loadPublicIntakeOptions()
-    const session = await getWecomSession(req)
-    if (!session) throw new ShippingError(401, '请先通过企业微信验证员工身份。')
+    // Anonymous intake must not depend on a stale WeCom cookie or directory service.
+    const session = options.requireVerification ? await getWecomSession(req) : null
+    if (options.requireVerification && !session) throw new ShippingError(401, '请先通过企业微信验证员工身份。')
     if (session && session.orgId !== options.orgId) throw new ShippingError(403, '企微身份不属于当前提报入口。')
     if (session?.phoneSource === 'unavailable') throw new ShippingError(422, '身份已验证，但缺少有效寄件电话，请管理员配置预置号码；已有工单仍可查询。')
     const submission = makeAnonymousShipmentSchema(session && options.rules ? { ...options.rules, team: { enabled: true, required: true, minLength: 1 }, teamOptions: [] } : options.rules).parse(await shippingJson(req))

@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   try {
     const options = await loadPublicIntakeOptions()
-    const employee = await getWecomSession(req)
+    const employee = options.requireVerification ? await getWecomSession(req) : null
     if (options.requireVerification && (!employee || employee.orgId !== options.orgId)) throw new ShippingError(401, '请先通过企业微信白名单身份验证。')
     const order = await getShipmentByReceipt((await params).token, employee ? { orgId: employee.orgId, employeeId: employee.id } : undefined)
     if (!order) return NextResponse.json({ error: '寄件回执不存在或已失效。' }, { status: 404, headers: { 'Cache-Control': 'no-store' } })

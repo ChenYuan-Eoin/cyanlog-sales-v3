@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-09T01:39:43Z",
+  "updated_at": "2026-11-09T08:38:28.810881+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -235,52 +235,31 @@
     }
   },
   "active_task": {
-    "id": "WP97",
-    "slug": "crm-intake-icu-gateway",
-    "name": "ICU 面向 CRM 的寄件受理网关",
+    "id": "WP19",
+    "slug": "anonymous-sales-intake-recovery",
+    "name": "销售匿名提报恢复",
     "kind": "product",
     "status": "active",
-    "objective": "完成可复用的纷享 APL 受理合同：先通过管理员受控的只读元数据检查器核验生产对象与字段，再从精确审批流程实例解析真实申请人、客户与寄件明细，以租户映射生成确定性请求体和签名，先只读预检，再幂等生成一张可追溯的待确认工单；未知、歧义、过期、重复或跨租户来源必须失败关闭。",
     "feature_id": "F054",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/wp92-directory-resume/Price-v3",
-    "activation_basis": "IN-20261109-001：用户要求按“纷享审批/APL → ICU 待确认工单 → 操作员确认 → 顺丰出号 → 回填纷享”的原目标建立持续推进目标；当前阶段 WP97，后续 WP98、WP99 按真实证据依次启动。",
+    "objective": "恢复销售入口匿名填写、提交待审核工单与私密回执查询；不依赖企微身份/白名单，不开放后台或他人工单。",
+    "started_at": "2026-11-09T08:38:28.810881+00:00",
+    "activation_basis": "IN-20261109-019：用户明确纠正匿名访问产品基线，线上配置接口仍返回强制验证，按生产阻断及证据推翻旧方向例外修复。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/anonymous-sales-intake/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/REQ_REGISTRY.yml",
-      "product-truth/feature-packets/F099-current-goal-ledger.md",
       "product-truth/feature-packets/F054-sf-self-service-order.md",
-      "product-truth/product-code/.env.example",
-      "product-truth/product-code/app/api/admin/organization-sources/fxiaoke/metadata",
-      "product-truth/product-code/lib/fxiaoke/client.ts",
-      "product-truth/product-code/lib/fxiaoke/client.test.ts",
-      "product-truth/product-code/lib/fxiaoke/settings.ts",
-      "product-truth/product-code/lib/fxiaoke/settings.test.ts",
-      "product-truth/product-code/lib/organization-connections/service.ts",
-      "product-truth/product-code/lib/fxiaoke/egress/directory-transport.ts",
-      "product-truth/product-code/lib/fxiaoke/egress/directory-transport.test.ts",
-      "product-truth/product-code/lib/fxiaoke/egress/protocol.mjs",
-      "product-truth/product-code/lib/fxiaoke/egress/protocol.test.ts",
-      "product-truth/product-code/lib/shipping/collaboration.ts",
-      "product-truth/product-code/lib/shipping/crm-intake.ts",
-      "product-truth/product-code/lib/shipping/crm-intake.test.ts",
-      "product-truth/product-code/lib/shipping/types.ts",
-      "product-truth/product-code/lib/shipping/validation.ts",
-      "product-truth/product-code/app/api/shipping/crm/preflight/route.ts",
-      "product-truth/product-code/app/api/shipping/crm/orders/route.ts",
-      "product-truth/product-code/app/api/shipping/crm/crm-routes.test.ts",
-      "product-truth/product-code/supabase/migrations/20261106000001_shipping_crm_intake.sql",
-      "product-truth/product-code/supabase/migrations/20261109000002_shipping_crm_identity_and_dedup.sql",
-      "product-truth/product-code/lib/shipping/shipping-crm-intake-migration.test.ts",
-      "product-truth/product-code/lib/shipping/fxiaoke-apl",
-      "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/middleware.test.ts",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/crm-intake-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/crm-intake-verifier.test.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js",
-      "AGENTS.md",
-      "product-truth/product-code/lib/fxiaoke/egress/README.md"
+      "product-truth/product-code/app/sales-portal",
+      "product-truth/product-code/app/api/shipping/public/orders",
+      "product-truth/product-code/app/api/shipping/public/public-orders.test.ts",
+      "product-truth/product-code/lib/shipping/intake-options.ts",
+      "product-truth/product-code/lib/shipping/intake-options.test.ts"
+    ],
+    "acceptance_checks": [
+      "无企微会话直接打开并填写销售提报",
+      "匿名 POST 到待确认工单且不附员工认证身份",
+      "回执 token 查询可用，匿名列表仍拒绝",
+      "旧企微会话或服务故障不阻断匿名提报"
     ],
     "delivery_contract": {
       "target_state": "production_released",
@@ -304,86 +283,41 @@
         "typecheck",
         "build"
       ],
-      "required_runtime_evidence": [
-        "crm_preflight",
-        "crm_unique_pending_workorder",
-        "crm_repeat_same_workorder",
-        "crm_waybill_null"
-      ],
-      "runtime_profile": "shipping_workspace",
-      "runtime_contract_version": "f054-crm-intake-v1",
-      "production_database_mode": "controlled_write_approved",
-      "production_write_boundary": "仅允许新增 WP97 的 CRM 受理事件及一张 awaiting_confirmation 工单；不得修改既有工单、账号、角色、组织、承运商配置或调用顺丰。",
-      "note": "WP97 的真实完成线是：生产纷享审批节点经 APL 和 Fx.http 完成签名预检，并在 ICU 生成一张可追溯的 awaiting_confirmation 工单；同一事件精确重放返回原工单，waybill=null 且没有承运商调用。代码、测试、部署、HTTP 200/202 和 Preview 都不能替代该业务证据。",
-      "required_production_runtime_evidence": [
-        "crm_preflight",
-        "crm_unique_pending_workorder",
-        "crm_repeat_same_workorder",
-        "crm_waybill_null"
-      ],
-      "production_release_authorization": {
-        "status": "approved_for_final_release",
-        "micro_fix_approval_id": "IN-20261109-002",
-        "clarification_id": "IN-20261109-001",
-        "final_release_approval_id": "IN-20261109-002",
-        "micro_fix_scope": "WP97 CRM/APL 生产受理网关的必要开发、迁移、发布与真实审批回读。",
-        "final_scope": "WP97：发布并迁移 ICU CRM 受理网关；在生产纷享指定审批节点经 APL/Fx.http 预检并创建唯一 awaiting_confirmation 工单，回读真实申请人、客户、来源与 waybill=null；不调用顺丰、不修改既有工单、账号、组织、角色或承运商配置。",
-        "carrier_calls_authorized": false,
-        "production_database_write_authorized": true,
-        "organization_sync_authorized": false,
-        "identity_or_role_change_authorized": false
-      },
+      "production_database_mode": "read_only",
       "final_acceptance": {
         "origin": "https://sales.cyanlog.icu",
-        "browser": "not_required_for_crm_apl_intake",
-        "trust_source": "fxiaoke_apl_execution_log_plus_signed_http_database_evidence",
+        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
         "new_local_browser_or_context_prohibited": true,
         "new_tab_prohibited": true,
-        "local_and_preview_role": "diagnostic_only_not_completion",
-        "release_truth_rule": "Git提交、Production迁移、Vercel部署与CRM业务证据彼此独立；HTTP 202、部署READY或代码测试不能替代唯一待确认工单。",
-        "trust_boundary": "纷享APL执行日志提供真实审批节点触发的操作员证据；签名HTTP响应与Production数据库回读提供机器证据，Harness只能校验声明与哈希绑定。",
-        "production_database_mode": "controlled_write_approved"
-      }
-    },
-    "acceptance_checks": [
-      "未签名、过期、重复或未知客户端 ID 的 CRM 请求被拒绝",
-      "预检返回缺项、稳定来源标识、客户与真实申请人，不生成工单",
-      "同一来源事件重复提交返回同一张待确认工单，内容变化返回冲突",
-      "成功受理创建 intake_source=crm 的待确认工单，记录 workflow/object/record/detail/task/revision/applicant",
-      "APL 合同只接受精确 workflowInstanceId、objectApiName、recordId、shipmentDetailId、taskId、stageId 与 revisionId；禁止按最新流程、客户名、执行人或模糊字段关联",
-      "真实申请人从审批流程实例上下文解析并独立于 Fx.http 执行身份；系统执行身份不得冒充业务申请人",
-      "APL 与 ICU 使用结构化签名信封，签名覆盖唯一 payloadText；外层请求重新序列化不得改变业务载荷摘要，预检与创建重试复用同一 payloadText",
-      "纷享对象、字段、审批节点与上下文路径来自已验证的租户映射配置；未知、歧义、缺失或版本不匹配时失败关闭，不硬编码猜测",
-      "使用官方 Fx.bpm、Fx.object、Fx.http 响应形状覆盖成功、缺项、签名、冲突和重试测试",
-      "生产纷享指定审批节点真实调用 APL，APL 先预检再创建，只生成一张 intake_source=crm 的 awaiting_confirmation 工单，真实申请人与客户可追溯且 waybill=null"
-    ],
-    "historical_scope": {
-      "scheduling_group": "CRM审批寄件",
-      "source_records": [
-        "IN-20261028-009"
+        "production_database_mode": "read_only"
+      },
+      "production_release_authorization": {
+        "status": "pending_security_gate_and_final_write_approval",
+        "scope": "匿名销售提报代码修复，无数据库迁移、配置写入或承运商调用",
+        "micro_fix_approval_id": "IN-20261109-019",
+        "clarification_id": "IN-20261109-019",
+        "micro_fix_scope": "恢复匿名销售提报与私密回执，不开放后台或列表",
+        "final_scope": "匿名销售提报代码修复，无数据库迁移、配置写入或承运商调用"
+      },
+      "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-intake-v1",
+      "required_runtime_evidence": [
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
       ],
-      "reconciliation_source": "IN-20261028-010",
-      "deferred_acceptance": [
-        "通过指定审批节点后只生成 1 张待确认工单",
-        "重复通知、撤回、重审、跨人、跨租户均有明确处理"
-      ],
-      "note": "审批唯一工单、重复通知、撤回、重审、跨人和跨租户均为 WP97 当前完成线；没有真实生产证据时不得进入 WP99。"
-    },
-    "non_goals": [
-      "无必要的纷享生产界面点击；只在动作唯一必要且风险已评估时操作已授权测试审批实例",
-      "逐人身份绑定、SSO或登录改造",
-      "组织目录同步或权限改造",
-      "顺丰真实下单或运单回写",
-      "组织切源、企微、AI或角色权限改造"
-    ],
-    "started_at": "2026-11-06T08:53:30.679Z",
-    "reason": "用户要求按可真实使用的纷享下单路径持续执行。WP97 先在生产纷享审批节点生成唯一待确认工单；只有该业务证据成立才进入 WP99 真实顺丰流程，随后 WP98 回填。"
+      "required_production_runtime_evidence": [
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
+      ]
+    }
   },
   "execution_queue": {
     "active": {
-      "id": "WP97",
-      "slug": "crm-intake-icu-gateway",
-      "name": "ICU 面向 CRM 的寄件受理网关"
+      "id": "WP19",
+      "slug": "anonymous-sales-intake-recovery",
+      "name": "销售匿名提报恢复"
     },
     "next": {
       "id": "WP99",
@@ -1416,28 +1350,6 @@
         "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
       },
       {
-        "id": "WP19",
-        "slug": "wecom-authorized-shipping-intake",
-        "name": "企微企业接入与员工提报校验",
-        "scheduling_group": "企微入口",
-        "acceptance_state": "部分发布；正式企业待验收",
-        "remaining_acceptance": "正式ONES员工接入、本人提报、外部身份拒绝；域名/资质仍按提供方规则",
-        "acceptance_owner": "WP76",
-        "source_records": [
-          "current_queue.parked",
-          "suspended_tasks",
-          "/Users/nsss/Documents/ChatGPT/Price-v3:ready"
-        ],
-        "reconciliation_source": "IN-20261028-010",
-        "historical_record": {
-          "id": "WP19",
-          "slug": "wecom-authorized-shipping-intake",
-          "name": "企微企业接入与员工提报校验",
-          "reason": "用户批准WP39先修Harness；已发布候选与本地UI微修复保留，未把历史门禁声明为完成"
-        },
-        "execution_rule": "复用责任WP实现及证据；本编号的剩余断言逐项通过才关闭，不自动算完成"
-      },
-      {
         "id": "WP26",
         "slug": "employee-workorder-continuity",
         "name": "凭本人稳定身份查看全部状态、原因和修订历史，A不能读B",
@@ -1832,6 +1744,12 @@
         "slug": "directory-inspection",
         "name": "目录只读核验",
         "reason": "作为WP92内部诊断步骤吸收，不再单独要求业务交付；部门单独同步草稿撤回，不计完成"
+      },
+      {
+        "id": "WP97",
+        "slug": "crm-intake-icu-gateway",
+        "name": "ICU 面向 CRM 的寄件受理网关",
+        "reason": "匿名销售提报生产阻断优先修复；既有 CRM 候选与授权保留，不宣称完成。"
       }
     ],
     "completed": [

@@ -38,10 +38,12 @@ export default function EmployeeAccess({ children, requireVerification=false, ru
   setSource(sourceFor(profile));setDirty(false);setEditing(!contactSchema.safeParse(profile?.sender).success);setSenderText('');setSaveCommon(false)
  }
  useEffect(()=>{
+  // The public form uses self-reported sender details, never a background WeCom check.
+  if (!requireVerification) { setLoading(false); return }
   let active=true
   call().then(data=>{if(!active)return;const profile=data.employee as EmployeeProfile|null;setEmployee(profile);if(profile){setSender(profile.sender || emptyContact());setDraft(profile.sender || emptyContact());setTeam(profile.team);setSource(sourceFor(profile));setEditing(!contactSchema.safeParse(profile.sender).success)}else if(initialEmployee){setSender(emptyContact());setDraft(emptyContact());setTeam('');setSessionKey(k=>k+1);setEditing(true)}}).catch(e=>{if(active){setLoadFailed(true);setError(e.message)}}).finally(()=>{if(active)setLoading(false)})
   return()=>{active=false}
- },[initialEmployee])
+ },[initialEmployee,requireVerification])
  useEffect(()=>{if(requireVerification)return;try{const saved=JSON.parse(localStorage.getItem('shipping-anonymous-sender-v1') || 'null');if(saved?.remember&&contactSchema.safeParse(saved.sender).success&&typeof saved.team==='string'){setSender(saved.sender);setDraft(saved.sender);setTeam(saved.team);setRemember(true);setEditing(false)}}catch{/* optional device draft */}},[requireVerification])
  useEffect(()=>{if(!remember||employee||requireVerification)return;try{localStorage.setItem('shipping-anonymous-sender-v1',JSON.stringify({remember:true,sender,team}))}catch{/* optional device draft */}},[remember,employee,requireVerification,sender,team])
  async function retry() {

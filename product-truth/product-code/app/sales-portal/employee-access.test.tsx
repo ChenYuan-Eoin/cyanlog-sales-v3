@@ -21,7 +21,7 @@ it('revokes and clears identity before allowing a different user',async()=>{
 })
 it('keeps administrator-enabled open intake usable without an email verification step',async()=>{
  fetcher.mockResolvedValue(response({employee:null}));render(<EmployeeAccess requireVerification={false} rules={{companyName:{enabled:true,required:true,minLength:4},team:{enabled:false,required:false,minLength:1},teamOptions:[]}}>{({controls,identityControls,canSubmit})=><>{identityControls}{controls}<button disabled={!canSubmit}>提报就绪</button></>}</EmployeeAccess>)
- fireEvent.change(await screen.findByLabelText('寄方地址文本'),{target:{value:'张三 13800000000 广东省深圳市南山区科苑路15号'}});fireEvent.click(screen.getByRole('button',{name:'解析寄方信息'}));fireEvent.click(screen.getByRole('button',{name:'使用此地址'}));await waitFor(()=>expect(screen.getByRole('button',{name:'提报就绪'})).toHaveProperty('disabled',false));expect(screen.queryByLabelText('公司邮箱')).toBeNull()
+ fireEvent.change(await screen.findByLabelText('寄方地址文本'),{target:{value:'张三 13800000000 广东省深圳市南山区科苑路15号'}});fireEvent.click(screen.getByRole('button',{name:'解析寄方信息'}));fireEvent.click(screen.getByRole('button',{name:'使用此地址'}));await waitFor(()=>expect(screen.getByRole('button',{name:'提报就绪'})).toHaveProperty('disabled',false));expect(screen.queryByLabelText('公司邮箱')).toBeNull();expect(fetcher).not.toHaveBeenCalled()
 })
 
  it('preserves saved pickup details when a new paste is not a complete address',async()=>{
