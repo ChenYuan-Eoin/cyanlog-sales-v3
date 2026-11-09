@@ -502,7 +502,9 @@ function getPreviewOrderException(state, repoRoot, inboxRecords) {
   const base = /^[a-f0-9]{40}$/.test(approval?.approved_candidate || '') ? approval.approved_candidate : null;
   const changed = base ? runGit(repoRoot, ['diff', '--name-only', '-z', base, 'HEAD'], { allowFailure: true }) : null;
   const contractVersion = runtimeContractVersionOf(state);
-  const verifier = contractVersion === SHIPPING_SETTINGS_CONTRACT
+  const verifier = contractVersion === CRM_INTAKE_CONTRACT
+    ? './crm-intake-verifier'
+    : contractVersion === SHIPPING_SETTINGS_CONTRACT
     ? './shipping-settings-verifier'
     : contractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT
       ? './shipping-service-selection-verifier'

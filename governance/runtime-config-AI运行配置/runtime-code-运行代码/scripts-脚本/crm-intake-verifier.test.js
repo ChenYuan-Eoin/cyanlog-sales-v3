@@ -323,3 +323,22 @@ test('signed request binds canonical content, timestamp, method and path', () =>
   assert.notEqual(verifier.signedRequest(SECRET, '1760000000', 'POST', '/api/shipping/crm/preflight', rawRequest), verifier.signedRequest(SECRET, '1760000001', 'POST', '/api/shipping/crm/preflight', rawRequest))
   assert.notEqual(verifier.signedRequest(SECRET, '1760000000', 'POST', '/api/shipping/crm/preflight', rawRequest), verifier.signedRequest(SECRET, '1760000000', 'POST', '/api/shipping/crm/orders', rawRequest))
 })
+
+
+test('CRM release ordering exception is bound to approval and preserves business acceptance', () => {
+  const approval = {
+    type: 'final_production_release_authorization', source: 'user_explicit', state: 'approved',
+    preview_order_exception: true, preview_status: 'not_passed', business_acceptance_deferred: true,
+    approved_candidate: COMMIT, approved_product_tree: 'b'.repeat(40), rollback_commit: 'c'.repeat(40),
+    production_migration_authorized: true, fxiaoke_interaction_authorized: false,
+    business_order_creation_authorized: false, carrier_calls_authorized: false, identity_or_role_change_authorized: false,
+  }
+  const input = { approval, activeId: 'WP97', contractVersion: verifier.CONTRACT, productTree: approval.approved_product_tree, candidateIsAncestor: true, changedPaths: ['governance/runtime-state/active-task.json'] }
+  assert.deepEqual(verifier.productionFirstExceptionBlockers(input), [])
+  for (const patch of [
+    { approval: undefined }, { activeId: 'WP98' }, { contractVersion: 'other' },
+    { productTree: 'd'.repeat(40) }, { candidateIsAncestor: false },
+    { changedPaths: ['product-truth/product-code/lib/shipping/crm-intake.ts'] },
+    ...['preview_status', 'business_acceptance_deferred', 'carrier_calls_authorized', 'business_order_creation_authorized', 'fxiaoke_interaction_authorized', 'identity_or_role_change_authorized', 'production_migration_authorized'].map(key => ({ approval: { ...approval, [key]: key === 'preview_status' ? 'passed' : !approval[key] } })),
+  ]) assert.ok(verifier.productionFirstExceptionBlockers({ ...input, ...patch }).length > 0)
+})

@@ -71,6 +71,27 @@ const OBSERVATION_FIELDS = Object.freeze([
   'attachments',
 ])
 
+// A user-approved ordering exception never closes the real APL business gate.
+function productionFirstExceptionBlockers({ approval, activeId, contractVersion, productTree, changedPaths, candidateIsAncestor } = {}) {
+  const errors = []
+  if (activeId !== 'WP97' || contractVersion !== CONTRACT) errors.push('CRM ordering exception is limited to WP97')
+  if (approval?.type !== 'final_production_release_authorization' || approval?.source !== 'user_explicit' || approval?.state !== 'approved' || approval?.preview_order_exception !== true) errors.push('CRM ordering exception requires explicit user approval')
+  if (approval?.preview_status !== 'not_passed' || approval?.business_acceptance_deferred !== true) errors.push('CRM exception must preserve unpassed Preview and deferred APL acceptance')
+  if (!COMMIT.test(approval?.approved_candidate || '') || candidateIsAncestor !== true) errors.push('CRM exception requires approved candidate ancestry')
+  if (!COMMIT.test(approval?.approved_product_tree || '') || productTree !== approval.approved_product_tree) errors.push('CRM exception cannot change approved product code')
+  if (!COMMIT.test(approval?.rollback_commit || '')) errors.push('CRM exception requires a rollback commit')
+  const allowed = new Set([
+    'governance/runtime-state/active-task.json', 'governance/runtime-state/demand-inbox.jsonl',
+    ...['project-registry.js', 'crm-intake-verifier.js', 'crm-intake-verifier.test.js'].map(name => `governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/${name}`),
+  ])
+  if (!Array.isArray(changedPaths) || changedPaths.some(file => !allowed.has(file))) errors.push('CRM exception only permits scoped delivery records')
+  if (approval?.production_migration_authorized !== true) errors.push('CRM migration authorization is required')
+  for (const flag of ['fxiaoke_interaction_authorized', 'business_order_creation_authorized', 'carrier_calls_authorized', 'identity_or_role_change_authorized']) {
+    if (approval?.[flag] !== false) errors.push(`CRM release exception must exclude ${flag}`)
+  }
+  return errors
+}
+
 function check(condition, message) {
   if (!condition) throw Error(message)
 }
@@ -665,6 +686,7 @@ async function verifyPreview(options = {}) {
 }
 
 module.exports = {
+  productionFirstExceptionBlockers,
   CONTRACT,
   ITEMS,
   PREVIEW_ACTIONS,

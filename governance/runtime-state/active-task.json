@@ -341,7 +341,8 @@
         "release_truth_rule": "Git提交、Production迁移、Vercel部署与CRM业务证据彼此独立；HTTP 202、部署READY或代码测试不能替代唯一待确认工单。",
         "trust_boundary": "纷享APL执行日志提供真实审批节点触发的操作员证据；签名HTTP响应与Production数据库回读提供机器证据，Harness只能校验声明与哈希绑定。",
         "production_database_mode": "controlled_write_approved"
-      }
+      },
+      "preview_order_exception_approval_id": "IN-20261109-009"
     },
     "acceptance_checks": [
       "未签名、过期、重复或未知客户端 ID 的 CRM 请求被拒绝",
