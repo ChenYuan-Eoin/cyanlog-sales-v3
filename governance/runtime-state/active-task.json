@@ -270,6 +270,7 @@
       "product-truth/product-code/app/api/shipping/crm/orders/route.ts",
       "product-truth/product-code/app/api/shipping/crm/crm-routes.test.ts",
       "product-truth/product-code/supabase/migrations/20261106000001_shipping_crm_intake.sql",
+      "product-truth/product-code/supabase/migrations/20261109000002_shipping_crm_identity_and_dedup.sql",
       "product-truth/product-code/lib/shipping/shipping-crm-intake-migration.test.ts",
       "product-truth/product-code/lib/shipping/fxiaoke-apl",
       "product-truth/product-code/middleware.ts",

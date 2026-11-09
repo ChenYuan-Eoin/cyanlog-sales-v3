@@ -11,7 +11,7 @@ export const runtime = 'nodejs'
 
 function errorResponse(error: unknown) {
   if (error instanceof CrmIntakeError) {
-    return NextResponse.json({ error: error.message, code: error.code, ...(error.missing ? { missing: error.missing } : {}) }, { status: error.status, headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json({ error: error.message, code: error.code, ...(error.missing ? { missing: error.missing } : {}), ...(error.existingOrderId ? { existingOrderId: error.existingOrderId } : {}) }, { status: error.status, headers: { 'Cache-Control': 'no-store' } })
   }
   return NextResponse.json({ error: 'CRM 寄件单暂未受理。', code: 'CRM_INTAKE_FAILED' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
 }

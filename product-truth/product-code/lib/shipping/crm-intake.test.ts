@@ -156,6 +156,16 @@ describe('CRM server-to-server authentication', () => {
 })
 
 describe('CRM intake preflight', () => {
+  it('reports applicant and sales attribution separately without inventing a salesperson', async () => {
+    const sales = { employeeId: 'sales-2000', name: '归属销售', departmentId: 'dept-sales' }
+    const withSales = await preflightCrmIntakeRequest(client, rawBody({ ...body, sales }))
+    expect(withSales).toMatchObject({ ready: true, source: { applicant: body.applicant, sales }, normalized: { applicant: body.applicant, sales } })
+    const withoutSales = await preflightCrmIntakeRequest(client, rawBody())
+    expect(withoutSales).toMatchObject({ ready: true, source: { sales: null }, normalized: { sales: null } })
+    const invalidSales = await preflightCrmIntakeRequest(client, rawBody({ ...body, sales: { name: '只有姓名' } }))
+    expect(invalidSales).toMatchObject({ ready: false, missing: expect.arrayContaining([expect.objectContaining({ field: 'sales.employeeId' })]) })
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
   it('returns normalized values while performing no database write', async () => {
     const parsed = crmIntakeBodySchema.parse(body)
     const result = await preflightCrmIntake(client, parsed)
@@ -247,6 +257,20 @@ describe('CRM intake preflight', () => {
 })
 
 describe('CRM intake create-pending idempotency', () => {
+  it('passes explicit sales attribution separately to persistence', async () => {
+    const sales = { employeeId: 'sales-2000', name: '归属销售' }
+    mocks.from.mockReturnValueOnce(eventLookup(null))
+    await createCrmIntake(client, rawBody({ ...body, sales }))
+    expect(mocks.rpc).toHaveBeenCalledWith('create_shipping_crm_intake', expect.objectContaining({ p_applicant_snapshot: body.applicant, p_sales_snapshot: sales }))
+  })
+
+  it('returns a usable conflict with the original order when another event already owns the shipment', async () => {
+    const existingOrderId = '22222222-2222-4222-8222-222222222222'
+    mocks.from.mockReturnValueOnce(eventLookup(null))
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: { message: 'CRM_SHIPMENT_ALREADY_INTAKEN', details: JSON.stringify({ orderId: existingOrderId }) } })
+    await expect(createCrmIntake(client, rawBody())).rejects.toMatchObject({ status: 409, code: 'CRM_SHIPMENT_ALREADY_INTAKEN', existingOrderId })
+    expect(mocks.rpc).toHaveBeenCalledTimes(1)
+  })
   it('returns the original order for an exact replay without reading current defaults', async () => {
     const payloadHash = createHash('sha256').update(canonicalJson(body)).digest('hex')
     mocks.from.mockReturnValueOnce(eventLookup({ payload_hash: payloadHash, shipping_order_id: 'order-1' }))

@@ -34,9 +34,10 @@ const ready: CrmIntakePreflight = {
   organization: { orgId: client.orgId, integrationClientId: client.clientId },
   event,
   eventKey: 'a'.repeat(64),
-  source: { event, applicant, customer, eventKey: 'a'.repeat(64) },
+  source: { event, applicant, sales: null, customer, eventKey: 'a'.repeat(64) },
   normalized: {
     applicant,
+    sales: null,
     customer,
     sender: { name: '寄件中心', phone: '13800000000', province: '上海市', city: '上海市', county: '浦东新区', address: '张江路88号' },
     recipient: { name: '收件人', phone: '13700000000', province: '广东省', city: '深圳市', county: '南山区', address: '科技园1号' },
@@ -91,6 +92,13 @@ describe('CRM intake preflight route', () => {
 })
 
 describe('CRM intake create-pending route', () => {
+  it('returns the existing order reference for a repeated shipment under a new event', async () => {
+    const existingOrderId = '22222222-2222-4222-8222-222222222222'
+    mocks.create.mockRejectedValue(new CrmIntakeError(409, 'CRM_SHIPMENT_ALREADY_INTAKEN', '本条寄件明细已有工单。', undefined, existingOrderId))
+    const response = await ordersPOST(request('/api/shipping/crm/orders'))
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'CRM_SHIPMENT_ALREADY_INTAKEN', existingOrderId })
+  })
   it('returns 202 for an accepted pending order and never exposes a carrier-success claim', async () => {
     const response = await ordersPOST(request('/api/shipping/crm/orders'))
     expect(response.status).toBe(202)

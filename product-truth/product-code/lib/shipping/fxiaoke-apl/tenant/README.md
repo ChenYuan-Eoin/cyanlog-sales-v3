@@ -1,5 +1,7 @@
 # 纷享审批寄件 APL 租户模板
 
+当前参考文件不可直接安装到生产：已核实人员稳定 ID 为 `PersonnelObj.user_id`，现有示例中的人员 `_id`、姓名、电话与部门映射有误，流程 API 也尚未在本租户验证。组织、字段、ICU 补齐与待办以 [ICU 字段盘点](./icu-field-audit.md) 为准；按用户指令先完成 ICU 准备，暂不操作纷享后台。
+
 `fxiaoke-approval-intake.groovy` 是 F054/WP97 的租户侧薄调用函数，`fxiaoke-approval-intake.example.json` 是对应的可审查配置模板。两者都不包含既有工单迁移或组织目录同步逻辑。
 
 ## 上线前必须取得的生产事实
@@ -47,6 +49,8 @@ WP97 的完成线不是 `code_green`、部署 READY、预检 200、受理 202 �
 | 幂等受理／精确重放 | `POST /api/shipping/crm/orders` | `created`、`orderId`、`orderNo`、`status`、`waybill`、`nextAction` | 首次创建待确认工单；同一事件和内容返回原单；内容改变返回 409 |
 
 请求来源身份、业务字段与签名按上文约定传入。接口验收检查鉴权、有效输入、缺项、精确重放、内容冲突及实际持久化结果；生产可调用性须在正式接口核实。模板存在或本地测试通过均不能代替生产调用证据。
+
+ICU 新增可选 `sales` 身份快照，独立于 `applicant`；缺省时保持未分配。新增迁移通过后，同一逻辑寄件明细在任务、流程实例、节点、修订或客户端变化时返回 `409 / CRM_SHIPMENT_ALREADY_INTAKEN` 和 `existingOrderId`，不会创建第二单。具体字段与迁移顺序见盘点文档。
 
 现有 Groovy 文件仅作为调用参考，配置位于文件开头的 `CONFIG`，对应字段说明见 JSON 示例。默认 `mode: preflight`，只预检；明确设为 `create` 后才会在预检通过时调用受理。返回 `preflight_ready`、`preflight_blocked`、`created` 或 `replayed`，纷享流程如何处理结果由节点配置负责。密钥只配置在服务端，不进入仓库。
 

@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 const migration = readFileSync(join(process.cwd(), 'supabase/migrations/20261106000001_shipping_crm_intake.sql'), 'utf8')
+const correction = readFileSync(join(process.cwd(), 'supabase/migrations/20261109000002_shipping_crm_identity_and_dedup.sql'), 'utf8')
 const orgId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const firstOrderId = '22222222-2222-4222-8222-222222222222'
 const secondOrderId = '33333333-3333-4333-8333-333333333333'
@@ -20,31 +21,32 @@ const payload = {
 const applicant = { employeeId: 'sales-1093', name: '销售', phone: '13700000000', departmentId: 'dept-1', departmentName: '销售部' }
 const customer = { accountId: 'account-1', name: '客户公司' }
 
-function callSql(args: { orderId: string; orderNo: string; hash?: string } = { orderId: firstOrderId, orderNo: 'SO-20261106-ABC12345' }) {
+function callSql(args: { orderId: string; orderNo: string; hash?: string; eventKey?: string; idempotencyKey?: string; revision?: string; task?: string; stage?: string; instance?: string; detail?: string; clientId?: string; sales?: Record<string, string> } = { orderId: firstOrderId, orderNo: 'SO-20261106-ABC12345' }) {
   return `
     select public.create_shipping_crm_intake(
       '${args.orderId}'::uuid,
       '${args.orderNo}',
       '${orgId}'::uuid,
-      '${idempotencyKey}'::uuid,
-      'fxiaoke-prod',
-      '${eventKey}',
+      '${args.idempotencyKey || idempotencyKey}'::uuid,
+      '${args.clientId || 'fxiaoke-prod'}',
+      '${args.eventKey || eventKey}',
       '${args.hash || payloadHash}',
       'ea-cyanlog',
-      'instance-1',
+      '${args.instance || 'instance-1'}',
       'ContractObj',
       'record-1',
-      'detail-1',
-      'task-1',
-      'stage-approved',
-      'revision-1',
+      '${args.detail || 'detail-1'}',
+      '${args.task || 'task-1'}',
+      '${args.stage || 'stage-approved'}',
+      '${args.revision || 'revision-1'}',
       '${JSON.stringify(applicant)}'::jsonb,
       '${JSON.stringify(customer)}'::jsonb,
       '${JSON.stringify(payload)}'::jsonb,
       '原始审批寄件文本',
       '${JSON.stringify({ event: 'workflow-approved', source: 'test' })}',
-      '${'c'.repeat(64)}',
+      '${args.eventKey || 'c'.repeat(64)}',
       '2026-11-06T03:00:00Z'::timestamptz
+      ${args.sales ? `, '${JSON.stringify(args.sales)}'::jsonb` : ''}
     ) as result
   `
 }
@@ -101,10 +103,62 @@ describe('CRM shipping intake migration', () => {
       insert into public.organizations (id) values ('${orgId}');
     `)
     await db.exec(migration)
+    await db.exec(correction)
   })
 
   afterEach(async () => {
     await db.close()
+  })
+
+  it('does not treat the applicant as the assigned salesperson', async () => {
+    await db.query(callSql())
+    const result = await db.query('select sales_ref, assignment_status from public.shipping_orders')
+    expect(result.rows).toEqual([{ sales_ref: null, assignment_status: 'unassigned' }])
+  })
+
+  it('blocks a new workflow event for the same logical shipment detail', async () => {
+    await db.query(callSql())
+    await expect(db.query(callSql({
+      orderId: secondOrderId, orderNo: 'SO-20261109-REAPPROVAL',
+      eventKey: 'e'.repeat(64), idempotencyKey: secondOrderId,
+      revision: 'revision-2', task: 'task-2', stage: 'stage-2', instance: 'instance-2', clientId: 'rotated-client',
+    }))).rejects.toThrow(/CRM_SHIPMENT_ALREADY_INTAKEN/)
+    const counts = await db.query('select count(*)::int as count from public.shipping_orders')
+    expect(counts.rows).toEqual([{ count: 1 }])
+  })
+
+  it('stores the explicitly supplied salesperson independently of the applicant', async () => {
+    const sales = { employeeId: 'sales-2000', name: '客户归属销售', departmentId: 'dept-sales' }
+    await db.query(callSql({ orderId: firstOrderId, orderNo: 'SO-20261109-SALES', sales }))
+    const result = await db.query(`
+      select o.sales_ref, o.assignment_status, o.identity_snapshot, e.sales_snapshot
+      from public.shipping_orders o join public.shipping_crm_intake_events e on e.shipping_order_id = o.id
+    `)
+    expect(result.rows).toEqual([{
+      sales_ref: 'sales-2000', assignment_status: 'assigned', sales_snapshot: sales,
+      identity_snapshot: { provider: 'fxiaoke', integrationClientId: 'fxiaoke-prod', applicant, sales },
+    }])
+  })
+
+  it('allows a separate shipment detail on the same contract', async () => {
+    await db.query(callSql())
+    const result = await db.query<{ result: { created: boolean } }>(callSql({
+      orderId: secondOrderId, orderNo: 'SO-20261109-SECOND', eventKey: 'e'.repeat(64),
+      idempotencyKey: secondOrderId, detail: 'detail-2',
+    }))
+    expect(result.rows[0].result.created).toBe(true)
+  })
+
+  it('keeps one RPC overload and denies browser roles after reapplying the correction', async () => {
+    await db.exec(correction)
+    const result = await db.query(`
+      select count(*)::int as count,
+        bool_or(has_function_privilege('anon', p.oid, 'execute')) as anon_can_execute,
+        bool_or(has_function_privilege('authenticated', p.oid, 'execute')) as authenticated_can_execute
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = 'create_shipping_crm_intake'
+    `)
+    expect(result.rows).toEqual([{ count: 1, anon_can_execute: false, authenticated_can_execute: false }])
   })
 
   it('atomically creates one awaiting-confirmation order with explicit CRM evidence', async () => {
@@ -145,7 +199,7 @@ describe('CRM shipping intake migration', () => {
     expect(state.rows[0]).toMatchObject({
       intake_source: 'crm',
       status: 'awaiting_confirmation',
-      sales_ref: 'sales-1093',
+      sales_ref: null,
       customer_ref: 'account-1',
       event_count: 1,
       replay_count: 0,
@@ -154,7 +208,7 @@ describe('CRM shipping intake migration', () => {
       applicant_employee_id: 'sales-1093',
       customer_account_id: 'account-1',
       raw_request: JSON.stringify({ event: 'workflow-approved', source: 'test' }),
-      identity_snapshot: { provider: 'fxiaoke', integrationClientId: 'fxiaoke-prod', applicant },
+      identity_snapshot: { provider: 'fxiaoke', integrationClientId: 'fxiaoke-prod', applicant, sales: null },
     })
   })
 

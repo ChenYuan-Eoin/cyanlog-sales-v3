@@ -48,6 +48,13 @@ const crmCustomerSchema = z.object({
   name: z.string().trim().min(1, '请填写客户名称').max(120),
 }).strict()
 
+const crmSalesSchema = z.object({
+  employeeId: identifier(160),
+  name: z.string().trim().min(1, '请填写归属销售姓名').max(60),
+  departmentId: identifier(160).optional(),
+  departmentName: z.string().trim().min(1).max(80).optional(),
+}).strict()
+
 const crmShipmentSchema = z.object({
   recipient: contactSchema,
   cargo: z.string().trim().min(1, '请填写物品').max(60),
@@ -68,6 +75,7 @@ const crmShipmentSchema = z.object({
 export const crmIntakeBodySchema = z.object({
   event: crmEventIdentitySchema,
   applicant: crmApplicantSchema,
+  sales: crmSalesSchema.optional(),
   customer: crmCustomerSchema,
   shipment: crmShipmentSchema,
 }).strict()
@@ -95,6 +103,7 @@ export type CrmMissingField = { field: string; message: string; issue: string }
 export type CrmIntakeSourceEvidence = {
   event: CrmEventIdentity | null
   applicant: CrmIntakePayload['applicant'] | null
+  sales: NonNullable<CrmIntakePayload['sales']> | null
   customer: CrmIntakePayload['customer'] | null
 }
 export type CrmIntakeInspection =
@@ -109,6 +118,7 @@ export type CrmIntakePreflight = {
   source: CrmIntakeSourceEvidence & { eventKey: string | null }
   normalized: null | {
     applicant: CrmIntakePayload['applicant']
+    sales: NonNullable<CrmIntakePayload['sales']> | null
     customer: CrmIntakePayload['customer']
     sender: Contact
     recipient: Contact
@@ -135,7 +145,7 @@ export type CrmIntakeReceipt = {
 }
 
 export class CrmIntakeError extends Error {
-  constructor(public status: number, public code: string, message: string, public missing?: CrmMissingField[]) {
+  constructor(public status: number, public code: string, message: string, public missing?: CrmMissingField[], public existingOrderId?: string) {
     super(message)
   }
 }
@@ -256,6 +266,7 @@ export function inspectCrmIntakeRequest(rawBody: string): CrmIntakeInspection {
   const source: CrmIntakeSourceEvidence = {
     event: crmEventIdentitySchema.safeParse(record?.event).data || null,
     applicant: crmApplicantSchema.safeParse(record?.applicant).data || null,
+    sales: crmSalesSchema.safeParse(record?.sales).data || null,
     customer: crmCustomerSchema.safeParse(record?.customer).data || null,
   }
   const parsed = crmIntakeBodySchema.safeParse(decoded)
@@ -304,7 +315,7 @@ export async function preflightCrmIntake(client: CrmIntakeClient, payload: CrmIn
       organization: { orgId: client.orgId, integrationClientId: client.clientId },
       event: payload.event,
       eventKey,
-      source: { event: payload.event, applicant: payload.applicant, customer: payload.customer, eventKey },
+      source: { event: payload.event, applicant: payload.applicant, sales: payload.sales || null, customer: payload.customer, eventKey },
       normalized: null,
       missing,
     }
@@ -315,9 +326,10 @@ export async function preflightCrmIntake(client: CrmIntakeClient, payload: CrmIn
     organization: { orgId: client.orgId, integrationClientId: client.clientId },
     event: payload.event,
     eventKey,
-    source: { event: payload.event, applicant: payload.applicant, customer: payload.customer, eventKey },
+    source: { event: payload.event, applicant: payload.applicant, sales: payload.sales || null, customer: payload.customer, eventKey },
     normalized: {
       applicant: payload.applicant,
+      sales: payload.sales || null,
       customer: payload.customer,
       sender: parsedSender.data,
       recipient: payload.shipment.recipient,
@@ -454,6 +466,7 @@ export async function createCrmIntake(client: CrmIntakeClient, rawBody: string):
     p_stage_id: payload.event.stageId,
     p_revision_id: payload.event.revisionId,
     p_applicant_snapshot: payload.applicant,
+    p_sales_snapshot: payload.sales || null,
     p_customer_snapshot: payload.customer,
     p_shipment_payload: input,
     p_raw_input: payload.shipment.sourceText || null,
@@ -462,6 +475,13 @@ export async function createCrmIntake(client: CrmIntakeClient, rawBody: string):
     p_next_review_at: nextShippingReviewAt(),
   })
   if (error) {
+    if (String(error.message || '').includes('CRM_SHIPMENT_ALREADY_INTAKEN')) {
+      let existingOrderId: string | undefined
+      try {
+        existingOrderId = databaseUuid.safeParse(JSON.parse(error.details || '{}').orderId).data
+      } catch { /* Do not expose untrusted database error details. */ }
+      throw new CrmIntakeError(409, 'CRM_SHIPMENT_ALREADY_INTAKEN', '本条寄件明细已有工单。请核对原工单；重审、换节点或修订不能重复建单。', undefined, existingOrderId)
+    }
     if (String(error.message || '').includes('CRM_INTAKE_PAYLOAD_CONFLICT')) {
       throw new CrmIntakeError(409, 'CRM_EVENT_PAYLOAD_CONFLICT', '同一 CRM 事件的内容发生变化，已拒绝覆盖原工单。')
     }
