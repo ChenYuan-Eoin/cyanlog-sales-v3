@@ -85,7 +85,7 @@ function productionFirstExceptionBlockers({ approval, activeId, contractVersion,
     ...['project-registry.js', 'crm-intake-verifier.js', 'crm-intake-verifier.test.js'].map(name => `governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/${name}`),
   ])
   if (!Array.isArray(changedPaths) || changedPaths.some(file => !allowed.has(file))) errors.push('CRM exception only permits scoped delivery records')
-  if (approval?.production_migration_authorized !== true) errors.push('CRM migration authorization is required')
+  if (approval?.production_migration_authorized !== true && !(approval?.production_migration_authorized === false && approval?.production_database_write_authorized === false)) errors.push('CRM release requires migration authorization or an explicit no-database-write scope')
   for (const flag of ['fxiaoke_interaction_authorized', 'business_order_creation_authorized', 'carrier_calls_authorized', 'identity_or_role_change_authorized']) {
     if (approval?.[flag] !== false) errors.push(`CRM release exception must exclude ${flag}`)
   }

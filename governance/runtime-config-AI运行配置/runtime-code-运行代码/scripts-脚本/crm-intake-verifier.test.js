@@ -335,6 +335,7 @@ test('CRM release ordering exception is bound to approval and preserves business
   }
   const input = { approval, activeId: 'WP97', contractVersion: verifier.CONTRACT, productTree: approval.approved_product_tree, candidateIsAncestor: true, changedPaths: ['governance/runtime-state/active-task.json'] }
   assert.deepEqual(verifier.productionFirstExceptionBlockers(input), [])
+  assert.deepEqual(verifier.productionFirstExceptionBlockers({ ...input, approval: { ...approval, production_migration_authorized: false, production_database_write_authorized: false } }), [])
   for (const patch of [
     { approval: undefined }, { activeId: 'WP98' }, { contractVersion: 'other' },
     { productTree: 'd'.repeat(40) }, { candidateIsAncestor: false },
