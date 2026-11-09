@@ -93,6 +93,26 @@ describe('CRM server-to-server authentication', () => {
     expect(authenticateCrmRequest({ method: 'POST', pathname: preflightPath, headers: headers(timestamp, `sha256=${signature}`), rawBody: requestBody, now, env })).toEqual(client)
   })
 
+  it('accepts the canonical database UUID used by the existing organization', () => {
+    const databaseClient = { ...client, orgId: '00000001-0000-0000-0000-000000000000' }
+    const requestBody = rawBody()
+    const signature = createCrmSignature(databaseClient.secret, timestamp, 'POST', preflightPath, requestBody)
+    const databaseHeaders = new Headers({
+      'x-shipping-crm-client-id': databaseClient.clientId,
+      'x-shipping-crm-timestamp': timestamp,
+      'x-shipping-crm-signature': `sha256=${signature}`,
+    })
+
+    expect(authenticateCrmRequest({
+      method: 'POST',
+      pathname: preflightPath,
+      headers: databaseHeaders,
+      rawBody: requestBody,
+      now,
+      env: { SHIPPING_CRM_CLIENTS_JSON: JSON.stringify([databaseClient]) },
+    })).toEqual(databaseClient)
+  })
+
   it('accepts a canonical-map HMAC even when the transport changes key order and whitespace', () => {
     const reorderedBody = JSON.stringify({
       shipment: body.shipment,

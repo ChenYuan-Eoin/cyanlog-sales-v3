@@ -22,6 +22,7 @@ const CRM_SIGNATURE_HEADER = 'x-shipping-crm-signature'
 
 const identifier = (max: number) => z.string().trim().min(1, '缺少来源标识').max(max)
 const phone = z.string().trim().regex(DOMESTIC_SHIPPING_PHONE_PATTERN, '请填写国内手机号或带区号的座机')
+const databaseUuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, '组织标识格式无效')
 
 const crmEventIdentitySchema = z.object({
   enterpriseId: identifier(120),
@@ -77,7 +78,9 @@ export type CrmIntakeClient = { clientId: string; orgId: string; enterpriseId?: 
 
 const clientsSchema = z.array(z.object({
   clientId: identifier(80).regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, '客户端 ID 格式无效'),
-  orgId: z.string().uuid(),
+  // PostgreSQL accepts canonical dashed UUID values without requiring RFC 4122 version bits.
+  // Existing tenant IDs use that database form, so client validation must follow the database contract.
+  orgId: databaseUuid,
   enterpriseId: identifier(120).optional(),
   secret: z.string().min(32, '客户端密钥至少 32 个字符').max(512),
 }).strict()).min(1).max(50).superRefine((clients, ctx) => {
