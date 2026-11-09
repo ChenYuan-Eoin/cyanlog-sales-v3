@@ -296,7 +296,7 @@
         "production_database_mode": "read_only"
       },
       "production_release_authorization": {
-        "status": "approved_code_only",
+        "status": "pending_security_gate_and_final_write_approval",
         "scope": "匿名销售提报代码修复，无数据库迁移、配置写入或承运商调用",
         "micro_fix_approval_id": "IN-20261109-019",
         "clarification_id": "IN-20261109-019",
@@ -304,7 +304,8 @@
         "final_scope": "发布匿名销售提报纯代码修复；正式站无需企微身份即可填写、预览和提交待审核工单，私密回执查询可用；不迁移、不新建真实寄件、不调用顺丰。",
         "final_release_approval_id": "IN-20261109-021",
         "code_release_authorized": true,
-        "production_database_write_authorized": false
+        "production_database_write_authorized": false,
+        "formal_gate_note": "IN-20261109-021 explicitly approves this release and legacy-contract/order exception. The legacy status enum cannot represent anonymous intake; preserve pending formal gate rather than pretending it passed."
       },
       "runtime_profile": "shipping_workspace",
       "runtime_contract_version": "f054-intake-v1",
@@ -318,7 +319,6 @@
         "shipping_tracking",
         "shipping_access"
       ],
-      "preview_order_exception_approval_id": "IN-20261109-021",
       "release_exception": {
         "authority": "IN-20261109-021",
         "preview_status": "not_passed",
