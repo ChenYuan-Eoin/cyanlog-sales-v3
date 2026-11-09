@@ -237,14 +237,14 @@ export async function listPublicShipmentReceipts(orgId: string, page = 0) {
   requireOrganization(orgId)
   if (!Number.isSafeInteger(page) || page < 0 || !Number.isSafeInteger((page + 1) * 50)) throw new ShippingError(400, '记录页码无效。')
   const { data, error } = await supabaseAdmin.from('shipping_orders')
-    .select('order_no,status,next_review_at,created_at,shipping_waybills(waybill_no)')
+    .select('order_no,status,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no)')
     .eq('org_id', orgId).order('created_at', { ascending: false }).order('id', { ascending: false })
     .range(page * 50, page * 50 + 50)
   if (error) throw new ShippingError(503, '提报记录暂时无法读取，请稍后刷新。')
   const rows = data || []
   const orders: ShipmentReceipt[] = rows.slice(0, 50).map(row => {
     const waybills = Array.isArray(row.shipping_waybills) ? row.shipping_waybills : row.shipping_waybills ? [row.shipping_waybills] : []
-    return { orderNo: row.order_no, status: row.status, waybill: waybills[0]?.waybill_no || null, nextReviewAt: row.next_review_at, createdAt: row.created_at }
+    return { orderNo: row.order_no, status: row.status, waybill: waybills[0]?.waybill_no || null, nextReviewAt: row.next_review_at, createdAt: row.created_at, customerName: typeof row.customer_name === 'string' && row.customer_name.trim() ? row.customer_name.trim() : null }
   })
   return { orders, nextPage: rows.length > 50 ? page + 1 : null }
 }

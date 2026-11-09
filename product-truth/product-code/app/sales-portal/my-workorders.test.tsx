@@ -1,6 +1,6 @@
 import React from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import MyWorkorders from './my-workorders'
 const fetcher=vi.fn()
 const order=(orderNo:string)=>({orderNo,status:'waybill_created',waybill:`SF-${orderNo}`,createdAt:'2026-11-09T08:00:00Z'})
@@ -14,6 +14,7 @@ it('loads shared records anonymously, appends pages and refreshes from the newes
  render(<MyWorkorders/>)
  expect(await screen.findByText('ONE')).toBeTruthy()
  expect(fetcher).toHaveBeenCalledWith('/api/shipping/public/orders?page=0',{cache:'no-store',credentials:'omit'})
+ fireEvent.click(screen.getByRole('button',{name:'查看更早记录'}))
  fireEvent.click(screen.getByRole('button',{name:'加载更多快递'}))
  expect(await screen.findByText('TWO')).toBeTruthy();expect(screen.getAllByText('ONE')).toHaveLength(1)
  expect(screen.getByText('已显示 2 条，已加载全部记录')).toBeTruthy()
@@ -25,6 +26,7 @@ it('keeps existing records when another page fails and lets visitors retry it',a
   .mockResolvedValueOnce(response({error:'记录暂不可用'},503))
   .mockResolvedValueOnce(response({orders:[order('TWO')],nextPage:null}))
  render(<MyWorkorders/>);await screen.findByText('ONE')
+ fireEvent.click(screen.getByRole('button',{name:'查看更早记录'}))
  fireEvent.click(screen.getByRole('button',{name:'加载更多快递'}));expect(await screen.findByRole('alert')).toHaveProperty('textContent','记录暂不可用')
  expect(screen.getByText('ONE')).toBeTruthy()
  fireEvent.click(screen.getByRole('button',{name:'加载更多快递'}));expect(await screen.findByText('TWO')).toBeTruthy()
@@ -35,4 +37,26 @@ it('explains an empty list and recovers from an initial failure',async()=>{
  render(<MyWorkorders/>);await screen.findByRole('alert')
  fireEvent.click(screen.getByRole('button',{name:'刷新提报记录'}));expect(await screen.findByText('尚无提报记录')).toBeTruthy()
  await waitFor(()=>expect(screen.queryByRole('alert')).toBeNull())
+})
+
+it('shows only the latest five initially, expands and collapses without losing loaded records',async()=>{
+ fetcher.mockResolvedValue(response({orders:Array.from({length:8},(_,i)=>order(`ORDER-${i}`)),nextPage:null}))
+ render(<MyWorkorders/>);await screen.findByText('ORDER-0')
+ expect(screen.getAllByRole('listitem')).toHaveLength(5);expect(screen.queryByText('ORDER-5')).toBeNull()
+ fireEvent.click(screen.getByRole('button',{name:'查看更早记录'}))
+ expect(screen.getAllByRole('listitem')).toHaveLength(8)
+ expect(screen.getByRole('region',{name:'按日期分组的提报记录'}).getAttribute('tabindex')).toBe('0')
+ fireEvent.click(screen.getByRole('button',{name:'收起 · 最近5条'}))
+ expect(screen.getAllByRole('listitem')).toHaveLength(5)
+ fireEvent.click(screen.getByRole('button',{name:'查看更早记录'}))
+ expect(screen.getByText('ORDER-7')).toBeTruthy();expect(fetcher).toHaveBeenCalledTimes(1)
+})
+it('groups by Shanghai calendar date and shows the submitted customer badge and local time',async()=>{
+ fetcher.mockResolvedValue(response({orders:[{...order('LATE'),createdAt:'2026-11-08T16:05:00Z',customerName:'星河科技'}, {...order('EARLY'),createdAt:'2026-11-08T15:55:00Z',customerName:null}],nextPage:null}))
+ render(<MyWorkorders/>);await screen.findByText('LATE')
+ const nextDay=screen.getByRole('region',{name:'2026年11月9日'}),priorDay=screen.getByRole('region',{name:'2026年11月8日'})
+ expect(within(nextDay).getByText('LATE')).toBeTruthy();expect(within(nextDay).getByText('00:05')).toBeTruthy()
+ expect(within(nextDay).getByText('星河科技').getAttribute('title')).toBe('星河科技')
+ expect(within(priorDay).getByText('EARLY')).toBeTruthy();expect(within(priorDay).getByText('23:55')).toBeTruthy()
+ expect(within(priorDay).getByText('未填客户')).toBeTruthy()
 })

@@ -259,7 +259,8 @@
       "product-truth/product-code/lib/fxiaoke/egress/directory-transport.ts",
       "product-truth/product-code/lib/fxiaoke/egress/directory-transport.test.ts",
       "product-truth/product-code/lib/shipping/collaboration.ts",
-      "product-truth/product-code/lib/shipping/collaboration.org.test.ts"
+      "product-truth/product-code/lib/shipping/collaboration.org.test.ts",
+      "product-truth/product-code/lib/shipping/types.ts"
     ],
     "acceptance_checks": [
       "无企微会话直接打开并填写销售提报",

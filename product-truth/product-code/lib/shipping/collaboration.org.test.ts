@@ -32,7 +32,7 @@ function query(table: string) {
     return { data: single ? matched[0] || null : matched, error: null }
   }
   const builder = {
-    select: () => builder,
+    select: vi.fn(() => builder),
     eq: (key: string, value: unknown) => { filters.push(item => item[key] === value); return builder },
     is: (key: string, value: unknown) => { filters.push(item => item[key] === value); return builder },
     in: (key: string, values: unknown[]) => { filters.push(item => values.includes(item[key])); return builder },
@@ -140,7 +140,16 @@ it('pages every source and employee in one organization with only public receipt
  expect(first.orders).toHaveLength(50);expect(first.nextPage).toBe(1)
  expect(second.orders).toHaveLength(3);expect(second.nextPage).toBeNull()
  expect(new Set([...first.orders,...second.orders].map(o=>o.orderNo)).size).toBe(53)
- expect(first.orders[0]).toEqual({orderNo:'A-052',status:'awaiting_confirmation',waybill:'SF-52',createdAt:'2026-09-27T00:00:00Z',nextReviewAt:'2026-09-27T01:00:00Z'})
+ expect(first.orders[0]).toEqual({orderNo:'A-052',status:'awaiting_confirmation',waybill:'SF-52',createdAt:'2026-09-27T00:00:00Z',nextReviewAt:'2026-09-27T01:00:00Z',customerName:null})
  expect((await listPublicShipmentReceipts('org-A',2)).orders).toEqual([])
  await expect(listPublicShipmentReceipts('',0)).rejects.toMatchObject({status:403})
+})
+
+it('includes only the submitted customer name alongside public receipt fields',async()=>{
+ tables.shipping_orders=[{...row('customer-order','org-A'),customer_name:'  星河科技  ',customer_ref:'CRM-CUSTOMER-ID'}]
+ const {orders}=await listPublicShipmentReceipts('org-A')
+ expect(orders[0]).toEqual({orderNo:'customer-order',status:'awaiting_confirmation',waybill:null,createdAt:'2026-09-27T00:00:00Z',nextReviewAt:'2026-09-27T01:00:00Z',customerName:'星河科技'})
+ expect(mocks.from.mock.results.at(-1)?.value.select).toHaveBeenCalledWith('order_no,status,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no)')
+ tables.shipping_orders[0].customer_name=''
+ expect((await listPublicShipmentReceipts('org-A')).orders[0].customerName).toBeNull()
 })
