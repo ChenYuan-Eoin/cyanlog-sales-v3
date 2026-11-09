@@ -6,7 +6,6 @@
 // its sole external writes are the signed ICU preflight/create calls. Carrier
 // booking remains in ICU after a human confirms the exact shipment.
 
-// BEGIN TENANT CONFIG
 def CONFIG = [
   schemaVersion: '1.0',
   mode: 'preflight',
@@ -65,8 +64,6 @@ def CONFIG = [
     ],
   ],
 ]
-
-// END TENANT CONFIG
 
 def CONFIG_TOKEN = '__CONFIGURE_'
 def SECRET_PLACEHOLDER = 'REPLACE_WITH_AT_LEAST_32_RANDOM_CHARACTERS'
