@@ -53,7 +53,7 @@ describe('sales shipping portal', () => {
 
 it('does not render a shipment form for an unidentified whitelist visitor', async () => {
  fetcher.mockImplementation(async (url:string)=>new Response(JSON.stringify(url.endsWith('/options')?{services:[],requireVerification:true,emailAvailable:false}:{employee:null})))
- render(<SalesPortal/>)
+ render(<SalesPortal initialOptions={{services:[],requireVerification:true,emailAvailable:false}}/>)
  expect(screen.queryByText('客户与收件信息')).toBeNull()
  expect(await screen.findByRole('link',{name:'使用企业微信验证身份'})).toBeTruthy()
  expect(screen.queryByLabelText('公司邮箱')).toBeNull()
