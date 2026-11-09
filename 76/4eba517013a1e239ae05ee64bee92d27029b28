@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "activeId": "WP19",
+  "commit": "764eba517013a1e239ae05ee64bee92d27029b28",
+  "evidence": {
+    "code": {
+      "commit": "764eba517013a1e239ae05ee64bee92d27029b28",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true,
+        "security": true,
+        "file_gate": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "exit_code": 0,
+          "artifact_path": "intake-records/restore-target-tests.log",
+          "log_sha256": "fdea9acf283d7d18a6f5ebf9c1db0f4b710027e3070244f913317863ac0c4567"
+        },
+        {
+          "name": "full_tests",
+          "exit_code": 0,
+          "artifact_path": "intake-records/restore-full-tests.log",
+          "log_sha256": "76dd456a08819bcb6ac28fe865c49a0a2f6eac29944a836211eb538b093cffb9"
+        },
+        {
+          "name": "lint",
+          "exit_code": 0,
+          "artifact_path": "intake-records/restore-lint.log",
+          "log_sha256": "ca1cfb2b5eb3709f5c86c0e3ccff8ea9b5737bd23bf25b44e45abc6658922361"
+        },
+        {
+          "name": "typecheck",
+          "exit_code": 0,
+          "artifact_path": "intake-records/restore-typecheck.log",
+          "log_sha256": "a9eebfc6c2eeecf19902c6499daedd1fdd8de55272e56810fa9bb81573f22713"
+        },
+        {
+          "name": "build",
+          "exit_code": 0,
+          "artifact_path": "intake-records/restore-build.log",
+          "log_sha256": "75f9c8f7c4b67586972cb324115bd7e51304fec61930079757d0a5f34fec9e4c"
+        },
+        {
+          "name": "security",
+          "exit_code": 0,
+          "artifact_path": "intake-records/restore-security.log",
+          "log_sha256": "1c3f8b84d12f172f99487a8f82fa4c370a0020f8155ef4d26a6fa881a716dd66"
+        },
+        {
+          "name": "file_gate",
+          "exit_code": 0,
+          "artifact_path": "intake-records/restore-file-gate.log",
+          "log_sha256": "ac8fa2bb0f1d86761f04b6dd5b3c318e1708cdeb6d6bf06c324c45cee14d210c"
+        }
+      ],
+      "tests": {
+        "target_passed": 59,
+        "passed": 3378,
+        "skipped": 5
+      },
+      "approval": "IN-20261109-022 and acceptance regressions IN-20261109-026/027/028",
+      "rollback_commit": "5e13c1d7703ce7ec760c49f660da132e41b16d69",
+      "observed_at": "2026-11-09T11:09:46.939390+00:00",
+      "production_database_write": false,
+      "carrier_calls": false,
+      "limitations": [
+        "Legacy WeCom/Preview contract is not marked passed.",
+        "Unrelated root-checkout Harness scope denied optional extra edit and worktree attachment; neither action performed. Existing scoped candidate retained."
+      ]
+    }
+  },
+  "updatedAt": "2026-11-09T11:09:49.537Z",
+  "gateSnapshots": {
+    "executing": {
+      "stage": "executing",
+      "checkedAt": "2026-11-09T11:09:49.515Z",
+      "head": "764eba517013a1e239ae05ee64bee92d27029b28",
+      "originMain": "5e13c1d7703ce7ec760c49f660da132e41b16d69",
+      "remoteMain": "5e13c1d7703ce7ec760c49f660da132e41b16d69",
+      "remoteProduction": "5e13c1d7703ce7ec760c49f660da132e41b16d69",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "370658b61c4f6c8fd5409877178cfa5b985a14c7",
+      "remoteAttestationRefOid": "370658b61c4f6c8fd5409877178cfa5b985a14c7",
+      "remoteSnapshotCheckedAt": "2026-11-09T11:09:47.154Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "aacb3cb4470270349f9c41f67a3728dc6d875d67da5ccde28d4c382289f2193d",
+  "sealedAt": "2026-11-09T11:09:49.537Z",
+  "attestationDigest": "5c8e86294c4d798edc010e2be1db94683d8dd01d9617a3b9078e726109c5b92f"
+}
