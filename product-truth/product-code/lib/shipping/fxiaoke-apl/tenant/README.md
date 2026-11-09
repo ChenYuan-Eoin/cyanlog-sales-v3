@@ -36,3 +36,65 @@
 ## 当前验收边界
 
 WP97 的完成线不是 `code_green`、部署 READY、预检 200、受理 202 或 Preview。必须在生产纷享指定审批节点完成一次真实、可追溯的 APL 调用，生产 ICU 只生成一张 `awaiting_confirmation` 工单且 `waybill=null`；同一事件再次触发仍返回同一工单，申请人与客户身份、流程实例、业务记录、寄件子行、任务、阶段和修订均可回读。官方接口的入参与返回形状已经由公开文档确认；当前租户的真实对象字段、任务名称与状态、审批节点可执行性及 `Fx.http` 实网透传仍须由上述生产业务证据证明。
+
+## 可复用初态：创建 APL 后如何写代码
+
+初态提供“寄件预检”和“受理为待确认工单”两个能力；沿用 ICU 的两个现有接口。纷享流程管理节点与流转，APL 只读取该节点上下文、映射字段、调用 ICU 并校验回执。更换流程只维护配置，同一份核心代码不按流程复制开发。
+
+| ICU 能力 | 调用 | 成功结果 | 写入影响 |
+| --- | --- | --- | --- |
+| 检查资料和可用寄件配置 | `POST /api/shipping/crm/preflight` | `ready`、逐字段 `missing`、`eventKey`、已核验来源 | 只读；不创建工单 |
+| 幂等受理／精确重放 | `POST /api/shipping/crm/orders` | `created`、`orderId`、`orderNo`、`status`、`waybill`、`nextAction` | 首次创建待确认工单；相同事件与内容返回原单；变更内容返回 409 |
+
+来源身份由企业、流程实例、对象、记录、明细、任务、阶段和修订组成。同一事件重试必须保留这些值和原请求内容。字段映射发生变化后不能伪造新事件来绕开冲突。生产是否已有客户端配置、寄件资料、可用服务和迁移仍须分别核验。
+
+### 1. 配置零件
+
+复制 `fxiaoke-approval-intake.example.json` 为本地配置。填写真实企业、对象 API Name、任务名称、稳定 stageId、字段映射和客户端 ID；保持 `clientSecret` 为占位符。未知字段应先通过 ICU 管理员只读元数据接口核验。
+
+- `mode: preflight`：默认模式，预检通过返回 `preflight_ready`，绝不调用受理接口。
+- `mode: create`：明确启用受理；仍先预检，缺项时不创建。
+- `environment: development`：只接受明确的 HTTPS Vercel Preview origin；不能指向正式域名。开发客户端密钥与生产分离。Preview 若有部署保护，由受信验证工具处理，不能把保护页当作 ICU 返回。
+- `environment: production`：只接受 `https://sales.cyanlog.icu`。
+- 每个节点配置一个阶段；不同流程使用不同配置，生成的核心代码哈希相同。初态适用范围为审批根记录关联唯一寄件明细，收件资料为结构化字段。多明细、自由文本和其他类型的流程上下文需要另行适配，不能静默取第一项。
+
+### 2. 生成可粘贴的 APL 代码
+
+在 `product-truth/product-code` 下运行（使用项目现有依赖，Node 24+）：
+
+```sh
+node --experimental-transform-types lib/shipping/fxiaoke-apl/tenant/build-apl.mjs /绝对路径/节点配置.json /绝对路径/节点代码.groovy
+```
+
+生成器核对配置，输出独立 Groovy 文件及 `coreSha256`；拒绝覆盖已有文件，拒绝接收真实密钥。两套流程配置的 `coreSha256` 应一致。把生成代码放入纷享中创建的流程 APL 函数，在纷享服务端替换密钥占位符，再在相应流程节点选择该函数。日后修改映射时重新生成配置区，核心逻辑保持一致。
+
+### 3. 节点结果与后续配置
+
+| APL 返回／异常 | 含义 | 流程配置建议 |
+| --- | --- | --- |
+| `preflight_ready` | 资料与 ICU 配置预检通过，尚未建单 | 联调确认后将配置切为 create |
+| `preflight_blocked` 与 `missing` | ICU 检查发现缺项，尚未建单 | 引导补齐；不能解释为成功受理 |
+| `created` | 首次受理，返回待确认工单 | 按业务需要继续；仍需 ICU 操作员确认寄件 |
+| `replayed` | 原事件已受理，返回同一工单 | 不重复产生下游业务操作 |
+| 带 `APL_*` 编码的异常 | 配置、来源、签名、网络或回执校验失败 | 进入节点异常处理；结果未知时先保持原事件查回 |
+
+返回值如何存入流程变量、失败如何暂停或分支，取决于所选函数命名空间和节点配置，必须在纷享验证。不要假设返回一个 Map 就会自动阻止流程继续。订单已离开待确认状态时，ICU 可以回读实际状态；当前 APL 初态会拒绝将其当作新建待确认成功，进入人工核对，不重复派单。
+
+### 4. dev 验收清单
+
+- 两套不同对象／字段／节点的配置生成同一核心代码。
+- 默认预检模式不调用创建；缺项返回可定位字段。
+- create 模式首次只生成一张待确认工单，精确重放返回同一单。
+- 修改原事件内容、跨企业、错签名、过期签名、歧义引用和未配置占位符均拒绝。
+- ICU API、APL 回执及持久化事实一致；没有承运商调用。
+- 本地适配器测试、Groovy 执行测试、Preview HTTP 和真实纷享节点分别记录；任何模拟不代表纷享编译器或真实审批通过。
+
+初态发布只交付 ICU 接口和可配置 APL 代码。WP97 的完整业务完成线仍按上文“当前验收边界”执行，未取得真实节点证据前保持未验收。
+
+本地 HTTP + Groovy + SQL 验收脚本位于 `dev/accept.mjs`。它使用临时 PGlite 数据、真实 Next 路由与 CRM SQL；纷享 API 和 PostgREST 传输层为测试适配器。需要 JRE 17、Groovy 3.0.25 的 `groovy` 与 `groovy-json` jar，将 `APL_JAVA_BIN` 指向 Java，`APL_GROOVY_CLASSPATH` 指向两个 jar，将 `ICU_DEV_EVIDENCE_DIR` 指向 worktree 的 codex-runtime 子目录后执行：
+
+```sh
+node --experimental-transform-types lib/shipping/fxiaoke-apl/tenant/dev/accept.mjs
+```
+
+脚本自动启动并停止本地 Next，写入逐项执行日志与 `acceptance.json`；不连接生产数据库。该测试证明生成代码在普通 Groovy 的执行结果以及 ICU HTTP/SQL 行为，不能证明纷享的沙箱限制、真实字段和流程节点配置。

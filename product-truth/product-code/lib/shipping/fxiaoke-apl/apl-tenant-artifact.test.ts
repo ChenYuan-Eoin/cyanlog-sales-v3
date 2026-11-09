@@ -9,11 +9,13 @@ const source = readFileSync(join(root, 'fxiaoke-approval-intake.groovy'), 'utf8'
 const exampleText = readFileSync(join(root, 'fxiaoke-approval-intake.example.json'), 'utf8')
 const example = JSON.parse(exampleText) as {
   endpoint: Record<string, unknown> & { clientSecret: string }
+  mode: string
+  environment: string
   workflow: Record<string, unknown>
   rootObject: Record<string, unknown>
   shipmentDetailObject: Record<string, unknown>
 }
-const { endpoint: _endpoint, ...mappingExample } = example
+const { endpoint: _endpoint, mode: _mode, environment: _environment, ...mappingExample } = example
 const { clientSecret: _clientSecret, ...reviewableEndpoint } = example.endpoint
 const reviewableExample = {
   ...mappingExample,

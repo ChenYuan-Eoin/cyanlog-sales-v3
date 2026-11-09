@@ -6,8 +6,11 @@
 // its sole external writes are the signed ICU preflight/create calls. Carrier
 // booking remains in ICU after a human confirms the exact shipment.
 
+// BEGIN TENANT CONFIG
 def CONFIG = [
   schemaVersion: '1.0',
+  mode: 'preflight',
+  environment: 'production',
   enterpriseId: '__CONFIGURE_FXIAOKE_ENTERPRISE_ID__',
   endpoint: [
     baseUrl: 'https://sales.cyanlog.icu',
@@ -63,7 +66,9 @@ def CONFIG = [
   ],
 ]
 
-def CONFIG_TOKEN = '__CONFIGURE__'
+// END TENANT CONFIG
+
+def CONFIG_TOKEN = '__CONFIGURE_'
 def SECRET_PLACEHOLDER = 'REPLACE_WITH_AT_LEAST_32_RANDOM_CHARACTERS'
 def CANONICALIZATION = 'crm-json-v1'
 def CANONICALIZATION_HEADER = 'x-shipping-crm-canonicalization'
@@ -150,6 +155,12 @@ def objectApiName = { Object value, String label ->
   return result
 }
 
+def fieldApiName = { Object value, String label ->
+  String result = requiredText(value, label)
+  if (!(result ==~ /^[A-Za-z_][A-Za-z0-9_]*$/)) fail('APL_FIELD_NAME_INVALID', label + '格式无效')
+  return result
+}
+
 def canonicalJson
 
 def escapeJson = { String value ->
@@ -200,6 +211,7 @@ def sourceValue = { Object raw, String select ->
   if (value instanceof Iterable && !(value instanceof CharSequence)) {
     List values = value as List
     if (values.isEmpty()) return null
+    if (values.size() != 1) fail('APL_MAPPING_AMBIGUOUS', '字段包含多个引用，不能自动选择第一项')
     value = values[0]
   }
   if (value instanceof Map) {
@@ -214,7 +226,7 @@ def mappedValue = { Map source, Map spec, String label ->
   String kind = safeText(spec['kind'])
   if (kind == 'literal') return spec['value']
   if (kind != 'field') fail('APL_MAPPING_INVALID', label + '映射类型无效')
-  String path = objectApiName(spec['path'], label + '.path')
+  String path = fieldApiName(spec['path'], label + '.path')
   if (path.startsWith(CONFIG_TOKEN)) fail('APL_CONFIG_PLACEHOLDER', label + '.path 仍是未配置占位值')
   return sourceValue(source[path], safeText(spec['select']) ?: 'raw')
 }
@@ -229,7 +241,7 @@ def mappedRequired = { Map source, Map spec, String label ->
 
 def uniqueColumns = { List<Map> specs ->
   return specs.findAll { it != null && safeText(it['kind']) == 'field' }
-    .collect { objectApiName(it['path'], '字段映射') }
+    .collect { fieldApiName(it['path'], '字段映射') }
     .unique()
 }
 
@@ -264,7 +276,15 @@ def validateConfig = {
   String secret = requiredText(endpoint['clientSecret'], 'endpoint.clientSecret')
   if (secret == SECRET_PLACEHOLDER || secret.length() < 32) fail('APL_CONFIG_INVALID', '客户端密钥未配置')
   String baseUrl = configuredValue(endpoint['baseUrl'], 'endpoint.baseUrl')
-  if (baseUrl != 'https://sales.cyanlog.icu') fail('APL_CONFIG_INVALID', 'ICU 地址必须是已批准 HTTPS 地址')
+  String environment = safeText(CONFIG['environment'])
+  if (!(safeText(CONFIG['mode']) in ['preflight', 'create'])) fail('APL_CONFIG_INVALID', 'mode 必须为 preflight 或 create')
+  if (!(environment in ['development', 'production'])) fail('APL_CONFIG_INVALID', 'environment 无效')
+  if (environment == 'production' && baseUrl != 'https://sales.cyanlog.icu') {
+    fail('APL_CONFIG_INVALID', '生产模式只能调用正式 ICU')
+  }
+  if (environment == 'development' && !(baseUrl ==~ /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/)) {
+    fail('APL_CONFIG_INVALID', '开发模式只能调用已核验的隔离 Preview 地址')
+  }
   if (safeText(endpoint['preflightPath']) != '/api/shipping/crm/preflight') fail('APL_CONFIG_INVALID', '预检路径无效')
   if (safeText(endpoint['createPath']) != '/api/shipping/crm/orders') fail('APL_CONFIG_INVALID', '受理路径无效')
   boundedInteger(endpoint['timeoutMs'], 'endpoint.timeoutMs', 1000, 120000)
@@ -462,7 +482,7 @@ List detailColumns = uniqueColumns([
 ])
 def findUniqueDetailId = {
   String detailApiName = objectApiName(detailMapping['objectApiName'], 'shipmentDetailObject.objectApiName')
-  String parentPath = objectApiName((detailMapping['parentRecordId'] as Map)['path'], 'shipmentDetail.parentRecordId.path')
+  String parentPath = fieldApiName((detailMapping['parentRecordId'] as Map)['path'], 'shipmentDetail.parentRecordId.path')
   def (Boolean error, Object result, String message) = Fx.object.find(
     detailApiName,
     FQLAttribute.builder()
@@ -660,8 +680,13 @@ missing.each { Object item ->
   requiredBoundedText(missingItem['message'], 'preflight.missing[].message', 500)
   requiredBoundedText(missingItem['issue'], 'preflight.missing[].issue', 80)
 }
+if (!(preflight['ready'] instanceof Boolean)) fail('APL_PREFLIGHT_INVALID', 'ICU 预检 ready 无效')
 if (preflight['ready'] != true || missing.size() > 0 || preflight['normalized'] == null) {
   return [status: 'preflight_blocked', eventKey: preflightEventKey, missing: missing]
+}
+
+if (safeText(CONFIG['mode']) == 'preflight') {
+  return [status: 'preflight_ready', eventKey: preflightEventKey, missing: [], nextAction: 'configure_create_mode']
 }
 
 Map receipt = requireMap(
@@ -684,7 +709,8 @@ String orderNo = requiredBoundedText(receipt['orderNo'], 'receipt.orderNo', 80)
 
 log.info('WP97_CRM_INTAKE_CREATED ' + preflightEventKey)
 return [
-  status: 'created',
+  status: receipt['created'] == true ? 'created' : 'replayed',
+  created: receipt['created'],
   eventKey: preflightEventKey,
   orderId: orderId,
   orderNo: orderNo,
