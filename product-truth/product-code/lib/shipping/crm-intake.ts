@@ -293,13 +293,58 @@ function assertEnterpriseScope(client: CrmIntakeClient, event: CrmEventIdentity)
   }
 }
 
+async function inspectCrmDirectoryEmployees(client: CrmIntakeClient, payload: CrmIntakePayload): Promise<CrmMissingField[]> {
+  // The authenticated client binds enterpriseId to orgId. Directory external_tenant_id
+  // is the Fxiaoke EA, which is a different identifier from the CRM tenantId.
+  const sources = await supabaseAdmin.from('organization_sources')
+    .select('id,connection_state,authority_scope')
+    .eq('system_org_id', client.orgId)
+    .eq('provider', 'fxiaoke')
+    .eq('status', 'active')
+    .limit(2)
+  if (sources.error) throw new CrmIntakeError(503, 'CRM_DIRECTORY_UNAVAILABLE', '组织人员目录暂时无法核对，请稍后重试。')
+  const source = sources.data?.[0]
+  if (sources.data?.length !== 1 || source.connection_state !== 'verified' || source.authority_scope?.directory !== 'authoritative') {
+    throw new CrmIntakeError(503, 'CRM_DIRECTORY_NOT_READY', '当前组织尚无唯一、已验证且启用的纷享人员目录。')
+  }
+
+  const references = [
+    { field: 'applicant.employeeId', label: '申请人', employeeId: payload.applicant.employeeId },
+    ...(payload.sales ? [{ field: 'sales.employeeId', label: '归属销售', employeeId: payload.sales.employeeId }] : []),
+  ]
+  const employeeIds = [...new Set(references.map(reference => reference.employeeId))]
+  const employees = await supabaseAdmin.from('external_identities')
+    .select('external_user_id,directory_status:profile_snapshot->>status')
+    .eq('system_org_id', client.orgId)
+    .eq('source_id', source.id)
+    .in('external_user_id', employeeIds)
+    .limit(employeeIds.length + 1)
+  if (employees.error) throw new CrmIntakeError(503, 'CRM_DIRECTORY_UNAVAILABLE', '组织人员目录暂时无法核对，请稍后重试。')
+
+  const missing: CrmMissingField[] = []
+  for (const reference of references) {
+    const matches = (employees.data || []).filter(employee => employee.external_user_id === reference.employeeId)
+    const employee = matches[0]
+    if (!employee) {
+      missing.push({ field: reference.field, issue: 'unknown_employee', message: `${reference.label}的员工 ID 不在当前组织的纷享目录中，请核对稳定员工 ID。` })
+    } else if (matches.length !== 1) {
+      missing.push({ field: reference.field, issue: 'ambiguous_employee', message: `${reference.label}的目录身份存在冲突，请先核实。` })
+    } else if (employee.directory_status !== 'active') {
+      missing.push({ field: reference.field, issue: 'inactive_employee', message: `${reference.label}在当前纷享目录中未确认为有效在职人员。` })
+    }
+  }
+  // This validates business references only. An ICU login, canonical account binding,
+  // identity authority, or role grant is deliberately not a prerequisite for APL intake.
+  return missing
+}
+
 export async function preflightCrmIntake(client: CrmIntakeClient, payload: CrmIntakePayload): Promise<CrmIntakePreflight> {
   assertEnterpriseScope(client, payload.event)
-  const [options, sender] = await Promise.all([
+  const [options, sender, missing] = await Promise.all([
     loadIntakeOptionsForOrg(client.orgId),
     loadDefaultShippingSender(client.orgId),
+    inspectCrmDirectoryEmployees(client, payload),
   ])
-  const missing: CrmMissingField[] = []
   const parsedSender = contactSchema.safeParse(sender)
   if (!parsedSender.success) missing.push(...zodMissing('sender', parsedSender.error))
 

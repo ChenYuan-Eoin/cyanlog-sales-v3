@@ -7,12 +7,13 @@
 ## 结论
 
 目录数据已经进入 ICU，但不能宣称“组织身份、销售归属、流程与回写全部打通”。
-ICU 已有只读预检和待确认工单受理接口；2026-11-09 正式接口探测仍返回
-`503 / CRM_INTAKE_NOT_CONFIGURED`。本轮没有修改生产连接或运行 APL。
+ICU 只读预检、独立销售字段和逻辑寄件防重复已随 PR #4 发布，正式提交为
+`346e0829aa9fdc52986ed8f9d75c3016c2881a02`。生产迁移已应用，客户端已绑定 tenantId `645753`；
+正式域名六项只读接口检查通过。未创建真实工单，也未运行纷享 APL。
 
-当前两个确定的 ICU 缺口已形成开发候选：申请人与销售归属独立保存；
-同一逻辑寄件明细跨流程实例、任务、节点、修订与客户端变化时不重复创建工单。
-开发验证不等于生产可调用。
+继续核查发现：该版本仍接受目录中不存在的申请人/销售 ID。新增最小修复在预检与新受理前
+核对当前组织的有效纷享目录、稳定员工 ID 和目录在职状态；此修复尚未发布。
+它不查询或修改 ICU 登录账号、角色与账号绑定，也不改变原工单精确重放。
 
 ## 1. 组织、销售、流程与回写现状
 
@@ -24,7 +25,7 @@ ICU 已有只读预检和待确认工单受理接口；2026-11-09 正式接口�
 | 完整公司范围 | 最新已应用目录快照 complete=true，但 scopeVerified=false、scopeEvidence=null | 分页完整不能证明全公司权限；126 位员工的禁止登录状态仍未知 |
 | 可用销售账号 | 这 405 条映射指向的 users 均 inactive / login_enabled=false；成员关系均 invited | 不能据此宣称已关联到可登录的现有销售账号。82 条在职、323 条 suspended，不得批量激活 |
 | 身份信任 | 来源 authority_scope.identity=evidence；SSO 解析器要求 authoritative 与有效账号/成员关系 | 身份授权未贯通；不把登录启用当作 APL 机器调用的前提，也不在本轮擅自启用身份权威或角色 |
-| 销售归属 | 原受理函数将 applicant.employeeId 直接写入 sales_ref；纷享存在独立归属销售字段 | 已在本轮开发候选中拆开，生产尚未发布。销售归属是业务身份快照，不自动授予 ICU 登录或查看权限 |
+| 销售归属 | 原受理函数将 applicant.employeeId 直接写入 sales_ref；纷享存在独立归属销售字段 | 已随 PR #4 发布并迁移。销售归属是业务身份快照，不自动授予 ICU 登录或查看权限 |
 | 本人查询归属 | CRM 原入库 created_by=null，未关联 employee_profile_id；旧本人列表还有 anonymous_web 来源过滤 | CRM 工单进入销售“本人列表”的链路未贯通，不能由名字或手机号推断 |
 | 流程识别 | ICU 可保存企业、对象、记录、寄件明细、实例、任务、节点标识与修订 | 当前合同真实实例/节点尚未验收。此前一次只读审批查询返回空对象，不能据此认定无流程 |
 | 实际 CRM 工单 | Production shipping_crm_intake_events=0；shipping_orders 中 owner_web=52、anonymous_web=5、crm=0 | 尚无真实 CRM→ICU 工单证据 |
@@ -47,10 +48,10 @@ ICU 已有只读预检和待确认工单受理接口；2026-11-09 正式接口�
 | 客户 | ContractObj.account_id；合同申请 object_l86q0__c 的 field_p3uo0__c 是客户名称，field_oAw2a__c 是签约主体 | customer.accountId、name | 语义已分清；不能把终端客户、签约主体、收件单位混为一项，具体来源待后续映射 |
 | 原业务记录/版本 | _id、version、last_modified_time | event.objectApiName、recordId、revisionId | ICU 可保存；不使用未核实的 modified_time 示例字段 |
 | 流程实例/任务/节点 | 官方有流程查询与任务查询；实际触发点待后续核对 | event.workflowInstanceId、taskId、stageId | stageId 当前是接入配置的稳定标识，不冒充纷享原生字段；流程上下文未实测 |
-| 企业 | 连接器上下文可区分 ea 与 tenantId，不能互换 | event.enterpriseId 与服务端客户端绑定 | 要在接入时固定同一含义；当前客户配置允许 enterpriseId 缺省，正式配置必须补齐企业绑定 |
+| 企业 | 连接器上下文可区分 ea 与 tenantId，不能互换 | event.enterpriseId 与服务端客户端绑定 | 要在接入时固定同一含义；正式客户端已绑定 tenantId=645753；EA=ones001 仅用于组织连接，不能互换 |
 | 本票收件人、电话、地址 | AccountAddrObj 有 contact_id/contact_way/province/city/district/address；ContactObj 有 name/mobile1 等 | shipment.recipient.name/phone/province/city/county/address | district→county 需要显式转换；档案存在不等于本票选中地址，具体合同表单暂缓 |
 | 地址选择 | SalesOrderObj.ship_to_add_control 仅控制可选范围；精确查询 ship_to_add 未命中 | 不据此生成收件地址 | 已排除错误映射，不用客户默认地址替代本票填写 |
-| 寄件人 | ICU 已有一条默认寄件人，姓名、电话、结构化地址非空 | 预检 normalized.sender | 数据已配置；完整格式/可寄达性仍需正式预检 |
+| 寄件人 | ICU 已有一条默认寄件人，姓名、电话、结构化地址非空 | 预检 normalized.sender | 正式预检已验证资料完整；真实可寄达性不由只读预检证明 |
 | 承运商与服务 | ICU 生产顺丰连接记录为 connected；授权服务标快 id=2、特快 id=1 | serviceId 或 servicePreference；预检返回服务 ID/名称/偏好 | 由 ICU 已授权服务解析，不在 APL 重写服务目录；未在本轮调用顺丰 |
 | 物品、重量、付款、备注 | 合同具体业务字段暂未指定 | cargo、weight、payment、remark；可选 specialRequirements/pickupWindow/sourceText | ICU 已有字段；未声明合同上已具备这些字段 |
 | ICU 回执 | 由 ICU 生成 | accepted、created、eventKey、orderId、orderNo、status、waybill、nextAction | 已有接口。首次受理只允许 awaiting_confirmation / waybill=null；生产未调用成功 |
@@ -84,7 +85,7 @@ ICU 已有只读预检和待确认工单受理接口；2026-11-09 正式接口�
 只新增销售快照字段、逻辑寄件唯一索引并更新受理函数。
 如历史数据已有重复逻辑明细，迁移会失败供核查，不自动合并或删除。
 发布时先迁移、后更新应用；新的 sales 参数可缺省，旧调用仍兼容。
-目前此迁移仅在开发验证执行，未应用到生产。
+此迁移已应用到生产并回读核对，CRM 事件/工单仍为 0，全部历史工单仍为 57。
 
 ## 3. 官方业务流程文档带来的确定结论
 
@@ -107,8 +108,9 @@ ICU 已有只读预检和待确认工单受理接口；2026-11-09 正式接口�
 - [x] 在开发环境复现申请人混作销售、重审后重复创建两项缺陷（原实现两项失败）。
 - [x] 补齐 sales 独立字段与逻辑明细去重；接口/数据库目标测试 33 项通过。
 - [x] 受影响 5 个测试文件 / 49 项通过；typecheck、目标 lint、build 通过，日志已写入 worktree 运行证据。这些是开发检查，不是生产验收。
-- [ ] 正式 ICU 客户端/企业绑定配置与真实签名预检通过；当前 503。
-- [ ] 组织范围证明、活动销售账号关联和本人查询归属核实；不擅自改变账号或角色。
+- [x] 正式 ICU 客户端/企业绑定、生产迁移和六项只读签名预检通过；发布提交 346e0829。
+- [ ] 员工 ID 目录核验修复：开发回归验证后发布；不能用原先接受虚构员工 ID 的 ready=true 证明组织身份已通。
+- [x] 组织范围、账号和本人查询的缺口已核实：全公司范围未证明，ICU 账号关联和本人列表未贯通。它们不作为机器 APL 调用的登录前置；本轮不改账号或角色。
 - [ ] 用户允许继续纷享操作后，再核实合同表单、实际流程、节点上下文与本票字段。
 - [ ] 排除现有 APL 参考中的人员 ID/姓名/电话/部门映射错误，并在纷享真实编译与只读预检。
 - [ ] 前两项准备好后，由用户观看创建 APL；当前明确暂缓。

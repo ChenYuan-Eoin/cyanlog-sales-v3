@@ -72,8 +72,28 @@ function eventLookup(data: unknown) {
   return chain
 }
 
+function directoryLookup(data: unknown, error: unknown = null) {
+  const chain: Record<string, ReturnType<typeof vi.fn>> = {}
+  chain.select = vi.fn(() => chain)
+  chain.eq = vi.fn(() => chain)
+  chain.in = vi.fn(() => chain)
+  chain.limit = vi.fn().mockResolvedValue({ data, error })
+  return chain
+}
+
+const directorySource = { id: 'source-1', connection_state: 'verified', authority_scope: { directory: 'authoritative', identity: 'evidence' } }
+const directoryEmployees = [
+  { external_user_id: body.applicant.employeeId, directory_status: 'active' },
+  { external_user_id: 'sales-2000', directory_status: 'active' },
+]
+
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
+  mocks.from.mockImplementation((table: string) => {
+    if (table === 'organization_sources') return directoryLookup([directorySource])
+    if (table === 'external_identities') return directoryLookup(directoryEmployees)
+    throw new Error(`Unexpected database table: ${table}`)
+  })
   mocks.options.mockResolvedValue({
     orgId: client.orgId,
     rules: { companyName: { enabled: true, required: true, minLength: 4 }, team: { enabled: true, required: true, minLength: 1 }, teamOptions: [] },
@@ -181,7 +201,7 @@ describe('CRM intake preflight', () => {
       },
       missing: [],
     })
-    expect(mocks.from).not.toHaveBeenCalled()
+    expect(mocks.from.mock.calls.map(([table]) => table)).toEqual(['organization_sources', 'external_identities'])
     expect(mocks.rpc).not.toHaveBeenCalled()
   })
 
@@ -253,6 +273,75 @@ describe('CRM intake preflight', () => {
     expect(crmEventKey(client, parsed.event)).toHaveLength(64)
     expect(crmEventKey(client, parsed.event)).toBe(crmEventKey(client, parsed.event))
     expect(crmEventKey(client, parsed.event)).not.toBe(crmEventKey(client, changed.event))
+  })
+})
+
+describe('CRM business directory identity', () => {
+  it('rejects nonexistent applicant and salesperson references without writing', async () => {
+    mocks.from.mockReturnValueOnce(directoryLookup([directorySource]))
+    mocks.from.mockReturnValueOnce(directoryLookup([]))
+    const result = await preflightCrmIntakeRequest(client, rawBody({ ...body, sales: { employeeId: 'unknown-sales', name: '未知销售' } }))
+    expect(result).toMatchObject({ ready: false, normalized: null, missing: [
+      { field: 'applicant.employeeId', issue: 'unknown_employee' },
+      { field: 'sales.employeeId', issue: 'unknown_employee' },
+    ] })
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('scopes stable employee IDs to the authenticated organization and its one verified directory', async () => {
+    const sourceQuery = directoryLookup([directorySource])
+    const employeeQuery = directoryLookup(directoryEmployees)
+    mocks.from.mockReturnValueOnce(sourceQuery).mockReturnValueOnce(employeeQuery)
+    const result = await preflightCrmIntakeRequest(client, rawBody())
+    expect(result.ready).toBe(true)
+    expect(sourceQuery.eq).toHaveBeenCalledWith('system_org_id', client.orgId)
+    expect(sourceQuery.eq).toHaveBeenCalledWith('provider', 'fxiaoke')
+    expect(sourceQuery.eq).toHaveBeenCalledWith('status', 'active')
+    expect(employeeQuery.eq).toHaveBeenCalledWith('system_org_id', client.orgId)
+    expect(employeeQuery.eq).toHaveBeenCalledWith('source_id', directorySource.id)
+    expect(employeeQuery.in).toHaveBeenCalledWith('external_user_id', [body.applicant.employeeId])
+    expect(mocks.from.mock.calls.map(([table]) => table)).not.toContain('users')
+  })
+
+  it.each(['inactive', null])('rejects a directory employee whose active status is not established: %s', async status => {
+    mocks.from.mockReturnValueOnce(directoryLookup([directorySource]))
+    mocks.from.mockReturnValueOnce(directoryLookup([{ ...directoryEmployees[0], directory_status: status }]))
+    expect(await preflightCrmIntakeRequest(client, rawBody())).toMatchObject({ ready: false, missing: [
+      { field: 'applicant.employeeId', issue: 'inactive_employee' },
+    ] })
+  })
+
+  it('rejects duplicate identity evidence instead of choosing a row', async () => {
+    mocks.from.mockReturnValueOnce(directoryLookup([directorySource]))
+    mocks.from.mockReturnValueOnce(directoryLookup([directoryEmployees[0], directoryEmployees[0]]))
+    expect(await preflightCrmIntakeRequest(client, rawBody())).toMatchObject({ ready: false, missing: [
+      { field: 'applicant.employeeId', issue: 'ambiguous_employee' },
+    ] })
+  })
+
+  it.each([
+    { sources: [] }, { sources: [directorySource, { ...directorySource, id: 'source-2' }] },
+    { sources: [{ ...directorySource, connection_state: 'failed' }] },
+    { sources: [{ ...directorySource, authority_scope: { directory: 'evidence' } }] },
+  ])('fails closed when the organization has no single usable directory: $sources', async ({ sources }) => {
+    mocks.from.mockReturnValueOnce(directoryLookup(sources))
+    await expect(preflightCrmIntakeRequest(client, rawBody())).rejects.toMatchObject({ status: 503, code: 'CRM_DIRECTORY_NOT_READY' })
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('fails closed on a directory database error', async () => {
+    mocks.from.mockReturnValueOnce(directoryLookup([directorySource]))
+    mocks.from.mockReturnValueOnce(directoryLookup(null, { message: 'unavailable' }))
+    await expect(preflightCrmIntakeRequest(client, rawBody())).rejects.toMatchObject({ status: 503, code: 'CRM_DIRECTORY_UNAVAILABLE' })
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('prevents new order creation for an unknown employee', async () => {
+    mocks.from.mockReturnValueOnce(eventLookup(null))
+    mocks.from.mockReturnValueOnce(directoryLookup([directorySource]))
+    mocks.from.mockReturnValueOnce(directoryLookup([]))
+    await expect(createCrmIntake(client, rawBody())).rejects.toMatchObject({ status: 422, code: 'CRM_INTAKE_INCOMPLETE' })
+    expect(mocks.rpc).not.toHaveBeenCalled()
   })
 })
 
