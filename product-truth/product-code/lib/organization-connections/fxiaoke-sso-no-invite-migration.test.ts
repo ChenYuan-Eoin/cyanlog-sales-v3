@@ -15,7 +15,7 @@ const salesRole = '66666666-6666-4666-8666-666666666666'
 const sessionId = '12121212-1212-4212-8212-121212121212'
 
 describe('Fxiaoke SSO without local invitation', () => {
-  it('promotes only a role-authorized active directory person, then opens and closes SSO with session revocation', async () => {
+  it('activates a matched member on first OAuth login without a role or invitation, then audits and revokes sessions', async () => {
     const db = await productionSchemaDatabase()
     try {
       await db.exec(personnelMigration)
@@ -71,6 +71,10 @@ describe('Fxiaoke SSO without local invitation', () => {
         select login_enabled as enabled, status from public.users where id = '${member}'
       `)
       expect(before.rows[0]).toMatchObject({ enabled: false, status: 'inactive' })
+      const prematureRole = await db.query<{ accepted: boolean }>(`
+        select public.admin_replace_org_roles_v1('${actor}', '${org}', '${member}', array['${salesRole}']::uuid[]) as accepted
+      `)
+      expect(prematureRole.rows[0].accepted).toBe(false)
       const closedLogin = await db.query<{ id: string | null }>(`
         select public.activate_fxiaoke_sso_member_v1('${org}', 'employee-1', '${member}') as id
       `)

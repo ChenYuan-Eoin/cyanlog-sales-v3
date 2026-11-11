@@ -442,7 +442,6 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
         const isLoginDisabled = user.login_enabled === false
         const isInvited = user.membership_status === 'invited'
         const isDirectoryPending = user.directory_pending_account === true
-        const canGrantSsoRole = isInvited && isDirectoryPending && user.directory_status === 'active'
         const roleMutationRestriction = getRoleMutationRestriction(user, currentUserId)
 
         return (
@@ -461,11 +460,11 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
 
               {/* P0: 分配角色 */}
               <DropdownMenuItem
-                disabled={Boolean(roleMutationRestriction) || (isInvited && !canGrantSsoRole)}
+                disabled={Boolean(roleMutationRestriction) || isInvited}
                 onSelect={() => {
-                  if (!roleMutationRestriction && (!isInvited || canGrantSsoRole)) onAssignRole(user)
+                  if (!roleMutationRestriction && !isInvited) onAssignRole(user)
                 }}
-                title={roleMutationRestriction?.reason || (canGrantSsoRole ? '纷享员工可先登录；分配角色后可使用对应业务功能' : undefined)}
+                title={roleMutationRestriction?.reason || (isDirectoryPending ? '请员工首次通过纷享登录后再分配业务角色' : undefined)}
               >
                 {roleMutationRestriction ? (
                   <LockIcon className="h-4 w-4 mr-2" />
