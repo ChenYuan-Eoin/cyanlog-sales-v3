@@ -38,7 +38,11 @@ export function createSessionExpiry(now = new Date()) {
   return new Date(now.getTime() + SESSION_MAX_AGE_SECONDS * 1000)
 }
 
-export async function issueSystemSession(userId: string, orgId: string): Promise<IssuedSystemSession> {
+export async function issueSystemSession(
+  userId: string,
+  orgId: string,
+  authMethod: 'local' | 'fxiaoke' = 'local',
+): Promise<IssuedSystemSession> {
   const [userResult, assignments] = await Promise.all([
     supabaseAdmin
       .from('users')
@@ -73,6 +77,7 @@ export async function issueSystemSession(userId: string, orgId: string): Promise
     id: randomUUID(),
     token,
     user_id: userId,
+    auth_method: authMethod,
     expires_at: expiresAt.toISOString(),
   })
   if (error) throw new SessionIssueError('SESSION_CREATE_FAILED', '系统会话创建失败。')

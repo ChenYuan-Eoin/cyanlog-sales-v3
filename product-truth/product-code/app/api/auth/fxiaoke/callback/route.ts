@@ -10,7 +10,6 @@ import {
 import { applySystemSessionCookies, issueSystemSession } from '@/lib/auth/session-response'
 import { discoverEnterprise, readEmployeeIdentity } from '@/lib/fxiaoke/client'
 import { FxiaokeError } from '@/lib/fxiaoke/contracts'
-import { transportForOrganization } from '@/lib/fxiaoke/egress/server'
 import { resolveFxiaokeIdentity } from '@/lib/fxiaoke/identity'
 import { exchangeFxiaokeAuthorizationCode } from '@/lib/fxiaoke/oauth'
 import { resolveConfiguredOAuthOrganization } from '@/lib/fxiaoke/sso'
@@ -93,7 +92,6 @@ function reportFailure(stage: CallbackStage, error: unknown) {
 }
 
 async function verifyEnterprise(
-  orgId: string,
   credentials: Awaited<ReturnType<typeof resolveConfiguredOAuthOrganization>>['credentials'],
   oauthCorpId: string,
 ) {
@@ -106,7 +104,7 @@ async function verifyEnterprise(
 
   // Legacy rows did not persist the enterprise corp identifier. Verify the
   // application-token enterprise on this callback and never trust the browser.
-  const enterprise = await discoverEnterprise(credentials, transportForOrganization(orgId))
+  const enterprise = await discoverEnterprise(credentials)
   if (enterprise.ea !== credentials.expectedEa || enterprise.corpId !== oauthCorpId) {
     throw new FxiaokeError('CROSS_ENTERPRISE_IDENTITY', '纷享登录身份不属于当前系统企业。', 403)
   }
@@ -143,14 +141,13 @@ export async function GET(request: NextRequest) {
     const identity = await exchangeFxiaokeAuthorizationCode(credentials, {
       code,
       redirectUrl: consumed.redirectUrl,
-    }, transportForOrganization(orgId))
+    })
     stage = 'enterprise_verification'
-    await verifyEnterprise(orgId, credentials, identity.corpId)
+    await verifyEnterprise(credentials, identity.corpId)
     stage = 'employee_profile'
     const profile = await readEmployeeIdentity(
       credentials,
       identity.openUserId,
-      transportForOrganization(orgId),
     )
     stage = 'identity_mapping'
     const mapped = await resolveFxiaokeIdentity({
@@ -165,7 +162,7 @@ export async function GET(request: NextRequest) {
       loginDisabled: profile.loginDisabled,
     })
     stage = 'session_issue'
-    const session = await issueSystemSession(mapped.userId, mapped.orgId)
+    const session = await issueSystemSession(mapped.userId, mapped.orgId, 'fxiaoke')
     const response = successHandoff(request)
     applySystemSessionCookies(response, session)
     return clearStateCookie(response)

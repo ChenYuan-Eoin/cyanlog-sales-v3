@@ -97,9 +97,15 @@ export async function POST(
         p_request_id: req.headers.get('x-request-id'),
       },
     )
-    if (replaceError || replaced !== true) {
-      console.error('Assign roles error:', replaceError || 'target_not_updated')
+    if (replaceError) {
+      console.error('Assign roles error:', replaceError)
       return NextResponse.json({ error: '分配角色失败' }, { status: 500 })
+    }
+    if (replaced !== true) {
+      return NextResponse.json({
+        error: '该成员尚不能分配角色；请核对纷享身份、在职状态和组织归属。',
+        code: 'MEMBER_NOT_ELIGIBLE',
+      }, { status: 409 })
     }
 
     const { data, error } = await supabaseAdmin

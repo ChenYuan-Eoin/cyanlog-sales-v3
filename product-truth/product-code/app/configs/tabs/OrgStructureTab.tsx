@@ -386,7 +386,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
       header: '账号关联',
       size: 110,
       cell: ({ row }) => row.original.directory_identity_id
-        ? <Badge variant={row.original.directory_pending_account ? 'outline' : 'secondary'}>{row.original.directory_pending_account ? '待关联账号' : '已有账号'}</Badge>
+        ? <Badge variant={row.original.directory_pending_account ? 'outline' : 'secondary'}>{row.original.directory_pending_account ? '待授权登录' : '已有账号'}</Badge>
         : <span className="text-xs text-slate-500">系统成员</span>,
     },
     {
@@ -441,6 +441,8 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
         const isDisabled = user.status !== 'active'
         const isLoginDisabled = user.login_enabled === false
         const isInvited = user.membership_status === 'invited'
+        const isDirectoryPending = user.directory_pending_account === true
+        const canGrantSsoRole = isInvited && isDirectoryPending && user.directory_status === 'active'
         const roleMutationRestriction = getRoleMutationRestriction(user, currentUserId)
 
         return (
@@ -459,11 +461,11 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
 
               {/* P0: 分配角色 */}
               <DropdownMenuItem
-                disabled={Boolean(roleMutationRestriction) || isInvited}
+                disabled={Boolean(roleMutationRestriction) || (isInvited && !canGrantSsoRole)}
                 onSelect={() => {
-                  if (!roleMutationRestriction && !isInvited) onAssignRole(user)
+                  if (!roleMutationRestriction && (!isInvited || canGrantSsoRole)) onAssignRole(user)
                 }}
-                title={roleMutationRestriction?.reason}
+                title={roleMutationRestriction?.reason || (canGrantSsoRole ? '分配角色后可使用纷享销客登录，无需邀请激活' : undefined)}
               >
                 {roleMutationRestriction ? (
                   <LockIcon className="h-4 w-4 mr-2" />
@@ -490,6 +492,9 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
                 绑定纷享身份
               </DropdownMenuItem>
 
+              {isDirectoryPending ? (
+                <DropdownMenuItem disabled>纷享员工无需邀请码；分配角色后使用纷享登录</DropdownMenuItem>
+              ) : <>
               <DropdownMenuItem
                 disabled={!isInvited}
                 onSelect={async () => {
@@ -539,6 +544,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
                 <BanIcon className="h-4 w-4 mr-2" />
                 撤销待激活邀请
               </DropdownMenuItem>
+              </>}
 
               {/* P1: 停用/启用 */}
               <DropdownMenuItem

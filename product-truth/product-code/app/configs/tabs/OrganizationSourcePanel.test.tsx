@@ -433,4 +433,32 @@ describe('OrganizationSourcePanel', () => {
     const post = fetchMock.mock.calls.find(([url, init]) => String(url).includes('/directory') && init?.method === 'POST')
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({ action: 'rollback', plan_id: current.id })
   })
+
+  it('lets an administrator explicitly open Fxiaoke login after role assignment without an invitation step', async () => {
+    let enabled = false
+    const fxiaokeSource = {
+      ...source, provider: 'fxiaoke', externalTenantId: 'FSCID_test',
+      authorityScope: { directory: 'authoritative', identity: 'evidence' },
+    }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/fxiaoke/sso') && init?.method === 'PATCH') {
+        enabled = true
+        return json({ enabled: true })
+      }
+      if (String(input).includes('/directory')) return json({ data: { plan: null, directory_cutover: { available: true, reason: null } } })
+      return json({ data: { sources: [{ ...fxiaokeSource, authorityScope: {
+        ...fxiaokeSource.authorityScope, identity: enabled ? 'authoritative' : 'evidence',
+      } }], providers } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<OrganizationSourcePanel />)
+
+    const enable = await screen.findByRole('button', { name: '启用纷享登录' })
+    expect(screen.getByText(/无需邀请码或本地密码/)).toBeInTheDocument()
+    fireEvent.click(enable)
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => (
+      String(url).endsWith('/fxiaoke/sso') && init?.method === 'PATCH'
+    ))).toBe(true))
+    expect(await screen.findByRole('button', { name: '停用纷享登录' })).toBeInTheDocument()
+  })
 })

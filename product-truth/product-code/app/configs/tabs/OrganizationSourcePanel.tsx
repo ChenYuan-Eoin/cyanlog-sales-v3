@@ -151,6 +151,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
   const [directoryLoading, setDirectoryLoading] = useState(false)
   const directoryReadGeneration = useRef(0)
   const [directoryAction, setDirectoryAction] = useState<DirectoryAction>(null)
+  const [ssoAction, setSsoAction] = useState(false)
   const [inspectionGeneration, setInspectionGeneration] = useState(0)
 
   const load = useCallback(async () => {
@@ -273,6 +274,32 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
     setInspectionGeneration(value => value + 1)
     await load()
     await onRefresh?.()
+  }
+
+  async function setSsoEnabled(enabled: boolean) {
+    if (selectedProviderRef.current !== 'fxiaoke' || !directorySource?.connectionRevision || ssoAction) return
+    const accepted = await confirmAction(
+      enabled
+        ? '启用纷享企业登录？请先给需要登录的在职纷享成员分配 ICU 角色。员工使用纷享身份登录，无需邀请码；目录同步本身不会授予业务权限。'
+        : '停用纷享企业登录？现有纷享成员会话将失效，角色和组织资料会保留。',
+      { confirmText: enabled ? '启用企业登录' : '停用企业登录', danger: !enabled },
+    )
+    if (!accepted) return
+    setSsoAction(true)
+    try {
+      const result = await fetch('/api/admin/organization-sources/fxiaoke/sso', {
+        method: 'PATCH', headers: authHeaders(true),
+        body: JSON.stringify({ enabled, connectionRevision: directorySource.connectionRevision }),
+      })
+      const body = await result.json().catch(() => ({})) as { error?: string }
+      if (!result.ok) throw new Error(body.error || '企业登录状态保存失败。')
+      success(enabled ? '纷享企业登录已启用。' : '纷享企业登录已停用，现有会话已失效。')
+      await refreshAll()
+    } catch (saveError) {
+      error(saveError instanceof Error ? saveError.message : '企业登录状态保存失败。')
+    } finally {
+      setSsoAction(false)
+    }
   }
 
   async function previewDirectory() {
@@ -806,16 +833,28 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
               <Badge variant={capabilityBadge(identityAuthoritative)}>{ssoState}</Badge>
             </div>
             <p className="mt-0.5 text-[11px] leading-5 text-slate-500">
-              企业登录只接受已验证的外部身份并绑定到既有系统成员，不从登录请求创建人员。
+              在职员工使用纷享身份登录，无需邀请码或本地密码。组织管理员分配 ICU 角色后才可进入业务；目录同步不会自动授权。
             </p>
           </div>
           <LogInIcon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
         </div>
         <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-[11px] leading-5 text-slate-600">
           {identityAuthoritative
-            ? '该提供方已被显式设为身份权威来源。登录仍须稳定身份映射、成员状态、有效角色和正式站真人验收，任何一项失败都会拒绝。'
-            : '目录读取、目录主来源或连接验证都不会自动开启登录。只有该提供方被显式设为身份权威来源并具备稳定映射后，企业登录才可启用。'}
+            ? '纷享已是身份权威来源。停用或冲突身份仍会被拒绝；正式站真人登录验收尚需单独完成。'
+            : '先在组织架构给至少一位在职纷享成员分配角色，再启用企业登录。未分配角色的员工不会取得业务会话。'}
         </div>
+        {directoryProvider === 'fxiaoke' && directorySource?.status === 'active'
+          && directorySource.connectionState === 'verified'
+          && directorySource.authorityScope.directory === 'authoritative' && (
+            <Button
+              type="button" variant={identityAuthoritative ? 'outline' : 'default'}
+              className="mt-3"
+              disabled={ssoAction}
+              onClick={() => void setSsoEnabled(!identityAuthoritative)}
+            >
+              {ssoAction ? '正在保存…' : identityAuthoritative ? '停用纷享登录' : '启用纷享登录'}
+            </Button>
+          )}
       </section>
     </div>
   )

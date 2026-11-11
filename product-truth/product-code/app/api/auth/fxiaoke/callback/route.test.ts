@@ -91,8 +91,8 @@ describe('Fxiaoke OAuth callback', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(response.headers.get('set-cookie')).toContain('token=session-token')
     expect(mocks.consume).toHaveBeenCalledWith(state)
-    expect(mocks.exchange).toHaveBeenCalledWith(credentials, { code: 'authorization-code', redirectUrl }, undefined)
-    expect(mocks.profile).toHaveBeenCalledWith(credentials, 'employee-open-id', undefined)
+    expect(mocks.exchange).toHaveBeenCalledWith(credentials, { code: 'authorization-code', redirectUrl })
+    expect(mocks.profile).toHaveBeenCalledWith(credentials, 'employee-open-id')
     expect(mocks.identity).toHaveBeenCalledWith({
       orgId,
       corpId: 'FSCID_enterprise',
@@ -104,21 +104,19 @@ describe('Fxiaoke OAuth callback', () => {
       lifeStatus: '正常',
       loginDisabled: false,
     })
-    expect(mocks.issue).toHaveBeenCalledWith(userId, orgId)
+    expect(mocks.issue).toHaveBeenCalledWith(userId, orgId, 'fxiaoke')
     const body = await response.text()
     expect(body).toContain("localStorage.setItem('token'")
     expect(body).not.toContain('session-token')
     expect(body).not.toContain('secret')
   })
 
-  it('routes the authorization-code exchange and profile read through the configured organization transport', async () => {
-    const transport = vi.fn()
-    mocks.transport.mockReturnValue(transport)
+  it('uses the application service directly without submitting a cloud-worker job', async () => {
     const response = await GET(request())
     expect(response.status).toBe(200)
-    expect(mocks.transport).toHaveBeenCalledWith(orgId)
-    expect(mocks.exchange).toHaveBeenCalledWith(credentials, { code: 'authorization-code', redirectUrl }, transport)
-    expect(mocks.profile).toHaveBeenCalledWith(credentials, 'employee-open-id', transport)
+    expect(mocks.transport).not.toHaveBeenCalled()
+    expect(mocks.exchange).toHaveBeenCalledWith(credentials, { code: 'authorization-code', redirectUrl })
+    expect(mocks.profile).toHaveBeenCalledWith(credentials, 'employee-open-id')
     expect(console.warn).not.toHaveBeenCalled()
   })
 
@@ -192,11 +190,9 @@ describe('Fxiaoke OAuth callback', () => {
   it('verifies legacy credentials against the provider application enterprise without persisting browser input', async () => {
     const legacy = { ...credentials, expectedCorpId: undefined }
     mocks.resolve.mockResolvedValue({ orgId, credentials: legacy })
-    const transport = vi.fn()
-    mocks.transport.mockReturnValue(transport)
     mocks.discover.mockResolvedValue({ ea: 'enterprise', corpId: 'FSCID_enterprise' })
     await GET(request())
-    expect(mocks.discover).toHaveBeenCalledWith(legacy, transport)
+    expect(mocks.discover).toHaveBeenCalledWith(legacy)
     expect(mocks.identity).toHaveBeenCalled()
   })
 })

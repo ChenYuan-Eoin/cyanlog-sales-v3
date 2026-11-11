@@ -60,7 +60,7 @@ describe('system session issuance', () => {
     const session = await issueSystemSession(userId, orgId)
     expect(session.token).toMatch(/^[0-9a-f-]{36}$/)
     expect(session.authContextCookie).toBe('signed-context')
-    expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({ token: session.token, user_id: userId }))
+    expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({ token: session.token, user_id: userId, auth_method: 'local' }))
     expect(mocks.cookie).toHaveBeenCalledWith(session.token, expect.objectContaining({
       userId,
       orgId,
@@ -68,6 +68,11 @@ describe('system session issuance', () => {
       allPermissions: ['*'],
       full: true,
     }))
+  })
+
+  it('marks a Fxiaoke session so disabling SSO can revoke only provider sessions', async () => {
+    await issueSystemSession(userId, orgId, 'fxiaoke')
+    expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({ user_id: userId, auth_method: 'fxiaoke' }))
   })
 
   it('fails closed when the identity was disabled between mapping and session issue', async () => {
