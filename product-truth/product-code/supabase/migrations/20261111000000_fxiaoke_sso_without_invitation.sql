@@ -120,9 +120,85 @@ revoke all on function public.admin_replace_org_roles_v1(uuid, uuid, uuid, uuid[
 grant execute on function public.admin_replace_org_roles_v1(uuid, uuid, uuid, uuid[], text, text)
   to service_role;
 
+-- A verified first OAuth login can establish the pre-matched directory
+-- person's system account. It never grants a role or accepts an invitation.
+create or replace function public.activate_fxiaoke_sso_member_v1(
+  p_org_id uuid,
+  p_external_user_id text,
+  p_expected_user_id uuid
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_source public.organization_sources%rowtype;
+  v_identity public.external_identities%rowtype;
+  v_person public.users%rowtype;
+  v_membership public.user_organizations%rowtype;
+  v_source_count integer;
+begin
+  perform private.personnel_lock_org_v1(p_org_id);
+  select count(*) into v_source_count from public.organization_sources
+   where system_org_id = p_org_id and provider = 'fxiaoke';
+  if v_source_count <> 1 then return null; end if;
+
+  select * into v_source from public.organization_sources
+   where system_org_id = p_org_id and provider = 'fxiaoke' for update;
+  if v_source.status <> 'active' or v_source.connection_state <> 'verified'
+    or v_source.effective_revision is null
+    or v_source.authority_scope->>'identity' <> 'authoritative'
+    or v_source.authority_scope->>'directory' <> 'authoritative'
+  then return null; end if;
+
+  select * into v_identity from public.external_identities
+   where source_id = v_source.id and system_org_id = p_org_id
+     and external_user_id = p_external_user_id and match_status = 'matched'
+     and canonical_user_id = p_expected_user_id;
+  if not found or v_identity.canonical_user_id is null
+    or v_identity.profile_snapshot->>'provisionedMemberId' <> v_identity.canonical_user_id::text
+    or v_identity.profile_snapshot->>'status' <> 'active'
+    or v_identity.profile_snapshot->>'loginDisabled' = 'true'
+  then return null; end if;
+
+  select * into v_person from public.users
+   where id = v_identity.canonical_user_id and org_id = p_org_id for update;
+  if not found then return null; end if;
+  select * into v_membership from public.user_organizations
+   where user_id = v_person.id and org_id = p_org_id for update;
+  if not found or v_membership.employment_status <> 'active'
+    or v_membership.is_default is distinct from true
+  then return null; end if;
+
+  if v_person.status = 'active' and v_person.login_enabled = true
+    and v_membership.status = 'active' then return v_person.id; end if;
+  if v_person.status <> 'inactive' or v_person.login_enabled is distinct from false
+    or v_person.password_hash is not null or v_membership.status <> 'invited'
+  then return null; end if;
+
+  update public.users set status = 'active', login_enabled = true, updated_at = now()
+   where id = v_person.id and org_id = p_org_id;
+  update public.user_organizations set status = 'active', updated_at = now()
+   where user_id = v_person.id and org_id = p_org_id;
+  perform private.personnel_insert_event_v1(
+    p_org_id, v_person.id, v_person.id, 'fxiaoke_sso_first_login',
+    jsonb_build_object('account_status', v_person.status, 'membership_status', v_membership.status),
+    jsonb_build_object('account_status', 'active', 'membership_status', 'active', 'role_granted', false),
+    'verified Fxiaoke OAuth login', null
+  );
+  return v_person.id;
+end;
+$$;
+
+revoke all on function public.activate_fxiaoke_sso_member_v1(uuid, text, uuid)
+  from public, anon, authenticated;
+grant execute on function public.activate_fxiaoke_sso_member_v1(uuid, text, uuid)
+  to service_role;
+
 -- An explicit organization-admin action opens or closes the enterprise SSO
--- source. It never creates a member or grants a role. A real, role-authorized
--- directory person must exist before the login button can be exposed.
+-- source. It never creates a member or grants a role. A real, matched and
+-- active directory person must exist before the login button can be exposed.
 create or replace function public.set_fxiaoke_identity_authority_v1(
   p_actor_id uuid,
   p_org_id uuid,
@@ -170,18 +246,20 @@ begin
     if not exists (
       select 1 from public.external_identities identity
       join public.users person on person.id = identity.canonical_user_id
-        and person.org_id = p_org_id and person.status = 'active'
-        and person.login_enabled = true
+        and person.org_id = p_org_id
       join public.user_organizations membership on membership.user_id = person.id
-        and membership.org_id = p_org_id and membership.status = 'active'
-        and membership.employment_status = 'active' and membership.is_default = true
-      join public.user_roles assignment on assignment.user_id = person.id
-        and assignment.org_id = p_org_id and assignment.scope_type = 'org'
-        and assignment.scope_id = p_org_id
+        and membership.org_id = p_org_id and membership.employment_status = 'active'
+        and membership.is_default = true
       where identity.source_id = v_source.id and identity.system_org_id = p_org_id
         and identity.match_status = 'matched'
+        and identity.profile_snapshot->>'provisionedMemberId' = person.id::text
         and identity.profile_snapshot->>'status' = 'active'
         and identity.profile_snapshot->>'loginDisabled' is distinct from 'true'
+        and (
+          (person.status = 'active' and person.login_enabled = true and membership.status = 'active')
+          or (person.status = 'inactive' and person.login_enabled = false
+            and person.password_hash is null and membership.status = 'invited')
+        )
     ) then return false; end if;
   else
     if not exists (

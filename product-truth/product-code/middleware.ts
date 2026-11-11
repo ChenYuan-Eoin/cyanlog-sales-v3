@@ -84,6 +84,12 @@ type MiddlewareAuthContext = {
   allPermissions: string[]
 }
 
+type FxiaokeSourceRow = {
+  authority_scope: { identity?: unknown } | null
+  connection_state: string
+  effective_revision: string | null
+}
+
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.some(p => pathname === p)) return true
@@ -134,10 +140,10 @@ function roleRecordOf(value: unknown): { id: string; code: string; permissions: 
 
 async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthContext | null> {
   const rest = createMiddlewareRestClient()
-  const tokenRows = await rest.selectRows<{ user_id: string; expires_at: string | null }>(
+  const tokenRows = await rest.selectRows<{ user_id: string; expires_at: string | null; auth_method?: string }>(
     'auth_tokens',
     { token },
-    'user_id,expires_at',
+    'user_id,expires_at,auth_method',
   )
   const tokenRecord = tokenRows[0]
 
@@ -169,6 +175,17 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
 
   const orgId = membershipRows[0]?.org_id
   if (!orgId) return null
+
+  if (tokenRecord.auth_method === 'fxiaoke') {
+    const sources = await rest.selectRows<FxiaokeSourceRow>(
+      'organization_sources',
+      { system_org_id: orgId, provider: 'fxiaoke', status: 'active' },
+      'authority_scope,connection_state,effective_revision',
+      2,
+    )
+    if (sources.length !== 1 || sources[0].authority_scope?.identity !== 'authoritative'
+      || sources[0].connection_state !== 'verified' || !sources[0].effective_revision) return null
+  }
 
   const [userRolesData, organizationRows] = await Promise.all([
     rest.selectRows<{ scope_type: string; scope_id: string | null; roles: unknown }>(
@@ -259,6 +276,17 @@ export async function middleware(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
       return NextResponse.redirect(buildRedirectUrl(request, '/login'))
+    }
+
+    // Some legacy business APIs check only authentication. A role-free SSO
+    // member may view only the waiting page and sign out; no business route
+    // can be reached through a guessed URL or direct API request.
+    if (authContext.roleCodes.length === 0) {
+      if (pathname === '/pending-access' || pathname === '/api/auth/logout') return NextResponse.next()
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: '尚未分配业务权限', code: 'ROLE_REQUIRED' }, { status: 403 })
+      }
+      return NextResponse.redirect(buildRedirectUrl(request, '/pending-access'))
     }
 
     // 路径级权限校验

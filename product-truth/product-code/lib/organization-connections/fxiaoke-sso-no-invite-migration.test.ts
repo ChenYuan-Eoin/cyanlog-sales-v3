@@ -59,6 +59,10 @@ describe('Fxiaoke SSO without local invitation', () => {
         select public.admin_replace_org_roles_v1('${actor}', '${org}', '${member}', array['${salesRole}']::uuid[]) as accepted
       `)
       expect(inactive.rows[0].accepted).toBe(false)
+      const inactiveLogin = await db.query<{ id: string | null }>(`
+        select public.activate_fxiaoke_sso_member_v1('${org}', 'employee-1', '${member}') as id
+      `)
+      expect(inactiveLogin.rows[0].id).toBeNull()
       await db.exec(`update public.external_identities
         set profile_snapshot = jsonb_set(profile_snapshot, '{status}', '"active"'::jsonb)
         where source_id = '${source}' and canonical_user_id = '${member}'`)
@@ -66,6 +70,30 @@ describe('Fxiaoke SSO without local invitation', () => {
         select login_enabled as enabled, status from public.users where id = '${member}'
       `)
       expect(before.rows[0]).toMatchObject({ enabled: false, status: 'inactive' })
+      const closedLogin = await db.query<{ id: string | null }>(`
+        select public.activate_fxiaoke_sso_member_v1('${org}', 'employee-1', '${member}') as id
+      `)
+      expect(closedLogin.rows[0].id).toBeNull()
+
+      const enabledWithoutRole = await db.query<{ accepted: boolean }>(`
+        select public.set_fxiaoke_identity_authority_v1('${actor}', '${org}', '${revision}', true) as accepted
+      `)
+      expect(enabledWithoutRole.rows[0].accepted).toBe(true)
+      const wrongUser = await db.query<{ id: string | null }>(`
+        select public.activate_fxiaoke_sso_member_v1('${org}', 'employee-1', '${actor}') as id
+      `)
+      expect(wrongUser.rows[0].id).toBeNull()
+      const firstLogin = await db.query<{ id: string | null }>(`
+        select public.activate_fxiaoke_sso_member_v1('${org}', 'employee-1', '${member}') as id
+      `)
+      expect(firstLogin.rows[0].id).toBe(member)
+      const roleless = await db.query<{ roles: number; invitations: number; enabled: boolean }>(`
+        select login_enabled as enabled,
+          (select count(*)::int from public.user_roles where user_id = '${member}') as roles,
+          (select count(*)::int from public.personnel_invitations where user_id = '${member}') as invitations
+        from public.users where id = '${member}'
+      `)
+      expect(roleless.rows[0]).toMatchObject({ enabled: true, roles: 0, invitations: 0 })
 
       const assigned = await db.query<{ accepted: boolean }>(`
         select public.admin_replace_org_roles_v1('${actor}', '${org}', '${member}', array['${salesRole}']::uuid[]) as accepted
@@ -86,10 +114,6 @@ describe('Fxiaoke SSO without local invitation', () => {
       `)
       expect(staleRevision.rows[0].accepted).toBe(false)
 
-      const enabled = await db.query<{ accepted: boolean }>(`
-        select public.set_fxiaoke_identity_authority_v1('${actor}', '${org}', '${revision}', true) as accepted
-      `)
-      expect(enabled.rows[0].accepted).toBe(true)
       await db.exec(`insert into public.auth_tokens(token, user_id, auth_method, expires_at) values
         ('existing-sso-session', '${member}', 'fxiaoke', now() + interval '1 hour'),
         ('existing-local-session', '${member}', 'local', now() + interval '1 hour')`)
@@ -105,6 +129,14 @@ describe('Fxiaoke SSO without local invitation', () => {
         from public.organization_sources where id = '${source}'
       `)
       expect(after.rows[0]).toMatchObject({ identity_authority: 'evidence', sso_tokens: 0, local_tokens: 1 })
+      await db.exec(`insert into public.external_identities(source_id, system_org_id, external_user_id,
+        canonical_user_id, match_status, profile_snapshot)
+        values ('${source}', '${org}', 'employee-1', '${member}', 'matched',
+          '{"provisionedMemberId":"${member}","status":"active","loginDisabled":false}'::jsonb)`)
+      const afterDisable = await db.query<{ id: string | null }>(`
+        select public.activate_fxiaoke_sso_member_v1('${org}', 'employee-1', '${member}') as id
+      `)
+      expect(afterDisable.rows[0].id).toBeNull()
     } finally {
       await db.close()
     }

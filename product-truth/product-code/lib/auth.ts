@@ -18,10 +18,28 @@ export class AuthError extends Error {
   }
 }
 
+async function hasActiveFxiaokeSessionSource(userId: string, orgId: string | null | undefined) {
+  if (!orgId) return false
+  const [sourceResult, membershipResult] = await Promise.all([
+    supabaseAdmin.from('organization_sources')
+      .select('authority_scope,connection_state,effective_revision')
+      .eq('system_org_id', orgId).eq('provider', 'fxiaoke').eq('status', 'active').limit(2),
+    supabaseAdmin.from('user_organizations')
+      .select('org_id').eq('user_id', userId).eq('org_id', orgId)
+      .eq('status', 'active').eq('is_default', true).maybeSingle(),
+  ])
+  if (sourceResult.error || membershipResult.error || !membershipResult.data) return false
+  const sources = sourceResult.data || []
+  return sources.length === 1
+    && sources[0].authority_scope?.identity === 'authoritative'
+    && sources[0].connection_state === 'verified'
+    && Boolean(sources[0].effective_revision)
+}
+
 export async function getAuthUserByToken(token: string): Promise<AuthUser | null> {
   const { data: tokenRecord } = await supabaseAdmin
     .from('auth_tokens')
-    .select('user_id, expires_at, user:users(id, email, phone, display_name, org_id, status, login_enabled)')
+    .select('user_id, expires_at, auth_method, user:users(id, email, phone, display_name, org_id, status, login_enabled)')
     .eq('token', token)
     .single()
 
@@ -32,25 +50,29 @@ export async function getAuthUserByToken(token: string): Promise<AuthUser | null
     ? tokenRecord.user[0]
     : tokenRecord.user
 
+  let resolvedUser: AuthUser | null = null
   if (
     joinedUser?.id
     && joinedUser.status === 'active'
     && joinedUser.login_enabled === true
   ) {
-    return joinedUser as AuthUser
+    resolvedUser = joinedUser as AuthUser
   }
 
-  if (joinedUser?.id) return null
+  if (joinedUser?.id && !resolvedUser) return null
 
-  const { data: user } = await supabaseAdmin
-    .from('users')
-    .select('id, email, phone, display_name, org_id, status, login_enabled')
-    .eq('id', tokenRecord.user_id)
-    .single()
+  if (!resolvedUser) {
+    const { data: user } = await supabaseAdmin
+      .from('users')
+      .select('id, email, phone, display_name, org_id, status, login_enabled')
+      .eq('id', tokenRecord.user_id)
+      .single()
+    resolvedUser = user?.status === 'active' && user.login_enabled === true ? user : null
+  }
 
-  return user?.status === 'active' && user.login_enabled === true
-    ? user
-    : null
+  if (tokenRecord.auth_method === 'fxiaoke' && resolvedUser
+    && !await hasActiveFxiaokeSessionSource(resolvedUser.id, resolvedUser.org_id)) return null
+  return resolvedUser
 }
 
 export async function getAuthUser(req: NextRequest): Promise<AuthUser | null> {

@@ -6,6 +6,7 @@ const db = vi.hoisted(() => ({
   mappings: [] as Array<Record<string, unknown>>,
   users: [] as Array<Record<string, unknown>>,
   memberships: [] as Array<Record<string, unknown>>,
+  activationAllowed: true,
 }))
 
 function matches(row: Record<string, unknown>, filters: Array<[string, unknown]>) {
@@ -14,6 +15,17 @@ function matches(row: Record<string, unknown>, filters: Array<[string, unknown]>
 
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
+    rpc: vi.fn(async (_name: string, args: { p_expected_user_id: string }) => {
+      if (!db.activationAllowed) return { data: null, error: null }
+      const user = db.users.find(row => row.id === args.p_expected_user_id)
+      const membership = db.memberships.find(row => row.user_id === args.p_expected_user_id)
+      if (user?.status === 'inactive' && user.login_enabled === false && membership?.status === 'invited') {
+        user.status = 'active'
+        user.login_enabled = true
+        membership.status = 'active'
+      }
+      return { data: args.p_expected_user_id, error: null }
+    }),
     from: vi.fn((table: string) => {
       const filters: Array<[string, unknown]> = []
       let limit = Infinity
@@ -107,6 +119,7 @@ describe('Fxiaoke stable identity resolution', () => {
     db.mappings.length = 0
     db.users.length = 0
     db.memberships.length = 0
+    db.activationAllowed = true
   })
 
   it('normalizes supported provider phones without claiming independent verification', () => {
@@ -122,6 +135,27 @@ describe('Fxiaoke stable identity resolution', () => {
     seedUser()
 
     await expect(resolveFxiaokeIdentity(input)).resolves.toEqual({ userId, orgId })
+  })
+
+  it('establishes a pre-matched directory member on first login without requiring a role', async () => {
+    seedSource()
+    seedMapping()
+    seedUser(userId, { status: 'inactive', login_enabled: false })
+    db.memberships[0].status = 'invited'
+
+    await expect(resolveFxiaokeIdentity(input)).resolves.toEqual({ userId, orgId })
+    expect(db.users[0]).toMatchObject({ status: 'active', login_enabled: true })
+    expect(db.memberships[0].status).toBe('active')
+  })
+
+  it('denies login when the atomic directory eligibility check refuses promotion', async () => {
+    seedSource()
+    seedMapping()
+    seedUser(userId, { status: 'inactive', login_enabled: false })
+    db.memberships[0].status = 'invited'
+    db.activationAllowed = false
+
+    await expect(resolveFxiaokeIdentity(input)).rejects.toMatchObject({ code: 'IDENTITY_DISABLED' })
   })
 
   it('resolves the database seed organization UUID', async () => {

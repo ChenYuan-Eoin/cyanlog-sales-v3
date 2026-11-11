@@ -30,7 +30,7 @@ it('cascades department selection through primary and secondary memberships and 
   fireEvent.click(screen.getByRole('button', { name: /^销售部/ }))
   expect(screen.getByText('待关联员工甲')).toBeInTheDocument()
   expect(screen.queryByText('财务员工乙')).not.toBeInTheDocument()
-  expect(screen.getByText('待授权登录')).toBeInTheDocument()
+  expect(screen.getByText('待首次登录')).toBeInTheDocument()
   const row = screen.getByText('待关联员工甲').closest('tr')!
   expect(within(row).getByText('咨询部')).toBeInTheDocument()
   expect(within(row).getByText('附属：销售部')).toBeInTheDocument()

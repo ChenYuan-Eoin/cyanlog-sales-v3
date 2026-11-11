@@ -45,12 +45,14 @@ function mockExactOrgAuth(options: {
   settingsError?: unknown
   status?: string
   loginEnabled?: boolean
+  authMethod?: 'local' | 'fxiaoke'
+  sourceIdentity?: 'authoritative' | 'evidence'
 }) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input))
     const table = url.pathname.split('/').pop()
     if (table === 'auth_tokens') {
-      return Response.json([{ user_id: 'user-1', expires_at: '2099-01-01T00:00:00.000Z' }])
+      return Response.json([{ user_id: 'user-1', expires_at: '2099-01-01T00:00:00.000Z', auth_method: options.authMethod ?? 'local' }])
     }
     if (table === 'users') {
       return Response.json([{
@@ -72,6 +74,12 @@ function mockExactOrgAuth(options: {
         return new Response('settings unavailable', { status: 503 })
       }
       return Response.json([{ settings: options.settings ?? {} }])
+    }
+    if (table === 'organization_sources') {
+      return Response.json([{
+        authority_scope: { identity: options.sourceIdentity ?? 'authoritative' },
+        connection_state: 'verified', effective_revision: 'revision-1',
+      }])
     }
     return new Response(`unexpected table ${table}`, { status: 500 })
   })
@@ -120,6 +128,36 @@ describe('middleware host routing', () => {
     const res = await middleware(req)
 
     expect(res.status).toBe(503)
+  })
+})
+
+describe('role-free federated session boundary', () => {
+  it('allows only the waiting page and sign-out while blocking business pages and APIs', async () => {
+    mockExactOrgAuth({ token: 'role-free-token', orgId: 'org-a', roles: [], authMethod: 'fxiaoke' })
+    const headers = { host: 'sales.cyanlog.icu' }
+    const makeAuthed = (path: string) => {
+      const req = makeRequest(`https://sales.cyanlog.icu${path}`, headers)
+      req.cookies.get = vi.fn().mockReturnValue({ value: 'role-free-token' })
+      return req
+    }
+
+    expect((await middleware(makeAuthed('/pending-access'))).status).toBe(200)
+    expect((await middleware(makeAuthed('/api/auth/logout'))).status).toBe(200)
+    const page = await middleware(makeAuthed('/quotes'))
+    expect(page.status).toBe(307)
+    expect(page.headers.get('location')).toBe('https://sales.cyanlog.icu/pending-access')
+    const api = await middleware(makeAuthed('/api/quotes'))
+    expect(api.status).toBe(403)
+    expect((await api.json()).code).toBe('ROLE_REQUIRED')
+  })
+
+  it('rejects an SSO token immediately when identity authority is disabled', async () => {
+    mockExactOrgAuth({ token: 'sso-token', orgId: 'org-a', roles: [], authMethod: 'fxiaoke', sourceIdentity: 'evidence' })
+    const req = makeRequest('https://sales.cyanlog.icu/pending-access', { host: 'sales.cyanlog.icu' })
+    req.cookies.get = vi.fn().mockReturnValue({ value: 'sso-token' })
+    const response = await middleware(req)
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe('https://sales.cyanlog.icu/login')
   })
 })
 
@@ -274,7 +312,7 @@ describe('middleware exact organization authorization', () => {
     const res = await middleware(req)
 
     expect(res.status).toBe(307)
-    expect(res.headers.get('location')).toContain('denied=config%3Aread')
+    expect(res.headers.get('location')).toBe('https://sales.cyanlog.icu/pending-access')
     const roleCall = fetchMock.mock.calls.find(([input]) => String(input).includes('/rest/v1/user_roles?'))
     expect(new URL(String(roleCall?.[0])).searchParams.getAll('scope_id')).toEqual(['eq.org-a'])
   })
@@ -300,7 +338,7 @@ describe('middleware exact organization authorization', () => {
     })
     const req = makeRequest('https://sales.cyanlog.icu/configs', {host:'sales.cyanlog.icu'})
     req.cookies.get = vi.fn().mockReturnValue({value:'example-missing-role-id'})
-    expect((await middleware(req)).headers.get('location')).toContain('denied=config%3Aread')
+    expect((await middleware(req)).headers.get('location')).toBe('https://sales.cyanlog.icu/pending-access')
   })
 
   it('空覆盖阻止超管访问后台且覆盖读取失败时关闭访问', async () => {

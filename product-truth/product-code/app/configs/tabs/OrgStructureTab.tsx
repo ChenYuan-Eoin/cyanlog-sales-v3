@@ -386,7 +386,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
       header: '账号关联',
       size: 110,
       cell: ({ row }) => row.original.directory_identity_id
-        ? <Badge variant={row.original.directory_pending_account ? 'outline' : 'secondary'}>{row.original.directory_pending_account ? '待授权登录' : '已有账号'}</Badge>
+        ? <Badge variant={row.original.directory_pending_account ? 'outline' : 'secondary'}>{row.original.directory_pending_account ? '待首次登录' : '已有账号'}</Badge>
         : <span className="text-xs text-slate-500">系统成员</span>,
     },
     {
@@ -465,7 +465,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
                 onSelect={() => {
                   if (!roleMutationRestriction && (!isInvited || canGrantSsoRole)) onAssignRole(user)
                 }}
-                title={roleMutationRestriction?.reason || (canGrantSsoRole ? '分配角色后可使用纷享销客登录，无需邀请激活' : undefined)}
+                title={roleMutationRestriction?.reason || (canGrantSsoRole ? '纷享员工可先登录；分配角色后可使用对应业务功能' : undefined)}
               >
                 {roleMutationRestriction ? (
                   <LockIcon className="h-4 w-4 mr-2" />
@@ -493,7 +493,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
               </DropdownMenuItem>
 
               {isDirectoryPending ? (
-                <DropdownMenuItem disabled>纷享员工无需邀请码；分配角色后使用纷享登录</DropdownMenuItem>
+                <DropdownMenuItem disabled>纷享员工无需邀请码；可先登录，再分配业务角色</DropdownMenuItem>
               ) : <>
               <DropdownMenuItem
                 disabled={!isInvited}

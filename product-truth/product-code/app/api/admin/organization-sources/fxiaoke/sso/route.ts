@@ -52,7 +52,7 @@ export async function PATCH(request: NextRequest) {
     if (data !== true) {
       return response({
         error: input.enabled
-          ? '开启前须有已分配组织角色的在职纷享成员，且连接和目录主来源保持有效；请刷新状态核对。'
+          ? '开启前须有已匹配的在职纷享成员，且连接和目录主来源保持有效；请刷新状态核对。'
           : '企业登录状态已变化，请刷新后重试。',
       }, 409)
     }

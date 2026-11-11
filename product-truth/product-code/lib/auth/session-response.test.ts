@@ -90,6 +90,20 @@ describe('system session issuance', () => {
     expect(mocks.cookie).not.toHaveBeenCalled()
   })
 
+  it('issues a Fxiaoke identity session without granting business permissions', async () => {
+    const scopedAccess = await import('@/lib/scoped-access')
+    vi.mocked(scopedAccess.getOrgRoleCodes).mockReturnValueOnce([])
+    vi.mocked(scopedAccess.getOrgAuthorizationRoleCodes).mockReturnValueOnce([])
+
+    const session = await issueSystemSession(userId, orgId, 'fxiaoke')
+    expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({
+      user_id: userId, auth_method: 'fxiaoke',
+    }))
+    expect(mocks.cookie).toHaveBeenCalledWith(session.token, expect.objectContaining({
+      roleCodes: [], allPermissions: [],
+    }))
+  })
+
   it('sets the existing HttpOnly server token and client handoff cookie', () => {
     const response = NextResponse.json({ ok: true })
     applySystemSessionCookies(response, {

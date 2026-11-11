@@ -280,7 +280,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
     if (selectedProviderRef.current !== 'fxiaoke' || !directorySource?.connectionRevision || ssoAction) return
     const accepted = await confirmAction(
       enabled
-        ? '启用纷享企业登录？请先给需要登录的在职纷享成员分配 ICU 角色。员工使用纷享身份登录，无需邀请码；目录同步本身不会授予业务权限。'
+        ? '启用纷享企业登录？已匹配的在职员工可凭纷享身份先登录，无需邀请码；未分配 ICU 角色时只能看到待授权页。目录同步本身不会授予业务权限。'
         : '停用纷享企业登录？现有纷享成员会话将失效，角色和组织资料会保留。',
       { confirmText: enabled ? '启用企业登录' : '停用企业登录', danger: !enabled },
     )
@@ -833,7 +833,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
               <Badge variant={capabilityBadge(identityAuthoritative)}>{ssoState}</Badge>
             </div>
             <p className="mt-0.5 text-[11px] leading-5 text-slate-500">
-              在职员工使用纷享身份登录，无需邀请码或本地密码。组织管理员分配 ICU 角色后才可进入业务；目录同步不会自动授权。
+              在职员工使用纷享身份登录，无需邀请码或本地密码。无角色时仅进入待授权页；组织管理员分配 ICU 角色后才可进入业务。
             </p>
           </div>
           <LogInIcon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
@@ -841,7 +841,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
         <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-[11px] leading-5 text-slate-600">
           {identityAuthoritative
             ? '纷享已是身份权威来源。停用或冲突身份仍会被拒绝；正式站真人登录验收尚需单独完成。'
-            : '先在组织架构给至少一位在职纷享成员分配角色，再启用企业登录。未分配角色的员工不会取得业务会话。'}
+            : '确认至少一位已匹配的在职纷享成员后可启用企业登录。未分配角色的员工只会进入待授权页，不能访问业务接口。'}
         </div>
         {directoryProvider === 'fxiaoke' && directorySource?.status === 'active'
           && directorySource.connectionState === 'verified'

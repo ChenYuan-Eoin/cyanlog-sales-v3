@@ -31,6 +31,43 @@ describe('Auth Module', () => {
   })
 
   describe('getAuthUser', () => {
+    it.each([
+      ['authoritative', true],
+      ['evidence', false],
+    ] as const)('checks current Fxiaoke identity authority for an SSO token: %s', async (identityAuthority, allowed) => {
+      ;(supabaseAdmin.from as any).mockImplementation((table: string) => {
+        if (table === 'auth_tokens') return {
+          select: () => ({ eq: () => ({ single: async () => ({
+            data: {
+              user_id: 'sso-user', auth_method: 'fxiaoke', expires_at: null,
+              user: { id: 'sso-user', org_id: 'org-1', status: 'active', login_enabled: true },
+            }, error: null,
+          }) }) }),
+        }
+        if (table === 'organization_sources') return {
+          select: () => ({ eq: () => query }),
+        }
+        if (table === 'user_organizations') return {
+          select: () => ({ eq: () => membership }),
+        }
+        throw new Error(`unexpected table ${table}`)
+      })
+      const query = {
+        eq: () => query,
+        limit: async () => ({ data: [{
+          authority_scope: { identity: identityAuthority },
+          connection_state: 'verified', effective_revision: 'revision-1',
+        }], error: null }),
+      }
+      const membership = {
+        eq: () => membership,
+        maybeSingle: async () => ({ data: { org_id: 'org-1' }, error: null }),
+      }
+
+      const user = await getAuthUser(makeReq({ authorization: 'Bearer sso-token' }))
+      expect(Boolean(user)).toBe(allowed)
+    })
+
     it('无 token 时返回 null', async () => {
       const user = await getAuthUser(makeReq())
       expect(user).toBeNull()
