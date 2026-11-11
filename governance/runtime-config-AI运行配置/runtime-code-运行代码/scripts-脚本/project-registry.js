@@ -2335,6 +2335,8 @@ function getDeliveryStatus(options = {}) {
   const releaseControl = attestation.releaseControl || {};
   const finalReleaseApprovalId = state.active_task?.delivery_contract?.production_release_authorization?.final_release_approval_id;
   const productionReleaseAuthorizationRecord = inboxRecords.find((record) => record?.id === finalReleaseApprovalId) || null;
+  const manualDeliveryGateApprovalId = state.active_task?.delivery_contract?.manual_delivery_gate_approval_id || null;
+  const manualDeliveryGateApprovalRecord = inboxRecords.find((record) => record?.id === manualDeliveryGateApprovalId) || null;
   const previewOrderException = getPreviewOrderException(state, repoRoot, inboxRecords);
   const productionFirstDefectReplay = approvedSsoProductionFirst({
     activeId: state.active_task?.id, featureId: state.active_task?.feature_id,
@@ -2366,6 +2368,8 @@ function getDeliveryStatus(options = {}) {
     requiredProductionRuntimeEvidence: state.active_task?.delivery_contract?.required_production_runtime_evidence || [],
     productionReleaseAuthorization: state.active_task?.delivery_contract?.production_release_authorization || null,
     productionReleaseAuthorizationRecord,
+    manualDeliveryGateApprovalId,
+    manualDeliveryGateApprovalRecord,
     previewOrderException,
     productionDatabaseMode: state.active_task?.delivery_contract?.final_acceptance?.production_database_mode || null,
     sameReleaseCommitRequired: state.active_task?.delivery_contract?.same_release_commit_required === true,
@@ -2426,6 +2430,28 @@ function getDeliveryStatus(options = {}) {
   };
 }
 
+function manualDeliveryGateApproved(status) {
+  const record = status.manualDeliveryGateApprovalRecord;
+  const approvedScope = '仅 WP94 纷享 SSO：Harness 已按既有用户要求停用时，以精确提交绑定的真实命令日志、校验哈希、隔离重放和生产验收替代自动 Harness 状态判断；不取消其他交付门禁。';
+  return status.activeId === 'WP94'
+    && status.featureId === 'F003'
+    && status.runtimeProfile === 'application'
+    && status.runtimeContractVersion === FXIAOKE_SSO_CONTRACT
+    && status.manualDeliveryGateApprovalId === 'IN-20261111-006'
+    && record?.id === status.manualDeliveryGateApprovalId
+    && record?.source === 'user_explicit'
+    && record?.type === 'delivery_gate_adjustment'
+    && record?.state === 'approved'
+    && record?.scope === approvedScope
+    && record?.manual_code_evidence_authorized === true
+    && record?.harness_auto_interception_authorized === false
+    && status.harness.mode === 'permissive'
+    && status.harness.phase === 'idle'
+    && !status.harness.activeGate
+    && !status.harness.workPackageId
+    && !status.harness.goalStatus;
+}
+
 function checkDeliveryStage(stage, options = {}) {
   if (!DELIVERY_STATES.includes(stage)) {
     return { ok: false, stage, blockers: [`unknown delivery stage: ${stage}`] };
@@ -2436,6 +2462,7 @@ function checkDeliveryStage(stage, options = {}) {
   const evidence = status.evidence;
   const productionTerminal = stage === 'production_released';
   const productionFirst = status.previewOrderException?.approved === true;
+  const manualGate = manualDeliveryGateApproved(status);
   if (productionFirst && stage === 'clean_preview_green') blockers.push('User-approved Production-first exception preserves Preview as not passed');
 
   if (status.git.worktreeIsolation && !status.git.worktreeIsolation.ok) {
@@ -2450,32 +2477,41 @@ function checkDeliveryStage(stage, options = {}) {
   }
 
   if (!status.scheduler.ok) blockers.push(...status.scheduler.errors);
-  if (status.harness.mode !== 'enforcing') blockers.push('Harness is not enforcing');
-  if (status.harness.workPackageId !== status.activeId) blockers.push('Harness is not bound to Active WP');
-  if (!status.harness.activeGate) blockers.push('Harness has no active gate');
+  if (!manualGate) {
+    if (status.harness.mode !== 'enforcing') blockers.push('Harness is not enforcing');
+    if (status.harness.workPackageId !== status.activeId) blockers.push('Harness is not bound to Active WP');
+    if (!status.harness.activeGate) blockers.push('Harness has no active gate');
+  }
   if (!options.skipStateCheck && !deliveryStateAtLeast(status.completionState, stage)) {
     blockers.push(`completion_state ${status.completionState} has not reached ${stage}`);
   }
 
   if (deliveryStateAtLeast(stage, 'code_green')) {
-    if (status.harness.phase !== 'verify' || status.harness.activeGate !== 'HG4') {
+    if (!manualGate && (status.harness.phase !== 'verify' || status.harness.activeGate !== 'HG4')) {
       blockers.push(`delivery verification requires Harness verify/HG4, got ${status.harness.phase || 'missing'}/${status.harness.activeGate || 'missing'}`);
     }
     if (!status.git.clean) blockers.push(`worktree is dirty (${status.git.dirtyEntries} entries)`);
     if (evidence.code?.commit !== status.git.head) blockers.push('code evidence commit does not equal HEAD');
-    const behaviorProof = loadBehaviorLogProof(repoRoot, status.git.head);
-    if (!behaviorProof.ok) {
-      blockers.push(behaviorProof.blocker);
+    if (manualGate) {
+      if (evidence.code?.manual_gate?.approval_id !== status.manualDeliveryGateApprovalId
+        || evidence.code?.manual_gate?.commit !== status.git.head) {
+        blockers.push('manual code evidence is not bound to the approved current HEAD');
+      }
     } else {
-      const recordedBehavior = evidence.code?.behavior_log;
-      const recordedPath = resolveEvidenceArtifactPath(repoRoot, recordedBehavior?.artifact_path);
-      if (
-        !recordedBehavior
-        || recordedPath !== getBehaviorLogPath(repoRoot)
-        || recordedBehavior.sha256 !== behaviorProof.sha256
-        || recordedBehavior.entry_sha256 !== behaviorProof.entrySha256
-      ) {
-        blockers.push('code evidence is not bound to the verified current-HEAD behavior log');
+      const behaviorProof = loadBehaviorLogProof(repoRoot, status.git.head);
+      if (!behaviorProof.ok) {
+        blockers.push(behaviorProof.blocker);
+      } else {
+        const recordedBehavior = evidence.code?.behavior_log;
+        const recordedPath = resolveEvidenceArtifactPath(repoRoot, recordedBehavior?.artifact_path);
+        if (
+          !recordedBehavior
+          || recordedPath !== getBehaviorLogPath(repoRoot)
+          || recordedBehavior.sha256 !== behaviorProof.sha256
+          || recordedBehavior.entry_sha256 !== behaviorProof.entrySha256
+        ) {
+          blockers.push('code evidence is not bound to the verified current-HEAD behavior log');
+        }
       }
     }
     for (const check of status.requiredCodeChecks) {
@@ -3267,6 +3303,7 @@ module.exports = {
   isSchedulerPathAllowed,
   loadSchedulerState,
   getDeliveryStatus,
+  manualDeliveryGateApproved,
   loadDeliveryRuntime,
   recordDeliveryEvidence,
   verifyShippingWorkspaceProduction,
