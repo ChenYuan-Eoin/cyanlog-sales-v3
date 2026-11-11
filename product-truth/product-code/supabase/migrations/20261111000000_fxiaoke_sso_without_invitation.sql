@@ -182,10 +182,10 @@ begin
   update public.user_organizations set status = 'active', updated_at = now()
    where user_id = v_person.id and org_id = p_org_id;
   perform private.personnel_insert_event_v1(
-    p_org_id, v_person.id, v_person.id, 'fxiaoke_sso_first_login',
+    p_org_id, v_person.id, v_person.id, 'fxiaoke_sso_account_enabled',
     jsonb_build_object('account_status', v_person.status, 'membership_status', v_membership.status),
     jsonb_build_object('account_status', 'active', 'membership_status', 'active', 'role_granted', false),
-    'verified Fxiaoke OAuth login', null
+    'verified Fxiaoke identity prepared for first login', null
   );
   return v_person.id;
 end;
@@ -194,6 +194,76 @@ $$;
 revoke all on function public.activate_fxiaoke_sso_member_v1(uuid, text, uuid)
   from public, anon, authenticated;
 grant execute on function public.activate_fxiaoke_sso_member_v1(uuid, text, uuid)
+  to service_role;
+
+-- Record a successful login only after the application session and signed
+-- cookie have been created. The session UUID is an audit key, not a bearer.
+create or replace function public.record_fxiaoke_sso_login_v1(
+  p_org_id uuid,
+  p_user_id uuid,
+  p_external_user_id text,
+  p_session_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_person public.users%rowtype;
+  v_now timestamptz := now();
+begin
+  perform private.personnel_lock_org_v1(p_org_id);
+  select * into v_person from public.users
+   where id = p_user_id and org_id = p_org_id for update;
+  if not found or v_person.status <> 'active' or v_person.login_enabled is distinct from true
+    or not exists (
+      select 1 from public.user_organizations membership
+      where membership.user_id = p_user_id and membership.org_id = p_org_id
+        and membership.status = 'active' and membership.employment_status = 'active'
+        and membership.is_default = true
+    )
+    or not exists (
+      select 1 from public.auth_tokens session
+      where session.id = p_session_id and session.user_id = p_user_id
+        and session.auth_method = 'fxiaoke' and session.expires_at > v_now
+    )
+    or not exists (
+      select 1 from public.organization_sources source
+      join public.external_identities identity on identity.source_id = source.id
+      where source.system_org_id = p_org_id and source.provider = 'fxiaoke'
+        and source.status = 'active' and source.connection_state = 'verified'
+        and source.effective_revision is not null
+        and source.authority_scope->>'identity' = 'authoritative'
+        and identity.system_org_id = p_org_id and identity.external_user_id = p_external_user_id
+        and identity.canonical_user_id = p_user_id and identity.match_status = 'matched'
+        and identity.profile_snapshot->>'provisionedMemberId' = p_user_id::text
+        and identity.profile_snapshot->>'status' = 'active'
+        and identity.profile_snapshot->>'loginDisabled' is distinct from 'true'
+    )
+  then return false; end if;
+
+  if exists (
+    select 1 from public.personnel_lifecycle_events event
+    where event.org_id = p_org_id and event.target_user_id = p_user_id
+      and event.command = 'fxiaoke_sso_login_success'
+      and event.request_id = p_session_id::text
+  ) then return true; end if;
+
+  update public.users set last_login_at = v_now where id = p_user_id and org_id = p_org_id;
+  perform private.personnel_insert_event_v1(
+    p_org_id, p_user_id, p_user_id, 'fxiaoke_sso_login_success',
+    jsonb_build_object('last_login_at', v_person.last_login_at),
+    jsonb_build_object('last_login_at', v_now, 'auth_method', 'fxiaoke'),
+    'verified Fxiaoke OAuth session issued', p_session_id::text
+  );
+  return true;
+end;
+$$;
+
+revoke all on function public.record_fxiaoke_sso_login_v1(uuid, uuid, text, uuid)
+  from public, anon, authenticated;
+grant execute on function public.record_fxiaoke_sso_login_v1(uuid, uuid, text, uuid)
   to service_role;
 
 -- An explicit organization-admin action opens or closes the enterprise SSO

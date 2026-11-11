@@ -29,6 +29,7 @@ type SessionUserRow = {
 }
 
 export type IssuedSystemSession = {
+  sessionId: string
   token: string
   expiresAt: Date
   authContextCookie: string | null
@@ -72,9 +73,10 @@ export async function issueSystemSession(
   }
 
   const token = randomUUID()
+  const sessionId = randomUUID()
   const expiresAt = createSessionExpiry()
   const { error } = await supabaseAdmin.from('auth_tokens').insert({
-    id: randomUUID(),
+    id: sessionId,
     token,
     user_id: userId,
     auth_method: authMethod,
@@ -94,7 +96,7 @@ export async function issueSystemSession(
     throw new SessionIssueError('SESSION_SIGNING_FAILED', '系统会话签名暂时不可用。')
   }
 
-  return { token, expiresAt, authContextCookie }
+  return { sessionId, token, expiresAt, authContextCookie }
 }
 
 export function applySystemSessionCookies(response: NextResponse, session: IssuedSystemSession) {

@@ -59,6 +59,7 @@ describe('system session issuance', () => {
   it('persists one revocable token and signs the current organization context', async () => {
     const session = await issueSystemSession(userId, orgId)
     expect(session.token).toMatch(/^[0-9a-f-]{36}$/)
+    expect(session.sessionId).toMatch(/^[0-9a-f-]{36}$/)
     expect(session.authContextCookie).toBe('signed-context')
     expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({ token: session.token, user_id: userId, auth_method: 'local' }))
     expect(mocks.cookie).toHaveBeenCalledWith(session.token, expect.objectContaining({
@@ -107,6 +108,7 @@ describe('system session issuance', () => {
   it('sets the existing HttpOnly server token and client handoff cookie', () => {
     const response = NextResponse.json({ ok: true })
     applySystemSessionCookies(response, {
+      sessionId: 'session-id',
       token: 'session-token',
       expiresAt: new Date('2026-11-05T00:00:00Z'),
       authContextCookie: 'signed-context',

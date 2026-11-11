@@ -15,7 +15,7 @@ beforeEach(() => {
   mocks.enabled.mockReset().mockReturnValue(true)
   mocks.validate.mockReset().mockReturnValue('203.0.113.1')
   mocks.parse.mockReset().mockResolvedValue({ identifier: 'member@example.test', kind: 'email', password: 'fixture' })
-  mocks.login.mockReset().mockResolvedValue({ token: 'example-local-session', expiresAt: new Date('2030-01-01'), authContextCookie: 'signed' })
+  mocks.login.mockReset().mockResolvedValue({ sessionId: 'session-id', token: 'example-local-session', expiresAt: new Date('2030-01-01'), authContextCookie: 'signed' })
   mocks.cookies.mockReset()
   mocks.revoke.mockReset().mockResolvedValue(undefined)
 })

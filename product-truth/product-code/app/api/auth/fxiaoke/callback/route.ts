@@ -7,12 +7,13 @@ import {
   consumeOAuthState,
   oauthStatesMatch,
 } from '@/lib/auth/oauth-state'
-import { applySystemSessionCookies, issueSystemSession } from '@/lib/auth/session-response'
+import { applySystemSessionCookies, issueSystemSession, SessionIssueError, type IssuedSystemSession } from '@/lib/auth/session-response'
 import { discoverEnterprise, readEmployeeIdentity } from '@/lib/fxiaoke/client'
 import { FxiaokeError } from '@/lib/fxiaoke/contracts'
 import { resolveFxiaokeIdentity } from '@/lib/fxiaoke/identity'
 import { exchangeFxiaokeAuthorizationCode } from '@/lib/fxiaoke/oauth'
 import { resolveConfiguredOAuthOrganization } from '@/lib/fxiaoke/sso'
+import { supabaseAdmin } from '@/lib/supabase'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -61,7 +62,7 @@ function errorCode(error: unknown) {
   }
   if (error instanceof FxiaokeError) {
     if (error.code === 'CROSS_ENTERPRISE_IDENTITY' || error.code === 'ENTERPRISE_MISMATCH') return 'SSO_ENTERPRISE_MISMATCH'
-    if (error.code.startsWith('IDENTITY_') || error.code === 'ORGANIZATION_MISMATCH' || error.code === 'BOOTSTRAP_ADMIN_INVALID') return 'SSO_IDENTITY_REJECTED'
+    if (error.code.startsWith('IDENTITY_') || error.code === 'EMPLOYEE_INACTIVE' || error.code === 'ORGANIZATION_MISMATCH' || error.code === 'BOOTSTRAP_ADMIN_INVALID') return 'SSO_IDENTITY_REJECTED'
     if (error.code === 'CONFIGURATION_REQUIRED' || error.code === 'CREDENTIALS_UNREADABLE' || error.code === 'SSO_ORGANIZATION_AMBIGUOUS' || error.code === 'SSO_ORGANIZATION_INVALID') return 'SSO_CONFIGURATION_INVALID'
     return 'SSO_PROVIDER_FAILED'
   }
@@ -69,7 +70,7 @@ function errorCode(error: unknown) {
   return 'SSO_CALLBACK_FAILED'
 }
 
-type CallbackStage = 'configuration' | 'token_exchange' | 'enterprise_verification' | 'employee_profile' | 'identity_mapping' | 'session_issue'
+type CallbackStage = 'configuration' | 'token_exchange' | 'enterprise_verification' | 'employee_profile' | 'identity_mapping' | 'session_issue' | 'login_audit'
 const SAFE_DIAGNOSTIC_CODES = new Set([
   'SSO_CONFIGURATION_UNAVAILABLE', 'CONFIG_STORAGE_UNAVAILABLE',
   'INVALID_OAUTH_CALLBACK', 'PROVIDER_TIMEOUT', 'PROVIDER_DNS', 'PROVIDER_UNAVAILABLE',
@@ -132,6 +133,7 @@ export async function GET(request: NextRequest) {
   if (!code || code.length > 2048) return loginError(request, 'SSO_CODE_INVALID')
 
   let stage: CallbackStage = 'configuration'
+  let session: IssuedSystemSession | null = null
   try {
     const { orgId, credentials } = await resolveConfiguredOAuthOrganization()
     if (orgId !== consumed.orgId) {
@@ -162,11 +164,25 @@ export async function GET(request: NextRequest) {
       loginDisabled: profile.loginDisabled,
     })
     stage = 'session_issue'
-    const session = await issueSystemSession(mapped.userId, mapped.orgId, 'fxiaoke')
+    session = await issueSystemSession(mapped.userId, mapped.orgId, 'fxiaoke')
+    stage = 'login_audit'
+    const audit = await supabaseAdmin.rpc('record_fxiaoke_sso_login_v1', {
+      p_org_id: mapped.orgId,
+      p_user_id: mapped.userId,
+      p_external_user_id: identity.openUserId,
+      p_session_id: session.sessionId,
+    })
+    if (audit.error || audit.data !== true) {
+      throw new SessionIssueError('SESSION_AUDIT_FAILED', '纷享登录审计未完成。')
+    }
     const response = successHandoff(request)
     applySystemSessionCookies(response, session)
     return clearStateCookie(response)
   } catch (error) {
+    if (session) {
+      // The browser must not receive a session whose success audit failed.
+      try { await supabaseAdmin.from('auth_tokens').delete().eq('id', session.sessionId) } catch { /* no token reaches the browser */ }
+    }
     reportFailure(stage, error)
     return loginError(request, errorCode(error))
   }

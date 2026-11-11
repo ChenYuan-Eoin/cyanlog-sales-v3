@@ -75,7 +75,7 @@ beforeEach(() => {
   mocks.inserts.length = 0
   mocks.accountKeys.length = 0
   mocks.compare.mockReset().mockResolvedValue(true)
-  mocks.issue.mockReset().mockResolvedValue({ token: 'example-local-session', expiresAt: new Date('2030-01-01'), authContextCookie: 'signed' })
+  mocks.issue.mockReset().mockResolvedValue({ sessionId: 'session-id', token: 'example-local-session', expiresAt: new Date('2030-01-01'), authContextCookie: 'signed' })
   mocks.revoke.mockReset().mockResolvedValue({ error: null })
 })
 afterEach(() => vi.unstubAllEnvs())
@@ -172,7 +172,7 @@ describe('existing member credential admission', () => {
   it('revokes a new token if credentials are forced to change during session issuance', async () => {
     mocks.issue.mockImplementationOnce(async () => {
       mocks.state.users[0].must_change_password = true
-      return { token: 'example-local-session', expiresAt: new Date('2030-01-01'), authContextCookie: 'signed' }
+      return { sessionId: 'session-id', token: 'example-local-session', expiresAt: new Date('2030-01-01'), authContextCookie: 'signed' }
     })
     await expect(loginExistingLocalAccount(input, '203.0.113.1')).rejects.toMatchObject({ code: 'AUTH_FAILED' })
     expect(mocks.revoke).toHaveBeenCalledWith('token', 'example-local-session')
@@ -187,7 +187,7 @@ describe('existing member credential admission', () => {
   it('revokes a new token if membership changes during issuance', async () => {
     mocks.issue.mockImplementationOnce(async () => {
       mocks.state.memberships[0].employment_status = 'ended'
-      return { token: 'example-local-session', expiresAt: new Date('2030-01-01'), authContextCookie: 'signed' }
+      return { sessionId: 'session-id', token: 'example-local-session', expiresAt: new Date('2030-01-01'), authContextCookie: 'signed' }
     })
     await expect(loginExistingLocalAccount(input, '203.0.113.1')).rejects.toMatchObject({ code: 'AUTH_FAILED' })
     expect(mocks.revoke).toHaveBeenCalledWith('token', 'example-local-session')

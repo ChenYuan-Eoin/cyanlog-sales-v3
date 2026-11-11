@@ -12,6 +12,7 @@ const source = '33333333-3333-4333-8333-333333333333'
 const revision = '44444444-4444-4444-8444-444444444444'
 const adminRole = '55555555-5555-4555-8555-555555555555'
 const salesRole = '66666666-6666-4666-8666-666666666666'
+const sessionId = '12121212-1212-4212-8212-121212121212'
 
 describe('Fxiaoke SSO without local invitation', () => {
   it('promotes only a role-authorized active directory person, then opens and closes SSO with session revocation', async () => {
@@ -94,6 +95,16 @@ describe('Fxiaoke SSO without local invitation', () => {
         from public.users where id = '${member}'
       `)
       expect(roleless.rows[0]).toMatchObject({ enabled: true, roles: 0, invitations: 0 })
+      await db.exec(`update public.users set status = 'inactive', login_enabled = false where id = '${member}'`)
+      const manuallyStopped = await db.query<{ id: string | null }>(`
+        select public.activate_fxiaoke_sso_member_v1('${org}', 'employee-1', '${member}') as id
+      `)
+      expect(manuallyStopped.rows[0].id).toBeNull()
+      await db.exec(`update public.users set status = 'active', login_enabled = true where id = '${member}'`)
+      const beforeSession = await db.query<{ accepted: boolean }>(`
+        select public.record_fxiaoke_sso_login_v1('${org}', '${member}', 'employee-1', '${sessionId}') as accepted
+      `)
+      expect(beforeSession.rows[0].accepted).toBe(false)
 
       const assigned = await db.query<{ accepted: boolean }>(`
         select public.admin_replace_org_roles_v1('${actor}', '${org}', '${member}', array['${salesRole}']::uuid[]) as accepted
@@ -114,9 +125,36 @@ describe('Fxiaoke SSO without local invitation', () => {
       `)
       expect(staleRevision.rows[0].accepted).toBe(false)
 
-      await db.exec(`insert into public.auth_tokens(token, user_id, auth_method, expires_at) values
-        ('existing-sso-session', '${member}', 'fxiaoke', now() + interval '1 hour'),
-        ('existing-local-session', '${member}', 'local', now() + interval '1 hour')`)
+      await db.exec(`insert into public.auth_tokens(id, token, user_id, auth_method, expires_at) values
+        ('${sessionId}', 'existing-sso-session', '${member}', 'fxiaoke', now() + interval '1 hour'),
+        ('13131313-1313-4313-8313-131313131313', 'existing-local-session', '${member}', 'local', now() + interval '1 hour')`)
+      await db.exec(`update public.users set status = 'inactive', login_enabled = false where id = '${member}'`)
+      const stoppedDuringIssue = await db.query<{ accepted: boolean }>(`
+        select public.record_fxiaoke_sso_login_v1('${org}', '${member}', 'employee-1', '${sessionId}') as accepted
+      `)
+      expect(stoppedDuringIssue.rows[0].accepted).toBe(false)
+      await db.exec(`update public.users set status = 'active', login_enabled = true where id = '${member}'`)
+      const recorded = await db.query<{ accepted: boolean }>(`
+        select public.record_fxiaoke_sso_login_v1('${org}', '${member}', 'employee-1', '${sessionId}') as accepted
+      `)
+      expect(recorded.rows[0].accepted).toBe(true)
+      const audit = await db.query<{ last_login_at: string | null; successes: number }>(`
+        select last_login_at,
+          (select count(*)::int from public.personnel_lifecycle_events
+            where target_user_id = '${member}' and command = 'fxiaoke_sso_login_success') as successes
+        from public.users where id = '${member}'
+      `)
+      expect(audit.rows[0].last_login_at).not.toBeNull()
+      expect(audit.rows[0].successes).toBe(1)
+      const replay = await db.query<{ accepted: boolean }>(`
+        select public.record_fxiaoke_sso_login_v1('${org}', '${member}', 'employee-1', '${sessionId}') as accepted
+      `)
+      expect(replay.rows[0].accepted).toBe(true)
+      const count = await db.query<{ successes: number }>(`
+        select count(*)::int as successes from public.personnel_lifecycle_events
+        where target_user_id = '${member}' and command = 'fxiaoke_sso_login_success'
+      `)
+      expect(count.rows[0].successes).toBe(1)
       await db.exec(`delete from public.external_identities where source_id = '${source}' and canonical_user_id = '${member}'`)
       const disabled = await db.query<{ accepted: boolean }>(`
         select public.set_fxiaoke_identity_authority_v1('${actor}', '${org}', '${revision}', false) as accepted

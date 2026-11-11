@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   profile: vi.fn(),
   identity: vi.fn(),
   issue: vi.fn(),
+  audit: vi.fn(),
+  revoke: vi.fn(),
   transport: vi.fn(),
 }))
 
@@ -22,6 +24,9 @@ vi.mock('@/lib/auth/oauth-state', () => ({
   oauthStatesMatch: (cookie: string | undefined, query: string | null) => Boolean(cookie && query && cookie === query),
 }))
 vi.mock('@/lib/auth/session-response', () => ({
+  SessionIssueError: class SessionIssueError extends Error {
+    constructor(readonly code: string, message: string) { super(message); this.name = 'SessionIssueError' }
+  },
   issueSystemSession: mocks.issue,
   applySystemSessionCookies: (response: Response & { cookies: { set: (...args: unknown[]) => void } }, session: { token: string }) => {
     response.cookies.set('token', session.token, { httpOnly: true })
@@ -35,6 +40,12 @@ vi.mock('@/lib/fxiaoke/client', () => ({
 }))
 vi.mock('@/lib/fxiaoke/egress/server', () => ({ transportForOrganization: mocks.transport }))
 vi.mock('@/lib/fxiaoke/identity', () => ({ resolveFxiaokeIdentity: mocks.identity }))
+vi.mock('@/lib/supabase', () => ({
+  supabaseAdmin: {
+    rpc: mocks.audit,
+    from: () => ({ delete: () => ({ eq: mocks.revoke }) }),
+  },
+}))
 
 import { GET } from './route'
 import { FxiaokeError } from '@/lib/fxiaoke/contracts'
@@ -78,10 +89,13 @@ describe('Fxiaoke OAuth callback', () => {
     mocks.transport.mockReset().mockReturnValue(undefined)
     mocks.identity.mockReset().mockResolvedValue({ userId, orgId })
     mocks.issue.mockReset().mockResolvedValue({
+      sessionId: '33333333-3333-4333-8333-333333333333',
       token: 'session-token',
       expiresAt: new Date('2026-11-05T00:00:00Z'),
       authContextCookie: 'signed-context',
     })
+    mocks.audit.mockReset().mockResolvedValue({ data: true, error: null })
+    mocks.revoke.mockReset().mockResolvedValue({ error: null })
   })
   afterEach(() => vi.restoreAllMocks())
 
@@ -105,10 +119,34 @@ describe('Fxiaoke OAuth callback', () => {
       loginDisabled: false,
     })
     expect(mocks.issue).toHaveBeenCalledWith(userId, orgId, 'fxiaoke')
+    expect(mocks.audit).toHaveBeenCalledWith('record_fxiaoke_sso_login_v1', {
+      p_org_id: orgId,
+      p_user_id: userId,
+      p_external_user_id: 'employee-open-id',
+      p_session_id: '33333333-3333-4333-8333-333333333333',
+    })
     const body = await response.text()
     expect(body).toContain("localStorage.setItem('token'")
     expect(body).not.toContain('session-token')
     expect(body).not.toContain('secret')
+  })
+
+  it('revokes an issued token and reports no success when the login audit fails', async () => {
+    mocks.audit.mockResolvedValue({ data: false, error: null })
+    const response = await GET(request())
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toContain('sso_error=SSO_SESSION_FAILED')
+    expect(response.headers.get('set-cookie')).not.toContain('token=session-token')
+    expect(mocks.revoke).toHaveBeenCalledWith('id', '33333333-3333-4333-8333-333333333333')
+  })
+
+  it('rejects a stopped provider employee before account or session changes', async () => {
+    mocks.profile.mockRejectedValue(new FxiaokeError('EMPLOYEE_INACTIVE', 'provider stopped', 403))
+    const response = await GET(request())
+    expect(response.headers.get('location')).toContain('sso_error=SSO_IDENTITY_REJECTED')
+    expect(mocks.identity).not.toHaveBeenCalled()
+    expect(mocks.issue).not.toHaveBeenCalled()
+    expect(mocks.audit).not.toHaveBeenCalled()
   })
 
   it('uses the application service directly without submitting a cloud-worker job', async () => {
