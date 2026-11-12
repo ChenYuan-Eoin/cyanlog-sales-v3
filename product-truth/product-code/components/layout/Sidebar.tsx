@@ -50,7 +50,7 @@ function loadShippingNavigation(token: string): Promise<NavigationAccess> {
       const roles = Array.isArray(body?.user?.roles) ? body.user.roles : []
       const baselineOnly = roles.length === 1 && roles[0]?.code === 'FXIAOKE_BASELINE'
       const access = { shipping: shipping.ok || (profile.ok && roles.length > 0 && body?.user?.authMethod === 'fxiaoke'),
-        config: profile.ok && roles.length > 0 && !baselineOnly }
+        config: profile.ok && !baselineOnly && body?.user?.canManageOrg === true }
       shippingNavigationCache.set(token, {
         access,
         expiresAt: Date.now() + (access.shipping ? 60_000 : 15_000),

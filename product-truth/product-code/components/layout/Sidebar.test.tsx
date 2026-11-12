@@ -56,4 +56,13 @@ describe('Sidebar shipping navigation lookup', () => {
     await waitFor(() => expect(screen.getAllByRole('link', { name: /自助收寄/ }).length).toBeGreaterThan(0))
     expect(screen.queryByRole('link', { name: /配置中心/ })).toBeNull()
   })
+
+  it('hides configuration for a Fxiaoke member with a scoped business role', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url === '/api/auth/me'
+      ? new Response(JSON.stringify({ user: { authMethod: 'fxiaoke', roles: [{ code: 'SALES' }], canManageOrg: false } }), { status: 200 })
+      : new Response('{}', { status: 403 })))
+    render(<Sidebar />)
+    await waitFor(() => expect(screen.getAllByRole('link', { name: /自助收寄/ }).length).toBeGreaterThan(0))
+    expect(screen.queryByRole('link', { name: /配置中心/ })).toBeNull()
+  })
 })
