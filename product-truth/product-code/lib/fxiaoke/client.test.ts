@@ -170,8 +170,8 @@ describe('Fxiaoke direct directory preview', () => {
       is_deleted: false,
     }
     const request = fixture(token, page([profile]))
-    await expect(readEmployeeIdentity(credentials, 'employee-open-id', request)).resolves.toEqual({
-      externalSubject: 'employee-open-id',
+    await expect(readEmployeeIdentity(credentials, 'FSUID_employee', request)).resolves.toEqual({
+      externalSubject: 'FSUID_employee',
       directoryUserId: '1093',
       phone: '13900000000',
       employeeNumber: 'E1001',
@@ -182,14 +182,28 @@ describe('Fxiaoke direct directory preview', () => {
       deleted: false,
     })
     const body = JSON.parse(String(request.mock.calls[1][1]?.body))
-    expect(body).not.toHaveProperty('convertUserId')
+    expect(body.convertUserId).toBe(true)
     const query = body.data.search_query_info
-    expect(query.filters).toEqual([{ field_name: 'user_id', field_values: ['employee-open-id'], operator: 'EQ' }])
+    expect(query.filters).toEqual([{ field_name: 'user_id', field_values: ['FSUID_employee'], operator: 'EQ' }])
     expect(query.fieldProjection).not.toContain('password')
     expect(JSON.stringify(request.mock.calls[1][1])).not.toContain('employee_number":"E1001')
-    await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(
+    await expect(readEmployeeIdentity(credentials, 'FSUID_employee', fixture(
       token, page([{ ...profile, life_status: 'normal' }]),
     ))).resolves.toMatchObject({ directoryUserId: '1093', lifeStatus: 'normal' })
+  })
+  it('resolves the numeric directory ID from the same object when FSUID conversion also changes the response', async () => {
+    const converted = { _id: 'record1', user_id: 'FSUID_employee', name: '测试员工', status: '0', is_pause_login: false }
+    const numeric = { ...converted, user_id: '1093' }
+    const request = fixture(token, page([converted]), page([numeric]))
+    await expect(readEmployeeIdentity(credentials, 'FSUID_employee', request))
+      .resolves.toMatchObject({ externalSubject: 'FSUID_employee', directoryUserId: '1093', status: 'active' })
+    const followup = JSON.parse(String(request.mock.calls[2][1]?.body))
+    expect(followup.convertUserId).toBe(false)
+    expect(followup.data.search_query_info.filters)
+      .toEqual([{ field_name: '_id', field_values: ['record1'], operator: 'EQ' }])
+    await expect(readEmployeeIdentity(credentials, 'FSUID_employee', fixture(
+      token, page([converted]), page([{ ...numeric, _id: 'record2' }]),
+    ))).rejects.toMatchObject({ code: 'IDENTITY_PROFILE_MISMATCH', status: 409 })
   })
   it('fails closed for missing, ambiguous, mismatched or inactive provider profiles', async () => {
     const profile = { _id: 'record1', user_id: '1093', name: '测试员工', phone: '13900000000', employee_number: 'E1001', status: '0', is_pause_login: false, life_status: '正常', is_deleted: false }

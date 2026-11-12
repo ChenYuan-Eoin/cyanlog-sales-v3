@@ -368,55 +368,75 @@ export async function readEmployeeIdentity(
     throw new FxiaokeError('INVALID_TOKEN_RESPONSE', '纷享未返回有效的企业授权信息。', 502)
   }
 
-  const response = await post('/cgi/crm/v2/data/query', {
-    data: {
-      dataObjectApiName: 'PersonnelObj',
-      search_query_info: {
-        limit: 100,
-        offset: 0,
-        fieldProjection: [
-          '_id',
-          'user_id',
-          'full_name',
-          'name',
-          'phone',
-          'employee_number',
-          'status',
-          'is_pause_login',
-          'life_status',
-          'is_deleted',
-        ],
-        filters: [{
-          field_name: 'user_id',
-          field_values: [externalSubject],
-          operator: 'EQ',
-        }],
-        orders: [],
+  async function queryPersonnel(fieldName: 'user_id' | '_id', value: string, convertUserId: boolean) {
+    const response = await post('/cgi/crm/v2/data/query', {
+      convertUserId,
+      data: {
+        dataObjectApiName: 'PersonnelObj',
+        search_query_info: {
+          limit: 100,
+          offset: 0,
+          fieldProjection: [
+            '_id',
+            'user_id',
+            'full_name',
+            'name',
+            'phone',
+            'employee_number',
+            'status',
+            'is_pause_login',
+            'life_status',
+            'is_deleted',
+          ],
+          filters: [{
+            field_name: fieldName,
+            field_values: [value],
+            operator: 'EQ',
+          }],
+          orders: [],
+        },
       },
-    },
-  }, {
-    authorization: `Bearer ${token.accessToken}`,
-    'x-fs-ea': credentials.expectedEa,
-    'x-fs-userid': credentials.apiUserId,
-  })
-
-  const page = response.data
-  if (!page || typeof page !== 'object' || Array.isArray(page) || !Array.isArray((page as Row).dataList)) {
-    throw new FxiaokeError(
-      'IDENTITY_PROFILE_RESPONSE_INVALID',
-      '当前纷享员工资料返回格式无法验证，登录已拒绝。',
-      403,
-    )
+    }, {
+      authorization: `Bearer ${token.accessToken}`,
+      'x-fs-ea': credentials.expectedEa,
+      'x-fs-userid': credentials.apiUserId,
+    })
+    const page = response.data
+    if (!page || typeof page !== 'object' || Array.isArray(page) || !Array.isArray((page as Row).dataList)) {
+      throw new FxiaokeError(
+        'IDENTITY_PROFILE_RESPONSE_INVALID',
+        '当前纷享员工资料返回格式无法验证，登录已拒绝。',
+        403,
+      )
+    }
+    return (page as Row).dataList as unknown[]
   }
-  const rows = (page as Row).dataList as unknown[]
+
+  // New OpenAPI headers interpret employee IDs as numeric by default. The OAuth
+  // subject is an FSUID, so the filter must explicitly enable conversion.
+  const rows = await queryPersonnel('user_id', externalSubject, externalSubject.startsWith('FSUID_'))
   if (rows.length === 0) {
     throw new FxiaokeError('IDENTITY_PROFILE_NOT_FOUND', '未找到当前纷享员工的唯一企业资料，登录已拒绝。', 403)
   }
   if (rows.length !== 1) {
     throw new FxiaokeError('IDENTITY_PROFILE_AMBIGUOUS', '当前纷享员工的企业资料不唯一，登录已拒绝。', 403)
   }
-  const row = object(rows[0])
-  const directoryUserId = id(row.user_id)
+  let row = object(rows[0])
+  let directoryUserId = id(row.user_id)
+  if (directoryUserId.startsWith('FSUID_') && directoryUserId === externalSubject) {
+    // If the converted response also uses FSUID, read that same object again
+    // without conversion to obtain the numeric ID used by the synced directory.
+    const objectDataId = id(row._id)
+    const numericRows = await queryPersonnel('_id', objectDataId, false)
+    if (numericRows.length !== 1) {
+      throw new FxiaokeError('IDENTITY_PROFILE_MISMATCH', '纷享员工资料与登录身份不一致。', 409)
+    }
+    row = object(numericRows[0])
+    if (id(row._id) !== objectDataId) {
+      throw new FxiaokeError('IDENTITY_PROFILE_MISMATCH', '纷享员工资料与登录身份不一致。', 409)
+    }
+    directoryUserId = id(row.user_id)
+  }
   if (!/^\d+$/.test(directoryUserId)) {
     throw new FxiaokeError('IDENTITY_PROFILE_MISMATCH', '纷享员工资料与登录身份不一致。', 409)
   }

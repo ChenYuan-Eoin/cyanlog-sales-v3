@@ -51,7 +51,8 @@ export function validRequest(input) {
     const identityEnvelope = exactKeys(body, ['convertUserId','data']);
     const documentedIdentityEnvelope = exactKeys(body, ['data']);
     if ((!previewEnvelope && !identityEnvelope && !documentedIdentityEnvelope)
-      || ((previewEnvelope || identityEnvelope) && body.convertUserId !== false)
+      || (previewEnvelope && body.convertUserId !== false)
+      || (identityEnvelope && typeof body.convertUserId !== 'boolean')
       || !exactKeys(body.data, ['dataObjectApiName','search_query_info'])) return false;
     const query = body.data.search_query_info;
     const allowedProjections = directoryProjections[body.data.dataObjectApiName];
@@ -78,11 +79,13 @@ export function validRequest(input) {
       && query.filters[0].field_values.length === 1
       && identifier(String(query.filters[0].field_values[0]));
     const isCurrentPreview = previewEnvelope
+      && body.convertUserId === false
       && query.offset === 0
       && hasDirectoryProjection
       && stableOrder
       && (firstPage || cursorPage);
     const isRollbackPreview = identityEnvelope
+      && body.convertUserId === false
       && query.offset % 100 === 0
       && hasDirectoryProjection
       && Array.isArray(query.orders) && query.orders.length === 0
@@ -93,11 +96,13 @@ export function validRequest(input) {
       && Array.isArray(query.orders) && query.orders.length === 0
       && query.filters.length === 1
       && exactKeys(query.filters[0], ['field_name','field_values','operator'])
-      && query.filters[0].field_name === 'user_id'
       && query.filters[0].operator === 'EQ'
       && Array.isArray(query.filters[0].field_values)
       && query.filters[0].field_values.length === 1
-      && identifier(String(query.filters[0].field_values[0]));
+      && identifier(String(query.filters[0].field_values[0]))
+      && ((query.filters[0].field_name === 'user_id'
+          && (body.convertUserId !== true || String(query.filters[0].field_values[0]).startsWith('FSUID_')))
+        || (query.filters[0].field_name === '_id' && body.convertUserId === false));
     return isCurrentPreview || isRollbackPreview || isIdentityLookup;
   } catch { return false; }
 }

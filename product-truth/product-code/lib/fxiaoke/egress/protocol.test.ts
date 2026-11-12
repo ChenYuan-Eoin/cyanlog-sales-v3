@@ -155,6 +155,17 @@ it('allows only the exact PersonnelObj identity lookup', () => {
     }),
   }
   expect(validRequest(query)).toBe(true)
+  const converted = JSON.parse(query.body)
+  converted.convertUserId = true
+  converted.data.search_query_info.filters[0].field_values = ['FSUID_employee']
+  expect(validRequest({ ...query, body: JSON.stringify(converted) })).toBe(true)
+  converted.data.search_query_info.filters[0].field_values = ['employee-open-id']
+  expect(validRequest({ ...query, body: JSON.stringify(converted) })).toBe(false)
+  const numericLookup = JSON.parse(query.body)
+  numericLookup.data.search_query_info.filters[0] = { field_name: '_id', field_values: ['record1'], operator: 'EQ' }
+  expect(validRequest({ ...query, body: JSON.stringify(numericLookup) })).toBe(true)
+  numericLookup.convertUserId = true
+  expect(validRequest({ ...query, body: JSON.stringify(numericLookup) })).toBe(false)
   expect(validRequest({ ...query, body: query.body.replace('employee-open-id','other-user') })).toBe(true)
   expect(validRequest({ ...query, body: query.body.replace('"operator":"EQ"','"operator":"LIKE"') })).toBe(false)
   expect(validRequest({ ...query, body: query.body.replace('"field_name":"user_id"','"field_name":"name"') })).toBe(false)
