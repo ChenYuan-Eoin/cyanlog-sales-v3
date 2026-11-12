@@ -368,8 +368,8 @@
       "runtime_profile": "application",
       "runtime_contract_version": "f003-fxiaoke-sso-v1",
       "manual_delivery_gate_approval_id": "IN-20261111-006",
-      "preview_order_exception_approval_id": "IN-20261112-006",
-      "vercel_connector_evidence_approval_id": "IN-20261112-002",
+      "preview_order_exception_approval_id": "IN-20261112-007",
+      "vercel_connector_evidence_approval_id": "IN-20261112-008",
       "production_database_mode": "controlled_write_approved",
       "production_release_authorization": {
         "status": "approved_for_final_release",

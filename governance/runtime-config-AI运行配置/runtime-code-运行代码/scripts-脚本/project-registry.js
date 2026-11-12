@@ -1539,9 +1539,11 @@ function approvedVercelConnectorReceipt(repoRoot, remoteProduction, options, dir
     const approvalId = state.active_task?.delivery_contract?.vercel_connector_evidence_approval_id;
     const approval = loadDemandInbox({ repoRoot }).records.find(record => record?.id === approvalId);
     const productTree = runGit(repoRoot, ['rev-parse', 'HEAD:product-truth/product-code']);
-    if (state.active_task?.id !== 'WP94' || approvalId !== 'IN-20261112-002'
-      || approval?.source !== 'user_explicit' || approval?.state !== 'approved'
+    if (state.active_task?.id !== 'WP94' || !/^IN-[0-9]{8}-[0-9]{3}$/.test(approvalId || '')
+      || approval?.type !== 'delivery_gate_adjustment' || approval?.target !== 'WP94'
+      || approval?.feature !== 'F003' || approval?.source !== 'user_explicit' || approval?.state !== 'approved'
       || approval?.vercel_connector_evidence_authorized !== true || approval?.fallback_only !== true
+      || approval?.direct_verifier_failure !== 'HTTP_403:PROJECT'
       || approval?.approved_product_tree !== productTree
       || runGit(repoRoot, ['merge-base', '--is-ancestor', approval.approved_candidate_base, 'HEAD'], { allowFailure: true }) === null) return null;
     const envelope = loadDeliveryRuntime({ repoRoot }).data.releaseControl?.vercel_connector_evidence;
