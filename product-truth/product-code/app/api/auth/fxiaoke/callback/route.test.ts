@@ -105,8 +105,8 @@ describe('Fxiaoke OAuth callback', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(response.headers.get('set-cookie')).toContain('token=session-token')
     expect(mocks.consume).toHaveBeenCalledWith(state)
-    expect(mocks.exchange).toHaveBeenCalledWith(credentials, { code: 'authorization-code', redirectUrl })
-    expect(mocks.profile).toHaveBeenCalledWith(credentials, 'employee-open-id')
+    expect(mocks.exchange).toHaveBeenCalledWith(credentials, { code: 'authorization-code', redirectUrl }, undefined)
+    expect(mocks.profile).toHaveBeenCalledWith(credentials, 'employee-open-id', undefined)
     expect(mocks.identity).toHaveBeenCalledWith({
       orgId,
       corpId: 'FSCID_enterprise',
@@ -149,12 +149,14 @@ describe('Fxiaoke OAuth callback', () => {
     expect(mocks.audit).not.toHaveBeenCalled()
   })
 
-  it('uses the application service directly without submitting a cloud-worker job', async () => {
+  it('routes the token exchange and employee lookup through the configured egress', async () => {
+    const forwarded = vi.fn() as typeof fetch
+    mocks.transport.mockReturnValue(forwarded)
     const response = await GET(request())
     expect(response.status).toBe(200)
-    expect(mocks.transport).not.toHaveBeenCalled()
-    expect(mocks.exchange).toHaveBeenCalledWith(credentials, { code: 'authorization-code', redirectUrl })
-    expect(mocks.profile).toHaveBeenCalledWith(credentials, 'employee-open-id')
+    expect(mocks.transport).toHaveBeenCalledWith(orgId)
+    expect(mocks.exchange).toHaveBeenCalledWith(credentials, { code: 'authorization-code', redirectUrl }, forwarded)
+    expect(mocks.profile).toHaveBeenCalledWith(credentials, 'employee-open-id', forwarded)
     expect(console.warn).not.toHaveBeenCalled()
   })
 
@@ -230,7 +232,18 @@ describe('Fxiaoke OAuth callback', () => {
     mocks.resolve.mockResolvedValue({ orgId, credentials: legacy })
     mocks.discover.mockResolvedValue({ ea: 'enterprise', corpId: 'FSCID_enterprise' })
     await GET(request())
-    expect(mocks.discover).toHaveBeenCalledWith(legacy)
+    expect(mocks.discover).toHaveBeenCalledWith(legacy, undefined)
     expect(mocks.identity).toHaveBeenCalled()
+  })
+
+  it('uses the configured egress to verify a legacy application enterprise', async () => {
+    const forwarded = vi.fn() as typeof fetch
+    mocks.transport.mockReturnValue(forwarded)
+    const legacy = { ...credentials, expectedCorpId: undefined }
+    mocks.resolve.mockResolvedValue({ orgId, credentials: legacy })
+    mocks.discover.mockResolvedValue({ ea: 'enterprise', corpId: 'FSCID_enterprise' })
+    const response = await GET(request())
+    expect(response.status).toBe(200)
+    expect(mocks.discover).toHaveBeenCalledWith(legacy, forwarded)
   })
 })

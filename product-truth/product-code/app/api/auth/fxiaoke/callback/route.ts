@@ -10,6 +10,7 @@ import {
 import { applySystemSessionCookies, issueSystemSession, SessionIssueError, type IssuedSystemSession } from '@/lib/auth/session-response'
 import { discoverEnterprise, readEmployeeIdentity } from '@/lib/fxiaoke/client'
 import { FxiaokeError } from '@/lib/fxiaoke/contracts'
+import { transportForOrganization } from '@/lib/fxiaoke/egress/server'
 import { resolveFxiaokeIdentity } from '@/lib/fxiaoke/identity'
 import { exchangeFxiaokeAuthorizationCode } from '@/lib/fxiaoke/oauth'
 import { resolveConfiguredOAuthOrganization } from '@/lib/fxiaoke/sso'
@@ -95,6 +96,7 @@ function reportFailure(stage: CallbackStage, error: unknown) {
 async function verifyEnterprise(
   credentials: Awaited<ReturnType<typeof resolveConfiguredOAuthOrganization>>['credentials'],
   oauthCorpId: string,
+  transport: typeof fetch | undefined,
 ) {
   if (credentials.expectedCorpId) {
     if (credentials.expectedCorpId !== oauthCorpId) {
@@ -105,7 +107,7 @@ async function verifyEnterprise(
 
   // Legacy rows did not persist the enterprise corp identifier. Verify the
   // application-token enterprise on this callback and never trust the browser.
-  const enterprise = await discoverEnterprise(credentials)
+  const enterprise = await discoverEnterprise(credentials, transport)
   if (enterprise.ea !== credentials.expectedEa || enterprise.corpId !== oauthCorpId) {
     throw new FxiaokeError('CROSS_ENTERPRISE_IDENTITY', '纷享登录身份不属于当前系统企业。', 403)
   }
@@ -139,17 +141,19 @@ export async function GET(request: NextRequest) {
     if (orgId !== consumed.orgId) {
       throw new FxiaokeError('SSO_ORGANIZATION_INVALID', '企业登录状态与当前配置企业不一致。', 409)
     }
+    const transport = transportForOrganization(orgId)
     stage = 'token_exchange'
     const identity = await exchangeFxiaokeAuthorizationCode(credentials, {
       code,
       redirectUrl: consumed.redirectUrl,
-    })
+    }, transport)
     stage = 'enterprise_verification'
-    await verifyEnterprise(credentials, identity.corpId)
+    await verifyEnterprise(credentials, identity.corpId, transport)
     stage = 'employee_profile'
     const profile = await readEmployeeIdentity(
       credentials,
       identity.openUserId,
+      transport,
     )
     stage = 'identity_mapping'
     const mapped = await resolveFxiaokeIdentity({
