@@ -393,15 +393,15 @@
       "runtime_contract_version": "f003-fxiaoke-sso-v1",
       "manual_delivery_gate_approval_id": "IN-20261111-006",
       "vercel_connector_evidence_approval_id": "IN-20261112-008",
-      "preview_order_exception_approval_id": "IN-20261112-020",
+      "preview_order_exception_approval_id": "IN-20261112-024",
       "production_database_mode": "controlled_write_approved",
       "production_release_authorization": {
         "status": "approved_for_final_release",
         "micro_fix_approval_id": "IN-20261112-015",
         "clarification_id": "IN-20261112-013",
-        "final_release_approval_id": "IN-20261112-020",
+        "final_release_approval_id": "IN-20261112-024",
         "micro_fix_scope": "WP94 仅补齐纷享会话每次请求的在职成员状态校验与目标回归；停用后拒绝旧会话，不扩大登录或业务权限。",
-        "final_scope": "WP94 生产首次真实登录验收发现的微修复：本人资料复用现有已授权身份查询、隐藏无权限配置入口、目录关联员工不提示逐人 openUserId 绑定。保持既有受限查看与寄件提报权限；不增加新数据库迁移或新角色范围。",
+        "final_scope": "仅 WP94 纷享只读角色组合：READONLY 或 FXIAOKE_BASELINE+READONLY 仍按基础查看范围拒绝无权 GET 与业务写入；FXIAOKE_BASELINE 可本人提报；明确 ADMIN/寄件操作员权限不变。",
         "database_write_authorized": true,
         "production_write_scope": [
           "20261111000000_fxiaoke_sso_without_invitation schema migration",
