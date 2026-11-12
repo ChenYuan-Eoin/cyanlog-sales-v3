@@ -170,6 +170,18 @@ export async function resolveFxiaokeIdentity(input: {
     throw new FxiaokeError('IDENTITY_DISABLED', '当前纷享员工不具备登录资格。', 403)
   }
 
+  const { data: baselineReady, error: baselineError } = await supabaseAdmin.rpc(
+    'ensure_fxiaoke_baseline_view_v1', {
+      p_org_id: input.orgId,
+      p_external_user_id: input.externalSubject,
+      p_expected_user_id: mapping.canonical_user_id,
+    },
+  )
+  if (baselineError) throw storageUnavailable()
+  if (baselineReady !== true) {
+    throw new FxiaokeError('BASELINE_ROLE_UNAVAILABLE', '基础查看权限暂不可用，请联系管理员核对角色设置。', 503)
+  }
+
   const resolved = await loadActiveUser(mapping.canonical_user_id, input.orgId)
   return { userId: resolved.id, orgId: input.orgId }
 }

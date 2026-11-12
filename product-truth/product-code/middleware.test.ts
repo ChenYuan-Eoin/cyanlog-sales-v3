@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NextRequest } from 'next/server'
 import { middleware } from './middleware'
 
-function makeRequest(url: string, headers: Record<string, string> = {}): NextRequest {
+function makeRequest(url: string, headers: Record<string, string> = {}, method = 'GET'): NextRequest {
   const nextUrl = new URL(url) as URL & { clone: () => URL }
   nextUrl.clone = () => new URL(nextUrl.toString())
   const request = {
@@ -13,6 +13,7 @@ function makeRequest(url: string, headers: Record<string, string> = {}): NextReq
       get: vi.fn(),
     },
     url,
+    method,
   } as unknown as NextRequest
 
   return request
@@ -47,6 +48,7 @@ function mockExactOrgAuth(options: {
   loginEnabled?: boolean
   authMethod?: 'local' | 'fxiaoke'
   sourceIdentity?: 'authoritative' | 'evidence'
+  shippingDirectGrant?: boolean
 }) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input))
@@ -81,6 +83,8 @@ function mockExactOrgAuth(options: {
         connection_state: 'verified', effective_revision: 'revision-1',
       }])
     }
+    if (table === 'permission_points') return Response.json([{ id: 'shipping-point' }])
+    if (table === 'user_permission_assignments') return Response.json(options.shippingDirectGrant ? [{ id: 'shipping-grant' }] : [])
     return new Response(`unexpected table ${table}`, { status: 500 })
   })
 
@@ -132,6 +136,34 @@ describe('middleware host routing', () => {
 })
 
 describe('role-free federated session boundary', () => {
+  it('lets a baseline member read business pages and self-submit while denying writes and configuration', async () => {
+    mockExactOrgAuth({ token: 'baseline-token', orgId: 'org-a', authMethod: 'fxiaoke', roles: [{ roles: { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view', 'contract:view', 'customer:view'] } }] })
+    const request = (path: string, method = 'GET') => {
+      const req = makeRequest(`https://sales.cyanlog.icu${path}`, { host: 'sales.cyanlog.icu' }, method)
+      req.cookies.get = vi.fn().mockReturnValue({ value: 'baseline-token' })
+      return req
+    }
+    expect((await middleware(request('/shipping'))).status).toBe(200)
+    expect((await middleware(request('/api/quotes'))).status).toBe(200)
+    expect((await middleware(request('/api/contracts/drafts'))).status).toBe(200)
+    expect((await middleware(request('/api/knowledge/tree'))).status).toBe(200)
+    expect((await middleware(request('/api/cases'))).status).toBe(403)
+    expect((await middleware(request('/api/tech-documents'))).status).toBe(403)
+    expect((await middleware(request('/api/shipping/owner/orders', 'POST'))).status).toBe(200)
+    expect((await middleware(request('/api/quotes', 'POST'))).status).toBe(403)
+    expect((await middleware(request('/api/shipping/orders', 'POST'))).status).toBe(403)
+    expect((await middleware(request('/api/admin/users'))).status).toBe(403)
+    expect((await middleware(request('/api/configs'))).status).toBe(403)
+    expect((await middleware(request('/configs'))).status).toBe(307)
+  })
+
+  it('respects a separate shipping operator grant on the batch API', async () => {
+    mockExactOrgAuth({ token: 'operator-token', orgId: 'org-a', authMethod: 'fxiaoke', shippingDirectGrant: true,
+      roles: [{ roles: { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view', 'contract:view', 'customer:view'] } }] })
+    const req = makeRequest('https://sales.cyanlog.icu/api/shipping/orders', { host: 'sales.cyanlog.icu' }, 'POST')
+    req.cookies.get = vi.fn().mockReturnValue({ value: 'operator-token' })
+    expect((await middleware(req)).status).toBe(200)
+  })
   it('allows only the waiting page and sign-out while blocking business pages and APIs', async () => {
     mockExactOrgAuth({ token: 'role-free-token', orgId: 'org-a', roles: [], authMethod: 'fxiaoke' })
     const headers = { host: 'sales.cyanlog.icu' }

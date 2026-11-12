@@ -240,7 +240,7 @@
     "name": "纷享 SSO 与联合身份门禁",
     "kind": "product",
     "status": "active",
-    "objective": "让已匹配的在职纷享员工凭纷享 OAuth 登录 ICU，不经邀请码或本地密码；ICU 内部成员与角色用于独立授权，不因目录同步自动授予业务权限。停用、冲突、跨企业身份失败关闭；无角色仅进入待授权页且业务接口拒绝。先完成代码与隔离验证，不改生产账号、角色或 SSO 开关。",
+    "objective": "让已匹配在职纷享员工用 OAuth 直接进入 ICU 非配置页面，按当前组织与本人/既有授权范围查看数据；默认浏览不开放编辑、审核、跨人数据和承运商下单。自助收寄入口呈现本人提报页，提报只产生待确认工单；批量处理仅给寄件操作员。停用、冲突、跨企业身份失败关闭，权限和会话可撤销。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp94-fxiaoke-sso-no-invite/Price-v3",
     "activation_basis": "IN-20261111-001/002：用户纠正邀请激活误用并批准优先修复纷享 SSO",
     "started_at": "2026-10-29T06:14:13.111308+00:00",
@@ -326,15 +326,25 @@
       "product-truth/product-code/node_modules",
       "product-truth/product-code/app/configs/tabs/OrgStructureTab.test.tsx",
       "product-truth/product-code/app/configs/tabs/OrganizationSourcePanel.test.tsx",
-      "product-truth/product-code/.next"
+      "product-truth/product-code/.next",
+      "product-truth/product-code/app/shipping/page.tsx",
+      "product-truth/product-code/app/shipping/page.test.tsx",
+      "product-truth/product-code/app/sales-portal",
+      "product-truth/product-code/app/api/shipping/owner/orders",
+      "product-truth/product-code/components/layout/Sidebar.tsx",
+      "product-truth/product-code/components/layout/Sidebar.test.tsx",
+      "product-truth/product-code/lib/shipping",
+      "product-truth/product-code/lib/role-permission-resolution.ts",
+      "product-truth/product-code/lib/role-permission-resolution.test.ts"
     ],
     "reproduction_capsule": "codex-runtime/wp94-sso/reproduction.json",
     "acceptance_checks": [
-      "已匹配且提供方在职的员工仅凭纷享 OAuth 获得同一 canonical users.id 的可撤销会话，无邀请码、本地密码或预先分配角色；无角色仅见待授权页",
-      "目录人员进入 ICU 的账号与成员授权流程不产生无邀请却标为待激活的死胡同；目录同步不自动授予业务角色",
-      "未映射、停用、冲突、跨组织、跨企业及重放身份均失败关闭；无角色会话的业务页面和 API 均由服务端拒绝",
+      "已匹配且提供方在职的员工仅凭纷享 OAuth 获得同一 canonical users.id 的可撤销会话，无邀请码、本地密码或预先分配业务角色；首次登录自动赋予受限只读角色",
+      "目录人员进入 ICU 的账号与成员授权流程不产生无邀请却标为待激活的死胡同；目录同步不自动授予编辑、审核或寄件处理权限",
+      "未映射、停用、冲突、跨组织、跨企业及重放身份均失败关闭；默认只读会话的写入、配置和管理 API 均由服务端拒绝",
       "正式站登录入口、回调、组织与权限显示同一真实状态；隔离测试不能冒充生产验收",
-      "纷享 SSO 不将未获准的云电脑作为新增或默认依赖"
+      "纷享 SSO 不将未获准的云电脑作为新增或默认依赖",
+      "已匹配在职纷享员工登录后可进入配置中心以外的页面并按本人/组织范围读取；默认权限不得编辑、审核、批量处理或向顺丰下单。自助收寄入口是与本人身份绑定的提报页，提交只建立待确认工单。"
     ],
     "delivery_contract": {
       "target_state": "production_released",
@@ -379,7 +389,12 @@
         "micro_fix_scope": "WP94 IN013 受限既有成员账号过渡入口，与纷享 OAuth 共用 canonical users.id、活动成员/新鲜角色及统一可撤销会话；不恢复注册、重置、改密、bootstrap、自动绑定/合并或数据库迁移。",
         "final_scope": "WP94 纷享 OAuth 无邀请登录衔接：仅执行配套数据库迁移、发布精确代码版本并在门禁通过后开启纷享身份登录；首次登录激活已匹配在职成员并记成功登录审计，无角色者仅进入待授权页，停用者拒绝。",
         "database_write_authorized": true,
-        "production_write_scope": ["20261111000000_fxiaoke_sso_without_invitation schema migration", "explicit fxiaoke identity authority toggle", "first verified OAuth login account and session state", "successful login audit"],
+        "production_write_scope": [
+          "20261111000000_fxiaoke_sso_without_invitation schema migration",
+          "explicit fxiaoke identity authority toggle",
+          "first verified OAuth login account and session state",
+          "successful login audit"
+        ],
         "database_write_scope_description": "Only the approved WP94 schema and first-login identity/session changes; no bulk account changes, role grants, directory sync, or carrier call.",
         "production_migrations_authorized": true,
         "migration_execution_authorized": true,

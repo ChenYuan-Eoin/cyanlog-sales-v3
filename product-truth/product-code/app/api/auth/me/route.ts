@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { getRequestAuthToken } from '@/lib/auth-token'
 import {
   canManageOrg,
   getDefaultOrgId,
@@ -17,7 +18,8 @@ function errorResponse(message: string, status: number, code?: string) {
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const [scopedAssignments, orgId, userResult] = await Promise.all([
+    const token = getRequestAuthToken(req)
+    const [scopedAssignments, orgId, userResult, sessionResult] = await Promise.all([
       getUserScopedRoleAssignments(user.id),
       getDefaultOrgId(user.id),
       supabaseAdmin
@@ -25,6 +27,7 @@ export async function GET(req: NextRequest) {
         .select('id, email, phone, display_name, avatar_url, title, employee_id, last_login_at, primary_dept_id, org_id')
         .eq('id', user.id)
         .single(),
+      supabaseAdmin.from('auth_tokens').select('user_id,auth_method').eq('token', token || '').maybeSingle(),
     ])
     const { data: userRow, error: userError } = userResult
 
@@ -43,6 +46,7 @@ export async function GET(req: NextRequest) {
         roles,
         scopedRoles: scopedAssignments,
         canManageOrg: canManageOrg(scopedAssignments, orgId),
+        authMethod: sessionResult.data?.user_id === user.id ? sessionResult.data.auth_method : null,
       },
     })
   } catch (error) {

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { ArrowRight, Building2, CheckCircle2, ClipboardPaste, Package, Sparkles, UserRound } from 'lucide-react'
 import { parseAddress } from '@/lib/shipping/address'
 import { DEFAULT_INTAKE_RULES, type IntakeRules } from '@/lib/shipping/intake-rules'
-import { makeAnonymousShipmentSchema } from '@/lib/shipping/validation'
+import { makeAnonymousShipmentSchema, ownerOrderSchema } from '@/lib/shipping/validation'
 import { normalizeDomesticShippingPhone } from '@/lib/shipping/phone'
 import { emptyContact, type Contact, type ShipmentReceipt, type ShipmentOrderStatus } from '@/lib/shipping/types'
 import styles from './sales-portal.module.css'
@@ -25,7 +25,20 @@ export default function SalesPortal({ initialEmployee = null, initialOptions = n
   if (lookupToken) return <ReceiptLookup token={lookupToken}/>
   return <EmployeeAccess companySender={options?.companySender} initialEmployee={initialEmployee} rules={options?.rules} requireVerification={options?.requireVerification ?? false} emailAvailable={options?.emailAvailable ?? false}>{({ employee, controls, identityControls, canSubmit, unavailableReason, sessionKey, sender, team }) => <SalesRequestForm rules={options?.rules} key={sessionKey} employee={employee} identityControls={identityControls} accessControls={<>{controls}{error && <p role="alert" className={styles.error}>{error}</p>}</>} accessReady={Boolean(options && canSubmit)} accessHint={error || (!options ? '正在读取提报设置…' : unavailableReason)} draftSender={sender} draftTeam={team} services={options?.services}/>}</EmployeeAccess>
 }
-export function SalesRequestForm({ employee, accessControls, identityControls, accessReady = Boolean(employee?.sender), draftSender, draftTeam, services, accessHint, rules = DEFAULT_INTAKE_RULES }: { employee: EmployeeProfile | null; accessControls?: ReactNode; identityControls?: ReactNode; accessReady?: boolean; accessHint?: string; rules?: IntakeRules; draftSender?: Contact; draftTeam?: string; services?: ShippingServiceOption[] }) {
+export function FxiaokeShippingProposal({ sender: initialSender, name, phone, rules, services }: { sender: Contact; name: string; phone: string; rules: IntakeRules; services: ShippingServiceOption[] }) {
+  const [sender, setSender] = useState<Contact>({ ...initialSender, name: name || initialSender.name, phone: phone || initialSender.phone })
+  const [team, setTeam] = useState('')
+  const update = (key: keyof Contact, value: string) => setSender(current => ({ ...current, [key]: value }))
+  return <SalesRequestForm mode="fxiaoke" employee={null} accessReady draftSender={sender} draftTeam={team} rules={rules} services={services}
+    accessControls={<section className={styles.card}><div className={styles.cardTitle}><UserRound size={18}/><div><h2>寄件人及揽收地址</h2><p>当前纷享账号已验证；请核对这一票实际的揽收联系人和地址</p></div></div>
+      <div className={styles.grid2}><label>寄件人姓名<input aria-label="寄件人姓名" value={sender.name} onChange={e => update('name', e.target.value)}/></label><label>寄件人联系电话<input aria-label="寄件人联系电话" value={sender.phone} onChange={e => update('phone', e.target.value)}/></label></div>
+      <div className={styles.grid3}><label>寄件省份<input aria-label="寄件省份" value={sender.province} onChange={e => update('province', e.target.value)}/></label><label>寄件城市<input aria-label="寄件城市" value={sender.city} onChange={e => update('city', e.target.value)}/></label><label>寄件区县<input aria-label="寄件区县" value={sender.county} onChange={e => update('county', e.target.value)}/></label></div>
+      <label>详细寄件地址<input aria-label="详细寄件地址" value={sender.address} onChange={e => update('address', e.target.value)}/></label>
+      {rules.team.enabled && <label>所属团队{rules.teamOptions.length ? <select aria-label="所属团队" value={team} onChange={e => setTeam(e.target.value)}><option value="">请选择</option>{rules.teamOptions.map(option => <option key={option} value={option}>{option}</option>)}</select> : <input aria-label="所属团队" value={team} onChange={e => setTeam(e.target.value)}/>}</label>}
+    </section>}/>
+}
+
+export function SalesRequestForm({ employee, accessControls, identityControls, accessReady = Boolean(employee?.sender), draftSender, draftTeam, services, accessHint, rules = DEFAULT_INTAKE_RULES, mode = 'public' }: { employee: EmployeeProfile | null; accessControls?: ReactNode; identityControls?: ReactNode; accessReady?: boolean; accessHint?: string; rules?: IntakeRules; draftSender?: Contact; draftTeam?: string; services?: ShippingServiceOption[]; mode?: 'public' | 'fxiaoke' }) {
   const senderContact = draftSender || employee?.sender || emptyContact()
   const sender = { ...senderContact, phone: normalizeDomesticShippingPhone(senderContact.phone) }
   const submitter = { name: sender.name, phone: sender.phone, team: draftTeam ?? employee?.team ?? '' }
@@ -44,7 +57,7 @@ export function SalesRequestForm({ employee, accessControls, identityControls, a
   const [preview, setPreview] = useState(false)
   const [attempted, setAttempted] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
-  const senderKey = JSON.stringify(senderContact)
+  const senderKey = JSON.stringify([senderContact, draftTeam])
   const [previewSenderKey, setPreviewSenderKey] = useState('')
   const previewCurrent = preview && previewSenderKey === senderKey
   const [uncertain, setUncertain] = useState(false)
@@ -81,14 +94,20 @@ export function SalesRequestForm({ employee, accessControls, identityControls, a
       const submission = makeAnonymousShipmentSchema(effectiveRules).safeParse({ key: crypto.randomUUID(), rawInput: rawAddress || undefined, contextToken: query.get('context') || undefined, businessCode: query.get('code') || undefined, input: draftInput })
       if (!submission.success) { const first = submission.error.issues[0]?.path.slice(1).join('.'); const field = formRef.current?.elements.namedItem(first) as HTMLElement | null; field?.focus(); return }
       if (!previewCurrent) { setPreviewSenderKey(senderKey); setPreview(true); return }
-      pendingSubmission.current = JSON.stringify(submission.data)
-      pendingCredentials.current = employee ? 'same-origin' : 'omit'
+      if (mode === 'fxiaoke') {
+        const ownerSubmission = ownerOrderSchema.safeParse({ key: submission.data.key, input: submission.data.input })
+        if (!ownerSubmission.success) { setError('请核对寄件资料后重试。'); return }
+        pendingSubmission.current = JSON.stringify(ownerSubmission.data)
+      } else {
+        pendingSubmission.current = JSON.stringify(submission.data)
+      }
+      pendingCredentials.current = mode === 'fxiaoke' || employee ? 'same-origin' : 'omit'
     }
     if (!pendingSubmission.current) return
     submissionRunning.current = true
     setBusy(true)
     try {
-      const response = await fetch('/api/shipping/public/orders', { credentials: pendingCredentials.current, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: pendingSubmission.current })
+      const response = await fetch(mode === 'fxiaoke' ? '/api/shipping/owner/orders' : '/api/shipping/public/orders', { credentials: pendingCredentials.current, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: pendingSubmission.current })
       const data = await response.json()
       if (!response.ok && [400, 401, 403, 422, 429].includes(response.status)) { pendingSubmission.current = null; setUncertain(false); setPreview(false); setError(data.error || '请核对工单资料'); return }
       if (!response.ok || typeof data.orderNo !== 'string' || !data.orderNo || data.orderNo.length > 80 || typeof data.status !== 'string' || !Object.hasOwn(receiptLabels, data.status) || (data.waybill != null && (typeof data.waybill !== 'string' || data.waybill.length > 80))) throw new Error('暂未确认工单提交结果，请使用原请求重取回执。')
@@ -100,10 +119,10 @@ export function SalesRequestForm({ employee, accessControls, identityControls, a
   if (receipt) return <main className={styles.page}><section className={styles.successCard}><div className={styles.successIcon}><CheckCircle2 size={34}/></div><p>工单已受理</p><h1>{receiptLabels[receipt.status]}</h1><span>工单编号</span><strong>{receipt.orderNo}</strong>{receipt.waybill && <><span>承运商运单号</span><strong className={styles.waybillNumber}>{receipt.waybill}</strong></>}<small>操作员确认后才会向顺丰下单并请求揽收。如需补充资料，请提供此工单编号。</small>{receipt.receiptToken && <><button type="button" onClick={async () => { try { const response = await fetch(`/api/shipping/public/orders/${receipt.receiptToken}`, { cache: 'no-store' }); const data = await response.json(); if (!response.ok) throw new Error(data.error); setReceipt(current => current ? { ...current, ...data } : current); setReceiptStatus('已刷新工单状态') } catch { setReceiptStatus('状态暂不可用，请稍后重试') } }}>刷新工单状态</button><button type="button" onClick={() => { void navigator.clipboard.writeText(`${window.location.origin}/sales-portal#receipt=${receipt.receiptToken}`).then(() => setReceiptStatus('查询链接已复制，请妥善保存，仅供本人使用')).catch(() => setReceiptStatus('复制失败，请重试')) }}>复制查询链接</button><p><a href={`/sales-portal#receipt=${receipt.receiptToken}`}>打开工单查询页（可收藏）</a></p><p role="status">{receiptStatus}</p></>}<button onClick={() => { setReceipt(null); setRecipient(emptyContact()); setRawAddress(''); setCustomerName(''); setSpecialRequirements(''); setPreview(false); setAttempted(false); setCustomerTouched(false) }}>继续提报一票</button></section></main>
 
   return <main className={styles.page}>
-    <header className={styles.header}><div className={styles.brand}><span>O</span><div><strong>自助收寄</strong><small>销售寄件提报</small></div></div><div className={styles.secure}>{employee?.wecom ? '企业微信身份已验证' : '开放提报 · 无需账号密码'}</div></header>
+    <header className={styles.header}><div className={styles.brand}><span>O</span><div><strong>自助收寄</strong><small>销售寄件提报</small></div></div><div className={styles.secure}>{mode === 'fxiaoke' ? '纷享身份已验证' : employee?.wecom ? '企业微信身份已验证' : '开放提报 · 无需账号密码'}</div></header>
     <div className={styles.hero}><div><p>SALES SHIPPING REQUEST</p><h1>发起寄件</h1><span>填好这一票，交给前台确认。</span></div><div className={styles.steps}><span className={styles.current}>1 填写信息</span><i/><span>2 前台确认</span><i/><span>3 快递揽收</span></div></div>
     {identityControls && <div className={styles.identityContainer}>{identityControls}</div>}
-    <nav className={styles.mobileNav} aria-label="提报与记录"><button type="button" aria-pressed={mobilePane === 'form'} onClick={() => setMobilePane('form')}>提报快递</button><button type="button" aria-pressed={mobilePane === 'records'} onClick={() => setMobilePane('records')}>提报记录</button></nav>
+    <nav className={styles.mobileNav} aria-label={mode === 'fxiaoke' ? '提报与摘要' : '提报与记录'}><button type="button" aria-pressed={mobilePane === 'form'} onClick={() => setMobilePane('form')}>提报快递</button><button type="button" aria-pressed={mobilePane === 'records'} onClick={() => setMobilePane('records')}>{mode === 'fxiaoke' ? '本次摘要' : '提报记录'}</button></nav>
     <div className={styles.workspace}>
     <div className={mobilePane === 'records' ? styles.mobileHidden : undefined}>
     {accessControls && <div className={`${styles.form} ${styles.accessControls}`}>{accessControls}</div>}
@@ -119,7 +138,7 @@ export function SalesRequestForm({ employee, accessControls, identityControls, a
       <footer className={styles.submit}><div><CheckCircle2 size={16}/><span>提交只会进入前台待确认池，不会直接产生运费。</span></div><button disabled={busy || !accessReady}>{busy ? '提交中…' : uncertain ? '重取工单回执' : previewCurrent ? '确认提交工单' : '预览工单'}<ArrowRight size={16}/></button></footer>
     </form>
     </div>
-    <aside aria-label="提报记录" className={`${styles.records} ${mobilePane === 'form' ? styles.mobileHidden : ''}`}><section className={styles.summaryCard} aria-label="本次寄件摘要"><h2>本次寄件</h2><dl><div><dt>寄件人</dt><dd>{sender.name || '待填写'} · {sender.phone}</dd><dd>{senderAddress || '地址待填写'}</dd></div><div><dt>收件人</dt><dd>{recipient.name || '待填写'}{recipient.phone && ` · ${recipient.phone}`}</dd><dd>{`${recipient.province}${recipient.city === recipient.province ? '' : recipient.city}${recipient.county}${recipient.address}` || '收件地址待填写'}</dd></div><div><dt>物品与服务</dt><dd>{cargo} · {weight || '—'} kg · {services?.find(item => item.id === Number(serviceId || services[0]?.id))?.name || (servicePreference === 'urgent' ? '加急' : '标准')}</dd></div></dl></section><section className={styles.summaryCard}><h2>提报记录</h2><MyWorkorders/></section></aside>
+    <aside aria-label={mode === 'fxiaoke' ? '本次摘要' : '提报记录'} className={`${styles.records} ${mobilePane === 'form' ? styles.mobileHidden : ''}`}><section className={styles.summaryCard} aria-label="本次寄件摘要"><h2>本次寄件</h2><dl><div><dt>寄件人</dt><dd>{sender.name || '待填写'} · {sender.phone}</dd><dd>{senderAddress || '地址待填写'}</dd></div><div><dt>收件人</dt><dd>{recipient.name || '待填写'}{recipient.phone && ` · ${recipient.phone}`}</dd><dd>{`${recipient.province}${recipient.city === recipient.province ? '' : recipient.city}${recipient.county}${recipient.address}` || '收件地址待填写'}</dd></div><div><dt>物品与服务</dt><dd>{cargo} · {weight || '—'} kg · {services?.find(item => item.id === Number(serviceId || services[0]?.id))?.name || (servicePreference === 'urgent' ? '加急' : '标准')}</dd></div></dl></section>{mode === 'public' && <section className={styles.summaryCard}><h2>提报记录</h2><MyWorkorders/></section>}</aside>
     </div>
   </main>
 }

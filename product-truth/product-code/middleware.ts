@@ -74,6 +74,11 @@ const PUBLIC_API_PATHS = new Set([
 const ROUTE_PERMISSIONS: Record<string, string> = {
   '/configs': 'config:read',
   '/admin': 'admin:access',
+  '/api/configs': 'config:read',
+  '/api/config-center': 'config:read',
+  '/api/admin': 'admin:access',
+  '/api/roles': 'config:read',
+  '/api/rules': 'config:read',
 }
 
 type MiddlewareAuthContext = {
@@ -111,6 +116,23 @@ function getRequiredPermission(pathname: string): string | null {
     if (pathname === prefix || pathname.startsWith(prefix + '/')) return perm
   }
   return null
+}
+
+const BASELINE_READ_PATHS = new Set([
+  '/api/auth/me', '/api/auth/context', '/api/dashboard',
+  '/api/quotes', '/api/contracts', '/api/contracts/drafts',
+  '/api/tenders', '/api/knowledge/tree', '/api/knowledge/pages',
+  '/api/agenda', '/api/opportunities', '/api/products',
+])
+
+// These read handlers already apply the current organization, owner or
+// explicit knowledge-page scope. Other legacy GET handlers may return every
+// row through the service client and need a separate scope review first.
+function baselineReadAllowed(pathname: string): boolean {
+  if (BASELINE_READ_PATHS.has(pathname)) return true
+  return /^\/api\/quotes\/[^/]+$/.test(pathname)
+    || /^\/api\/contracts\/[^/]+$/.test(pathname)
+    || /^\/api\/knowledge\/pages\/[^/]+$/.test(pathname)
 }
 
 function buildRedirectUrl(request: NextRequest, pathname: string, search = ''): URL {
@@ -232,6 +254,16 @@ async function getMiddlewareAuthContext(token: string): Promise<MiddlewareAuthCo
   return loadMiddlewareAuthContext(token)
 }
 
+async function hasDirectShippingOperateGrant(userId: string, orgId: string): Promise<boolean> {
+  const rest = createMiddlewareRestClient()
+  const points = await rest.selectRows<{ id: string }>('permission_points', { code: 'shipping:operate' }, 'id', 1)
+  if (!points[0]?.id) return false
+  const grants = await rest.selectRows<{ id: string }>('user_permission_assignments', {
+    user_id: userId, org_id: orgId, permission_point_id: points[0].id,
+  }, 'id', 1)
+  return Boolean(grants[0]?.id)
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const host = request.headers.get('host')?.toLowerCase()
@@ -287,6 +319,32 @@ export async function middleware(request: NextRequest) {
         return NextResponse.json({ error: '尚未分配业务权限', code: 'ROLE_REQUIRED' }, { status: 403 })
       }
       return NextResponse.redirect(buildRedirectUrl(request, '/pending-access'))
+    }
+
+    // The dedicated Fxiaoke baseline role makes authenticated pages usable,
+    // not to turn legacy login-only POST routes into editing permissions.
+    // The one exception creates a pending work order owned by this member;
+    // carrier ordering remains behind the operator permission.
+    const baselineOnly = authContext.roleCodes.length === 1 && authContext.roleCodes[0] === 'FXIAOKE_BASELINE'
+    if (baselineOnly && required && (required === 'config:read' || required === 'admin:access')) {
+      return pathname.startsWith('/api/')
+        ? NextResponse.json({ error: 'Forbidden', required }, { status: 403 })
+        : NextResponse.redirect(buildRedirectUrl(request, '/'))
+    }
+    if (baselineOnly && pathname.startsWith('/api/') && ['GET', 'HEAD'].includes(request.method)
+      && !baselineReadAllowed(pathname)) {
+      return NextResponse.json({ error: '此数据尚未开放基础查看范围', code: 'READ_SCOPE_REQUIRED' }, { status: 403 })
+    }
+    const separatelyAuthorizedShipping = baselineOnly && pathname.startsWith('/api/shipping/')
+      && pathname !== '/api/shipping/owner/orders'
+      && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
+      && await hasDirectShippingOperateGrant(authContext.userId, authContext.orgId)
+    if (baselineOnly
+      && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
+      && pathname !== '/api/auth/logout'
+      && pathname !== '/api/shipping/owner/orders'
+      && !separatelyAuthorizedShipping) {
+      return NextResponse.json({ error: '基础查看账号不能执行此操作', code: 'READ_ONLY' }, { status: 403 })
     }
 
     // 路径级权限校验

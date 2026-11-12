@@ -31,29 +31,36 @@ const navItems = [
   { name: '配置中心', href: '/configs', icon: SettingsIcon },
 ]
 
-const shippingNavigationCache = new Map<string, { allowed: boolean; expiresAt: number }>()
-const shippingNavigationInflight = new Map<string, Promise<boolean>>()
+type NavigationAccess = { shipping: boolean; config: boolean }
+const shippingNavigationCache = new Map<string, { access: NavigationAccess; expiresAt: number }>()
+const shippingNavigationInflight = new Map<string, Promise<NavigationAccess>>()
 
-function loadShippingNavigation(token: string): Promise<boolean> {
+function loadShippingNavigation(token: string): Promise<NavigationAccess> {
   const cached = shippingNavigationCache.get(token)
-  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.allowed)
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.access)
   const inflight = shippingNavigationInflight.get(token)
   if (inflight) return inflight
-  const request = fetch('/api/shipping/settings', {
-    cache: 'no-store',
-    headers: token === 'anonymous' ? {} : { Authorization: `Bearer ${token}` },
-  })
-    .then((response) => {
-      const allowed = response.ok
+  const headers: Record<string, string> = token === 'anonymous' ? {} : { Authorization: `Bearer ${token}` }
+  const request = Promise.all([
+    fetch('/api/shipping/settings', { cache: 'no-store', headers }),
+    fetch('/api/auth/me', { cache: 'no-store', headers }),
+  ])
+    .then(async ([shipping, profile]) => {
+      const body = profile.ok ? await profile.json() : null
+      const roles = Array.isArray(body?.user?.roles) ? body.user.roles : []
+      const baselineOnly = roles.length === 1 && roles[0]?.code === 'FXIAOKE_BASELINE'
+      const access = { shipping: shipping.ok || (profile.ok && roles.length > 0 && body?.user?.authMethod === 'fxiaoke'),
+        config: profile.ok && roles.length > 0 && !baselineOnly }
       shippingNavigationCache.set(token, {
-        allowed,
-        expiresAt: Date.now() + (allowed ? 60_000 : 15_000),
+        access,
+        expiresAt: Date.now() + (access.shipping ? 60_000 : 15_000),
       })
-      return allowed
+      return access
     })
     .catch(() => {
-      shippingNavigationCache.set(token, { allowed: false, expiresAt: Date.now() + 15_000 })
-      return false
+      const access = { shipping: false, config: false }
+      shippingNavigationCache.set(token, { access, expiresAt: Date.now() + 15_000 })
+      return access
     })
     .finally(() => {
       if (shippingNavigationInflight.get(token) === request) shippingNavigationInflight.delete(token)
@@ -67,16 +74,17 @@ export function Sidebar() {
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const branding = useBranding()
-  const [shippingAllowed, setShippingAllowed] = useState(false)
+  const [navigationAccess, setNavigationAccess] = useState<NavigationAccess>({ shipping: false, config: false })
   useEffect(() => {
     let live = true
     const token = localStorage.getItem('token') || 'anonymous'
-    void loadShippingNavigation(token).then((allowed) => {
-      if (live) setShippingAllowed(allowed)
+    void loadShippingNavigation(token).then((access) => {
+      if (live) setNavigationAccess(access)
     })
     return () => { live = false }
   }, [])
-  const visibleNavItems = shippingAllowed ? [...navItems.slice(0, 2), { name: '自助收寄', href: '/shipping', icon: Package }, ...navItems.slice(2)] : navItems
+  const visibleNavItems = (navigationAccess.shipping ? [...navItems.slice(0, 2), { name: '自助收寄', href: '/shipping', icon: Package }, ...navItems.slice(2)] : navItems)
+    .filter(item => navigationAccess.config || item.href !== '/configs')
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'

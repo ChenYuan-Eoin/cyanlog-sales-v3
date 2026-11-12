@@ -24,6 +24,9 @@ export function resolveRolePermissions(
   settings: unknown,
   role: { id: string; code: string; permissions: unknown },
 ): { permissions: string[]; overridden: boolean } {
+  if (role.code === 'FXIAOKE_BASELINE') {
+    return { permissions: ['quote:view', 'contract:view', 'customer:view'], overridden: true }
+  }
   if (settings != null && !isRecord(settings)) return { permissions: [], overridden: true }
   if (!isRecord(settings) || !Object.prototype.hasOwnProperty.call(settings, 'role_permission_overrides')) {
     return { permissions: templatePermissions(role), overridden: false }

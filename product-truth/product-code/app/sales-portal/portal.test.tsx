@@ -1,7 +1,8 @@
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import SalesPortal, { SalesRequestForm } from './portal'
+import SalesPortal, { FxiaokeShippingProposal, SalesRequestForm } from './portal'
+import { ownerOrderSchema } from '@/lib/shipping/validation'
 vi.mock('./my-workorders', () => ({default: () => <p>全部快递记录</p>}))
 const employee = { id: 'employee-1', email: 'person@ones.cn', team: '大客户部', updatedAt: '2026-10-09T00:00:00.000Z', sender: { name: '李娜', phone: '13800138000', province: '广东省', city: '广州市', county: '天河区', address: '销售路88号' } }
 
@@ -10,6 +11,26 @@ beforeEach(() => { vi.stubGlobal('React', React); vi.stubGlobal('fetch', fetcher
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('sales shipping portal', () => {
+  it('submits a Fxiaoke proposal as an owned pending order, not an anonymous order', async () => {
+    fetcher.mockResolvedValue(new Response(JSON.stringify({ orderNo: 'SO-FX-001', status: 'awaiting_confirmation', waybill: null }), { status: 202 }))
+    render(<FxiaokeShippingProposal sender={employee.sender} name="李娜" phone="13800138000" rules={{companyName:{enabled:true,required:true,minLength:4},team:{enabled:true,required:true,minLength:1},teamOptions:[]}} services={[{id:2,name:'顺丰标快',preference:'standard'}]}/>)
+    expect(screen.getByText('纷享身份已验证')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('所属团队'), { target: { value: '大客户部' } })
+    fireEvent.change(screen.getByLabelText('客户公司名称'), { target: { value: '星河科技' } })
+    fireEvent.change(screen.getByLabelText('智能地址一键粘贴'), { target: { value: '张三 13900139000 广东省深圳市南山区科技路1号' } })
+    fireEvent.click(screen.getByRole('button', { name: '识别并填充' }))
+    fireEvent.click(screen.getByRole('button', { name: '预览工单' }))
+    fireEvent.click(screen.getByRole('button', { name: '确认提交工单' }))
+    expect(await screen.findByText('SO-FX-001')).toBeTruthy()
+    const [url, init] = fetcher.mock.calls[0]
+    expect(url).toBe('/api/shipping/owner/orders')
+    expect(init.credentials).toBe('same-origin')
+    const body = JSON.parse(init.body)
+    expect(ownerOrderSchema.safeParse(body).success).toBe(true)
+    expect(body).not.toHaveProperty('rawInput')
+    expect(body).not.toHaveProperty('contextToken')
+    expect(screen.queryByText('全部快递记录')).toBeNull()
+  })
   it('collects customer and a dedicated optional special requirement', () => {
     render(<SalesRequestForm employee={employee} />)
     expect(screen.getByText('客户与收件信息')).toBeTruthy()

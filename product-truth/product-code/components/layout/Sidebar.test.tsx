@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { Sidebar } from './Sidebar'
 
@@ -35,16 +35,25 @@ describe('Sidebar shipping navigation lookup', () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ navigationAvailable: true }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
     const first = render(<Sidebar />)
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
 
     currentPathname = '/quotes'
     first.rerender(<Sidebar />)
     await Promise.resolve()
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
 
     first.unmount()
     render(<Sidebar />)
     await Promise.resolve()
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows proposal navigation and hides configuration for a baseline Fxiaoke member', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url === '/api/auth/me'
+      ? new Response(JSON.stringify({ user: { authMethod: 'fxiaoke', roles: [{ code: 'FXIAOKE_BASELINE' }] } }), { status: 200 })
+      : new Response('{}', { status: 403 })))
+    render(<Sidebar />)
+    await waitFor(() => expect(screen.getAllByRole('link', { name: /自助收寄/ }).length).toBeGreaterThan(0))
+    expect(screen.queryByRole('link', { name: /配置中心/ })).toBeNull()
   })
 })

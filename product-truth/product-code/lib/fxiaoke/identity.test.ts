@@ -7,6 +7,7 @@ const db = vi.hoisted(() => ({
   users: [] as Array<Record<string, unknown>>,
   memberships: [] as Array<Record<string, unknown>>,
   activationAllowed: true,
+  baselineAllowed: true,
 }))
 
 function matches(row: Record<string, unknown>, filters: Array<[string, unknown]>) {
@@ -15,7 +16,8 @@ function matches(row: Record<string, unknown>, filters: Array<[string, unknown]>
 
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
-    rpc: vi.fn(async (_name: string, args: { p_expected_user_id: string }) => {
+    rpc: vi.fn(async (name: string, args: { p_expected_user_id: string }) => {
+      if (name === 'ensure_fxiaoke_baseline_view_v1') return { data: db.baselineAllowed, error: null }
       if (!db.activationAllowed) return { data: null, error: null }
       const user = db.users.find(row => row.id === args.p_expected_user_id)
       const membership = db.memberships.find(row => row.user_id === args.p_expected_user_id)
@@ -120,6 +122,7 @@ describe('Fxiaoke stable identity resolution', () => {
     db.users.length = 0
     db.memberships.length = 0
     db.activationAllowed = true
+    db.baselineAllowed = true
   })
 
   it('normalizes supported provider phones without claiming independent verification', () => {
@@ -156,6 +159,14 @@ describe('Fxiaoke stable identity resolution', () => {
     db.activationAllowed = false
 
     await expect(resolveFxiaokeIdentity(input)).rejects.toMatchObject({ code: 'IDENTITY_DISABLED' })
+  })
+
+  it('fails closed when baseline viewing cannot be granted', async () => {
+    seedSource()
+    seedMapping()
+    seedUser()
+    db.baselineAllowed = false
+    await expect(resolveFxiaokeIdentity(input)).rejects.toMatchObject({ code: 'BASELINE_ROLE_UNAVAILABLE', status: 503 })
   })
 
   it('resolves the database seed organization UUID', async () => {
