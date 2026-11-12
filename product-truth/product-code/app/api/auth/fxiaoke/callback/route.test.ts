@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   issue: vi.fn(),
   audit: vi.fn(),
   revoke: vi.fn(),
+  lookup: vi.fn(),
   transport: vi.fn(),
 }))
 
@@ -43,7 +44,9 @@ vi.mock('@/lib/fxiaoke/identity', () => ({ resolveFxiaokeIdentity: mocks.identit
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     rpc: mocks.audit,
-    from: () => ({ delete: () => ({ eq: mocks.revoke }) }),
+    from: (table: string) => table === 'external_identities'
+      ? { select: () => ({ eq: () => ({ eq: () => ({ limit: mocks.lookup }) }) }) }
+      : { delete: () => ({ eq: mocks.revoke }) },
   },
 }))
 
@@ -59,6 +62,7 @@ const credentials = {
   appSecret: 'secret',
   expectedEa: 'enterprise',
   expectedCorpId: 'FSCID_enterprise',
+  apiUserId: '1093',
 }
 
 function request(query = `state=${state}&code=authorization-code`) {
@@ -68,6 +72,7 @@ function request(query = `state=${state}&code=authorization-code`) {
 describe('Fxiaoke OAuth callback', () => {
   beforeEach(() => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mocks.lookup.mockReset().mockResolvedValue({ data: [], error: null })
     mocks.consume.mockReset().mockResolvedValue({ orgId, redirectUrl })
     mocks.resolve.mockReset().mockResolvedValue({ orgId, credentials })
     mocks.exchange.mockReset().mockResolvedValue({
@@ -191,15 +196,33 @@ describe('Fxiaoke OAuth callback', () => {
       const response = await GET(request())
       expect(response.status).toBe(302)
       expect(response.headers.get('location')).toBe('https://sales.cyanlog.icu/login?sso_error=SSO_IDENTITY_REJECTED')
-      expect(console.warn).toHaveBeenCalledExactlyOnceWith('fxiaoke_sso_callback_failed', {
+      expect(console.warn).toHaveBeenCalledWith('fxiaoke_sso_callback_failed', {
         stage: 'employee_profile', code, status: 403,
       })
+      if (code === 'IDENTITY_PROFILE_NOT_FOUND') {
+        expect(console.warn).toHaveBeenCalledWith('fxiaoke_sso_profile_empty_diagnostic', {
+          subjectFormat: 'other', matchesConfiguredApiUser: false, directoryMapping: 'absent',
+        })
+      } else expect(console.warn).toHaveBeenCalledTimes(1)
       expect(mocks.identity).not.toHaveBeenCalled()
       expect(mocks.issue).not.toHaveBeenCalled()
       expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toMatch(/secret|employee-open-id|13900000000|provider-access-token|authorization-code/)
       expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain(state)
     },
   )
+
+  it('classifies a missing provider profile against the existing directory without logging identifiers', async () => {
+    mocks.exchange.mockResolvedValue({ openUserId: '1093', corpId: 'FSCID_enterprise', expiresIn: 7200 })
+    mocks.profile.mockRejectedValue(new FxiaokeError('IDENTITY_PROFILE_NOT_FOUND', 'sensitive profile', 403))
+    mocks.lookup.mockResolvedValue({ data: [{ id: 'mapping-id' }], error: null })
+    const response = await GET(request())
+    expect(response.headers.get('location')).toContain('sso_error=SSO_IDENTITY_REJECTED')
+    expect(console.warn).toHaveBeenCalledWith('fxiaoke_sso_profile_empty_diagnostic', {
+      subjectFormat: 'numeric', matchesConfiguredApiUser: true, directoryMapping: 'present',
+    })
+    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toMatch(/1093|mapping-id|authorization-code|secret/)
+    expect(mocks.issue).not.toHaveBeenCalled()
+  })
 
   it('rejects missing state cookies before consuming server state', async () => {
     const response = await GET(new NextRequest(`${redirectUrl}?state=${state}&code=code`))

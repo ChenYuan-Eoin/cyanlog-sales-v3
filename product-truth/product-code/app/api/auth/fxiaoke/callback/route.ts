@@ -136,6 +136,7 @@ export async function GET(request: NextRequest) {
 
   let stage: CallbackStage = 'configuration'
   let session: IssuedSystemSession | null = null
+  let profileLookup: { orgId: string; subject: string; apiUserId: string } | null = null
   try {
     const { orgId, credentials } = await resolveConfiguredOAuthOrganization()
     if (orgId !== consumed.orgId) {
@@ -150,6 +151,7 @@ export async function GET(request: NextRequest) {
     stage = 'enterprise_verification'
     await verifyEnterprise(credentials, identity.corpId, transport)
     stage = 'employee_profile'
+    profileLookup = { orgId, subject: identity.openUserId, apiUserId: credentials.apiUserId }
     const profile = await readEmployeeIdentity(
       credentials,
       identity.openUserId,
@@ -188,6 +190,26 @@ export async function GET(request: NextRequest) {
       try { await supabaseAdmin.from('auth_tokens').delete().eq('id', session.sessionId) } catch { /* no token reaches the browser */ }
     }
     reportFailure(stage, error)
+    if (stage === 'employee_profile' && error instanceof FxiaokeError
+      && error.code === 'IDENTITY_PROFILE_NOT_FOUND' && profileLookup) {
+      // Diagnose identifier drift without recording the OAuth subject, employee
+      // profile, provider token or any credential in Production logs.
+      let mapping: 'present' | 'absent' | 'unknown' = 'unknown'
+      try {
+        const { data, error: lookupError } = await supabaseAdmin.from('external_identities')
+          .select('id')
+          .eq('system_org_id', profileLookup.orgId)
+          .eq('external_user_id', profileLookup.subject)
+          .limit(1)
+        if (!lookupError) mapping = data?.length ? 'present' : 'absent'
+      } catch { /* Keep the original login rejection when diagnosis is unavailable. */ }
+      console.warn('fxiaoke_sso_profile_empty_diagnostic', {
+        subjectFormat: /^\d+$/.test(profileLookup.subject) ? 'numeric'
+          : profileLookup.subject.startsWith('FSUID_') ? 'fsuid' : 'other',
+        matchesConfiguredApiUser: profileLookup.subject === profileLookup.apiUserId,
+        directoryMapping: mapping,
+      })
+    }
     return loginError(request, errorCode(error))
   }
 }
