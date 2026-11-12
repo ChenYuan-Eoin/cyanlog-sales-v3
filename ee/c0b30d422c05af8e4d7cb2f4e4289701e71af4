@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "activeId": "WP94",
+  "commit": "eec0b30d422c05af8e4d7cb2f4e4289701e71af4",
+  "evidence": {
+    "code": {
+      "commit": "eec0b30d422c05af8e4d7cb2f4e4289701e71af4",
+      "manual_gate": {
+        "approval_id": "IN-20261111-006",
+        "commit": "eec0b30d422c05af8e4d7cb2f4e4289701e71af4"
+      },
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "exit_code": 0,
+          "artifact_path": "/Users/nsss/Documents/ChatGPT/Price-v3/.git/worktrees/Price-v36/codex-runtime/harness/wp94-code-eec0b30d/target_tests.log",
+          "log_sha256": "cc99709af56d57054c2c95d5f62a1af48ea09762ab6b9cfb1b32be76525bc6e3"
+        },
+        {
+          "name": "full_tests",
+          "exit_code": 0,
+          "artifact_path": "/Users/nsss/Documents/ChatGPT/Price-v3/.git/worktrees/Price-v36/codex-runtime/harness/wp94-code-eec0b30d/full_tests.log",
+          "log_sha256": "fa46049d9da1ad8a5ac3a5c6eeb876848e9b6a1f652dd4b5b34a5a81661b42a5"
+        },
+        {
+          "name": "lint",
+          "exit_code": 0,
+          "artifact_path": "/Users/nsss/Documents/ChatGPT/Price-v3/.git/worktrees/Price-v36/codex-runtime/harness/wp94-code-eec0b30d/lint.log",
+          "log_sha256": "56bd761c77ed122fb9ec43a00cda169dc62c440969b938b691fc8b00029ec0a1"
+        },
+        {
+          "name": "typecheck",
+          "exit_code": 0,
+          "artifact_path": "/Users/nsss/Documents/ChatGPT/Price-v3/.git/worktrees/Price-v36/codex-runtime/harness/wp94-code-eec0b30d/typecheck.log",
+          "log_sha256": "0530ceef9b030d8d885b2ca16d1cc86d655d82d7c1835561120eacd40dcc32f4"
+        },
+        {
+          "name": "build",
+          "exit_code": 0,
+          "artifact_path": "/Users/nsss/Documents/ChatGPT/Price-v3/.git/worktrees/Price-v36/codex-runtime/harness/wp94-code-eec0b30d/build.log",
+          "log_sha256": "fa84259f4d8b187994c837e7f51077bf2afca0cc2e09f487163cc8053ffd09ca"
+        }
+      ]
+    }
+  },
+  "updatedAt": "2026-11-12T10:30:42.741Z",
+  "completionState": "code_green",
+  "releaseControl": {
+    "production_branch": "production",
+    "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+    "production_branch_evidence": {
+      "artifact_path": "/Users/nsss/Documents/ChatGPT/Price-v3/.git/worktrees/Price-v36/codex-runtime/harness/wp94-release-control/production-branch-eec.json",
+      "sha256": "9ae83622a05b7db97a93a280a4d47014395ad4792593559903bc52969d5e655b",
+      "payload": {
+        "project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "branch": "production",
+        "observed_at": "2026-11-12T10:29:35.108Z",
+        "source": "live-vercel-api",
+        "production_deployment_id": "dpl_CWzVbwapCUZVuw5JRbDJv2toSHaJ",
+        "production_commit": "86e297d06976f4f60cc1a0b1328638d3760d156e",
+        "raw_project_sha256": "a00d4110fc271211ec04aba8b589679924e77689782db2ab8223be4896727bb5",
+        "raw_domain_sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc",
+        "raw_alias_sha256": "ef5678450af60b03f9255f43a00d5937a4bb6aa718ce4ecf09ed532304a3f1de",
+        "raw_deployment_sha256": "a71b36c4355d2d6fcc704620612aa08585e976be436f64a5d1692b6637708532"
+      }
+    },
+    "production_commit_before": "86e297d06976f4f60cc1a0b1328638d3760d156e",
+    "production_deployment_id_before": "dpl_CWzVbwapCUZVuw5JRbDJv2toSHaJ",
+    "production_commit_after": "86e297d06976f4f60cc1a0b1328638d3760d156e",
+    "production_deployment_id_after": "dpl_CWzVbwapCUZVuw5JRbDJv2toSHaJ"
+  },
+  "gateSnapshots": {
+    "code_green": {
+      "stage": "code_green",
+      "checkedAt": "2026-11-12T10:30:42.724Z",
+      "head": "eec0b30d422c05af8e4d7cb2f4e4289701e71af4",
+      "originMain": "86e297d06976f4f60cc1a0b1328638d3760d156e",
+      "remoteMain": "86e297d06976f4f60cc1a0b1328638d3760d156e",
+      "remoteProduction": "86e297d06976f4f60cc1a0b1328638d3760d156e",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "48bab2736bbc3408e74a18a8c837c7f2b0292ef7",
+      "remoteAttestationRefOid": "48bab2736bbc3408e74a18a8c837c7f2b0292ef7",
+      "remoteSnapshotCheckedAt": "2026-11-12T10:30:39.499Z",
+      "vercelProduction": null,
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "ac6c4f02942baadc200c896037e741390962b291bc18950717022d84f9b3185a",
+  "sealedAt": "2026-11-12T10:30:42.742Z",
+  "attestationDigest": "deefa1ef1f1bfdda1ee06452add9112dedc40ebf9a59d584e481acd437f9bc2e"
+}
