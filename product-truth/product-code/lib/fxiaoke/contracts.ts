@@ -63,6 +63,7 @@ export type DirectoryEmployee = {
 }
 export type VerifiedEmployeeIdentity = {
   externalSubject: string
+  directoryUserId: string
   phone: string | null
   employeeNumber: string | null
   displayName: string

@@ -159,6 +159,14 @@ it('allows only the exact PersonnelObj identity lookup', () => {
   expect(validRequest({ ...query, body: query.body.replace('"operator":"EQ"','"operator":"LIKE"') })).toBe(false)
   expect(validRequest({ ...query, body: query.body.replace('"field_name":"user_id"','"field_name":"name"') })).toBe(false)
   expect(validRequest({ ...query, body: query.body.replace('"phone"','"password"') })).toBe(false)
+  const documented = JSON.parse(query.body)
+  delete documented.convertUserId
+  expect(validRequest({ ...query, body: JSON.stringify(documented) })).toBe(true)
+  expect(validRequest({ ...query, body: JSON.stringify({ ...documented, returnTotalNum: 1 }) })).toBe(false)
+  expect(validRequest({ ...query, body: JSON.stringify({
+    ...documented,
+    data: { ...documented.data, search_query_info: { ...documented.data.search_query_info, filters: [] } },
+  }) })).toBe(false)
 })
 it('allows only exact read-only object metadata requests', () => {
   const headers = { 'content-type': 'application/json', authorization: 'Bearer fixture-token', 'x-fs-ea': 'enterprise', 'x-fs-userid': '123' }

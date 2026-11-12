@@ -83,6 +83,7 @@ describe('Fxiaoke OAuth callback', () => {
     mocks.discover.mockReset()
     mocks.profile.mockReset().mockResolvedValue({
       externalSubject: 'employee-open-id',
+      directoryUserId: '1093',
       phone: '13900000000',
       employeeNumber: 'E1001',
       displayName: '测试员工',
@@ -115,7 +116,7 @@ describe('Fxiaoke OAuth callback', () => {
     expect(mocks.identity).toHaveBeenCalledWith({
       orgId,
       corpId: 'FSCID_enterprise',
-      externalSubject: 'employee-open-id',
+      externalSubject: '1093',
       phone: '13900000000',
       employeeNumber: 'E1001',
       displayName: '测试员工',
@@ -127,7 +128,7 @@ describe('Fxiaoke OAuth callback', () => {
     expect(mocks.audit).toHaveBeenCalledWith('record_fxiaoke_sso_login_v1', {
       p_org_id: orgId,
       p_user_id: userId,
-      p_external_user_id: 'employee-open-id',
+      p_external_user_id: '1093',
       p_session_id: '33333333-3333-4333-8333-333333333333',
     })
     const body = await response.text()

@@ -161,7 +161,7 @@ export async function GET(request: NextRequest) {
     const mapped = await resolveFxiaokeIdentity({
       orgId,
       corpId: identity.corpId,
-      externalSubject: identity.openUserId,
+      externalSubject: profile.directoryUserId,
       phone: profile.phone,
       employeeNumber: profile.employeeNumber,
       displayName: profile.displayName,
@@ -175,7 +175,7 @@ export async function GET(request: NextRequest) {
     const audit = await supabaseAdmin.rpc('record_fxiaoke_sso_login_v1', {
       p_org_id: mapped.orgId,
       p_user_id: mapped.userId,
-      p_external_user_id: identity.openUserId,
+      p_external_user_id: profile.directoryUserId,
       p_session_id: session.sessionId,
     })
     if (audit.error || audit.data !== true) {

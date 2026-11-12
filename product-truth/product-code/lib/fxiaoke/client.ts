@@ -307,11 +307,9 @@ export async function previewDirectory(credentials: Credentials, request: typeof
 }
 
 /**
- * Reads the provider profile for the already-authenticated OAuth subject.
- * openUserId is only a provider lookup key here; it is never compared with the
- * system work number. PersonnelObj.phone is a provider-returned value, not an
- * independent verification claim. The identity resolver still requires one
- * canonical phone match before persisting a new mapping.
+ * The documented PersonnelObj filter accepts the OAuth openUserId (FSUID),
+ * while the projected user_id is the numeric directory ID already synchronized
+ * into ICU. Neither phone nor employee number is used to bind accounts.
  */
 export async function readEmployeeIdentity(
   credentials: Credentials,
@@ -371,7 +369,6 @@ export async function readEmployeeIdentity(
   }
 
   const response = await post('/cgi/crm/v2/data/query', {
-    convertUserId: false,
     data: {
       dataObjectApiName: 'PersonnelObj',
       search_query_info: {
@@ -419,13 +416,15 @@ export async function readEmployeeIdentity(
     throw new FxiaokeError('IDENTITY_PROFILE_AMBIGUOUS', '当前纷享员工的企业资料不唯一，登录已拒绝。', 403)
   }
   const row = object(rows[0])
-  if (id(row.user_id) !== externalSubject) {
+  const directoryUserId = id(row.user_id)
+  if (!/^\d+$/.test(directoryUserId)) {
     throw new FxiaokeError('IDENTITY_PROFILE_MISMATCH', '纷享员工资料与登录身份不一致。', 409)
   }
 
   const lifeStatus = optionalText(row.life_status)
   const profile: VerifiedEmployeeIdentity = {
     externalSubject,
+    directoryUserId,
     phone: optionalText(row.phone),
     employeeNumber: optionalText(row.employee_number),
     displayName: optionalText(row.full_name) || name(row.name),
@@ -438,7 +437,7 @@ export async function readEmployeeIdentity(
     profile.deleted
     || profile.loginDisabled === true
     || profile.status !== 'active'
-    || (profile.lifeStatus && profile.lifeStatus !== '正常')
+    || (profile.lifeStatus && !['正常', 'normal'].includes(profile.lifeStatus.toLowerCase()))
   ) {
     throw new FxiaokeError('EMPLOYEE_INACTIVE', '当前纷享员工已停用、离职或不可登录。', 403)
   }

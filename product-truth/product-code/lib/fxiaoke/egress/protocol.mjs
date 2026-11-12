@@ -49,7 +49,10 @@ export function validRequest(input) {
     }
     const previewEnvelope = exactKeys(body, ['convertUserId','returnTotalNum','data']) && body.returnTotalNum === 1;
     const identityEnvelope = exactKeys(body, ['convertUserId','data']);
-    if ((!previewEnvelope && !identityEnvelope) || body.convertUserId !== false || !exactKeys(body.data, ['dataObjectApiName','search_query_info'])) return false;
+    const documentedIdentityEnvelope = exactKeys(body, ['data']);
+    if ((!previewEnvelope && !identityEnvelope && !documentedIdentityEnvelope)
+      || ((previewEnvelope || identityEnvelope) && body.convertUserId !== false)
+      || !exactKeys(body.data, ['dataObjectApiName','search_query_info'])) return false;
     const query = body.data.search_query_info;
     const allowedProjections = directoryProjections[body.data.dataObjectApiName];
     if (
@@ -84,7 +87,7 @@ export function validRequest(input) {
       && hasDirectoryProjection
       && Array.isArray(query.orders) && query.orders.length === 0
       && firstPage;
-    const isIdentityLookup = identityEnvelope
+    const isIdentityLookup = (identityEnvelope || documentedIdentityEnvelope)
       && body.data.dataObjectApiName === 'PersonnelObj'
       && JSON.stringify(query.fieldProjection) === JSON.stringify(identityProjection)
       && Array.isArray(query.orders) && query.orders.length === 0

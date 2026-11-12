@@ -159,7 +159,7 @@ describe('Fxiaoke direct directory preview', () => {
   it('reads one verified employee profile by OAuth subject without using the system work number', async () => {
     const profile = {
       _id: 'record1',
-      user_id: 'employee-open-id',
+      user_id: '1093',
       full_name: '测试员工',
       name: '测试员工昵称',
       phone: '13900000000',
@@ -172,6 +172,7 @@ describe('Fxiaoke direct directory preview', () => {
     const request = fixture(token, page([profile]))
     await expect(readEmployeeIdentity(credentials, 'employee-open-id', request)).resolves.toEqual({
       externalSubject: 'employee-open-id',
+      directoryUserId: '1093',
       phone: '13900000000',
       employeeNumber: 'E1001',
       displayName: '测试员工',
@@ -180,13 +181,18 @@ describe('Fxiaoke direct directory preview', () => {
       lifeStatus: '正常',
       deleted: false,
     })
-    const query = JSON.parse(String(request.mock.calls[1][1]?.body)).data.search_query_info
+    const body = JSON.parse(String(request.mock.calls[1][1]?.body))
+    expect(body).not.toHaveProperty('convertUserId')
+    const query = body.data.search_query_info
     expect(query.filters).toEqual([{ field_name: 'user_id', field_values: ['employee-open-id'], operator: 'EQ' }])
     expect(query.fieldProjection).not.toContain('password')
     expect(JSON.stringify(request.mock.calls[1][1])).not.toContain('employee_number":"E1001')
+    await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(
+      token, page([{ ...profile, life_status: 'normal' }]),
+    ))).resolves.toMatchObject({ directoryUserId: '1093', lifeStatus: 'normal' })
   })
   it('fails closed for missing, ambiguous, mismatched or inactive provider profiles', async () => {
-    const profile = { _id: 'record1', user_id: 'employee-open-id', name: '测试员工', phone: '13900000000', employee_number: 'E1001', status: '0', is_pause_login: false, life_status: '正常', is_deleted: false }
+    const profile = { _id: 'record1', user_id: '1093', name: '测试员工', phone: '13900000000', employee_number: 'E1001', status: '0', is_pause_login: false, life_status: '正常', is_deleted: false }
     await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(token, page([])))).rejects.toMatchObject({ code: 'IDENTITY_PROFILE_NOT_FOUND', status: 403 })
     await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(token, page([profile, { ...profile, _id: 'record2' }])))).rejects.toMatchObject({ code: 'IDENTITY_PROFILE_AMBIGUOUS', status: 403 })
     await expect(readEmployeeIdentity(credentials, 'employee-open-id', fixture(token, page([{ ...profile, user_id: 'other-user' }])))).rejects.toMatchObject({ code: 'IDENTITY_PROFILE_MISMATCH', status: 409 })
