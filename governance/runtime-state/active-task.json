@@ -368,7 +368,7 @@
       "runtime_profile": "application",
       "runtime_contract_version": "f003-fxiaoke-sso-v1",
       "manual_delivery_gate_approval_id": "IN-20261111-006",
-      "preview_order_exception_approval_id": "IN-20261111-007",
+      "preview_order_exception_approval_id": "IN-20261112-001",
       "production_database_mode": "controlled_write_approved",
       "production_release_authorization": {
         "status": "approved_for_final_release",
@@ -389,7 +389,8 @@
         "phone_history_migration_authorized": false,
         "password_removal_authorized": false,
         "role_modification_authorized": false,
-        "egress_worker_authorized": false,
+        "egress_worker_authorized": true,
+        "egress_worker_approval_id": "IN-20261112-001",
         "carrier_calls_authorized": false,
         "organization_configuration_write_authorized": true,
         "directory_sync_authorized": false,
