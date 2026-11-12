@@ -84,6 +84,7 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
 type MiddlewareAuthContext = {
   userId: string
   orgId: string
+  authMethod: 'local' | 'fxiaoke'
   roleCodes: string[]
   authorizationRoleCodes: string[]
   allPermissions: string[]
@@ -243,6 +244,7 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
   return {
     userId,
     orgId,
+    authMethod: tokenRecord.auth_method === 'fxiaoke' ? 'fxiaoke' : 'local',
     roleCodes,
     authorizationRoleCodes,
     allPermissions,
@@ -322,28 +324,31 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(buildRedirectUrl(request, '/pending-access'))
     }
 
-    // The dedicated Fxiaoke baseline role makes authenticated pages usable,
-    // not to turn legacy login-only POST routes into editing permissions.
+    // A federated viewer can hold either read-only role, or both after a role
+    // change. Neither combination turns legacy login-only routes into writes.
     // The one exception creates a pending work order owned by this member;
     // carrier ordering remains behind the operator permission.
-    const baselineOnly = authContext.roleCodes.length === 1 && authContext.roleCodes[0] === 'FXIAOKE_BASELINE'
-    if (baselineOnly && required && (required === 'config:read' || required === 'admin:access')) {
+    const federatedViewer = authContext.authMethod === 'fxiaoke'
+      && authContext.roleCodes.every(code => code === 'FXIAOKE_BASELINE' || code === 'READONLY')
+    if (federatedViewer && required && (required === 'config:read' || required === 'admin:access')) {
       return pathname.startsWith('/api/')
         ? NextResponse.json({ error: 'Forbidden', required }, { status: 403 })
         : NextResponse.redirect(buildRedirectUrl(request, '/'))
     }
-    if (baselineOnly && pathname.startsWith('/api/') && ['GET', 'HEAD'].includes(request.method)
+    if (federatedViewer && pathname.startsWith('/api/') && ['GET', 'HEAD'].includes(request.method)
       && !baselineReadAllowed(pathname)) {
       return NextResponse.json({ error: '此数据尚未开放基础查看范围', code: 'READ_SCOPE_REQUIRED' }, { status: 403 })
     }
-    const separatelyAuthorizedShipping = baselineOnly && pathname.startsWith('/api/shipping/')
+    const separatelyAuthorizedShipping = federatedViewer && pathname.startsWith('/api/shipping/')
       && pathname !== '/api/shipping/owner/orders'
       && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
       && await hasDirectShippingOperateGrant(authContext.userId, authContext.orgId)
-    if (baselineOnly
+    const baselineSelfSubmission = pathname === '/api/shipping/owner/orders'
+      && authContext.roleCodes.includes('FXIAOKE_BASELINE')
+    if (federatedViewer
       && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
       && pathname !== '/api/auth/logout'
-      && pathname !== '/api/shipping/owner/orders'
+      && !baselineSelfSubmission
       && !separatelyAuthorizedShipping) {
       return NextResponse.json({ error: '基础查看账号不能执行此操作', code: 'READ_ONLY' }, { status: 403 })
     }

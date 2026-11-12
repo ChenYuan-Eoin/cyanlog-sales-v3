@@ -165,6 +165,44 @@ describe('role-free federated session boundary', () => {
     req.cookies.get = vi.fn().mockReturnValue({ value: 'operator-token' })
     expect((await middleware(req)).status).toBe(200)
   })
+
+  it.each([
+    [{ id: 'readonly', code: 'READONLY', permissions: ['quote:view', 'contract:view', 'customer:view'] }],
+    [
+      { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view', 'contract:view', 'customer:view'] },
+      { id: 'readonly', code: 'READONLY', permissions: ['quote:view', 'contract:view', 'customer:view'] },
+    ],
+  ])('keeps a federated viewer read-only with role set %j', async (...roleRecords) => {
+    mockExactOrgAuth({
+      token: 'viewer-token', orgId: 'org-a', authMethod: 'fxiaoke',
+      roles: roleRecords.map(role => ({ roles: role })),
+    })
+    const request = (path: string, method = 'GET') => {
+      const req = makeRequest(`https://sales.cyanlog.icu${path}`, { host: 'sales.cyanlog.icu' }, method)
+      req.cookies.get = vi.fn().mockReturnValue({ value: 'viewer-token' })
+      return req
+    }
+    expect((await middleware(request('/api/quotes'))).status).toBe(200)
+    expect((await middleware(request('/api/cases'))).status).toBe(403)
+    expect((await middleware(request('/api/quotes', 'POST'))).status).toBe(403)
+    expect((await middleware(request('/api/contracts/example', 'PATCH'))).status).toBe(403)
+    expect((await middleware(request('/api/shipping/orders', 'POST'))).status).toBe(403)
+    expect((await middleware(request('/api/shipping/owner/orders', 'POST'))).status)
+      .toBe(roleRecords.some(role => role.code === 'FXIAOKE_BASELINE') ? 200 : 403)
+  })
+
+  it('preserves separately assigned administrator access alongside the baseline role', async () => {
+    mockExactOrgAuth({
+      token: 'admin-token', orgId: 'org-a', authMethod: 'fxiaoke',
+      roles: [
+        { roles: { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view'] } },
+        { roles: { id: 'admin', code: 'ADMIN', permissions: ['org:*', 'config:*'] } },
+      ],
+    })
+    const req = makeRequest('https://sales.cyanlog.icu/configs', { host: 'sales.cyanlog.icu' })
+    req.cookies.get = vi.fn().mockReturnValue({ value: 'admin-token' })
+    expect((await middleware(req)).status).toBe(200)
+  })
   it('allows only the waiting page and sign-out while blocking business pages and APIs', async () => {
     mockExactOrgAuth({ token: 'role-free-token', orgId: 'org-a', roles: [], authMethod: 'fxiaoke' })
     const headers = { host: 'sales.cyanlog.icu' }
