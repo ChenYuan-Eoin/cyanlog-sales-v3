@@ -1476,7 +1476,7 @@ function resolveVercelDeploymentCommit(deployment) {
 // WP94 only: an explicitly approved connector receipt is used when the
 // installed CLI credential is rejected. The receipt is time and hash bound;
 // the local checker cannot independently repeat the MCP tool calls.
-function verifyVercelConnectorPayload(payload, remoteProduction, checkedAt, artifact) {
+function verifyVercelConnectorPayload(payload, remoteProduction, checkedAt, artifact, approvalId) {
   const blockers = [];
   const project = payload?.project;
   const domain = payload?.domain;
@@ -1485,7 +1485,7 @@ function verifyVercelConnectorPayload(payload, remoteProduction, checkedAt, arti
   const observedAt = Date.parse(payload?.observed_at || '');
   const age = Date.parse(checkedAt) - observedAt;
   const expected = VERCEL_PRODUCTION_CONTRACT;
-  if (payload?.source !== 'vercel_mcp_connector' || payload?.approval_id !== 'IN-20261112-002') blockers.push('Vercel connector receipt source or approval mismatch');
+  if (payload?.source !== 'vercel_mcp_connector' || payload?.approval_id !== approvalId) blockers.push('Vercel connector receipt source or approval mismatch');
   if (!Number.isFinite(age) || age < -60000 || age > 15 * 60000) blockers.push('Vercel connector receipt is not fresh');
   if (payload?.commit !== remoteProduction || !/^[0-9a-f]{40}$/.test(String(remoteProduction || ''))) blockers.push('Vercel connector receipt does not match remote production');
   if (project?.id !== expected.projectId || project?.name !== expected.projectName || project?.accountId !== expected.teamId) blockers.push('Vercel connector project mismatch');
@@ -1556,7 +1556,7 @@ function approvedVercelConnectorReceipt(repoRoot, remoteProduction, options, dir
     }
     return verifyVercelConnectorPayload(envelope.payload, remoteProduction, checkedAt, {
       artifact_path: envelope.artifact_path, sha256: envelope.sha256
-    });
+    }, approvalId);
   } catch {
     return { ok: false, blockers: ['approved Vercel connector receipt could not be verified'], snapshot: null };
   }
