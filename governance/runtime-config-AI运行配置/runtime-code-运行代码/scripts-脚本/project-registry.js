@@ -1473,6 +1473,92 @@ function resolveVercelDeploymentCommit(deployment) {
   };
 }
 
+// WP94 only: an explicitly approved connector receipt is used when the
+// installed CLI credential is rejected. The receipt is time and hash bound;
+// the local checker cannot independently repeat the MCP tool calls.
+function verifyVercelConnectorPayload(payload, remoteProduction, checkedAt, artifact) {
+  const blockers = [];
+  const project = payload?.project;
+  const domain = payload?.domain;
+  const alias = payload?.alias;
+  const deployment = payload?.deployment;
+  const observedAt = Date.parse(payload?.observed_at || '');
+  const age = Date.parse(checkedAt) - observedAt;
+  const expected = VERCEL_PRODUCTION_CONTRACT;
+  if (payload?.source !== 'vercel_mcp_connector' || payload?.approval_id !== 'IN-20261112-002') blockers.push('Vercel connector receipt source or approval mismatch');
+  if (!Number.isFinite(age) || age < -60000 || age > 15 * 60000) blockers.push('Vercel connector receipt is not fresh');
+  if (payload?.commit !== remoteProduction || !/^[0-9a-f]{40}$/.test(String(remoteProduction || ''))) blockers.push('Vercel connector receipt does not match remote production');
+  if (project?.id !== expected.projectId || project?.name !== expected.projectName || project?.accountId !== expected.teamId) blockers.push('Vercel connector project mismatch');
+  if (project?.latestDeployment?.id !== deployment?.id || project?.latestDeployment?.target !== 'production' || project?.latestDeployment?.readyState !== 'READY') blockers.push('Vercel connector current Production deployment mismatch');
+  if (domain?.name !== expected.domain || domain?.projectId !== expected.projectId || domain?.verified !== true) blockers.push('Vercel connector verified domain mismatch');
+  if (alias?.alias !== expected.domain || alias?.projectId !== expected.projectId || alias?.deploymentId !== deployment?.id
+    || alias?.deployment?.id !== deployment?.id || alias?.redirect != null || alias?.deletedAt != null) blockers.push('Vercel connector current alias mismatch');
+  if (deployment?.id !== project?.latestDeployment?.id || deployment?.name !== expected.projectName
+    || deployment?.project?.id !== expected.projectId || deployment?.project?.name !== expected.projectName
+    || deployment?.target !== 'production' || deployment?.readyState !== 'READY' || deployment?.state !== 'READY'
+    || deployment?.meta?.githubCommitRef !== 'production' || deployment?.meta?.githubCommitSha !== remoteProduction
+    || !Array.isArray(deployment?.alias) || !deployment.alias.includes(expected.domain)) blockers.push('Vercel connector deployment, branch or source mismatch');
+  return {
+    ok: blockers.length === 0,
+    blockers,
+    snapshot: {
+      version: 1,
+      source: 'approved-vercel-mcp-connector',
+      checkedAt,
+      observedAt: payload?.observed_at || null,
+      contract: expected,
+      project: {
+        id: project?.id || null,
+        name: project?.name || null,
+        teamId: project?.accountId || null,
+        productionBranch: deployment?.meta?.githubCommitRef || null,
+        productionDeploymentId: project?.latestDeployment?.id || null
+      },
+      domain: { name: domain?.name || null, projectId: domain?.projectId || null, verified: domain?.verified === true },
+      alias: {
+        name: alias?.alias || null, projectId: alias?.projectId || null,
+        deploymentId: alias?.deploymentId || null, deploymentReferenceId: alias?.deployment?.id || null,
+        redirect: alias?.redirect ?? null, deletedAt: alias?.deletedAt ?? null
+      },
+      deployment: {
+        id: deployment?.id || null, name: deployment?.name || null, projectId: deployment?.project?.id || null,
+        teamId: project?.accountId || null, target: deployment?.target || null,
+        readyState: deployment?.readyState || null, gitCommitSha: deployment?.meta?.githubCommitSha || null
+      },
+      remoteProduction,
+      raw: { connector: artifact }
+    }
+  };
+}
+
+function approvedVercelConnectorReceipt(repoRoot, remoteProduction, options, directError, checkedAt) {
+  if (!String(directError?.message || '').includes('HTTP_403:PROJECT')) return null;
+  try {
+    const { state } = loadSchedulerState({ repoRoot });
+    const approvalId = state.active_task?.delivery_contract?.vercel_connector_evidence_approval_id;
+    const approval = loadDemandInbox({ repoRoot }).records.find(record => record?.id === approvalId);
+    const productTree = runGit(repoRoot, ['rev-parse', 'HEAD:product-truth/product-code']);
+    if (state.active_task?.id !== 'WP94' || approvalId !== 'IN-20261112-002'
+      || approval?.source !== 'user_explicit' || approval?.state !== 'approved'
+      || approval?.vercel_connector_evidence_authorized !== true || approval?.fallback_only !== true
+      || approval?.approved_product_tree !== productTree
+      || runGit(repoRoot, ['merge-base', '--is-ancestor', approval.approved_candidate_base, 'HEAD'], { allowFailure: true }) === null) return null;
+    const envelope = loadDeliveryRuntime({ repoRoot }).data.releaseControl?.vercel_connector_evidence;
+    if (!evidenceEnvelopeValid(envelope, repoRoot)) {
+      return { ok: false, blockers: ['approved Vercel connector receipt is missing or hash-invalid'], snapshot: null };
+    }
+    if (envelope.payload?.stage !== options.stage || envelope.payload?.approval_id !== approvalId
+      || envelope.payload?.git_head !== runGit(repoRoot, ['rev-parse', 'HEAD'])) {
+      return { ok: false, blockers: ['approved Vercel connector receipt stage or commit mismatch'], snapshot: null };
+    }
+    return verifyVercelConnectorPayload(envelope.payload, remoteProduction, checkedAt, {
+      artifact_path: envelope.artifact_path, sha256: envelope.sha256
+    });
+  } catch {
+    return { ok: false, blockers: ['approved Vercel connector receipt could not be verified'], snapshot: null };
+  }
+}
+
 function verifyVercelProductionState(repoRoot, remoteProduction, options = {}) {
   const checkedAt = new Date().toISOString();
   const artifactPrefix = `vercel-production-verifier/${options.stage || 'gate'}/${checkedAt.replace(/[^0-9A-Za-z]/g, '-')}-${process.pid}`;
@@ -1514,6 +1600,8 @@ function verifyVercelProductionState(repoRoot, remoteProduction, options = {}) {
       deploymentResponse = batch.deployment;
     }
   } catch (error) {
+    const approvedConnector = approvedVercelConnectorReceipt(repoRoot, remoteProduction, options, error, checkedAt);
+    if (approvedConnector) return approvedConnector;
     return {
       ok: false,
       blockers: [`live Vercel Production verification failed closed: ${error.message}`],

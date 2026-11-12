@@ -2249,7 +2249,7 @@ function runActionApprovalSelftest(repoRoot) {
 function runVercelHttpsTransportSelftest(repoRoot) {
   const vm = require('vm');
   // Test stubs exist only in this isolated, selftest-registry VM. No production
-  // export, response override, environment switch or cached receipt is added.
+  // export, response override or environment switch is added.
   writeJson(path.join(repoRoot, 'governance/runtime-config-AI运行配置/config-配置文件/project-governance-项目治理注册表.json'), { version: 'selftest' });
   const registrySource = fs.readFileSync(path.join(__dirname, 'project-registry.js'), 'utf8');
   const fixtureToken = 'example_existing_vercel_fixture_credential';
@@ -2306,11 +2306,11 @@ function runVercelHttpsTransportSelftest(repoRoot) {
     };
     fakeRequire.main = require.main;
     const moduleCopy = { exports: {} };
-    vm.runInNewContext(registrySource + '\nmodule.exports.__selftestLiveRead = runVercelApi; module.exports.__selftestBatch = runVercelProductionBatch; module.exports.__selftestVerify = verifyVercelProductionState;', {
+    vm.runInNewContext(registrySource + '\nmodule.exports.__selftestLiveRead = runVercelApi; module.exports.__selftestBatch = runVercelProductionBatch; module.exports.__selftestVerify = verifyVercelProductionState; module.exports.__selftestConnectorPayload = verifyVercelConnectorPayload;', {
       require: fakeRequire, module: moduleCopy, exports: moduleCopy.exports,
       process, __dirname, __filename: path.join(__dirname, 'project-registry.js'), console, Buffer, URL
     }, { filename: 'selftest-live-vercel-transport.js' });
-    return { read: moduleCopy.exports.__selftestLiveRead, batch: moduleCopy.exports.__selftestBatch, verify: moduleCopy.exports.__selftestVerify, calls };
+    return { read: moduleCopy.exports.__selftestLiveRead, batch: moduleCopy.exports.__selftestBatch, verify: moduleCopy.exports.__selftestVerify, connectorPayload: moduleCopy.exports.__selftestConnectorPayload, calls };
   }
   const valid = fixture();
   const response = valid.read(repoRoot, endpoint);
@@ -2334,6 +2334,35 @@ function runVercelHttpsTransportSelftest(repoRoot) {
   const verifierFixture = fixture();
   assert.strictEqual(verifierFixture.verify(repoRoot, fixtureSha).ok, true);
   assert.strictEqual(verifierFixture.calls.filter(item => item.command === process.execPath).length, 1, 'formal verifier must collect all four reads in one child');
+  const observedAt = new Date().toISOString();
+  const connectorReceipt = {
+    source: 'vercel_mcp_connector', approval_id: 'IN-20261112-002', observed_at: observedAt, commit: fixtureSha,
+    project: { id: VERCEL_PRODUCTION_CONTRACT.projectId, name: VERCEL_PRODUCTION_CONTRACT.projectName,
+      accountId: VERCEL_PRODUCTION_CONTRACT.teamId,
+      latestDeployment: { id: SELFTEST_PRODUCTION_DEPLOYMENT_ID, target: 'production', readyState: 'READY' } },
+    domain: { name: VERCEL_PRODUCTION_CONTRACT.domain, projectId: VERCEL_PRODUCTION_CONTRACT.projectId, verified: true },
+    alias: { alias: VERCEL_PRODUCTION_CONTRACT.domain, projectId: VERCEL_PRODUCTION_CONTRACT.projectId,
+      deploymentId: SELFTEST_PRODUCTION_DEPLOYMENT_ID, deployment: { id: SELFTEST_PRODUCTION_DEPLOYMENT_ID },
+      redirect: null, deletedAt: null },
+    deployment: { id: SELFTEST_PRODUCTION_DEPLOYMENT_ID, name: VERCEL_PRODUCTION_CONTRACT.projectName,
+      project: { id: VERCEL_PRODUCTION_CONTRACT.projectId, name: VERCEL_PRODUCTION_CONTRACT.projectName },
+      target: 'production', readyState: 'READY', state: 'READY',
+      meta: { githubCommitRef: 'production', githubCommitSha: fixtureSha },
+      alias: [VERCEL_PRODUCTION_CONTRACT.domain] }
+  };
+  const connector = verifierFixture.connectorPayload;
+  assert.strictEqual(connector(connectorReceipt, fixtureSha, observedAt, { artifact_path: 'receipt.json', sha256: 'a'.repeat(64) }).ok, true);
+  for (const change of [
+    value => { value.observed_at = '2000-01-01T00:00:00Z'; },
+    value => { value.project.accountId = 'other'; },
+    value => { value.domain.verified = false; },
+    value => { value.alias.deploymentId = 'dpl_Other'; },
+    value => { value.deployment.meta.githubCommitRef = 'main'; },
+    value => { value.deployment.meta.githubCommitSha = 'b'.repeat(40); }
+  ]) {
+    const value = JSON.parse(JSON.stringify(connectorReceipt)); change(value);
+    assert.strictEqual(connector(value, fixtureSha, observedAt).ok, false, 'connector proof must fail closed on stale or mismatched facts');
+  }
 
   for (const bad of ['https://elsewhere.test/', '//elsewhere.test/', endpoint + '&teamId=other', endpoint.replace('teamId=', 'wrong='), endpoint + '\nheader="injected"', '/v13/deployments/../auth?teamId=' + VERCEL_PRODUCTION_CONTRACT.teamId]) {
     const sample = fixture();
