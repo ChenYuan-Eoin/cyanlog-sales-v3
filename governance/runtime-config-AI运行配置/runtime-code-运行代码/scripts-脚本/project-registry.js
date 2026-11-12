@@ -1489,11 +1489,10 @@ function verifyVercelConnectorPayload(payload, remoteProduction, checkedAt, arti
   if (!Number.isFinite(age) || age < -60000 || age > 15 * 60000) blockers.push('Vercel connector receipt is not fresh');
   if (payload?.commit !== remoteProduction || !/^[0-9a-f]{40}$/.test(String(remoteProduction || ''))) blockers.push('Vercel connector receipt does not match remote production');
   if (project?.id !== expected.projectId || project?.name !== expected.projectName || project?.accountId !== expected.teamId) blockers.push('Vercel connector project mismatch');
-  if (project?.latestDeployment?.id !== deployment?.id || project?.latestDeployment?.target !== 'production' || project?.latestDeployment?.readyState !== 'READY') blockers.push('Vercel connector current Production deployment mismatch');
   if (domain?.name !== expected.domain || domain?.projectId !== expected.projectId || domain?.verified !== true) blockers.push('Vercel connector verified domain mismatch');
   if (alias?.alias !== expected.domain || alias?.projectId !== expected.projectId || alias?.deploymentId !== deployment?.id
     || alias?.deployment?.id !== deployment?.id || alias?.redirect != null || alias?.deletedAt != null) blockers.push('Vercel connector current alias mismatch');
-  if (deployment?.id !== project?.latestDeployment?.id || deployment?.name !== expected.projectName
+  if (deployment?.name !== expected.projectName
     || deployment?.project?.id !== expected.projectId || deployment?.project?.name !== expected.projectName
     || deployment?.target !== 'production' || deployment?.readyState !== 'READY' || deployment?.state !== 'READY'
     || deployment?.meta?.githubCommitRef !== 'production' || deployment?.meta?.githubCommitSha !== remoteProduction
@@ -1512,7 +1511,7 @@ function verifyVercelConnectorPayload(payload, remoteProduction, checkedAt, arti
         name: project?.name || null,
         teamId: project?.accountId || null,
         productionBranch: deployment?.meta?.githubCommitRef || null,
-        productionDeploymentId: project?.latestDeployment?.id || null
+        productionDeploymentId: deployment?.id || null
       },
       domain: { name: domain?.name || null, projectId: domain?.projectId || null, verified: domain?.verified === true },
       alias: {

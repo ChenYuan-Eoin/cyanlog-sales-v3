@@ -2352,6 +2352,9 @@ function runVercelHttpsTransportSelftest(repoRoot) {
   };
   const connector = verifierFixture.connectorPayload;
   assert.strictEqual(connector(connectorReceipt, fixtureSha, observedAt, { artifact_path: 'receipt.json', sha256: 'a'.repeat(64) }).ok, true);
+  const previewLatestReceipt = JSON.parse(JSON.stringify(connectorReceipt));
+  previewLatestReceipt.project.latestDeployment = { id: 'dpl_Preview', target: null, readyState: 'BUILDING' };
+  assert.strictEqual(connector(previewLatestReceipt, fixtureSha, observedAt).ok, true, 'current production is determined by the domain alias, not the newest preview');
   for (const change of [
     value => { value.observed_at = '2000-01-01T00:00:00Z'; },
     value => { value.project.accountId = 'other'; },
