@@ -483,16 +483,23 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
 
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem
-                disabled={isInvited || isDisabled}
-                onSelect={() => onBindIdentity(user)}
-              >
-                <FingerprintIcon className="h-4 w-4 mr-2" />
-                绑定纷享身份
-              </DropdownMenuItem>
+              {user.directory_identity_id ? (
+                <DropdownMenuItem disabled>
+                  <FingerprintIcon className="h-4 w-4 mr-2" />
+                  已由纷享目录关联，无需逐人绑定
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem
+                  disabled={isInvited || isDisabled}
+                  onSelect={() => onBindIdentity(user)}
+                >
+                  <FingerprintIcon className="h-4 w-4 mr-2" />
+                  绑定历史 ICU 账号的纷享身份
+                </DropdownMenuItem>
+              )}
 
               {isDirectoryPending ? (
-                <DropdownMenuItem disabled>纷享员工无需邀请码；可先登录，再分配业务角色</DropdownMenuItem>
+                <DropdownMenuItem disabled>纷享员工无需邀请码；首次登录即可查看，业务操作另按授权</DropdownMenuItem>
               ) : <>
               <DropdownMenuItem
                 disabled={!isInvited}

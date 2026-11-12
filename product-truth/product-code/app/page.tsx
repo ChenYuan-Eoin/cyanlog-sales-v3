@@ -315,13 +315,15 @@ export default function HomePage() {
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <Link
-                href="/configs"
-                prefetch={false}
-                className="inline-flex h-10 items-center rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-              >
-                配置中心
-              </Link>
+              {profile?.canManageOrg && (
+                <Link
+                  href="/configs"
+                  prefetch={false}
+                  className="inline-flex h-10 items-center rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  配置中心
+                </Link>
+              )}
               <button
                 onClick={async () => {
                   await logoutClientSession()

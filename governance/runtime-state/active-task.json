@@ -329,6 +329,8 @@
       "product-truth/product-code/.next",
       "product-truth/product-code/app/shipping/page.tsx",
       "product-truth/product-code/app/shipping/page.test.tsx",
+      "product-truth/product-code/app/page.tsx",
+      "product-truth/product-code/app/profile/page.tsx",
       "product-truth/product-code/app/sales-portal",
       "product-truth/product-code/app/api/shipping/owner/orders",
       "product-truth/product-code/components/layout/Sidebar.tsx",
@@ -338,6 +340,18 @@
       "product-truth/product-code/lib/role-permission-resolution.test.ts"
     ],
     "reproduction_capsule": "codex-runtime/wp94-sso/reproduction.json",
+    "micro_fixes": [
+      {
+        "id": "IN-20261112-018",
+        "scope": "生产真实纷享登录后个人信息读取被基础查看白名单误挡、工作台与个人信息页残留配置中心入口；复用已获准的本人身份 GET 与修正误导入口，写入仍由服务端拒绝。",
+        "evidence": "86e297d0 / sales.cyanlog.icu / 现有 Chrome：员工登录成功、自助收寄提报页通过；个人信息空白，/configs 跳回工作台。"
+      },
+      {
+        "id": "IN-20261112-019",
+        "scope": "纷享目录已关联员工无需管理员逐人填写 openUserId；组织成员菜单明确自动关联，手工绑定只保留给未关联的历史 ICU 账号。",
+        "evidence": "用户提交绑定纷享身份弹窗截图并询问是否还须逐人设定；正式站已证实目录匹配员工无需该弹窗即可 OAuth 登录。"
+      }
+    ],
     "acceptance_checks": [
       "已匹配且提供方在职的员工仅凭纷享 OAuth 获得同一 canonical users.id 的可撤销会话，无邀请码、本地密码或预先分配业务角色；首次登录自动赋予受限只读角色",
       "目录人员进入 ICU 的账号与成员授权流程不产生无邀请却标为待激活的死胡同；目录同步不自动授予编辑、审核或寄件处理权限",

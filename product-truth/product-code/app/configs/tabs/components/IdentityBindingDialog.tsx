@@ -80,10 +80,10 @@ export function IdentityBindingDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FingerprintIcon className="h-5 w-5" />
-            绑定纷享身份
+            绑定历史 ICU 账号
           </DialogTitle>
           <DialogDescription>
-            为 {user?.display_name || '当前成员'} 建立稳定身份映射。不会按手机号或姓名自动匹配。
+            仅在历史 ICU 账号未由纷享目录关联时使用。普通员工通过目录同步自动关联，无需逐人填写 openUserId。不会按手机号或姓名自动匹配。
           </DialogDescription>
         </DialogHeader>
 

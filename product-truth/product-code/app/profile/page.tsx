@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import { error } from '@/lib/toast'
 
@@ -14,6 +15,8 @@ interface UserProfile {
   title: string | null
   employee_id: string | null
   last_login_at: string | null
+  authMethod?: string | null
+  roles?: { code: string }[]
 }
 
 export default function ProfilePage() {
@@ -22,6 +25,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [editMode, setEditMode] = useState(false)
+  const baselineOnly = profile?.roles?.length === 1 && profile.roles[0]?.code === 'FXIAOKE_BASELINE'
 
   // Form state
   const [displayName, setDisplayName] = useState('')
@@ -31,7 +35,7 @@ export default function ProfilePage() {
   const loadProfile = useCallback(async () => {
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch('/api/profile', token ? {
+      const res = await fetch('/api/auth/me', token ? {
         headers: { Authorization: `Bearer ${token}` },
       } : undefined)
 
@@ -128,6 +132,9 @@ export default function ProfilePage() {
         <div className="mb-8">
           <h1 className="text-2xl font-semibold text-slate-900">个人信息</h1>
           <p className="text-slate-500 mt-1">管理您的账户信息和个人设置</p>
+          {profile?.authMethod === 'fxiaoke' && (
+            <p className="text-sm text-slate-600 mt-2">本次使用纷享销客身份登录</p>
+          )}
         </div>
 
         {/* Profile Card */}
@@ -159,12 +166,14 @@ export default function ProfilePage() {
                 工号：{profile?.employee_id || '未设置'}
               </p>
             </div>
-            <button
-              onClick={() => setEditMode(!editMode)}
-              className="px-4 py-2 text-sm border rounded-lg hover:bg-slate-50 transition-colors"
-            >
-              {editMode ? '取消' : '编辑'}
-            </button>
+            {!baselineOnly && (
+              <button
+                onClick={() => setEditMode(!editMode)}
+                className="px-4 py-2 text-sm border rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                {editMode ? '取消' : '编辑'}
+              </button>
+            )}
           </div>
 
           {/* Edit Form */}
@@ -274,9 +283,9 @@ export default function ProfilePage() {
 
         {/* Navigation hint */}
         <div className="mt-6 text-center text-sm text-slate-500">
-          <a href="/configs" className="hover:text-primary">
-            ← 返回配置中心
-          </a>
+          <Link href="/" className="hover:text-primary">
+            ← 返回工作台
+          </Link>
         </div>
       </div>
     </div>
