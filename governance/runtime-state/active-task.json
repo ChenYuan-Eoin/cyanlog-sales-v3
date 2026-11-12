@@ -451,12 +451,20 @@
       "name": "纷享 SSO 与联合身份门禁"
     },
     "next": {
-      "id": "WP34",
-      "slug": "shipping-auth-recovery",
-      "name": "顺丰认证失败与原单安全恢复",
-      "entry_gate_status": "waiting_wp94_candidate"
+      "id": "WP97",
+      "slug": "crm-intake-icu-gateway",
+      "name": "ICU 面向 CRM 的寄件受理网关",
+      "entry_gate": "WP94 纷享员工登录与权限边界完成正式验收；随后核对 APL 草稿、字段映射和真实流程触发条件",
+      "entry_gate_status": "waiting_wp94_production_acceptance"
     },
     "ready": [
+      {
+        "id": "WP34",
+        "slug": "shipping-auth-recovery",
+        "name": "顺丰认证失败与原单安全恢复",
+        "entry_gate": "在 WP99 真实顺丰出号前确认认证失败分类与原单安全恢复，避免重复下单",
+        "entry_gate_status": "waiting_wp97_pending_order_acceptance"
+      },
       {
         "id": "WP53",
         "slug": "directory-sync-maintenance",
@@ -1862,12 +1870,6 @@
         "slug": "directory-inspection",
         "name": "目录只读核验",
         "reason": "作为WP92内部诊断步骤吸收，不再单独要求业务交付；部门单独同步草稿撤回，不计完成"
-      },
-      {
-        "id": "WP97",
-        "slug": "crm-intake-icu-gateway",
-        "name": "ICU 面向 CRM 的寄件受理网关",
-        "reason": "匿名销售提报生产阻断优先修复；既有 CRM 候选与授权保留，不宣称完成。"
       },
       {
         "id": "WP19",
