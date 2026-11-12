@@ -36,14 +36,24 @@ describe('LoginPage enterprise identity', () => {
   })
 
   it('never renders a dead SSO button when no provider is genuinely available', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ providers: [] }), {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ providers: [], providerStatus: 'paused' }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     })))
     render(<LoginPage />)
-    expect(await screen.findByText(/企业统一登录尚未就绪/)).toBeInTheDocument()
+    expect(await screen.findByText(/纷享登录目前已暂停/)).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /纷享销客登录/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /请联系管理员开通/ })).not.toBeInTheDocument()
+  })
+
+  it('distinguishes missing configuration from a temporarily unavailable provider', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ providers: [], providerStatus: 'not_configured' })))
+    const view = render(<LoginPage />)
+    expect(await screen.findByText('纷享登录尚未配置，请联系管理员。')).toBeInTheDocument()
+    view.unmount()
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ providers: [], providerStatus: 'unavailable' }, { status: 503 })))
+    render(<LoginPage />)
+    expect(await screen.findByText('纷享登录服务暂时不可用，请稍后重试。')).toBeInTheDocument()
   })
 
   it('turns SSO callback failures into fixed user-facing messages', async () => {

@@ -8,7 +8,14 @@ import LoginForm from './LoginForm'
 type EnterpriseProviderState =
   | { status: 'loading' }
   | { status: 'available'; label: string; startUrl: string }
-  | { status: 'unavailable' }
+  | { status: 'paused' | 'not_configured' | 'configuration_error' | 'unavailable' }
+
+const PROVIDER_STATUS_MESSAGES = {
+  paused: '纷享登录目前已暂停，请稍后再试或联系管理员。',
+  not_configured: '纷享登录尚未配置，请联系管理员。',
+  configuration_error: '纷享登录配置需要管理员核对。',
+  unavailable: '纷享登录服务暂时不可用，请稍后重试。',
+} as const
 
 const SSO_ERROR_MESSAGES: Record<string, string> = {
   SSO_NOT_CONFIGURED: '企业统一登录尚未配置，请联系管理员。',
@@ -49,11 +56,11 @@ export default function LoginPage() {
     const controller = new AbortController()
     void fetch('/api/auth/providers', { cache: 'no-store', signal: controller.signal })
       .then(async response => {
-        const data = await response.json() as { localAccountEnabled?: unknown; providers?: Array<{ id?: unknown; label?: unknown; startUrl?: unknown }> }
+        const data = await response.json() as { localAccountEnabled?: unknown; providerStatus?: unknown; providers?: Array<{ id?: unknown; label?: unknown; startUrl?: unknown }> }
         // Local admission has its own server switch, including when SSO is unavailable.
         setLocalAccountEnabled(data.localAccountEnabled === true)
         if (!response.ok) {
-          setEnterpriseProvider({ status: 'unavailable' })
+          setEnterpriseProvider({ status: data.providerStatus === 'configuration_error' ? 'configuration_error' : 'unavailable' })
           return
         }
         const provider = data.providers?.find(item => item.id === 'fxiaoke')
@@ -61,7 +68,7 @@ export default function LoginPage() {
           typeof provider?.label !== 'string'
           || provider.startUrl !== '/api/auth/fxiaoke/start'
         ) {
-          setEnterpriseProvider({ status: 'unavailable' })
+          setEnterpriseProvider({ status: data.providerStatus === 'paused' || data.providerStatus === 'not_configured' ? data.providerStatus : 'unavailable' })
           return
         }
         setEnterpriseProvider({
@@ -173,7 +180,7 @@ export default function LoginPage() {
             ) : enterpriseProvider.status === 'loading' ? (
               <div aria-live="polite" className="subtitle">正在检查企业统一登录…</div>
             ) : (
-              <div className="subtitle">企业统一登录尚未就绪，请联系管理员完成配置。</div>
+              <div className="subtitle">{PROVIDER_STATUS_MESSAGES[enterpriseProvider.status]}</div>
             )}
 
             {error && (
