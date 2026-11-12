@@ -1526,7 +1526,9 @@ function verifyVercelConnectorPayload(payload, remoteProduction, checkedAt, arti
         readyState: deployment?.readyState || null, gitCommitSha: deployment?.meta?.githubCommitSha || null
       },
       remoteProduction,
-      raw: { connector: artifact }
+      // One receipt contains all four connector reads. Each entry is bound to
+      // the same hashed file rather than pretending to be a direct REST read.
+      raw: { project: artifact, domain: artifact, alias: artifact, deployment: artifact, connector: artifact }
     }
   };
 }
@@ -1876,7 +1878,9 @@ function sealDeliveryAttestation(options = {}) {
       remoteRefs: 'git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery',
       ancestor: 'git merge-base --is-ancestor origin/main HEAD',
       worktree: 'git status --porcelain=v1 --untracked-files=all',
-      vercelProduction: 'official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin'
+      vercelProduction: check.status.vercelProduction?.source === 'approved-vercel-mcp-connector'
+        ? 'user-approved live Vercel MCP connector receipt; hash-bound, local replay unavailable'
+        : 'official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin'
     }
   };
   const runtimeUpdate = writeDeliveryRuntime({
