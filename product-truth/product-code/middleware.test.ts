@@ -47,6 +47,7 @@ function mockExactOrgAuth(options: {
   status?: string
   loginEnabled?: boolean
   authMethod?: 'local' | 'fxiaoke'
+  employmentStatus?: string
   sourceIdentity?: 'authoritative' | 'evidence'
   shippingDirectGrant?: boolean
 }) {
@@ -66,7 +67,7 @@ function mockExactOrgAuth(options: {
       }])
     }
     if (table === 'user_organizations') {
-      return Response.json([{ org_id: options.orgId }])
+      return Response.json([{ org_id: options.orgId, employment_status: options.employmentStatus ?? 'active' }])
     }
     if (table === 'user_roles') {
       return Response.json(options.roles)
@@ -190,6 +191,15 @@ describe('role-free federated session boundary', () => {
     const response = await middleware(req)
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toBe('https://sales.cyanlog.icu/login')
+  })
+
+  it('rejects an existing SSO session after directory employment is suspended', async () => {
+    mockExactOrgAuth({ token: 'sso-token', orgId: 'org-a', roles: [{ roles: { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view'] } }],
+      authMethod: 'fxiaoke', employmentStatus: 'suspended' })
+    const req = makeRequest('https://sales.cyanlog.icu/api/quotes', { host: 'sales.cyanlog.icu' })
+    req.cookies.get = vi.fn().mockReturnValue({ value: 'sso-token' })
+    const response = await middleware(req)
+    expect(response.status).toBe(401)
   })
 })
 

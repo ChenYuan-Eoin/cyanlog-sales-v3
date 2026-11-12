@@ -61,11 +61,34 @@ describe('Auth Module', () => {
       }
       const membership = {
         eq: () => membership,
-        maybeSingle: async () => ({ data: { org_id: 'org-1' }, error: null }),
+        maybeSingle: async () => ({ data: { org_id: 'org-1', employment_status: 'active' }, error: null }),
       }
 
       const user = await getAuthUser(makeReq({ authorization: 'Bearer sso-token' }))
       expect(Boolean(user)).toBe(allowed)
+    })
+
+    it('rejects an existing Fxiaoke session after employment is suspended', async () => {
+      ;(supabaseAdmin.from as any).mockImplementation((table: string) => {
+        if (table === 'auth_tokens') return {
+          select: () => ({ eq: () => ({ single: async () => ({
+            data: { user_id: 'sso-user', auth_method: 'fxiaoke', expires_at: null,
+              user: { id: 'sso-user', org_id: 'org-1', status: 'active', login_enabled: true } },
+            error: null,
+          }) }) }),
+        }
+        if (table === 'organization_sources') return { select: () => ({ eq: () => source }) }
+        if (table === 'user_organizations') return { select: () => ({ eq: () => membership }) }
+        throw new Error(`unexpected table ${table}`)
+      })
+      const source = { eq: () => source, limit: async () => ({ data: [{
+        authority_scope: { identity: 'authoritative' }, connection_state: 'verified', effective_revision: 'revision-1',
+      }], error: null }) }
+      const membership = { eq: () => membership, maybeSingle: async () => ({
+        data: { org_id: 'org-1', employment_status: 'suspended' }, error: null,
+      }) }
+
+      expect(await getAuthUser(makeReq({ authorization: 'Bearer sso-token' }))).toBeNull()
     })
 
     it('无 token 时返回 null', async () => {

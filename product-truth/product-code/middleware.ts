@@ -181,11 +181,11 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
       status: string
       login_enabled: boolean | null
     }>('users', { id: userId }, 'id,org_id,status,login_enabled'),
-    rest.selectRows<{ org_id: string }>('user_organizations', {
+    rest.selectRows<{ org_id: string; employment_status: string }>('user_organizations', {
       user_id: userId,
       status: 'active',
       is_default: 'true',
-    }, 'org_id'),
+    }, 'org_id,employment_status'),
   ])
   const userRow = userRows[0]
 
@@ -199,6 +199,7 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
   if (!orgId) return null
 
   if (tokenRecord.auth_method === 'fxiaoke') {
+    if (membershipRows[0]?.employment_status !== 'active') return null
     const sources = await rest.selectRows<FxiaokeSourceRow>(
       'organization_sources',
       { system_org_id: orgId, provider: 'fxiaoke', status: 'active' },

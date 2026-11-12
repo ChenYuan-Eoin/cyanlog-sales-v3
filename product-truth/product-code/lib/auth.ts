@@ -25,10 +25,11 @@ async function hasActiveFxiaokeSessionSource(userId: string, orgId: string | nul
       .select('authority_scope,connection_state,effective_revision')
       .eq('system_org_id', orgId).eq('provider', 'fxiaoke').eq('status', 'active').limit(2),
     supabaseAdmin.from('user_organizations')
-      .select('org_id').eq('user_id', userId).eq('org_id', orgId)
+      .select('org_id,employment_status').eq('user_id', userId).eq('org_id', orgId)
       .eq('status', 'active').eq('is_default', true).maybeSingle(),
   ])
-  if (sourceResult.error || membershipResult.error || !membershipResult.data) return false
+  if (sourceResult.error || membershipResult.error
+    || membershipResult.data?.employment_status !== 'active') return false
   const sources = sourceResult.data || []
   return sources.length === 1
     && sources[0].authority_scope?.identity === 'authoritative'
