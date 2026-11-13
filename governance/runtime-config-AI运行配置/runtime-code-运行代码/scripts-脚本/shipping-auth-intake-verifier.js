@@ -70,6 +70,10 @@ function operatorPayload(value, expected, { requireFresh = true } = {}) {
   check(value.commit === expected.commit && value.deployment_id === expected.deploymentId, 'Operator commit or deployment mismatch')
   check(value.url === `${ORIGIN}/shipping` || value.url === `${ORIGIN}/sales-portal`, 'Operator must replay the Production intake path')
   check(value.browser_context === 'existing_user_chrome' && value.existing_tab_id && value.new_tabs === 0 && value.new_browser_contexts === 0, 'Existing Chrome tab required')
+  const safari = value.supplementary_browser
+  check(safari?.browser_context === 'existing_user_safari' && safari?.attestation_method === 'codex_safari_native_existing_session'
+    && String(safari?.existing_window_id || '').trim() && safari?.url === `${ORIGIN}/shipping`
+    && safari?.new_tabs === 0 && safari?.new_browser_contexts === 0, 'Existing Safari operator window required')
   check(value.attestation_type === 'trusted_operator_browser' && value.trust_boundary === 'operator_attestation_not_machine_proof'
     && value.attestation_method === 'codex_chrome_control_existing_session' && String(value.attested_by || '').trim(), 'Browser trust boundary missing')
   const age = Date.now() - Date.parse(value.attested_at || '')
@@ -78,6 +82,8 @@ function operatorPayload(value, expected, { requireFresh = true } = {}) {
   check(same(value.actions, ACTIONS), 'Operator action sequence is incomplete')
   check(Array.isArray(value.observations) && value.observations.length === ACTIONS.length
     && value.observations.every((item, index) => item?.action === ACTIONS[index] && item?.result === 'pass'
+      && item?.browser_context === (index === ACTIONS.length - 1 ? 'existing_user_safari' : 'existing_user_chrome')
+      && item?.surface_id === (index === ACTIONS.length - 1 ? safari.existing_window_id : value.existing_tab_id)
       && typeof item?.detail === 'string' && item.detail.trim().length >= 15), 'Operator observations are incomplete')
   check(Array.isArray(value.attachments) && value.attachments.length > 0
     && value.attachments.every(item => typeof item?.path === 'string' && SHA.test(item.sha256 || '')), 'Raw operator attachment is missing')

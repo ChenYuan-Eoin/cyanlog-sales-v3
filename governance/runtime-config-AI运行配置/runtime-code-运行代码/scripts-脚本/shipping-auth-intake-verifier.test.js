@@ -21,10 +21,15 @@ function fixture(t) {
       commit: expected.commit, deployment_id: expected.deploymentId,
     },
     browser_context: 'existing_user_chrome', existing_tab_id: 'chrome-123', new_tabs: 0, new_browser_contexts: 0,
+    supplementary_browser: { browser_context: 'existing_user_safari', attestation_method: 'codex_safari_native_existing_session',
+      existing_window_id: 'safari-window-123', url: 'https://sales.cyanlog.icu/shipping', new_tabs: 0, new_browser_contexts: 0 },
     attestation_type: 'trusted_operator_browser', trust_boundary: 'operator_attestation_not_machine_proof',
     attestation_method: 'codex_chrome_control_existing_session', attested_by: 'codex', attested_at: new Date().toISOString(),
     no_business_writes: true, carrier_calls: false, result: 'pass', actions: [...v.ACTIONS],
-    observations: v.ACTIONS.map(action => ({ action, result: 'pass', detail: `Observed read-only ${action} path in existing Chrome.` })),
+    observations: v.ACTIONS.map((action, index) => ({ action, result: 'pass',
+      browser_context: index === v.ACTIONS.length - 1 ? 'existing_user_safari' : 'existing_user_chrome',
+      surface_id: index === v.ACTIONS.length - 1 ? 'safari-window-123' : 'chrome-123',
+      detail: `Observed read-only ${action} path in the assigned existing browser.` })),
     attachments: [{ path: 'chrome.png', sha256: sha(attachment) }],
   }
   function save() {
@@ -45,6 +50,8 @@ test('contract permits only a read-only existing-Chrome replay', t => {
     value => { value.carrier_calls = true },
     value => { value.no_business_writes = false },
     value => { value.actions.reverse() },
+    value => { value.observations[3].browser_context = 'existing_user_chrome' },
+    value => { value.supplementary_browser.new_tabs = 1 },
     value => { value.attested_at = new Date(Date.now() + 3600_000).toISOString() },
   ]) {
     const changed = structuredClone(f.payload); change(changed)
