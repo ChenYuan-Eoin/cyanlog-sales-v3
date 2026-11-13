@@ -67,7 +67,7 @@ function getAllChildDeptIds(departments: OrgSummaryDepartment[], parentId: strin
 type MemberEmployment = 'active' | 'departed' | 'suspended' | 'unknown'
 
 function memberEmployment(user: OrgSummaryUser): MemberEmployment {
-  if (user.directory_identity_id || user.directory_source) {
+  if (user.directory_identity_id) {
     if (user.directory_status === 'active') return 'active'
     if (user.directory_status === 'ended'
       || (user.directory_source === 'fxiaoke' && user.directory_status === 'suspended')) return 'departed'
@@ -414,7 +414,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
       size: 110,
       cell: ({ row }) => {
         const user = row.original
-        if (!user.directory_identity_id && !user.directory_source) return <span className="text-xs text-slate-500">系统成员</span>
+        if (!user.directory_identity_id) return <span className="text-xs text-slate-500">系统成员</span>
         const employed = memberEmployment(user) === 'active'
         const firstLoginPending = user.directory_pending_account === true && user.membership_status === 'invited' && user.status === 'inactive'
         return <Badge variant={employed && firstLoginPending ? 'outline' : 'secondary'}>
@@ -458,7 +458,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
         const isLoginDisabled = user.login_enabled === false
         const isInvited = user.membership_status === 'invited'
         const isDirectoryPending = user.directory_pending_account === true
-        const isDirectoryManaged = Boolean(user.directory_identity_id || user.directory_source)
+        const isDirectoryManaged = Boolean(user.directory_identity_id)
         const directoryUnavailable = isDirectoryManaged && memberEmployment(user) !== 'active'
         const roleMutationRestriction = getRoleMutationRestriction(user, currentUserId)
 

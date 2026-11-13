@@ -89,6 +89,18 @@ it('distinguishes manual suspension and unknown directory status and provides an
   expect(within(screen.getByText('目录待核对丁').closest('tr')!).queryByText('在职')).not.toBeInTheDocument()
 })
 
+it('keeps an unlinked manual member manageable when the organization aggregate names its directory source', async () => {
+  const manual = { ...statusPayload.users[2], directory_source: 'fxiaoke', directory_status: 'active' }
+  render(<OrgStructureTab orgSummary={{ ...statusPayload, users: [manual] }} currentUserId="actor" />)
+  fireEvent.change(screen.getByLabelText('成员状态'), { target: { value: 'all' } })
+  const row = screen.getByText('本地停用丙').closest('tr')!
+  expect(within(row).getByText('系统成员')).toBeInTheDocument()
+  expect(within(row).getByText('已停用')).toBeInTheDocument()
+  fireEvent.keyDown(within(row).getByRole('button', { name: '管理本地停用丙' }), { key: 'ArrowDown' })
+  expect(await screen.findByRole('menuitem', { name: '编辑' })).not.toHaveAttribute('aria-disabled', 'true')
+  expect(screen.getByRole('menuitem', { name: '启用用户' })).toBeInTheDocument()
+})
+
 it('does not call a previously active directory account a first-login account after local login is disabled', () => {
   const user = { ...statusPayload.users[0], id: 'previously-active', display_name: '已登录后禁用戊', status: 'active', membership_status: 'active' as const }
   render(<OrgStructureTab orgSummary={{ ...statusPayload, users: [user] }} currentUserId="actor" />)
