@@ -59,6 +59,7 @@ const FXIAOKE_SSO_PRODUCTION_ITEMS = Object.freeze(['fxiaoke_sso_login', 'fxiaok
 const SHIPPING_PARSER_CONTRACT = 'f054-parser-v1';
 const SHIPPING_SERVICE_SELECTION_CONTRACT = 'f054-service-selection-v1';
 const SHIPPING_SETTINGS_CONTRACT = 'f054-shipping-settings-v1';
+const SHIPPING_AUTH_INTAKE_CONTRACT = 'f054-auth-intake-v1';
 const CRM_INTAKE_CONTRACT = 'f054-crm-intake-v1';
 const SHIPPING_PARSER_ITEMS = Object.freeze(['shipping_parser']);
 const APPLICATION_PERMISSION_ACTIONS = Object.freeze(['open_roles', 'save_role_permissions', 'verify_saved_permissions', 'revoke_role_permissions', 'verify_access_denied', 'restore_role_permissions']);
@@ -335,6 +336,7 @@ function requiredReplayActions(state, environment = 'preview') {
   if (runtimeProfileOf(state) === 'application' && runtimeContractVersionOf(state) === ORGANIZATION_CONNECTIONS_CONTRACT) return require('./organization-connections-verifier').CANDIDATE_ACTIONS;
   if (runtimeProfileOf(state) === 'application' && runtimeContractVersionOf(state) === DIRECTORY_CUTOVER_CONTRACT) return require('./organization-directory-cutover-verifier').CANDIDATE_ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === SHIPPING_SETTINGS_CONTRACT) return require('./shipping-settings-verifier').ACTIONS;
+  if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === SHIPPING_AUTH_INTAKE_CONTRACT) return require('./shipping-auth-intake-verifier').ACTIONS;
   if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === SHIPPING_SERVICE_SELECTION_CONTRACT) return require('./shipping-service-selection-verifier').ACTIONS;
   if (runtimeContractVersionOf(state) === SHIPPING_PARSER_CONTRACT) return require('./shipping-parser-verifier').ACTIONS;
   if (runtimeProfileOf(state) === 'application' && runtimeContractVersionOf(state) === FXIAOKE_SSO_CONTRACT) {
@@ -443,6 +445,16 @@ function shippingWorkspaceEvidenceBlockers(section, environment, expectedContrac
 
 function shippingProductionVerifierScopeBlockers(status) {
   const blockers = [];
+  if (status.runtimeContractVersion === SHIPPING_AUTH_INTAKE_CONTRACT) {
+    if (status.activeId !== 'WP35' || status.featureId !== 'F054' || status.runtimeProfile !== 'shipping_workspace') blockers.push('Authenticated intake verifier requires WP35 F054');
+    const authorization = status.productionReleaseAuthorization;
+    if (status.targetState !== 'production_released' || status.productionDatabaseMode !== 'read_only'
+      || authorization?.status !== 'approved_code_only' || authorization.database_write_authorized !== false
+      || authorization.production_database_write_authorized !== false || authorization.carrier_calls_authorized !== false) {
+      blockers.push('Authenticated intake verifier requires code-only authority without Production writes or carrier calls');
+    }
+    return blockers;
+  }
   if (status.runtimeContractVersion === SHIPPING_SETTINGS_CONTRACT) {
     if (status.activeId !== 'WP40' || status.featureId !== 'F054' || status.runtimeProfile !== 'shipping_workspace') blockers.push('Shipping settings verifier requires the scoped WP40 F054 workspace contract');
     const authorization = status.productionReleaseAuthorization;
@@ -504,6 +516,8 @@ function getPreviewOrderException(state, repoRoot, inboxRecords) {
   const contractVersion = runtimeContractVersionOf(state);
   const verifier = contractVersion === CRM_INTAKE_CONTRACT
     ? './crm-intake-verifier'
+    : contractVersion === SHIPPING_AUTH_INTAKE_CONTRACT
+      ? './shipping-auth-intake-verifier'
     : contractVersion === SHIPPING_SETTINGS_CONTRACT
     ? './shipping-settings-verifier'
     : contractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT
@@ -515,7 +529,7 @@ function getPreviewOrderException(state, repoRoot, inboxRecords) {
           : './fxiaoke-connection-verifier';
   const blockers = require(verifier).productionFirstExceptionBlockers({
     approval, activeId: state.active_task?.id, contractVersion,
-    ...([SHIPPING_SETTINGS_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT].includes(contractVersion) ? { featureId: state.active_task?.feature_id, runtimeProfile: runtimeProfileOf(state) } : {}),
+    ...([SHIPPING_SETTINGS_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_AUTH_INTAKE_CONTRACT].includes(contractVersion) ? { featureId: state.active_task?.feature_id, runtimeProfile: runtimeProfileOf(state) } : {}),
     productTree: runGit(repoRoot, ['rev-parse', 'HEAD:product-truth/product-code'], { allowFailure: true }),
     candidateIsAncestor: Boolean(base && runGit(repoRoot, ['merge-base', '--is-ancestor', base, 'HEAD'], { allowFailure: true }) !== null),
     changedPaths: changed === null ? null : changed.split('\0').filter(Boolean),
@@ -617,6 +631,7 @@ function validateSchedulerSnapshot(options, candidate) {
   const parserRelease = profile === 'shipping_workspace' && contractVersion === SHIPPING_PARSER_CONTRACT;
   const serviceSelectionRelease = profile === 'shipping_workspace' && contractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT;
   const shippingSettingsRelease = profile === 'shipping_workspace' && contractVersion === SHIPPING_SETTINGS_CONTRACT;
+  const authenticatedIntakeRelease = profile === 'shipping_workspace' && contractVersion === SHIPPING_AUTH_INTAKE_CONTRACT;
   const crmIntakeRelease = profile === 'shipping_workspace' && contractVersion === CRM_INTAKE_CONTRACT;
   const fxiaokeProduction = fxiaokeRelease && deliveryContract.target_state === 'production_released';
   const fxiaokeSsoProduction = fxiaokeSsoRelease && deliveryContract.target_state === 'production_released';
@@ -655,10 +670,11 @@ function validateSchedulerSnapshot(options, candidate) {
   }
   if (['shipping', 'shipping_workspace'].includes(profile) && state.active_task?.feature_id !== 'F054') errors.push('Shipping evidence profile requires the F054 feature binding');
   const applicationRelease = profile === 'application' && [APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, DIRECTORY_SCOPE_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT].includes(contractVersion);
-  if (contractVersion && !applicationRelease && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', SHIPPING_PARSER_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_SETTINGS_CONTRACT, CRM_INTAKE_CONTRACT].includes(contractVersion))) errors.push('Unknown or mismatched runtime contract version');
+  if (contractVersion && !applicationRelease && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', SHIPPING_PARSER_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_SETTINGS_CONTRACT, SHIPPING_AUTH_INTAKE_CONTRACT, CRM_INTAKE_CONTRACT].includes(contractVersion))) errors.push('Unknown or mismatched runtime contract version');
   if (parserRelease && (state.active_task.id !== 'WP95' || deliveryContract.production_database_mode !== 'read_only')) errors.push('Parser contract is limited to WP95 without business writes');
   if (serviceSelectionRelease && (state.active_task.id !== 'WP52' || deliveryContract.production_database_mode !== 'read_only')) errors.push('Service selection contract is limited to read-only WP52');
   if (shippingSettingsRelease && (state.active_task.id !== 'WP40' || deliveryContract.production_database_mode !== 'read_only')) errors.push('Shipping settings contract is limited to read-only WP40');
+  if (authenticatedIntakeRelease && (state.active_task.id !== 'WP35' || deliveryContract.production_database_mode !== 'read_only')) errors.push('Authenticated intake contract is limited to read-only WP35');
   if (crmIntakeRelease) {
     errors.push(...require('./crm-intake-verifier').contractScopeBlockers({
       activeId: state.active_task?.id,
@@ -684,6 +700,8 @@ function validateSchedulerSnapshot(options, candidate) {
     ? require('./shipping-service-selection-verifier').ITEMS
     : shippingSettingsRelease
       ? require('./shipping-settings-verifier').ITEMS
+    : authenticatedIntakeRelease
+      ? require('./shipping-auth-intake-verifier').ITEMS
     : crmIntakeRelease
       ? require('./crm-intake-verifier').ITEMS
     : parserRelease
@@ -713,6 +731,7 @@ function validateSchedulerSnapshot(options, candidate) {
   }
   if (serviceSelectionRelease && JSON.stringify(requiredRuntimeEvidence) !== JSON.stringify(canonicalRuntimeEvidence)) errors.push('Service selection runtime evidence must contain only the scoped selection and access items');
   if (shippingSettingsRelease && JSON.stringify(requiredRuntimeEvidence) !== JSON.stringify(canonicalRuntimeEvidence)) errors.push('Shipping settings runtime evidence must contain only the scoped settings and access items');
+  if (authenticatedIntakeRelease && JSON.stringify(requiredRuntimeEvidence) !== JSON.stringify(canonicalRuntimeEvidence)) errors.push('Authenticated intake runtime evidence must contain only intake and access items');
   if (crmIntakeRelease && JSON.stringify(requiredRuntimeEvidence) !== JSON.stringify(canonicalRuntimeEvidence)) errors.push('CRM intake runtime evidence must contain only the four scoped CRM proofs');
   if (organizationConnectionsCode && JSON.stringify(requiredRuntimeEvidence) !== JSON.stringify(canonicalRuntimeEvidence)) errors.push('Organization connection runtime evidence must contain only the scoped lifecycle and preview items');
   if (deliveryContract?.target_state === 'production_released') {
@@ -735,6 +754,7 @@ function validateSchedulerSnapshot(options, candidate) {
     }
     if (serviceSelectionRelease && JSON.stringify(requiredProductionRuntimeEvidence) !== JSON.stringify(canonicalProductionEvidence)) errors.push('Service selection Production evidence must contain only the scoped selection and access items');
     if (shippingSettingsRelease && JSON.stringify(requiredProductionRuntimeEvidence) !== JSON.stringify(canonicalProductionEvidence)) errors.push('Shipping settings Production evidence must contain only the scoped settings and access items');
+    if (authenticatedIntakeRelease && JSON.stringify(requiredProductionRuntimeEvidence) !== JSON.stringify(canonicalProductionEvidence)) errors.push('Authenticated intake Production evidence must contain only intake and access items');
     if (crmIntakeRelease && JSON.stringify(requiredProductionRuntimeEvidence) !== JSON.stringify(canonicalProductionEvidence)) errors.push('CRM intake Production evidence must contain only the four scoped CRM proofs');
     const releaseAuthorization = deliveryContract.production_release_authorization;
     for (const field of ['status', 'micro_fix_approval_id', 'clarification_id', 'micro_fix_scope', 'final_scope']) {
@@ -771,7 +791,9 @@ function validateSchedulerSnapshot(options, candidate) {
     if (shippingSettingsRelease && (releaseAuthorization?.status !== 'approved_code_only' || releaseAuthorization.carrier_calls_authorized !== false
       || releaseAuthorization.organization_sync_authorized !== false || releaseAuthorization.service_retirement_authorized !== false
       || releaseAuthorization.production_database_write_authorized !== false)) errors.push('Shipping settings release must explicitly exclude Production database writes, carrier calls, organization synchronization, and service retirement');
-    if (releaseAuthorization?.status === 'approved_code_only' && (databaseMode !== 'read_only' || (!applicationRelease && !['f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', SHIPPING_PARSER_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_SETTINGS_CONTRACT].includes(contractVersion))
+    if (authenticatedIntakeRelease && (releaseAuthorization?.status !== 'approved_code_only' || releaseAuthorization.carrier_calls_authorized !== false
+      || releaseAuthorization.production_database_write_authorized !== false)) errors.push('Authenticated intake release must explicitly exclude Production database writes and carrier calls');
+    if (releaseAuthorization?.status === 'approved_code_only' && (databaseMode !== 'read_only' || (!applicationRelease && !['f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', SHIPPING_PARSER_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_SETTINGS_CONTRACT, SHIPPING_AUTH_INTAKE_CONTRACT].includes(contractVersion))
       || releaseAuthorization.database_write_authorized !== false)) errors.push('Code-only release requires the UI or recovery contract and explicit read-only database boundary');
   }
   for (const dynamicKey of ['evidence', 'release_control', 'releaseControl', 'completionState', 'completion_state', 'defects']) {
@@ -2041,6 +2063,14 @@ function productionBrowserOperatorAttestationBlockers(envelope, repoRoot, expect
 function productionRuntimeEvidenceBlockers(evidence, requiredItems, repoRoot, expected) {
   const blockers = [];
   const section = evidence.production_runtime || {};
+  if (expected.runtimeContractVersion === SHIPPING_AUTH_INTAKE_CONTRACT) {
+    const verifier = require('./shipping-auth-intake-verifier');
+    for (const item of ['verifier', ...verifier.ITEMS]) {
+      if (!evidenceEnvelopeValid(section[item], repoRoot) || !evidenceEnvelopeUnderPrefix(section[item], 'production-runtime-verifier')) blockers.push(`Authenticated intake controlled evidence missing or invalid: ${item}`);
+    }
+    blockers.push(...verifier.productionEvidenceBlockers(section, { ...expected, runtime: path.dirname(getDeliveryRuntimePath(repoRoot)) }));
+    return blockers;
+  }
   if (expected.runtimeContractVersion === SHIPPING_SETTINGS_CONTRACT) {
     const verifier = require('./shipping-settings-verifier');
     for (const item of ['verifier', ...verifier.ITEMS]) {
@@ -2525,6 +2555,17 @@ function getDeliveryStatus(options = {}) {
 
 function manualDeliveryGateApproved(status) {
   const record = status.manualDeliveryGateApprovalRecord;
+  const harnessIdle = status.harness.mode === 'permissive' && status.harness.phase === 'idle'
+    && !status.harness.activeGate && !status.harness.workPackageId && !status.harness.goalStatus;
+  if (status.activeId === 'WP35' && status.featureId === 'F054'
+    && status.runtimeProfile === 'shipping_workspace' && status.runtimeContractVersion === SHIPPING_AUTH_INTAKE_CONTRACT) {
+    return status.manualDeliveryGateApprovalId === 'IN-20261113-009'
+      && record?.id === status.manualDeliveryGateApprovalId
+      && record?.type === 'final_production_release_authorization' && record?.source === 'user_explicit'
+      && record?.state === 'approved' && record?.scope === status.productionReleaseAuthorization?.final_scope
+      && record?.manual_code_evidence_authorized === true && record?.harness_auto_interception_authorized === false
+      && harnessIdle;
+  }
   const approvedScope = '仅 WP94 纷享 SSO：Harness 已按既有用户要求停用时，以精确提交绑定的真实命令日志、校验哈希、隔离重放和生产验收替代自动 Harness 状态判断；不取消其他交付门禁。';
   return status.activeId === 'WP94'
     && status.featureId === 'F003'
@@ -2538,11 +2579,7 @@ function manualDeliveryGateApproved(status) {
     && record?.scope === approvedScope
     && record?.manual_code_evidence_authorized === true
     && record?.harness_auto_interception_authorized === false
-    && status.harness.mode === 'permissive'
-    && status.harness.phase === 'idle'
-    && !status.harness.activeGate
-    && !status.harness.workPackageId
-    && !status.harness.goalStatus;
+    && harnessIdle;
 }
 
 function checkDeliveryStage(stage, options = {}) {
@@ -2817,8 +2854,8 @@ function checkDeliveryStage(stage, options = {}) {
     if (status.git.remoteProduction !== status.git.head) blockers.push('origin/production does not equal released candidate HEAD');
     const codeOnly = status.productionReleaseAuthorization?.status === 'approved_code_only';
     if (!codeOnly && status.productionReleaseAuthorization?.status !== 'approved_for_final_release') blockers.push('Final Production release authorization is still pending');
-    if (codeOnly ? status.productionDatabaseMode !== 'read_only' || !['f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', SHIPPING_PARSER_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_SETTINGS_CONTRACT, APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT].includes(status.runtimeContractVersion) : status.productionDatabaseMode !== 'controlled_write_approved') blockers.push('Production database boundary does not match the authorized release mode');
-    if ([SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_SETTINGS_CONTRACT].includes(status.runtimeContractVersion)) blockers.push(...shippingProductionVerifierScopeBlockers(status));
+    if (codeOnly ? status.productionDatabaseMode !== 'read_only' || !['f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', SHIPPING_PARSER_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_SETTINGS_CONTRACT, SHIPPING_AUTH_INTAKE_CONTRACT, APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT].includes(status.runtimeContractVersion) : status.productionDatabaseMode !== 'controlled_write_approved') blockers.push('Production database boundary does not match the authorized release mode');
+    if ([SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_SETTINGS_CONTRACT, SHIPPING_AUTH_INTAKE_CONTRACT].includes(status.runtimeContractVersion)) blockers.push(...shippingProductionVerifierScopeBlockers(status));
     const approvalRecord = status.productionReleaseAuthorizationRecord;
     if (approvalRecord?.type !== 'final_production_release_authorization') blockers.push('Final Production authorization record type is invalid');
     if (approvalRecord?.state !== 'approved') blockers.push('Final Production authorization record is not approved');
@@ -2864,6 +2901,11 @@ function checkDeliveryStage(stage, options = {}) {
     }
     if (status.runtimeContractVersion === CRM_INTAKE_CONTRACT) {
       blockers.push(...require('./crm-intake-verifier').contractScopeBlockers(status));
+    } else if (status.runtimeContractVersion === SHIPPING_AUTH_INTAKE_CONTRACT) {
+      const verifier = require('./shipping-auth-intake-verifier');
+      try { verifier.operatorPayload(evidence.production?.browser_acceptance?.payload, { commit: status.git.head, deploymentId: liveVercel.snapshot?.deployment?.id }, { requireFresh: false }); }
+      catch (error) { blockers.push(error.message); }
+      if (evidence.production_runtime?.sales_intake?.payload?.source_operator_sha256 !== evidence.production?.browser_acceptance?.sha256) blockers.push('Authenticated intake runtime is not bound to accepted Chrome evidence');
     } else if (status.runtimeContractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT) {
       if (JSON.stringify(evidence.production?.browser_acceptance?.payload?.actions) !== JSON.stringify(require('./shipping-service-selection-verifier').ACTIONS)) blockers.push('Service selection Production operator actions are incomplete or out of order');
       if (evidence.production_runtime?.shipping_service_selection?.payload?.source_operator_sha256 !== evidence.production?.browser_acceptance?.sha256) blockers.push('Service selection Production runtime is not bound to the accepted Chrome operator evidence');
@@ -3046,6 +3088,13 @@ async function verifyShippingWorkspaceProduction(options = {}) {
   const { runtimePath } = loadDeliveryMutableBase({ repoRoot });
   const serviceSelection = status.runtimeContractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT;
   const shippingSettings = status.runtimeContractVersion === SHIPPING_SETTINGS_CONTRACT;
+  const authenticatedIntake = status.runtimeContractVersion === SHIPPING_AUTH_INTAKE_CONTRACT;
+  if (authenticatedIntake) {
+    const blockers = productionBrowserOperatorAttestationBlockers(options.operator, repoRoot, { commit: status.git.head, deploymentId: live.snapshot.deployment.id });
+    try { require('./shipping-auth-intake-verifier').operatorPayload(options.operator?.payload, { commit: status.git.head, deploymentId: live.snapshot.deployment.id }); }
+    catch (error) { blockers.push(error.message); }
+    if (blockers.length) throw new Error(blockers.join('; '));
+  }
   if (serviceSelection) {
     const blockers = productionBrowserOperatorAttestationBlockers(options.operator, repoRoot, { commit: status.git.head, deploymentId: live.snapshot.deployment.id });
     if (JSON.stringify(options.operator.payload?.actions) !== JSON.stringify(require('./shipping-service-selection-verifier').ACTIONS)) blockers.push('Service selection Production operator actions are incomplete or out of order');
@@ -3056,7 +3105,9 @@ async function verifyShippingWorkspaceProduction(options = {}) {
     blockers.push(...require('./shipping-settings-verifier').productionOperatorBlockers(options.operator?.payload, { commit: status.git.head, deploymentId: live.snapshot.deployment.id }));
     if (blockers.length) throw new Error(blockers.join('; '));
   }
-  const payload = shippingSettings ? await require('./shipping-settings-verifier').verify({
+  const payload = authenticatedIntake ? await require('./shipping-auth-intake-verifier').verify({
+    runtime: path.dirname(runtimePath), operator: options.operator, commit: status.git.head, deploymentId: live.snapshot.deployment.id
+  }) : shippingSettings ? await require('./shipping-settings-verifier').verify({
     runtime: path.dirname(runtimePath), operator: options.operator, commit: status.git.head, deploymentId: live.snapshot.deployment.id
   }) : serviceSelection ? await require('./shipping-service-selection-verifier').verify({
     runtime: path.dirname(runtimePath), operator: options.operator, commit: status.git.head, deploymentId: live.snapshot.deployment.id

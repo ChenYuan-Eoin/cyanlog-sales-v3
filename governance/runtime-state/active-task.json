@@ -260,6 +260,8 @@
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
+    "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-auth-intake-verifier.js",
+    "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-auth-intake-verifier.test.js",
       "product-truth/product-code/app/shipping/page.tsx",
       "product-truth/product-code/app/shipping/page.test.tsx",
       "product-truth/product-code/app/shipping/workbench.tsx",
@@ -301,13 +303,11 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "shipping_workspace",
-        "shipping_tracking",
+        "sales_intake",
         "shipping_access"
       ],
       "required_production_runtime_evidence": [
-        "shipping_workspace",
-        "shipping_tracking",
+        "sales_intake",
         "shipping_access"
       ],
       "required_production_evidence": [
@@ -331,24 +331,25 @@
         "production_database_mode": "read_only"
       },
       "production_release_authorization": {
-        "status": "pending_security_gate_and_final_write_approval",
-        "final_release_approval_id": null,
+        "status": "approved_code_only",
+        "final_release_approval_id": "IN-20261113-009",
         "micro_fix_approval_id": "IN-20261016-009",
         "clarification_id": "IN-20261016-015",
         "micro_fix_scope": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
-        "final_scope": "Authenticated sales shipping intake and address choices, subject to separate production release approval under current AGENTS.md.",
+        "final_scope": "WP35 合并发布：关闭匿名提报和全组织公开记录；在职纷享员工可单票或多票提报待确认工单，按当前账号和组织只读本人 owner_web 记录；恢复寄件地址选择。发布验收不提交真实工单、不调用顺丰、不写生产数据库或改旧单。",
         "database_write_authorized": false,
+        "production_database_write_authorized": false,
+        "carrier_calls_authorized": false,
         "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
         "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
-        "legacy_scope_only": true,
-        "new_scope_release_authorized": false,
-        "authorization_interpretation": "The historic WP35 code-only approval covered the older address UX. IN-20261113-004 approves the scheduling and product scope change, not push, PR or Production deployment under the user-provided current AGENTS.md."
+        "legacy_scope_only": false,
+        "new_scope_release_authorized": true,
+        "authorization_interpretation": "IN-20261113-008/009 combine the user-approved scope and one Production release after the product code is complete. Live verification is read-only and uses the existing Chrome."
       },
-      "blocking_acceptance_defects": [
-        "IN-20261016-009",
-        "IN-20261016-023"
-      ],
-      "runtime_contract_version": "f054-intake-v1"
+      "manual_delivery_gate_approval_id": "IN-20261113-009",
+      "preview_order_exception_approval_id": "IN-20261113-009",
+      "blocking_acceptance_defects": [],
+      "runtime_contract_version": "f054-auth-intake-v1"
     },
     "feature_id": "F054",
     "integration_decision": {
