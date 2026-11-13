@@ -466,3 +466,86 @@ module.exports = {
   productionBlockers,
   verify
 };
+
+// A code-only organization member page release is independent of full SSO
+// acceptance. The old contract above remains unchanged and still requires its
+// real identity-denial matrix.
+const MEMBER_CONTRACT = 'f003-org-member-ui-v1';
+const MEMBER_ACTIONS = Object.freeze(['default_active_members', 'departed_members', 'directory_controls', 'employee_login_entry', 'manual_member_boundary']);
+const MEMBER_FLAGS = Object.freeze(['active_members_only_by_default', 'departed_not_first_login', 'historical_records_queryable', 'manual_member_controls_preserved', 'directory_lifecycle_controls_absent', 'employee_login_link_visible']);
+function memberOperatorBlockers(payload, expected = {}) {
+  const errors = [];
+  if (!payload || payload.contract_version !== MEMBER_CONTRACT || payload.environment !== 'production'
+    || payload.url !== ORIGIN + '/configs?tab=org-structure') errors.push('Member UI operator scope mismatch');
+  if (payload?.commit !== expected.commit || payload?.deployment_id !== expected.deploymentId) errors.push('Member UI operator commit/deployment mismatch');
+  if (payload?.attestation_type !== 'trusted_operator_browser' || payload?.trust_boundary !== 'operator_attestation_not_machine_proof'
+    || payload?.source !== 'trusted_existing_iab_operator' || payload?.browser_context !== 'existing_user_iab'
+    || payload?.attestation_method !== 'codex_iab_control_existing_session' || !nonempty(payload?.existing_tab_id)
+    || payload?.new_tabs !== 0 || payload?.new_browser_contexts !== 0 || !nonempty(payload?.attested_by)) errors.push('Member UI needs the user existing IAB session');
+  const age = (expected.now ?? Date.now()) - Date.parse(payload?.attested_at || '');
+  if (!Number.isFinite(age) || age < -60000 || age > 2 * 3600000) errors.push('Member UI operator evidence must be fresh');
+  if (payload?.result !== 'pass' || payload?.no_business_writes !== true || payload?.carrier_calls !== false
+    || payload?.full_sso_acceptance !== false) errors.push('Member UI must remain read-only and cannot claim full SSO acceptance');
+  if (!sameActions(payload?.actions, MEMBER_ACTIONS) || !Array.isArray(payload?.observations)
+    || payload.observations.length !== MEMBER_ACTIONS.length
+    || payload.observations.some((x,i) => x?.action !== MEMBER_ACTIONS[i] || x?.result !== 'pass' || !nonempty(x?.detail))) errors.push('Member UI observations incomplete');
+  for (const flag of MEMBER_FLAGS) if (payload?.[flag] !== true) errors.push('Member UI missing observation: ' + flag);
+  if (!attachmentShapeValid(payload?.attachments)) errors.push('Member UI raw observations missing');
+  return errors;
+}
+function memberProductionFirstBlockers(args = {}) {
+  const { approval, productTree, changedPaths, candidateIsAncestor } = args;
+  const errors = [];
+  if (args.activeId !== 'WP94' || args.contractVersion !== MEMBER_CONTRACT) errors.push('Member UI scope mismatch');
+  if (approval?.type !== 'final_production_release_authorization' || approval?.state !== 'approved' || approval?.source !== 'user_explicit'
+    || approval?.preview_order_exception !== true || approval?.preview_status !== 'not_passed'
+    || approval?.code_release_authorized !== true || approval?.production_database_write_authorized !== false
+    || approval?.database_write_authorized !== false || approval?.carrier_calls_authorized !== false
+    || approval?.full_sso_acceptance !== false || approval?.operator_browser !== 'existing_user_iab') errors.push('Member UI requires scoped code-only authority');
+  if (!/^[a-f0-9]{40}$/.test(approval?.approved_candidate || '') || !/^[a-f0-9]{40}$/.test(approval?.approved_product_tree || '')
+    || candidateIsAncestor !== true || productTree !== approval.approved_product_tree) errors.push('Member UI candidate tree/ancestry mismatch');
+  const rules = new Set(['governance/runtime-state/active-task.json', 'governance/runtime-state/demand-inbox.jsonl',
+    ...['project-registry.js','fxiaoke-sso-verifier.js','fxiaoke-sso-verifier.test.js','harness-selftest.js'].map(x=>'governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/'+x)]);
+  if (!Array.isArray(changedPaths) || changedPaths.some(x=>!rules.has(x))) errors.push('Member UI post-approval product changes');
+  if (!/^[a-f0-9]{40}$/.test(approval?.rollback_commit || '')) errors.push('Member UI rollback required');
+  return errors;
+}
+function memberProductionBlockers(section, expected = {}) {
+  const errors=[];const page=section?.org_member_ui?.payload, proof=section?.verifier?.payload;
+  if (!page || !proof || page.contract_version !== MEMBER_CONTRACT || proof.contract_version !== MEMBER_CONTRACT
+    || page.commit !== expected.commit || proof.commit !== expected.commit || page.deployment_id !== expected.deploymentId
+    || proof.deployment_id !== expected.deploymentId || page.environment !== 'production' || proof.environment !== 'production'
+    || page.source !== 'trusted_existing_iab_operator' || proof.source !== 'live_member_ui_verifier'
+    || page.full_sso_acceptance !== false || proof.read_only !== true || proof.result !== 'pass') errors.push('Member UI controlled receipt mismatch');
+  if (!SHA256.test(page?.source_operator_sha256 || '') || page.source_operator_sha256 !== proof?.source_operator_sha256) errors.push('Member UI operator binding mismatch');
+  if (!Array.isArray(proof?.probes) || proof.probes.length !== 2 || proof.probes[0]?.path !== '/api/auth/providers'
+    || proof.probes[0]?.status !== 200 || proof.probes[0]?.provider_available !== true
+    || proof.probes[1]?.path !== '/configs?tab=org-structure' || ![302,303,307,308].includes(proof.probes[1]?.status)
+    || proof.probes[1]?.location !== '/login') errors.push('Member UI anonymous/login probes incomplete');
+  if (page) errors.push(...memberOperatorBlockers(page.operator_attestation, {...expected,now:Date.parse(proof?.observed_at||'')}));
+  return errors;
+}
+async function verifyMemberUi({runtime,operator,commit,deploymentId,request=fetch}={}) {
+  const expected={commit,deploymentId};const errors=memberOperatorBlockers(operator?.payload,expected);if(errors.length)throw Error(errors.join('; '));
+  const original=readArtifact(runtime,operator.artifact_path,operator.sha256);
+  if (JSON.stringify(JSON.parse(original)) !== JSON.stringify(operator.payload)) throw Error('Member UI operator envelope mismatch');
+  const folder=path.join(runtime,'production-runtime-verifier');fs.mkdirSync(folder,{recursive:true});
+  const write=(name,value)=>{const b=Buffer.isBuffer(value)?value:Buffer.from(JSON.stringify(value));const p=path.join(folder,'member-'+name);fs.writeFileSync(p,b);return {path:'production-runtime-verifier/member-'+name,sha256:sha256(b)}};
+  const attachments=operator.payload.attachments.map((x,i)=>write('attachment-'+i+path.extname(x.path),readArtifact(runtime,x.path,x.sha256)));
+  attachments.push(write('operator-original.json',original));
+  const probes=[];
+  for(const endpoint of ['/api/auth/providers','/configs?tab=org-structure']){
+    const response=await request(ORIGIN+endpoint,{method:'GET',credentials:'omit',redirect:'manual',signal:AbortSignal.timeout(15000)});
+    const raw=await response.text();const probe={path:endpoint,status:response.status,location:response.headers.get('location')||'',credentials:'omit'};
+    if(endpoint==='/api/auth/providers'){let body;try{body=JSON.parse(raw)}catch{}probe.provider_available=body?.providers?.some(x=>x.id==='fxiaoke'&&x.startUrl==='/api/auth/fxiaoke/start')===true;}
+    probe.raw=write('probe-'+probes.length+'.json',{...probe,response_sha256:sha256(raw)});probes.push(probe);
+  }
+  const common={contract_version:MEMBER_CONTRACT,environment:'production',origin:ORIGIN,commit,deployment_id:deploymentId,source_operator_sha256:operator.sha256,attachments};
+  const envelope=(name,payload)=>{const ref=write(name+'.json',payload);return {artifact_path:ref.path,sha256:ref.sha256,payload}};
+  const section={org_member_ui:envelope('page',{...common,source:'trusted_existing_iab_operator',full_sso_acceptance:false,operator_attestation:operator.payload}),verifier:envelope('verifier',{...common,source:'live_member_ui_verifier',read_only:true,result:'pass',observed_at:new Date().toISOString(),probes})};
+  const blockers=memberProductionBlockers(section,expected);if(blockers.length)throw Error(blockers.join('; '));return section;
+}
+const memberAdapter={CONTRACT:MEMBER_CONTRACT,ITEMS:['org_member_ui'],PRODUCTION_ITEMS:['org_member_ui'],PREVIEW_ACTIONS:MEMBER_ACTIONS,PRODUCTION_ACTIONS:MEMBER_ACTIONS,
+  productionFirstExceptionBlockers:memberProductionFirstBlockers,productionOperatorBlockers:memberOperatorBlockers,productionBlockers:memberProductionBlockers,
+  previewBlockers:()=>['Member UI Preview remains not passed until a real isolated operator journey is available'],verify:verifyMemberUi};
+module.exports.forContract = version => version === MEMBER_CONTRACT ? memberAdapter : module.exports;

@@ -2351,10 +2351,10 @@ function runVercelHttpsTransportSelftest(repoRoot) {
       alias: [VERCEL_PRODUCTION_CONTRACT.domain] }
   };
   const connector = verifierFixture.connectorPayload;
-  assert.strictEqual(connector(connectorReceipt, fixtureSha, observedAt, { artifact_path: 'receipt.json', sha256: 'a'.repeat(64) }).ok, true);
+  assert.strictEqual(connector(connectorReceipt, fixtureSha, observedAt, { artifact_path: 'receipt.json', sha256: 'a'.repeat(64) }, 'IN-20261112-002').ok, true);
   const previewLatestReceipt = JSON.parse(JSON.stringify(connectorReceipt));
   previewLatestReceipt.project.latestDeployment = { id: 'dpl_Preview', target: null, readyState: 'BUILDING' };
-  assert.strictEqual(connector(previewLatestReceipt, fixtureSha, observedAt).ok, true, 'current production is determined by the domain alias, not the newest preview');
+  assert.strictEqual(connector(previewLatestReceipt, fixtureSha, observedAt, undefined, 'IN-20261112-002').ok, true, 'current production is determined by the domain alias, not the newest preview');
   for (const change of [
     value => { value.observed_at = '2000-01-01T00:00:00Z'; },
     value => { value.project.accountId = 'other'; },
@@ -2364,7 +2364,7 @@ function runVercelHttpsTransportSelftest(repoRoot) {
     value => { value.deployment.meta.githubCommitSha = 'b'.repeat(40); }
   ]) {
     const value = JSON.parse(JSON.stringify(connectorReceipt)); change(value);
-    assert.strictEqual(connector(value, fixtureSha, observedAt).ok, false, 'connector proof must fail closed on stale or mismatched facts');
+    assert.strictEqual(connector(value, fixtureSha, observedAt, undefined, 'IN-20261112-002').ok, false, 'connector proof must fail closed on stale or mismatched facts');
   }
 
   for (const bad of ['https://elsewhere.test/', '//elsewhere.test/', endpoint + '&teamId=other', endpoint.replace('teamId=', 'wrong='), endpoint + '\nheader="injected"', '/v13/deployments/../auth?teamId=' + VERCEL_PRODUCTION_CONTRACT.teamId]) {

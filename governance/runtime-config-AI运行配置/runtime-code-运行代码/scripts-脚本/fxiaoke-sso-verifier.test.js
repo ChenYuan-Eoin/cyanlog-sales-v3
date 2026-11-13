@@ -344,3 +344,57 @@ test('controlled Production verifier records four fail-closed public probes with
     fs.rmSync(runtime, { recursive: true, force: true });
   }
 });
+
+test('member UI contract accepts only scoped existing-IAB read-only observations and keeps full SSO independent', () => {
+  const member = v.forContract('f003-org-member-ui-v1');
+  assert.equal(v.forContract(v.CONTRACT), v);
+  const payload = {
+    contract_version: member.CONTRACT, commit: expected.commit, deployment_id: expected.deploymentId,
+    environment: 'production', url: 'https://sales.cyanlog.icu/configs?tab=org-structure',
+    source: 'trusted_existing_iab_operator', attestation_type: 'trusted_operator_browser',
+    trust_boundary: 'operator_attestation_not_machine_proof', attestation_method: 'codex_iab_control_existing_session',
+    browser_context: 'existing_user_iab', existing_tab_id: 'existing-1', new_tabs: 0, new_browser_contexts: 0,
+    attested_by: 'operator', attested_at: '2026-10-29T03:00:00Z', result: 'pass',
+    no_business_writes: true, carrier_calls: false, full_sso_acceptance: false,
+    actions: member.PRODUCTION_ACTIONS,
+    observations: member.PRODUCTION_ACTIONS.map(action => ({ action, result: 'pass', detail: 'Observed actual member page behavior.' })),
+    active_members_only_by_default: true, departed_not_first_login: true, historical_records_queryable: true,
+    manual_member_controls_preserved: true, directory_lifecycle_controls_absent: true, employee_login_link_visible: true,
+    attachments: attachment,
+  };
+  assert.deepEqual(member.productionOperatorBlockers(payload, expected), []);
+  for (const patch of [{full_sso_acceptance: true}, {no_business_writes:false}, {browser_context:'new_context'}, {departed_not_first_login:false}, {actions:[]}]) {
+    assert.ok(member.productionOperatorBlockers({...payload,...patch},expected).length > 0);
+  }
+  assert.ok(v.productionOperatorBlockers(payload,expected).length > 0);
+});
+
+test('member verifier checks real probe results and binds existing-session observations without writing business data', async () => {
+  const fs = require('fs'), os = require('os'), path = require('path'), crypto = require('crypto');
+  const member = v.forContract('f003-org-member-ui-v1'), runtime = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'member-proof-')));
+  const hash = x => crypto.createHash('sha256').update(x).digest('hex');
+  try {
+    const raw = Buffer.from('member page observation'); fs.writeFileSync(path.join(runtime, 'raw.txt'), raw);
+    const payload = {
+      contract_version: member.CONTRACT, commit: expected.commit, deployment_id: expected.deploymentId,
+      environment:'production',url:'https://sales.cyanlog.icu/configs?tab=org-structure',source:'trusted_existing_iab_operator',
+      attestation_type:'trusted_operator_browser',trust_boundary:'operator_attestation_not_machine_proof',
+      attestation_method:'codex_iab_control_existing_session',browser_context:'existing_user_iab',existing_tab_id:'1',
+      new_tabs:0,new_browser_contexts:0,attested_by:'operator',attested_at:new Date().toISOString(),result:'pass',
+      no_business_writes:true,carrier_calls:false,full_sso_acceptance:false,actions:member.PRODUCTION_ACTIONS,
+      observations:member.PRODUCTION_ACTIONS.map(action=>({action,result:'pass',detail:'Observed current member page behavior.'})),
+      active_members_only_by_default:true,departed_not_first_login:true,historical_records_queryable:true,
+      manual_member_controls_preserved:true,directory_lifecycle_controls_absent:true,employee_login_link_visible:true,
+      attachments:[{path:'raw.txt',sha256:hash(raw)}],
+    };
+    const data=Buffer.from(JSON.stringify(payload));fs.writeFileSync(path.join(runtime,'operator.json'),data);
+    const operator={artifact_path:'operator.json',sha256:hash(data),payload};let calls=[];
+    const request=async (url,options)=>{calls.push({url,options});return url.endsWith('/api/auth/providers')
+      ? new Response(JSON.stringify({providers:[{id:'fxiaoke',startUrl:'/api/auth/fxiaoke/start'}]}),{status:200})
+      : new Response('',{status:307,headers:{location:'/login'}});};
+    const section=await member.verify({runtime,operator,commit:expected.commit,deploymentId:expected.deploymentId,request});
+    assert.deepEqual(member.productionBlockers(section,expected),[]);
+    assert.deepEqual(calls.map(x=>[x.options.method,x.options.credentials]),[['GET','omit'],['GET','omit']]);
+    await assert.rejects(()=>member.verify({runtime,operator,commit:expected.commit,deploymentId:expected.deploymentId,request:async()=>new Response('{}',{status:200})}),/probes incomplete/);
+  } finally {fs.rmSync(runtime,{recursive:true,force:true});}
+});

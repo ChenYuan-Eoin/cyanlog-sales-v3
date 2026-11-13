@@ -256,7 +256,11 @@
       "product-truth/product-code/node_modules",
       "product-truth/product-code/.next",
       "product-truth/product-code/tsconfig.tsbuildinfo",
-      "product-truth/product-code/next-env.d.ts"
+      "product-truth/product-code/next-env.d.ts",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-sso-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-sso-verifier.test.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/harness-selftest.js"
     ],
     "reproduction_capsule": "codex-runtime/wp94-sso/reproduction.json",
     "micro_fixes": [
@@ -284,10 +288,14 @@
       "已匹配在职纷享员工登录后可进入配置中心以外的页面并按本人/组织范围读取；默认权限不得编辑、审核、批量处理或向顺丰下单。自助收寄入口是与本人身份绑定的提报页，提交只建立待确认工单。"
     ],
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -302,67 +310,49 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "fxiaoke_sso"
+        "org_member_ui"
       ],
       "required_production_runtime_evidence": [
-        "fxiaoke_sso_login",
-        "fxiaoke_sso_denials"
+        "org_member_ui"
       ],
       "runtime_profile": "application",
-      "runtime_contract_version": "f003-fxiaoke-sso-v1",
+      "runtime_contract_version": "f003-org-member-ui-v1",
       "manual_delivery_gate_approval_id": "IN-20261111-006",
-      "vercel_connector_evidence_approval_id": "IN-20261112-008",
       "production_database_mode": "read_only",
       "production_release_authorization": {
-        "status": "approved_for_final_release",
-        "micro_fix_approval_id": "IN-20261112-015",
-        "clarification_id": "IN-20261112-013",
-        "final_release_approval_id": "IN-20261112-024",
-        "micro_fix_scope": "WP94 仅补齐纷享会话每次请求的在职成员状态校验与目标回归；停用后拒绝旧会话，不扩大登录或业务权限。",
-        "final_scope": "仅 WP94 纷享只读角色组合：READONLY 或 FXIAOKE_BASELINE+READONLY 仍按基础查看范围拒绝无权 GET 与业务写入；FXIAOKE_BASELINE 可本人提报；明确 ADMIN/寄件操作员权限不变。",
-        "database_write_authorized": true,
-        "production_write_scope": [
-          "20261111000000_fxiaoke_sso_without_invitation schema migration",
-          "20261112000000_fxiaoke_baseline_view schema migration SHA256 59a88973ea3260ab9ad1bd946674c56df92a74d861cff468ba7260db8209b900",
-          "20261112000001_fxiaoke_baseline_scoped_role_guard schema migration SHA256 eb9760b99e371be5981be0f817d97201b07ce6cf00d67ce56990d99d66da8b5b",
-          "explicit fxiaoke identity authority toggle",
-          "first verified OAuth login account and session state",
-          "successful login audit",
-          "per-login baseline view role only for verified active matched members without an organization role"
-        ],
-        "database_write_scope_description": "Only the two exact WP94 baseline migrations and verified per-login baseline grants; no bulk account changes, directory sync or carrier call.",
-        "production_migrations_authorized": true,
-        "migration_execution_authorized": true,
-        "account_creation_authorized": false,
-        "account_merge_execution_authorized": false,
-        "identity_binding_authorized": false,
-        "password_reset_authorized": false,
-        "phone_history_migration_authorized": false,
-        "password_removal_authorized": false,
-        "role_modification_authorized": true,
-        "egress_worker_authorized": true,
-        "egress_worker_approval_id": "IN-20261112-001",
-        "carrier_calls_authorized": false,
-        "organization_configuration_write_authorized": true,
-        "directory_sync_authorized": false,
-        "source_unbind_authorized": false,
-        "transport_execution_clarification_id": "IN-20261102-027"
+        "status": "approved_code_only",
+        "micro_fix_approval_id": "IN-20261113-015",
+        "clarification_id": "IN-20261113-016",
+        "final_release_approval_id": "IN-20261113-017",
+        "micro_fix_scope": "本次成员页及对应验收器最小修复",
+        "final_scope": "仅WP94成员页代码修复：按真实目录关联显示在职/离职/不可登录，默认在职和历史筛选、保留手工成员入口、共享员工登录说明；现有IAB正式站只读复验，无迁移、生产人员/账号/角色写入或承运商调用，完整SSO验收保持未完成。",
+        "database_write_authorized": false,
+        "production_database_write_authorized": false,
+        "carrier_calls_authorized": false
       },
       "final_acceptance": {
-        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+        "browser": "trusted_operator_attestation_from_user_existing_iab_only",
         "production_database_mode": "read_only"
       },
-      "note": "本分支只对齐用户已确认的统一组织接入配置真相与安全用户路径，实施仍由后续有界迁移批次承载，Active WP94/Next WP82不变。不得继承独立UI候选的授权来执行统一表迁移；既有UI发布分支及其批准保留。",
+      "note": "仅WP94成员页代码修复：按真实目录关联显示在职/离职/不可登录，默认在职和历史筛选、保留手工成员入口、共享员工登录说明；现有IAB正式站只读复验，无迁移、生产人员/账号/角色写入或承运商调用，完整SSO验收保持未完成。",
       "blocking_acceptance_defects": [
-        "IN-20261102-003",
-        "IN-20261102-007",
-        "IN-20261102-017"
-      ]
+        "IN-20261113-015"
+      ],
+      "preview_order_exception_approval_id": "IN-20261113-017"
     },
     "parked_at": "2026-11-02T10:28:35.605Z",
     "reason": "IN028批准统一接入后联合双登录验收；UI发布分支及真实网络阻断证据保留，未宣称Production关闭。",
     "paused_reason": "IN-20261113-004 approved priority switch to authenticated shipping intake; UI candidate preserved in codex/wp94-baseline-view-actions at 55830b5b.",
-    "scope_note": "当前只开发已复现的组织成员展示与登录入口反馈；Production交付合同和历史证据保留，候选固定后再按真实范围绑定发布，不继承旧候选。"
+    "scope_note": "当前只开发已复现的组织成员展示与登录入口反馈；Production交付合同和历史证据保留，候选固定后再按真实范围绑定发布，不继承旧候选。",
+    "remaining_identity_acceptance": {
+      "status": "not_verified",
+      "defects": [
+        "IN-20261102-003",
+        "IN-20261102-007",
+        "IN-20261102-017"
+      ],
+      "scope": "完整SSO停用身份、跨企业/租户、冲突与重放拒绝矩阵仍未验收；本次成员页发布不关闭。"
+    }
   },
   "execution_queue": {
     "active": {
