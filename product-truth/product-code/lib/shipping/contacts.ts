@@ -40,17 +40,18 @@ export async function loadFxiaokeSenderChoices(user: AuthUser, orgId: string) {
     senderChoices: { company: companyChoice, personal: personalChoice },
     senderSource,
     team: typeof saved?.contact?.team === 'string' ? saved.contact.team : '',
+    departmentId: typeof saved?.contact?.departmentId === 'string' ? saved.contact.departmentId : '',
     updatedAt: saved?.updated_at || NO_PROFILE_VERSION,
     fxiaoke: true as const,
   }
 }
 
-export async function saveFxiaokeCommonSender(user: AuthUser, orgId: string, contact: Contact, expectedUpdatedAt: string, team = '') {
+export async function saveFxiaokeCommonSender(user: AuthUser, orgId: string, contact: Contact, expectedUpdatedAt: string, team = '', departmentId = '') {
   const current = await latestCommonSender(user.id, orgId)
   if ((current?.updated_at || NO_PROFILE_VERSION) !== expectedUpdatedAt) {
     throw new ShippingError(409, '常用寄件地址已在其他页面更新，请刷新后核对再保存。')
   }
-  const savedContact = { ...contactSchema.parse(contact), team: team.trim().slice(0, 80) }
+  const savedContact = { ...contactSchema.parse(contact), team: team.trim().slice(0, 80), departmentId }
   const fingerprint = commonSenderFingerprint(orgId)
   const updatedAt = new Date().toISOString()
   if (current) {

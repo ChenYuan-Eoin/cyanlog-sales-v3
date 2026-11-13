@@ -6,7 +6,7 @@ import { requireShippingConnectionManager } from '@/lib/shipping/connection-auth
 import { requireShippingOperator } from '@/lib/shipping/operator-access'
 import { loadShippingWorkspaceSettings } from '@/lib/shipping/workspace-settings'
 import { loadIntakeOptionsForOrg } from '@/lib/shipping/intake-options'
-import { loadFxiaokeSenderChoices } from '@/lib/shipping/contacts'
+import { loadFxiaokeShippingProfile } from '@/lib/shipping/department-access'
 import { getDefaultOrgId } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import { FxiaokeShippingProposal } from '@/app/sales-portal/portal'
@@ -30,7 +30,8 @@ export default async function ShippingPage() {
     }
     const orgId = await getDefaultOrgId(user.id)
     if (!orgId) redirect('/?denied=shipping:operate')
-    const [options, profile] = await Promise.all([loadIntakeOptionsForOrg(orgId), loadFxiaokeSenderChoices(user, orgId)])
+    const options = await loadIntakeOptionsForOrg(orgId)
+    const profile = await loadFxiaokeShippingProfile(user, orgId, options.rules)
     return <div className="h-full overflow-y-auto"><FxiaokeShippingProposal profile={profile} rules={options.rules} services={options.services} connectionStatus={options.connectionStatus}/></div>
   }
   const settings = await loadShippingWorkspaceSettings(authorizedOrgId)

@@ -11,38 +11,36 @@ beforeEach(() => { vi.stubGlobal('React', React); vi.stubGlobal('fetch', fetcher
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('sales shipping portal', () => {
-  it('keeps the multi-order draft when switching between single and batch proposal', async () => {
-    const fxProfile={...employee,fxiaoke:true,senderChoices:{company:employee.sender,personal:null},senderSource:'company' as const}
-    fetcher.mockResolvedValue(new Response(JSON.stringify({employee:fxProfile}),{status:200}))
-    render(<FxiaokeShippingProposal profile={fxProfile} rules={{companyName:{enabled:true,required:true,minLength:4},team:{enabled:true,required:true,minLength:1},teamOptions:[]}} services={[]}/>)
-    fireEvent.click(screen.getByRole('button',{name:'多票提报'}))
-    fireEvent.change(screen.getByLabelText('多票地址文本'),{target:{value:'林示例 13800000001 广东省深圳市南山区科苑路8号'}})
-    fireEvent.click(screen.getByRole('button',{name:'单票提报'}))
-    fireEvent.click(screen.getByRole('button',{name:'多票提报'}))
-    expect(screen.getByLabelText('多票地址文本')).toHaveProperty('value','林示例 13800000001 广东省深圳市南山区科苑路8号')
-  })
-  it('submits a Fxiaoke proposal as an owned pending order, not an anonymous order', async () => {
-    const fxProfile={...employee,fxiaoke:true,senderChoices:{company:employee.sender,personal:null},senderSource:'company' as const}
+  it('uses one Fxiaoke intake for one address and submits one owned pending order', async () => {
+    const fxProfile={...employee,fxiaoke:true,departmentId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',departments:[{id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',name:'大客户部',path:'销售部 / 大客户部',isPrimary:true}],senderChoices:{company:employee.sender,personal:null},senderSource:'company' as const}
     fetcher.mockImplementation(async (url:string) => new Response(JSON.stringify(url==='/api/shipping/owner/profile'
       ? {employee:fxProfile}
       : { orderNo: 'SO-FX-001', status: 'awaiting_confirmation', waybill: null }), { status: url==='/api/shipping/owner/profile'?200:202 }))
     render(<FxiaokeShippingProposal profile={fxProfile} rules={{companyName:{enabled:true,required:true,minLength:4},team:{enabled:true,required:true,minLength:1},teamOptions:[]}} services={[{id:2,name:'顺丰标快',preference:'standard'}]}/>)
+    expect(screen.queryByRole('navigation',{name:'销售提报方式'})).toBeNull()
+    expect(screen.getByRole('heading',{name:'发起寄件'})).toBeTruthy()
     expect(screen.getByText(/纷享身份已验证/)).toBeTruthy()
     expect(screen.getByText('仅我的记录')).toBeTruthy()
     expect(screen.queryByText('全部快递记录')).toBeNull()
-    fireEvent.change(screen.getByLabelText('所属团队'), { target: { value: '大客户部' } })
-    fireEvent.change(screen.getByLabelText('客户公司名称'), { target: { value: '星河科技' } })
-    fireEvent.change(screen.getByLabelText('智能地址一键粘贴'), { target: { value: '张三 13900139000 广东省深圳市南山区科技路1号' } })
-    fireEvent.click(screen.getByRole('button', { name: '识别并填充' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: '预览工单' })).toHaveProperty('disabled', false))
-    fireEvent.click(screen.getByRole('button', { name: '预览工单' }))
-    fireEvent.click(screen.getByRole('button', { name: '确认提交工单' }))
-    expect(await screen.findByText('SO-FX-001')).toBeTruthy()
-    const [url, init] = fetcher.mock.calls.find(([,request])=>request?.method==='POST')!
+    expect(screen.getByLabelText('所属团队')).toHaveProperty('value','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
+    fireEvent.change(screen.getByLabelText('收件地址文本'), { target: { value: '张三 13900139000 广东省深圳市南山区科技路1号' } })
+    fireEvent.click(screen.getByRole('button', { name: '识别收件信息' }))
+    expect(screen.getByRole('heading',{name:'逐票核对 · 1 票'})).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('第1票客户公司'), { target: { value: '星河科技' } })
+    fireEvent.change(screen.getByLabelText('第1票特殊需求'), { target: { value: '上门前联系' } })
+    await waitFor(() => expect(screen.getByRole('button', { name: '预览 1 票' })).toHaveProperty('disabled', false))
+    fireEvent.click(screen.getByRole('button', { name: '预览 1 票' }))
+    expect(screen.getByRole('region',{name:'寄件提报预览'})).toHaveProperty('textContent',expect.stringContaining('上门前联系'))
+    fireEvent.click(screen.getByRole('button', { name: '确认提交 1 票' }))
+    expect(await screen.findByText(/SO-FX-001/)).toBeTruthy()
+    const posts=fetcher.mock.calls.filter(([,request])=>request?.method==='POST')
+    expect(posts).toHaveLength(1)
+    const [url, init] = posts[0]
     expect(url).toBe('/api/shipping/owner/orders')
     expect(init.credentials).toBe('same-origin')
     const body = JSON.parse(init.body)
     expect(ownerOrderSchema.safeParse(body).success).toBe(true)
+    expect(body.input).toMatchObject({specialRequirements:'上门前联系',serviceId:2,servicePreference:'standard',submittedBy:{team:'大客户部',departmentId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'}})
     expect(body).not.toHaveProperty('rawInput')
     expect(body).not.toHaveProperty('contextToken')
   })

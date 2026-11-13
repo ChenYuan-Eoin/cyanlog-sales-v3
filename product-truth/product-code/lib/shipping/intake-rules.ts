@@ -1,8 +1,24 @@
 import { z } from 'zod'
 const fieldRule = z.object({ enabled: z.boolean(), required: z.boolean(), minLength: z.number().int().min(0).max(120) }).strict().refine(v => v.enabled || !v.required, '隐藏字段不能设为必填')
-export const intakeRulesSchema = z.object({ companyName: fieldRule, team: fieldRule.refine(v => v.minLength <= 80, '团队最少字数不能超过80'), teamOptions: z.array(z.string().trim().min(1).max(80)).max(100) }).strict()
+export const intakeRulesSchema = z.object({ companyName: fieldRule, team: fieldRule.refine(v => v.minLength <= 80, '团队最少字数不能超过80'), teamOptions: z.array(z.string().trim().min(1).max(80)).max(100), allowedDepartmentIds: z.array(z.string().uuid()).max(500).nullable().optional() }).strict()
 export type IntakeRules = z.infer<typeof intakeRulesSchema>
-export const DEFAULT_INTAKE_RULES: IntakeRules = { companyName: { enabled: true, required: true, minLength: 4 }, team: { enabled: true, required: true, minLength: 1 }, teamOptions: [] }
+export const DEFAULT_INTAKE_RULES: IntakeRules = { companyName: { enabled: true, required: true, minLength: 4 }, team: { enabled: true, required: true, minLength: 1 }, teamOptions: [], allowedDepartmentIds: null }
+export function effectiveShippingDepartmentIds<T extends { id: string; parentId: string | null }>(departments: T[], roots: string[] | null | undefined): Set<string> {
+  if (roots == null) return new Set(departments.map(item => item.id))
+  const selected = new Set(roots)
+  const byId = new Map(departments.map(item => [item.id, item]))
+  const allowed = new Set<string>()
+  for (const department of departments) {
+    let current: T | undefined = department
+    const visited = new Set<string>()
+    while (current && !visited.has(current.id)) {
+      if (selected.has(current.id)) { allowed.add(department.id); break }
+      visited.add(current.id)
+      current = current.parentId ? byId.get(current.parentId) : undefined
+    }
+  }
+  return allowed
+}
 export function intakeFieldSchema(rule: IntakeRules['companyName'], label: string, max: number, options: string[] = []) {
   return z.string().trim().max(max).default('').superRefine((value, ctx) => {
     if (!rule.enabled) return

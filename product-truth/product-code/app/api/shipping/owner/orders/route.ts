@@ -9,6 +9,7 @@ import { createOwnerShipment, listOwnerShipmentReceipts, publicShipmentReceipt }
 import { loadDefaultShippingSender } from '@/lib/shipping/sender-profile'
 import { type ShippingInput } from '@/lib/shipping/types'
 import { DOMESTIC_SHIPPING_PHONE_PATTERN, normalizeDomesticShippingPhone } from '@/lib/shipping/phone'
+import { loadEmployeeShippingDepartments, resolveEmployeeShippingDepartment } from '@/lib/shipping/department-access'
 
 export const runtime = 'nodejs'
 
@@ -27,11 +28,15 @@ export async function POST(req: NextRequest) {
     if (!contactSchema.safeParse(sender).success) throw new ShippingError(422, '请先补齐寄件人姓名、联系电话和完整揽收地址，再提交工单。')
     const rules = await loadIntakeSettings(orgId)
     const company = intakeFieldSchema(rules.companyName, '公司名称', 120).parse(submission.input.customerName)
-    const team = intakeFieldSchema(rules.team, '所属团队', 80, rules.teamOptions).parse(submission.input.submittedBy?.team)
+    const department = selfSubmit
+      ? resolveEmployeeShippingDepartment(await loadEmployeeShippingDepartments(user.id, orgId, rules), submission.input.submittedBy?.departmentId, submission.input.submittedBy?.team)
+      : null
+    const team = department?.name || intakeFieldSchema(rules.team, '所属团队', 80, rules.teamOptions).parse(submission.input.submittedBy?.team)
     const accountPhone = normalizeDomesticShippingPhone(user.phone || '')
     const input: ShippingInput = { ...submission.input, sender: contactSchema.parse(sender), customerName: company,
       submittedBy: { name: selfSubmit ? user.display_name?.trim().slice(0, 60) || sender.name : sender.name,
-        phone: selfSubmit && DOMESTIC_SHIPPING_PHONE_PATTERN.test(accountPhone) ? accountPhone : sender.phone, team } }
+        phone: selfSubmit && DOMESTIC_SHIPPING_PHONE_PATTERN.test(accountPhone) ? accountPhone : sender.phone, team,
+        ...(department ? { departmentId: department.id } : {}) } }
     delete input.serviceId
     const order = await createOwnerShipment({
       orgId, userId: user.id, key: submission.key, input, usesDefaultSender: !submission.input.sender,

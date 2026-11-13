@@ -40,13 +40,11 @@ export default function SalesPortal({ initialEmployee = null, initialOptions = n
   return <EmployeeAccess companySender={options?.companySender} initialEmployee={initialEmployee} rules={options?.rules} requireVerification={options?.requireVerification ?? false} emailAvailable={options?.emailAvailable ?? false}>{({ employee, controls, identityControls, canSubmit, unavailableReason, sessionKey, sender, team }) => <SalesRequestForm rules={options?.rules} key={sessionKey} employee={employee} identityControls={identityControls} accessControls={<>{controls}{error && <p role="alert" className={styles.error}>{error}</p>}</>} accessReady={Boolean(options && canSubmit)} accessHint={error || (!options ? '正在读取提报设置…' : unavailableReason)} draftSender={sender} draftTeam={team} services={options?.services}/>}</EmployeeAccess>
 }
 export function FxiaokeShippingProposal({ profile, rules, services, connectionStatus }: { profile: EmployeeProfile; rules: IntakeRules; services: ShippingServiceOption[]; connectionStatus?: string }) {
-  const [proposalMode, setProposalMode] = useState<'single' | 'batch'>('single')
-  const [batchSeen, setBatchSeen] = useState(false)
   return <EmployeeAccess key={profile.id} mode="fxiaoke" requireVerification initialEmployee={profile} companySender={profile.senderChoices?.company} rules={rules}>
-    {({ employee, controls, identityControls, canSubmit, unavailableReason, sessionKey, sender, team }) =>
-      <><nav aria-label="销售提报方式" className={styles.proposalModes}><button type="button" aria-current={proposalMode === 'single' ? 'page' : undefined} onClick={() => setProposalMode('single')}>单票提报</button><button type="button" aria-current={proposalMode === 'batch' ? 'page' : undefined} onClick={() => { setBatchSeen(true); setProposalMode('batch') }}>多票提报</button></nav><div hidden={proposalMode !== 'single'}><SalesRequestForm key={sessionKey} mode="fxiaoke" employee={employee}
-        identityControls={identityControls} accessControls={controls} accessReady={canSubmit}
-        accessHint={unavailableReason} draftSender={sender} draftTeam={team} rules={rules} services={services} connectionStatus={connectionStatus}/></div>{batchSeen && <div hidden={proposalMode !== 'batch'}><SalesBatchProposal key={sessionKey} sender={sender} team={team} rules={rules} accessReady={canSubmit} accessHint={unavailableReason} identityControls={identityControls} accessControls={controls} connectionStatus={connectionStatus}/></div>}</>}
+    {({ employee, controls, identityControls, canSubmit, unavailableReason, sessionKey, sender, team, departmentId }) =>
+      <SalesBatchProposal key={sessionKey} sender={sender} team={team} departmentId={departmentId} departments={employee?.departments || []} rules={rules} services={services}
+        accessReady={canSubmit} accessHint={unavailableReason} identityControls={identityControls}
+        accessControls={controls} connectionStatus={connectionStatus}/>}
   </EmployeeAccess>
 }
 
