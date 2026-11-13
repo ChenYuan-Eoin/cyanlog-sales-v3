@@ -505,7 +505,7 @@ describe('self-service shipping workbench', () => {
     expect(screen.getByRole('region', { name: '批量寄件操作台' })).toBeTruthy()
     expect(screen.getByRole('region', { name: '收寄件台账与待办' })).toBeTruthy()
     expect(screen.getByRole('region', { name: '单据详情与物流轨迹' })).toBeTruthy()
-    expect(screen.getByRole('link', { name: '销售寄件提报' }).getAttribute('href')).toBe('/sales-portal')
+    expect(screen.queryByRole('link', { name: '销售寄件提报' })).toBeNull()
     expect(await screen.findByText('暂无收寄记录')).toBeTruthy()
     expect(screen.getByRole('form', { name: '物流轨迹查询' })).toBeTruthy()
     expect(screen.getByLabelText('备用查询运单号')).toBeTruthy()

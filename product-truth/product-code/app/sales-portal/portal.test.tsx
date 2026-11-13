@@ -12,17 +12,21 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('sales shipping portal', () => {
   it('submits a Fxiaoke proposal as an owned pending order, not an anonymous order', async () => {
-    fetcher.mockResolvedValue(new Response(JSON.stringify({ orderNo: 'SO-FX-001', status: 'awaiting_confirmation', waybill: null }), { status: 202 }))
-    render(<FxiaokeShippingProposal sender={employee.sender} name="李娜" phone="13800138000" rules={{companyName:{enabled:true,required:true,minLength:4},team:{enabled:true,required:true,minLength:1},teamOptions:[]}} services={[{id:2,name:'顺丰标快',preference:'standard'}]}/>)
-    expect(screen.getByText('纷享身份已验证')).toBeTruthy()
+    const fxProfile={...employee,fxiaoke:true,senderChoices:{company:employee.sender,personal:null},senderSource:'company' as const}
+    fetcher.mockImplementation(async (url:string) => new Response(JSON.stringify(url==='/api/shipping/owner/profile'
+      ? {employee:fxProfile}
+      : { orderNo: 'SO-FX-001', status: 'awaiting_confirmation', waybill: null }), { status: url==='/api/shipping/owner/profile'?200:202 }))
+    render(<FxiaokeShippingProposal profile={fxProfile} rules={{companyName:{enabled:true,required:true,minLength:4},team:{enabled:true,required:true,minLength:1},teamOptions:[]}} services={[{id:2,name:'顺丰标快',preference:'standard'}]}/>)
+    expect(screen.getByText(/纷享身份已验证/)).toBeTruthy()
     fireEvent.change(screen.getByLabelText('所属团队'), { target: { value: '大客户部' } })
     fireEvent.change(screen.getByLabelText('客户公司名称'), { target: { value: '星河科技' } })
     fireEvent.change(screen.getByLabelText('智能地址一键粘贴'), { target: { value: '张三 13900139000 广东省深圳市南山区科技路1号' } })
     fireEvent.click(screen.getByRole('button', { name: '识别并填充' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '预览工单' })).toHaveProperty('disabled', false))
     fireEvent.click(screen.getByRole('button', { name: '预览工单' }))
     fireEvent.click(screen.getByRole('button', { name: '确认提交工单' }))
     expect(await screen.findByText('SO-FX-001')).toBeTruthy()
-    const [url, init] = fetcher.mock.calls[0]
+    const [url, init] = fetcher.mock.calls.find(([,request])=>request?.method==='POST')!
     expect(url).toBe('/api/shipping/owner/orders')
     expect(init.credentials).toBe('same-origin')
     const body = JSON.parse(init.body)

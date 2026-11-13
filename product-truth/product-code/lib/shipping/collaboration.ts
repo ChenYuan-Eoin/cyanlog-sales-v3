@@ -150,10 +150,11 @@ export async function amendShipmentOrder(args: {
   return map(data as ShipmentRow)
 }
 
-export async function getShipmentByReceipt(token: string, owner?: { orgId: string; employeeId: string }) {
+export async function getShipmentByReceipt(token: string, owner: { orgId: string; employeeId?: string }) {
   if (!/^[A-Za-z0-9_-]{40,80}$/.test(token)) return null
   let query = supabaseAdmin.from('shipping_orders').select(select).eq('receipt_token_hash', hash(token))
-  if (owner) query = query.eq('org_id', owner.orgId).eq('employee_profile_id', owner.employeeId)
+  query = query.eq('org_id', owner.orgId)
+  if (owner.employeeId) query = query.eq('employee_profile_id', owner.employeeId)
   const { data, error } = await query.maybeSingle()
   if (error) throw new ShippingError(503, '寄件状态暂不可用。')
   return data ? map(data as ShipmentRow) : null

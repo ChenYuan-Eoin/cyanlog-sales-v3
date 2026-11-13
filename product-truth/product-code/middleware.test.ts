@@ -145,12 +145,17 @@ describe('role-free federated session boundary', () => {
       return req
     }
     expect((await middleware(request('/shipping'))).status).toBe(200)
+    expect((await middleware(request('/sales-portal'))).status).toBe(200)
     expect((await middleware(request('/api/quotes'))).status).toBe(200)
     expect((await middleware(request('/api/contracts/drafts'))).status).toBe(200)
     expect((await middleware(request('/api/knowledge/tree'))).status).toBe(200)
     expect((await middleware(request('/api/cases'))).status).toBe(403)
     expect((await middleware(request('/api/tech-documents'))).status).toBe(403)
     expect((await middleware(request('/api/shipping/owner/orders', 'POST'))).status).toBe(200)
+    expect((await middleware(request('/api/shipping/owner/profile'))).status).toBe(200)
+    expect((await middleware(request('/api/shipping/owner/profile', 'POST'))).status).toBe(200)
+    expect((await middleware(request('/api/shipping/public/orders/' + 'a'.repeat(43)))).status).toBe(200)
+    expect((await middleware(request('/api/shipping/public/orders'))).status).toBe(403)
     expect((await middleware(request('/api/quotes', 'POST'))).status).toBe(403)
     expect((await middleware(request('/api/shipping/orders', 'POST'))).status).toBe(403)
     expect((await middleware(request('/api/admin/users'))).status).toBe(403)
@@ -242,12 +247,16 @@ describe('role-free federated session boundary', () => {
 })
 
 describe('middleware public API routing', () => {
-  it('keeps the sales portal public while protecting the operator workbench', async () => {
+  it('requires login for the proposal page and every former anonymous intake route', async () => {
     const portal = await middleware(makeRequest('https://sales.cyanlog.icu/sales-portal', { host: 'sales.cyanlog.icu' }))
     const workbench = await middleware(makeRequest('https://sales.cyanlog.icu/shipping', { host: 'sales.cyanlog.icu' }))
-    expect(portal.status).toBe(200)
+    expect(portal.status).toBe(307)
+    expect(portal.headers.get('location')).toBe('https://sales.cyanlog.icu/login')
     expect(workbench.status).toBe(307)
     expect(workbench.headers.get('location')).toBe('https://sales.cyanlog.icu/login')
+    for (const path of ['/api/shipping/public/options', '/api/shipping/public/orders', '/api/shipping/public/orders/' + 'a'.repeat(43)]) {
+      expect((await middleware(makeRequest('https://sales.cyanlog.icu' + path, { host: 'sales.cyanlog.icu' }))).status).toBe(401)
+    }
   })
 
   it('serves runtime brand assets without requiring an authenticated session', async () => {

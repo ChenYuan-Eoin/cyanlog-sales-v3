@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
-import { loadPublicIntakeOptions } from '@/lib/shipping/intake-options'
-import { ShippingError } from '@/lib/shipping/config'
+
 export const runtime = 'nodejs'
+
 export async function GET() {
-  try { const { services, emailAvailable, requireVerification, rules, companySender } = await loadPublicIntakeOptions(); return NextResponse.json({ services, emailAvailable, requireVerification, rules, companySender }, { headers: { 'Cache-Control': 'no-store' } }) }
-  catch (error) { return NextResponse.json({ error: error instanceof ShippingError ? error.message : '提报设置暂不可用。' }, { status: error instanceof ShippingError ? error.status : 500, headers: { 'Cache-Control': 'no-store' } }) }
+  return NextResponse.json(
+    { error: '寄件设置仅向已登录员工开放。', code: 'AUTHENTICATED_INTAKE_REQUIRED' },
+    { status: 410, headers: { 'Cache-Control': 'no-store' } },
+  )
 }

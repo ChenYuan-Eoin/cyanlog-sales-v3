@@ -16,6 +16,19 @@ import type { ShippingServiceOption } from '@/lib/shipping/sf-service-catalog'
 const receiptLabels: Record<ShipmentOrderStatus, string> = { accepted: '工单已受理', awaiting_confirmation: '待操作员审核确认', returned: '工单已退回', confirmed: '工单已确认', ordering: '正式下单中', order_unknown: '下单结果待确认', waybill_created: '运单已生成', in_transit: '运输中', delivered: '已签收', cancelled: '运单已取消', order_failed: '下单未成功' }
 
 type PortalOptions = { companySender?: Contact | null; services: ShippingServiceOption[]; requireVerification: boolean; emailAvailable: boolean; rules?: IntakeRules }
+export function AuthenticatedReceiptRoute({ children }: { children: ReactNode }) {
+  const [lookupToken, setLookupToken] = useState('')
+  useEffect(() => {
+    const read = () => {
+      const token = new URLSearchParams(window.location.hash.slice(1)).get('receipt') || ''
+      setLookupToken(/^[A-Za-z0-9_-]{40,80}$/.test(token) ? token : '')
+    }
+    read()
+    window.addEventListener('hashchange', read)
+    return () => window.removeEventListener('hashchange', read)
+  }, [])
+  return lookupToken ? <ReceiptLookup token={lookupToken}/> : children
+}
 export default function SalesPortal({ initialEmployee = null, initialOptions = null }: { initialEmployee?: EmployeeProfile | null; initialOptions?: PortalOptions | null } = {}) {
   const [lookupToken, setLookupToken] = useState('')
   useEffect(() => { const read = () => { const token = new URLSearchParams(window.location.hash.slice(1)).get('receipt') || ''; setLookupToken(/^[A-Za-z0-9_-]{40,80}$/.test(token) ? token : '') }; read(); window.addEventListener('hashchange', read); return () => window.removeEventListener('hashchange', read) }, [])
@@ -25,20 +38,16 @@ export default function SalesPortal({ initialEmployee = null, initialOptions = n
   if (lookupToken) return <ReceiptLookup token={lookupToken}/>
   return <EmployeeAccess companySender={options?.companySender} initialEmployee={initialEmployee} rules={options?.rules} requireVerification={options?.requireVerification ?? false} emailAvailable={options?.emailAvailable ?? false}>{({ employee, controls, identityControls, canSubmit, unavailableReason, sessionKey, sender, team }) => <SalesRequestForm rules={options?.rules} key={sessionKey} employee={employee} identityControls={identityControls} accessControls={<>{controls}{error && <p role="alert" className={styles.error}>{error}</p>}</>} accessReady={Boolean(options && canSubmit)} accessHint={error || (!options ? '正在读取提报设置…' : unavailableReason)} draftSender={sender} draftTeam={team} services={options?.services}/>}</EmployeeAccess>
 }
-export function FxiaokeShippingProposal({ sender: initialSender, name, phone, rules, services }: { sender: Contact; name: string; phone: string; rules: IntakeRules; services: ShippingServiceOption[] }) {
-  const [sender, setSender] = useState<Contact>({ ...initialSender, name: name || initialSender.name, phone: phone || initialSender.phone })
-  const [team, setTeam] = useState('')
-  const update = (key: keyof Contact, value: string) => setSender(current => ({ ...current, [key]: value }))
-  return <SalesRequestForm mode="fxiaoke" employee={null} accessReady draftSender={sender} draftTeam={team} rules={rules} services={services}
-    accessControls={<section className={styles.card}><div className={styles.cardTitle}><UserRound size={18}/><div><h2>寄件人及揽收地址</h2><p>当前纷享账号已验证；请核对这一票实际的揽收联系人和地址</p></div></div>
-      <div className={styles.grid2}><label>寄件人姓名<input aria-label="寄件人姓名" value={sender.name} onChange={e => update('name', e.target.value)}/></label><label>寄件人联系电话<input aria-label="寄件人联系电话" value={sender.phone} onChange={e => update('phone', e.target.value)}/></label></div>
-      <div className={styles.grid3}><label>寄件省份<input aria-label="寄件省份" value={sender.province} onChange={e => update('province', e.target.value)}/></label><label>寄件城市<input aria-label="寄件城市" value={sender.city} onChange={e => update('city', e.target.value)}/></label><label>寄件区县<input aria-label="寄件区县" value={sender.county} onChange={e => update('county', e.target.value)}/></label></div>
-      <label>详细寄件地址<input aria-label="详细寄件地址" value={sender.address} onChange={e => update('address', e.target.value)}/></label>
-      {rules.team.enabled && <label>所属团队{rules.teamOptions.length ? <select aria-label="所属团队" value={team} onChange={e => setTeam(e.target.value)}><option value="">请选择</option>{rules.teamOptions.map(option => <option key={option} value={option}>{option}</option>)}</select> : <input aria-label="所属团队" value={team} onChange={e => setTeam(e.target.value)}/>}</label>}
-    </section>}/>
+export function FxiaokeShippingProposal({ profile, rules, services, connectionStatus }: { profile: EmployeeProfile; rules: IntakeRules; services: ShippingServiceOption[]; connectionStatus?: string }) {
+  return <EmployeeAccess key={profile.id} mode="fxiaoke" requireVerification initialEmployee={profile} companySender={profile.senderChoices?.company} rules={rules}>
+    {({ employee, controls, identityControls, canSubmit, unavailableReason, sessionKey, sender, team }) =>
+      <SalesRequestForm key={sessionKey} mode="fxiaoke" employee={employee}
+        identityControls={identityControls} accessControls={controls} accessReady={canSubmit}
+        accessHint={unavailableReason} draftSender={sender} draftTeam={team} rules={rules} services={services} connectionStatus={connectionStatus}/>}
+  </EmployeeAccess>
 }
 
-export function SalesRequestForm({ employee, accessControls, identityControls, accessReady = Boolean(employee?.sender), draftSender, draftTeam, services, accessHint, rules = DEFAULT_INTAKE_RULES, mode = 'public' }: { employee: EmployeeProfile | null; accessControls?: ReactNode; identityControls?: ReactNode; accessReady?: boolean; accessHint?: string; rules?: IntakeRules; draftSender?: Contact; draftTeam?: string; services?: ShippingServiceOption[]; mode?: 'public' | 'fxiaoke' }) {
+export function SalesRequestForm({ employee, accessControls, identityControls, accessReady = Boolean(employee?.sender), draftSender, draftTeam, services, accessHint, rules = DEFAULT_INTAKE_RULES, mode = 'public', connectionStatus }: { employee: EmployeeProfile | null; accessControls?: ReactNode; identityControls?: ReactNode; accessReady?: boolean; accessHint?: string; rules?: IntakeRules; draftSender?: Contact; draftTeam?: string; services?: ShippingServiceOption[]; mode?: 'public' | 'fxiaoke'; connectionStatus?: string }) {
   const senderContact = draftSender || employee?.sender || emptyContact()
   const sender = { ...senderContact, phone: normalizeDomesticShippingPhone(senderContact.phone) }
   const submitter = { name: sender.name, phone: sender.phone, team: draftTeam ?? employee?.team ?? '' }
@@ -119,7 +128,7 @@ export function SalesRequestForm({ employee, accessControls, identityControls, a
   if (receipt) return <main className={styles.page}><section className={styles.successCard}><div className={styles.successIcon}><CheckCircle2 size={34}/></div><p>工单已受理</p><h1>{receiptLabels[receipt.status]}</h1><span>工单编号</span><strong>{receipt.orderNo}</strong>{receipt.waybill && <><span>承运商运单号</span><strong className={styles.waybillNumber}>{receipt.waybill}</strong></>}<small>操作员确认后才会向顺丰下单并请求揽收。如需补充资料，请提供此工单编号。</small>{receipt.receiptToken && <><button type="button" onClick={async () => { try { const response = await fetch(`/api/shipping/public/orders/${receipt.receiptToken}`, { cache: 'no-store' }); const data = await response.json(); if (!response.ok) throw new Error(data.error); setReceipt(current => current ? { ...current, ...data } : current); setReceiptStatus('已刷新工单状态') } catch { setReceiptStatus('状态暂不可用，请稍后重试') } }}>刷新工单状态</button><button type="button" onClick={() => { void navigator.clipboard.writeText(`${window.location.origin}/sales-portal#receipt=${receipt.receiptToken}`).then(() => setReceiptStatus('查询链接已复制，请妥善保存，仅供本人使用')).catch(() => setReceiptStatus('复制失败，请重试')) }}>复制查询链接</button><p><a href={`/sales-portal#receipt=${receipt.receiptToken}`}>打开工单查询页（可收藏）</a></p><p role="status">{receiptStatus}</p></>}<button onClick={() => { setReceipt(null); setRecipient(emptyContact()); setRawAddress(''); setCustomerName(''); setSpecialRequirements(''); setPreview(false); setAttempted(false); setCustomerTouched(false) }}>继续提报一票</button></section></main>
 
   return <main className={styles.page}>
-    <header className={styles.header}><div className={styles.brand}><span>O</span><div><strong>自助收寄</strong><small>销售寄件提报</small></div></div><div className={styles.secure}>{mode === 'fxiaoke' ? '纷享身份已验证' : employee?.wecom ? '企业微信身份已验证' : '开放提报 · 无需账号密码'}</div></header>
+    <header className={styles.header}><div className={styles.brand}><span>O</span><div><strong>自助收寄</strong><small>销售寄件提报</small></div></div><div className={styles.secure}>{mode === 'fxiaoke' ? `纷享身份已验证 · 顺丰连接${connectionStatus === 'connected' ? '已验证' : connectionStatus === 'failed' ? '待维护' : connectionStatus === 'unconfigured' ? '待配置' : '待验证'}` : employee?.wecom ? '企业微信身份已验证' : '开放提报 · 无需账号密码'}</div></header>
     <div className={styles.hero}><div><p>SALES SHIPPING REQUEST</p><h1>发起寄件</h1><span>填好这一票，交给前台确认。</span></div><div className={styles.steps}><span className={styles.current}>1 填写信息</span><i/><span>2 前台确认</span><i/><span>3 快递揽收</span></div></div>
     {identityControls && <div className={styles.identityContainer}>{identityControls}</div>}
     <nav className={styles.mobileNav} aria-label={mode === 'fxiaoke' ? '提报与摘要' : '提报与记录'}><button type="button" aria-pressed={mobilePane === 'form'} onClick={() => setMobilePane('form')}>提报快递</button><button type="button" aria-pressed={mobilePane === 'records'} onClick={() => setMobilePane('records')}>{mode === 'fxiaoke' ? '本次摘要' : '提报记录'}</button></nav>
@@ -147,5 +156,5 @@ function ReceiptLookup({ token }: { token: string }) {
   const [receipt, setReceipt] = useState<ShipmentReceipt | null>(null), [error, setError] = useState(''), [busy, setBusy] = useState(false)
   async function load() { setBusy(true); setError(''); try { const response = await fetch(`/api/shipping/public/orders/${encodeURIComponent(token)}`, { cache: 'no-store' }); const data = await response.json(); if (!response.ok || !data.orderNo || !Object.hasOwn(receiptLabels, data.status)) throw new Error(data.error || '回执暂不可用'); setReceipt(data) } catch (e) { setError(e instanceof Error ? e.message : '查询失败') } finally { setBusy(false) } }
   useEffect(() => { let active = true; setReceipt(null); setError(''); setBusy(true); fetch(`/api/shipping/public/orders/${encodeURIComponent(token)}`, { cache: 'no-store' }).then(async response => { const data = await response.json(); if (!response.ok || !data.orderNo || !Object.hasOwn(receiptLabels, data.status)) throw new Error(data.error || '回执暂不可用'); if (active) setReceipt(data) }).catch(e => { if (active) setError(e.message) }).finally(() => { if (active) setBusy(false) }); return () => { active = false } }, [token])
-  return <main className={styles.page}><section className={styles.successCard}><h1>工单进度</h1>{receipt && <><strong>{receipt.orderNo}</strong><p>{receiptLabels[receipt.status]}</p>{receipt.waybill && <strong className={styles.waybillNumber}>{receipt.waybill}</strong>}</>}{error && <p role="alert">{error}</p>}<button type="button" disabled={busy} onClick={() => void load()}>{busy ? '查询中…' : '刷新进度'}</button><p><a href="/sales-portal">提报新工单</a></p><small>持有本链接即可查询这一票的状态；不会显示完整姓名、地址或其他人的工单。</small></section></main>
+  return <main className={styles.page}><section className={styles.successCard}><h1>工单进度</h1>{receipt && <><strong>{receipt.orderNo}</strong><p>{receiptLabels[receipt.status]}</p>{receipt.waybill && <strong className={styles.waybillNumber}>{receipt.waybill}</strong>}</>}{error && <p role="alert">{error}</p>}<button type="button" disabled={busy} onClick={() => void load()}>{busy ? '查询中…' : '刷新进度'}</button><p><a href="/sales-portal">提报新工单</a></p><small>登录后可凭本链接查询这一票的状态；页面不会显示完整姓名、地址或其他人的工单。</small></section></main>
 }

@@ -94,3 +94,37 @@ it('does not overwrite a manual draft when company options arrive late',()=>{
  view.rerender(renderForm(profile.sender))
  expect(screen.getByLabelText('寄件人姓名')).toHaveProperty('value','正在填写')
 })
+
+it('restores Fxiaoke company, common and custom pickup with account-bound profile saving', async()=>{
+ const fx={...profile,wecom:false,fxiaoke:true,identityName:'陈源',identityPhone:'13800000000',team:'销售部',senderSource:'personal' as const,senderChoices:{company:{...profile.sender,name:'公司前台',phone:'13700000000',address:'公司路1号'},personal:{...profile.sender,name:'揽收同事',phone:'13900000000',address:'常用路2号'}},sender:{...profile.sender,name:'揽收同事',phone:'13900000000',address:'常用路2号'}}
+ fetcher.mockImplementation(async(url:string,init?:RequestInit)=>response({employee:init?.method==='POST'?{...fx,sender:{...fx.sender,address:'新常用路3号'},senderChoices:{...fx.senderChoices,personal:{...fx.sender,address:'新常用路3号'}}}:fx}))
+ render(<EmployeeAccess mode="fxiaoke" requireVerification initialEmployee={fx} rules={{companyName:{enabled:true,required:true,minLength:4},team:{enabled:true,required:true,minLength:1},teamOptions:['销售部','市场部']}}>{({controls,identityControls,sender,canSubmit})=><>{identityControls}{controls}<output aria-label="当前寄件地址">{sender.address}</output><button disabled={!canSubmit}>提报就绪</button></>}</EmployeeAccess>)
+ await screen.findByText('纷享销客已连接')
+ expect(fetcher).toHaveBeenCalledWith('/api/shipping/owner/profile',expect.objectContaining({cache:'no-store'}))
+ expect(screen.getByRole('radio',{name:/我的常用/})).toHaveProperty('checked',true)
+ fireEvent.click(screen.getByRole('radio',{name:/公司默认/}))
+ expect(screen.getByLabelText('当前寄件地址')).toHaveProperty('textContent','公司路1号')
+ expect(screen.getByText('公司前台')).toBeTruthy()
+ expect(screen.getByText('陈源')).toBeTruthy()
+ fireEvent.change(screen.getByLabelText('所属团队'),{target:{value:'市场部'}})
+ fireEvent.click(screen.getByRole('radio',{name:/自定义地址/}))
+ fireEvent.change(screen.getByLabelText('寄件人姓名'),{target:{value:'本次揽收人'}})
+ fireEvent.change(screen.getByLabelText('寄件人联系电话'),{target:{value:'13600000000'}})
+ fireEvent.change(screen.getByLabelText('详细寄件地址'),{target:{value:'新常用路3号'}})
+ fireEvent.click(screen.getByLabelText('同时保存为我的常用地址'))
+ fireEvent.click(screen.getByRole('button',{name:'保存揽收地址'}))
+ await screen.findByText('揽收地址已保存为我的常用地址，下次自动带入。')
+ const post=fetcher.mock.calls.find(([url,init])=>url==='/api/shipping/owner/profile'&&init?.method==='POST')
+ expect(JSON.parse(post![1].body)).toMatchObject({action:'save_profile',profile:{team:'市场部',sender:{name:'本次揽收人',phone:'13600000000',address:'新常用路3号'}}})
+ expect(localStorage.getItem('shipping-anonymous-sender-v1')).toBeNull()
+ expect(screen.getByRole('button',{name:'提报就绪'})).toHaveProperty('disabled',false)
+})
+
+it('clears the previous employee form when the authenticated account changed before profile refresh',async()=>{
+ const original={...profile,wecom:false,fxiaoke:true,identityName:'员工甲',senderChoices:{company:profile.sender,personal:null},senderSource:'company' as const}
+ const replacement={...original,id:'staff-2',identityName:'员工乙',sender:{...profile.sender,name:'员工乙',address:'另一地址66号'}}
+ fetcher.mockResolvedValue(response({employee:replacement}))
+ render(<EmployeeAccess mode="fxiaoke" requireVerification initialEmployee={original}>{({identityControls,sender,sessionKey})=><>{identityControls}<output aria-label="当前账号与地址">{sessionKey}|{sender.name}|{sender.address}</output></>}</EmployeeAccess>)
+ await waitFor(()=>expect(screen.getByLabelText('当前账号与地址').textContent).toBe('1|员工乙|另一地址66号'))
+ expect(screen.queryByText('员工甲')).toBeNull()
+})

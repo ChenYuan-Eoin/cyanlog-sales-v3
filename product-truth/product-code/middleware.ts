@@ -35,7 +35,7 @@ import { createMiddlewareRestClient } from '@/lib/middleware-rest-client'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
 import { resolveRolePermissions } from '@/lib/role-permission-resolution'
 
-const PUBLIC_PATHS = ['/login', '/accept-invitation', '/sales-portal']
+const PUBLIC_PATHS = ['/login', '/accept-invitation']
 const RETIRED_EXACT_PATHS = new Set([
   '/register',
   '/change-password',
@@ -100,7 +100,11 @@ type FxiaokeSourceRow = {
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.some(p => pathname === p)) return true
   if (pathname.startsWith('/api/')) {
-    return PUBLIC_API_PATHS.has(pathname) || pathname.startsWith('/api/shipping/public/')
+    const authenticatedIntakePath = pathname === '/api/shipping/public/options'
+      || pathname === '/api/shipping/public/orders'
+      || pathname.startsWith('/api/shipping/public/orders/')
+    return PUBLIC_API_PATHS.has(pathname)
+      || (pathname.startsWith('/api/shipping/public/') && !authenticatedIntakePath)
   }
   return pathname.startsWith('/_next/')
     || pathname.startsWith('/favicon')
@@ -124,6 +128,7 @@ const BASELINE_READ_PATHS = new Set([
   '/api/quotes', '/api/contracts', '/api/contracts/drafts',
   '/api/tenders', '/api/knowledge/tree', '/api/knowledge/pages',
   '/api/agenda', '/api/opportunities', '/api/products',
+  '/api/shipping/owner/profile',
 ])
 
 // These read handlers already apply the current organization, owner or
@@ -134,6 +139,7 @@ function baselineReadAllowed(pathname: string): boolean {
   return /^\/api\/quotes\/[^/]+$/.test(pathname)
     || /^\/api\/contracts\/[^/]+$/.test(pathname)
     || /^\/api\/knowledge\/pages\/[^/]+$/.test(pathname)
+    || /^\/api\/shipping\/public\/orders\/[^/]+$/.test(pathname)
 }
 
 function buildRedirectUrl(request: NextRequest, pathname: string, search = ''): URL {
@@ -343,7 +349,8 @@ export async function middleware(request: NextRequest) {
       && pathname !== '/api/shipping/owner/orders'
       && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
       && await hasDirectShippingOperateGrant(authContext.userId, authContext.orgId)
-    const baselineSelfSubmission = pathname === '/api/shipping/owner/orders'
+    const baselineSelfSubmission = (pathname === '/api/shipping/owner/orders'
+      || pathname === '/api/shipping/owner/profile')
       && authContext.roleCodes.includes('FXIAOKE_BASELINE')
     if (federatedViewer
       && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
