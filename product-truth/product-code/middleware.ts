@@ -128,7 +128,7 @@ const BASELINE_READ_PATHS = new Set([
   '/api/quotes', '/api/contracts', '/api/contracts/drafts',
   '/api/tenders', '/api/knowledge/tree', '/api/knowledge/pages',
   '/api/agenda', '/api/opportunities', '/api/products',
-  '/api/shipping/owner/profile',
+  '/api/shipping/owner/profile', '/api/shipping/owner/orders',
 ])
 
 // These read handlers already apply the current organization, owner or

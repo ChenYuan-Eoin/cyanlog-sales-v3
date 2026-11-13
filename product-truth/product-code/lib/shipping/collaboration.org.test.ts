@@ -5,7 +5,7 @@ import type { ShippingInput } from './types'
 const mocks = vi.hoisted(() => ({ from: vi.fn(), recipients: vi.fn() }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from } }))
 vi.mock('./operator-access', () => ({ listShippingOperatorRecipients: mocks.recipients }))
-import { assignShipmentRelation, createAnonymousShipment, createOwnerShipment, createDueShipmentReviewReminders, listShipmentLedger, listEmployeeShipmentReceipts, listPublicShipmentReceipts } from './collaboration'
+import { assignShipmentRelation, createAnonymousShipment, createOwnerShipment, createDueShipmentReviewReminders, listShipmentLedger, listEmployeeShipmentReceipts, listOwnerShipmentReceipts, listPublicShipmentReceipts } from './collaboration'
 
 type Row = Record<string, unknown>
 let tables: Record<string, Row[]>
@@ -152,4 +152,20 @@ it('includes only the submitted customer name alongside public receipt fields',a
  expect(mocks.from.mock.results.at(-1)?.value.select).toHaveBeenCalledWith('order_no,status,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no)')
  tables.shipping_orders[0].customer_name=''
  expect((await listPublicShipmentReceipts('org-A')).orders[0].customerName).toBeNull()
+})
+
+it('shows only the current account and organization owner-web receipts, never another person waybill or an unattributed old order', async()=>{
+ tables.shipping_orders = [
+  {...row('mine','org-A'),created_by:'owner-A',intake_source:'owner_web',shipping_waybills:[{waybill_no:'SF1234567890123'}]},
+  {...row('coworker','org-A'),created_by:'owner-B',intake_source:'owner_web',shipping_waybills:[{waybill_no:'SF9999999999999'}]},
+  {...row('old-anonymous','org-A'),created_by:null,intake_source:'anonymous_web',shipping_waybills:[{waybill_no:'SF8888888888888'}]},
+  {...row('crm','org-A'),created_by:'owner-A',intake_source:'crm',shipping_waybills:[{waybill_no:'SF7777777777777'}]},
+  {...row('other-org','org-B'),created_by:'owner-A',intake_source:'owner_web',shipping_waybills:[{waybill_no:'SF6666666666666'}]},
+ ]
+ const own=await listOwnerShipmentReceipts('org-A','owner-A')
+ expect(own.orders.map(item=>item.orderNo)).toEqual(['mine'])
+ expect(own.orders[0].waybill).toBe('SF1234567890123')
+ expect((await listOwnerShipmentReceipts('org-A','no-orders')).orders).toEqual([])
+ await expect(listOwnerShipmentReceipts('org-A','',0)).rejects.toMatchObject({status:401})
+ await expect(listOwnerShipmentReceipts('org-A','owner-A',1001)).rejects.toMatchObject({status:400})
 })

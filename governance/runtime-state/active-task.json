@@ -240,7 +240,7 @@
     "name": "销售寄件提报体验",
     "kind": "product",
     "status": "active",
-    "objective": "让自助寄件提报只对已登录的在职 ICU 员工开放；关闭匿名提交与全组织公开记录；在纷享员工本人提报页恢复身份连接状态、公司默认/我的常用/本次自定义寄件地址。旧单保留，旧回执登录后可查看；操作员仍进入批量处理页。此批不向顺丰下单、不改生产旧单。",
+    "objective": "让已登录在职员工完成单票或多票自助寄件提报，并只查看本人的提报记录；关闭匿名提交与全组织公开记录，恢复身份连接状态及公司默认/我的常用/本次自定义寄件地址。旧单保留，旧回执登录后可查看；操作员仍进入批量处理页。所有代码完成后一次发布，不向顺丰下单、不改生产旧单。",
     "started_at": "2026-10-16T07:43:35.475527+00:00",
     "activation_basis": "IN-20261113-004：用户看过匿名路径关闭、历史回执和地址数据隔离的影响评估后，明确批准优先切换。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp35-authenticated-shipping-intake/Price-v3",
@@ -274,6 +274,7 @@
       "product-truth/product-code/middleware.ts",
       "product-truth/product-code/middleware.test.ts",
       "product-truth/product-code/lib/shipping/collaboration.ts",
+    "product-truth/product-code/lib/shipping/collaboration.org.test.ts",
       "product-truth/product-code/lib/shipping/contacts.fxiaoke.test.ts",
       "product-truth/product-code/components/layout/AppShell.tsx"
     ],
@@ -316,7 +317,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "Authenticated sales shipping intake only; no carrier order or production data migration.",
+      "note": "Authenticated single and multi-order sales intake plus owner-only records; one Production release after all code is ready. No carrier order or production data migration.",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -361,7 +362,7 @@
     "active": {
       "id": "WP35",
       "slug": "sales-intake-experience",
-      "name": "登录后自助寄件提报"
+      "name": "登录后自助寄件提报与本人记录"
     },
     "next": {
       "id": "WP97",

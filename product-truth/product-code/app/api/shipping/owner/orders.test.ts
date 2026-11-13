@@ -1,16 +1,16 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), operator: vi.fn(), create: vi.fn(), rules: vi.fn(), settings: vi.fn(), sender: vi.fn(), runtime: vi.fn(), chooseService: vi.fn(), confirm: vi.fn(), carrier: vi.fn() }))
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), operator: vi.fn(), create: vi.fn(), list: vi.fn(), rules: vi.fn(), settings: vi.fn(), sender: vi.fn(), runtime: vi.fn(), chooseService: vi.fn(), confirm: vi.fn(), carrier: vi.fn() }))
 vi.mock('@/lib/shipping/intake-settings', () => ({ loadIntakeSettings: mocks.rules }))
 vi.mock('@/lib/auth', () => ({ requireAuth: mocks.auth, AuthError: class extends Error {} }))
 vi.mock('@/lib/shipping/runtime-config', () => ({ loadShippingSettings: mocks.settings, getShippingRuntimeConfig: mocks.runtime, selectAuthorizedShippingService: mocks.chooseService }))
 vi.mock('@/lib/shipping/sender-profile', () => ({ loadDefaultShippingSender: mocks.sender }))
 vi.mock('@/lib/shipping/operator-access', () => ({ requireShippingOperator: mocks.operator }))
-vi.mock('@/lib/shipping/collaboration', () => ({ createOwnerShipment: mocks.create, publicShipmentReceipt: (order: { orderNo: string; status: string; waybill: string | null }) => ({ orderNo: order.orderNo, status: order.status, waybill: order.waybill }) }))
+vi.mock('@/lib/shipping/collaboration', () => ({ createOwnerShipment: mocks.create, listOwnerShipmentReceipts: mocks.list, publicShipmentReceipt: (order: { orderNo: string; status: string; waybill: string | null }) => ({ orderNo: order.orderNo, status: order.status, waybill: order.waybill }) }))
 vi.mock('@/lib/shipping/workflow', () => ({ confirmAndSubmitShipment: mocks.confirm }))
 vi.mock('@/lib/shipping/sf-client', () => ({ createSfOrder: mocks.carrier }))
-import { POST } from './orders/route'
+import { GET, POST } from './orders/route'
 import { AuthError } from '@/lib/auth'
 import { ShippingError } from '@/lib/shipping/config'
 
@@ -25,12 +25,30 @@ beforeEach(() => {
   mocks.auth.mockReset().mockResolvedValue({ id: 'operator-1' })
   mocks.operator.mockReset().mockResolvedValue('org-1')
   mocks.create.mockReset().mockResolvedValue({ id: 'order-1', orderNo: 'SO-20261008-ABC12345', status: 'awaiting_confirmation', waybill: null })
+  mocks.list.mockReset().mockResolvedValue({ orders: [], nextPage: null })
   mocks.settings.mockReset().mockResolvedValue({ sender: companySender, defaultBillingAccountId: undefined, canSubmit: false })
   mocks.sender.mockReset().mockResolvedValue(companySender)
   mocks.runtime.mockReset()
   mocks.chooseService.mockReset()
   mocks.confirm.mockReset()
   mocks.carrier.mockReset()
+})
+
+describe('authenticated personal intake records', () => {
+  it('passes only the authenticated user and current organization to the owner list', async () => {
+    const response = await GET(new NextRequest('http://localhost/api/shipping/owner/orders?page=0'))
+    expect(response.status).toBe(200)
+    expect(mocks.list).toHaveBeenCalledWith('org-1', 'operator-1', 0)
+    expect(mocks.create).not.toHaveBeenCalled()
+    expect(mocks.carrier).not.toHaveBeenCalled()
+  })
+  it('rejects invalid pages and sessions before reading any records', async () => {
+    expect((await GET(new NextRequest('http://localhost/api/shipping/owner/orders?page=-1'))).status).toBe(400)
+    expect(mocks.list).not.toHaveBeenCalled()
+    mocks.auth.mockRejectedValue(new AuthError())
+    expect((await GET(new NextRequest('http://localhost/api/shipping/owner/orders?page=0'))).status).toBe(401)
+    expect(mocks.list).not.toHaveBeenCalled()
+  })
 })
 
 describe('operator intake creates a work order without carrier submission', () => {

@@ -5,7 +5,7 @@ import styles from './sales-portal.module.css'
 const labels: Record<string, string> = { awaiting_confirmation: '待审核', returned: '已退回，请联系操作员补充资料', confirmed: '已确认', ordering: '下单中', order_unknown: '下单结果待确认', waybill_created: '运单已生成', in_transit: '运输中', delivered: '已签收', cancelled: '已取消', order_failed: '下单未成功', accepted: '已受理' }
 const dateFormat = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'long', day: 'numeric' })
 const timeFormat = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-export default function MyWorkorders() {
+export default function MyWorkorders({ scope = 'public', refreshKey = 0 }: { scope?: 'public' | 'owner'; refreshKey?: number }) {
   const [orders, setOrders] = useState<ShipmentReceipt[] | null>(null), [busy, setBusy] = useState(true), [error, setError] = useState('')
   const [nextPage, setNextPage] = useState<number | null>(null)
   const [expanded, setExpanded] = useState(false)
@@ -15,15 +15,15 @@ export default function MyWorkorders() {
   const load = useCallback(async (page = 0) => {
     setBusy(true); setError('')
     try {
-      const response = await fetch(`/api/shipping/public/orders?page=${page}`, { cache: 'no-store', credentials: 'omit' })
+      const response = await fetch(`/api/shipping/${scope === 'owner' ? 'owner' : 'public'}/orders?page=${page}`, { cache: 'no-store', credentials: scope === 'owner' ? 'same-origin' : 'omit' })
       const data = await response.json()
       if (!response.ok || !Array.isArray(data.orders)) throw new Error(data.error || '读取失败')
       setOrders(current => page === 0 ? data.orders : [...new Map([...(current || []), ...data.orders].map(order => [order.orderNo, order])).values()])
       setNextPage(Number.isSafeInteger(data.nextPage) && data.nextPage > page ? data.nextPage : null)
       if (page === 0) setExpanded(false)
     } catch (e) { setError(e instanceof Error ? e.message : '读取失败') } finally { setBusy(false) }
-  }, [])
-  useEffect(() => { void load() }, [load])
+  }, [scope])
+  useEffect(() => { void load() }, [load, refreshKey])
   const visibleOrders = expanded ? orders || [] : (orders || []).slice(0, 5)
   const groups = new Map<string, ShipmentReceipt[]>()
   for (const order of visibleOrders) {
@@ -32,7 +32,7 @@ export default function MyWorkorders() {
   }
   const canExpand = (orders?.length || 0) > 5 || nextPage !== null
   return <section className={styles.card}>
-    <p className={styles.hint}>全部快递 · 按提报日期分组</p>
+    <p className={styles.hint}>{scope === 'owner' ? '仅我的提报 · 按提报日期分组' : '全部快递 · 按提报日期分组'}</p>
     <div className={styles.recordToolbar}>
       <button type="button" disabled={busy} onClick={() => void load()}>{busy ? '正在读取…' : '刷新提报记录'}</button>
       {canExpand && <button type="button" aria-expanded={expanded} aria-controls={listId} onClick={() => { if (!expanded) setExpandedHeight(Math.max(720, (listRef.current?.getBoundingClientRect().height || 0) + 160)); setExpanded(current => !current) }}>{expanded ? '收起 · 最近5条' : '查看更早记录'}</button>}

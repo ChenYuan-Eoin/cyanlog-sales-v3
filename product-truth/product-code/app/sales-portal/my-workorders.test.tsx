@@ -21,6 +21,13 @@ it('loads shared records anonymously, appends pages and refreshes from the newes
  fireEvent.click(screen.getByRole('button',{name:'刷新提报记录'}))
  expect(await screen.findByText('NEW')).toBeTruthy();expect(screen.queryByText('ONE')).toBeNull()
 })
+it('reads only the authenticated owner endpoint in employee mode', async()=>{
+ fetcher.mockResolvedValue(response({orders:[],nextPage:null}))
+ render(<MyWorkorders scope="owner"/>)
+ expect(await screen.findByText('仅我的提报 · 按提报日期分组')).toBeTruthy()
+ expect(fetcher).toHaveBeenCalledWith('/api/shipping/owner/orders?page=0',{cache:'no-store',credentials:'same-origin'})
+ expect(fetcher.mock.calls.some(([url])=>String(url).includes('/public/orders'))).toBe(false)
+})
 it('keeps existing records when another page fails and lets visitors retry it',async()=>{
  fetcher.mockResolvedValueOnce(response({orders:[order('ONE')],nextPage:1}))
   .mockResolvedValueOnce(response({error:'记录暂不可用'},503))

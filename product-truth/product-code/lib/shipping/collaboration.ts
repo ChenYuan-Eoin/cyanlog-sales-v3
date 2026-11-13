@@ -233,6 +233,30 @@ export async function listEmployeeShipmentReceipts(orgId: string, employeeId: st
   return (data || []).map(row => publicShipmentReceipt(map(row as ShipmentRow)))
 }
 
+export async function listOwnerShipmentReceipts(orgId: string, userId: string, page = 0) {
+  requireOrganization(orgId)
+  if (!userId) throw new ShippingError(401, '请先登录后查看本人提报记录。')
+  if (!Number.isSafeInteger(page) || page < 0 || page > 1000) throw new ShippingError(400, '记录页码无效。')
+  const limit = 50
+  const { data, error } = await supabaseAdmin.from('shipping_orders')
+    .select('order_no,status,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no)')
+    .eq('org_id', orgId)
+    .eq('created_by', userId)
+    .eq('intake_source', 'owner_web')
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(page * limit, page * limit + limit)
+  if (error) throw new ShippingError(503, '本人提报记录暂时无法读取，请稍后刷新。')
+  const rows = data || []
+  const orders: ShipmentReceipt[] = rows.slice(0, limit).map(row => {
+    const waybills = Array.isArray(row.shipping_waybills) ? row.shipping_waybills : row.shipping_waybills ? [row.shipping_waybills] : []
+    return { orderNo: row.order_no, status: row.status, waybill: waybills[0]?.waybill_no || null,
+      nextReviewAt: row.next_review_at, createdAt: row.created_at,
+      customerName: typeof row.customer_name === 'string' && row.customer_name.trim() ? row.customer_name.trim() : null }
+  })
+  return { orders, nextPage: rows.length > limit ? page + 1 : null }
+}
+
 /** Temporary shared sales list approved in IN-20261109-022; no contact or receipt secrets. */
 export async function listPublicShipmentReceipts(orgId: string, page = 0) {
   requireOrganization(orgId)

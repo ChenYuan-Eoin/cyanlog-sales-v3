@@ -5,12 +5,20 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { shippingHandler, shippingJson } from '@/lib/shipping/http'
 import { contactSchema, ownerOrderSchema } from '@/lib/shipping/validation'
-import { createOwnerShipment, publicShipmentReceipt } from '@/lib/shipping/collaboration'
+import { createOwnerShipment, listOwnerShipmentReceipts, publicShipmentReceipt } from '@/lib/shipping/collaboration'
 import { loadDefaultShippingSender } from '@/lib/shipping/sender-profile'
 import { type ShippingInput } from '@/lib/shipping/types'
 import { DOMESTIC_SHIPPING_PHONE_PATTERN, normalizeDomesticShippingPhone } from '@/lib/shipping/phone'
 
 export const runtime = 'nodejs'
+
+export async function GET(req: NextRequest) {
+  return shippingHandler(req, async (user, orgId) => {
+    const rawPage = req.nextUrl.searchParams.get('page') || '0'
+    if (!/^(0|[1-9]\d{0,3})$/.test(rawPage)) throw new ShippingError(400, '记录页码无效。')
+    return listOwnerShipmentReceipts(orgId, user.id, Number(rawPage))
+  }, { allowFxiaokeSelfSubmit: true })
+}
 
 export async function POST(req: NextRequest) {
   const response = await shippingHandler(req, async (user, orgId, selfSubmit) => {

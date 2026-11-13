@@ -10,6 +10,7 @@ import { emptyContact, type Contact, type ShipmentReceipt, type ShipmentOrderSta
 import styles from './sales-portal.module.css'
 import MyWorkorders from './my-workorders'
 import EmployeeAccess, { type EmployeeProfile } from './employee-access'
+import SalesBatchProposal from './sales-batch'
 
 import type { ShippingServiceOption } from '@/lib/shipping/sf-service-catalog'
 
@@ -39,11 +40,13 @@ export default function SalesPortal({ initialEmployee = null, initialOptions = n
   return <EmployeeAccess companySender={options?.companySender} initialEmployee={initialEmployee} rules={options?.rules} requireVerification={options?.requireVerification ?? false} emailAvailable={options?.emailAvailable ?? false}>{({ employee, controls, identityControls, canSubmit, unavailableReason, sessionKey, sender, team }) => <SalesRequestForm rules={options?.rules} key={sessionKey} employee={employee} identityControls={identityControls} accessControls={<>{controls}{error && <p role="alert" className={styles.error}>{error}</p>}</>} accessReady={Boolean(options && canSubmit)} accessHint={error || (!options ? '正在读取提报设置…' : unavailableReason)} draftSender={sender} draftTeam={team} services={options?.services}/>}</EmployeeAccess>
 }
 export function FxiaokeShippingProposal({ profile, rules, services, connectionStatus }: { profile: EmployeeProfile; rules: IntakeRules; services: ShippingServiceOption[]; connectionStatus?: string }) {
+  const [proposalMode, setProposalMode] = useState<'single' | 'batch'>('single')
+  const [batchSeen, setBatchSeen] = useState(false)
   return <EmployeeAccess key={profile.id} mode="fxiaoke" requireVerification initialEmployee={profile} companySender={profile.senderChoices?.company} rules={rules}>
     {({ employee, controls, identityControls, canSubmit, unavailableReason, sessionKey, sender, team }) =>
-      <SalesRequestForm key={sessionKey} mode="fxiaoke" employee={employee}
+      <><nav aria-label="销售提报方式" className={styles.proposalModes}><button type="button" aria-current={proposalMode === 'single' ? 'page' : undefined} onClick={() => setProposalMode('single')}>单票提报</button><button type="button" aria-current={proposalMode === 'batch' ? 'page' : undefined} onClick={() => { setBatchSeen(true); setProposalMode('batch') }}>多票提报</button></nav><div hidden={proposalMode !== 'single'}><SalesRequestForm key={sessionKey} mode="fxiaoke" employee={employee}
         identityControls={identityControls} accessControls={controls} accessReady={canSubmit}
-        accessHint={unavailableReason} draftSender={sender} draftTeam={team} rules={rules} services={services} connectionStatus={connectionStatus}/>}
+        accessHint={unavailableReason} draftSender={sender} draftTeam={team} rules={rules} services={services} connectionStatus={connectionStatus}/></div>{batchSeen && <div hidden={proposalMode !== 'batch'}><SalesBatchProposal key={sessionKey} sender={sender} team={team} rules={rules} accessReady={canSubmit} accessHint={unavailableReason} identityControls={identityControls} accessControls={controls} connectionStatus={connectionStatus}/></div>}</>}
   </EmployeeAccess>
 }
 
@@ -131,7 +134,7 @@ export function SalesRequestForm({ employee, accessControls, identityControls, a
     <header className={styles.header}><div className={styles.brand}><span>O</span><div><strong>自助收寄</strong><small>销售寄件提报</small></div></div><div className={styles.secure}>{mode === 'fxiaoke' ? `纷享身份已验证 · 顺丰连接${connectionStatus === 'connected' ? '已验证' : connectionStatus === 'failed' ? '待维护' : connectionStatus === 'unconfigured' ? '待配置' : '待验证'}` : employee?.wecom ? '企业微信身份已验证' : '开放提报 · 无需账号密码'}</div></header>
     <div className={styles.hero}><div><p>SALES SHIPPING REQUEST</p><h1>发起寄件</h1><span>填好这一票，交给前台确认。</span></div><div className={styles.steps}><span className={styles.current}>1 填写信息</span><i/><span>2 前台确认</span><i/><span>3 快递揽收</span></div></div>
     {identityControls && <div className={styles.identityContainer}>{identityControls}</div>}
-    <nav className={styles.mobileNav} aria-label={mode === 'fxiaoke' ? '提报与摘要' : '提报与记录'}><button type="button" aria-pressed={mobilePane === 'form'} onClick={() => setMobilePane('form')}>提报快递</button><button type="button" aria-pressed={mobilePane === 'records'} onClick={() => setMobilePane('records')}>{mode === 'fxiaoke' ? '本次摘要' : '提报记录'}</button></nav>
+    <nav className={styles.mobileNav} aria-label="提报与记录"><button type="button" aria-pressed={mobilePane === 'form'} onClick={() => setMobilePane('form')}>提报快递</button><button type="button" aria-pressed={mobilePane === 'records'} onClick={() => setMobilePane('records')}>提报记录</button></nav>
     <div className={styles.workspace}>
     <div className={mobilePane === 'records' ? styles.mobileHidden : undefined}>
     {accessControls && <div className={`${styles.form} ${styles.accessControls}`}>{accessControls}</div>}
@@ -147,7 +150,7 @@ export function SalesRequestForm({ employee, accessControls, identityControls, a
       <footer className={styles.submit}><div><CheckCircle2 size={16}/><span>提交只会进入前台待确认池，不会直接产生运费。</span></div><button disabled={busy || !accessReady}>{busy ? '提交中…' : uncertain ? '重取工单回执' : previewCurrent ? '确认提交工单' : '预览工单'}<ArrowRight size={16}/></button></footer>
     </form>
     </div>
-    <aside aria-label={mode === 'fxiaoke' ? '本次摘要' : '提报记录'} className={`${styles.records} ${mobilePane === 'form' ? styles.mobileHidden : ''}`}><section className={styles.summaryCard} aria-label="本次寄件摘要"><h2>本次寄件</h2><dl><div><dt>寄件人</dt><dd>{sender.name || '待填写'} · {sender.phone}</dd><dd>{senderAddress || '地址待填写'}</dd></div><div><dt>收件人</dt><dd>{recipient.name || '待填写'}{recipient.phone && ` · ${recipient.phone}`}</dd><dd>{`${recipient.province}${recipient.city === recipient.province ? '' : recipient.city}${recipient.county}${recipient.address}` || '收件地址待填写'}</dd></div><div><dt>物品与服务</dt><dd>{cargo} · {weight || '—'} kg · {services?.find(item => item.id === Number(serviceId || services[0]?.id))?.name || (servicePreference === 'urgent' ? '加急' : '标准')}</dd></div></dl></section>{mode === 'public' && <section className={styles.summaryCard}><h2>提报记录</h2><MyWorkorders/></section>}</aside>
+    <aside aria-label="提报记录" className={`${styles.records} ${mobilePane === 'form' ? styles.mobileHidden : ''}`}><section className={styles.summaryCard} aria-label="本次寄件摘要"><h2>本次寄件</h2><dl><div><dt>寄件人</dt><dd>{sender.name || '待填写'} · {sender.phone}</dd><dd>{senderAddress || '地址待填写'}</dd></div><div><dt>收件人</dt><dd>{recipient.name || '待填写'}{recipient.phone && ` · ${recipient.phone}`}</dd><dd>{`${recipient.province}${recipient.city === recipient.province ? '' : recipient.city}${recipient.county}${recipient.address}` || '收件地址待填写'}</dd></div><div><dt>物品与服务</dt><dd>{cargo} · {weight || '—'} kg · {services?.find(item => item.id === Number(serviceId || services[0]?.id))?.name || (servicePreference === 'urgent' ? '加急' : '标准')}</dd></div></dl></section><section className={styles.summaryCard}><h2>提报记录</h2><MyWorkorders scope={mode === 'fxiaoke' ? 'owner' : 'public'}/></section></aside>
     </div>
   </main>
 }
