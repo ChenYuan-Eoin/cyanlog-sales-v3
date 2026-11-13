@@ -64,18 +64,45 @@ function getAllChildDeptIds(departments: OrgSummaryDepartment[], parentId: strin
   return result
 }
 
+type MemberEmployment = 'active' | 'departed' | 'suspended' | 'unknown'
+
+function memberEmployment(user: OrgSummaryUser): MemberEmployment {
+  if (user.directory_identity_id || user.directory_source) {
+    if (user.directory_status === 'active') return 'active'
+    if (user.directory_status === 'ended'
+      || (user.directory_source === 'fxiaoke' && user.directory_status === 'suspended')) return 'departed'
+    if (user.directory_status === 'suspended') return 'suspended'
+    return 'unknown'
+  }
+  if (user.employment_status === 'ended' || user.membership_status === 'ended') return 'departed'
+  if (user.employment_status === 'suspended' || user.membership_status === 'suspended') return 'suspended'
+  if (user.membership_status === 'invited' || user.status === 'active') return 'active'
+  if (user.status === 'suspended') return 'suspended'
+  if (user.status === 'inactive') return 'departed'
+  return 'unknown'
+}
+
+const EMPLOYMENT_LABELS: Record<MemberEmployment, string> = {
+  active: '在职', departed: '已离职', suspended: '已停用', unknown: '待核对',
+}
+
+function memberDepartmentIds(user: OrgSummaryUser): Set<string> {
+  return new Set([...(user.department_ids ?? []), ...(user.primary_dept_id ? [user.primary_dept_id] : [])])
+}
+
 // ============ 部门树组件 ============
 
 interface DepartmentTreeProps {
   departments: OrgSummaryDepartment[]
   users: OrgSummaryUser[]
+  countUsers?: OrgSummaryUser[]
   selectedDeptId: string | null
   onSelectDept: (id: string | null) => void
   onRefresh?: () => void | Promise<void>
   className?: string
 }
 
-function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRefresh, className }: DepartmentTreeProps) {
+function DepartmentTree({ departments, users, countUsers = users, selectedDeptId, onSelectDept, onRefresh, className }: DepartmentTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [editDept, setEditDept] = useState<OrgSummaryDepartment | null>(null)
   const [deletingDept, setDeletingDept] = useState<OrgSummaryDepartment | null>(null)
@@ -224,7 +251,7 @@ function DepartmentTree({ departments, users, selectedDeptId, onSelectDept, onRe
 
           {/* Member count */}
           <Badge variant={isSelected ? 'default' : 'outline'} className="shrink-0 text-xs">
-            {dept.member_count}
+            {countUsers.filter(user => memberDepartmentIds(user).has(dept.id)).length}
           </Badge>
         </div>
 
@@ -385,9 +412,15 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
       id: 'directory_association',
       header: '账号关联',
       size: 110,
-      cell: ({ row }) => row.original.directory_identity_id
-        ? <Badge variant={row.original.directory_pending_account ? 'outline' : 'secondary'}>{row.original.directory_pending_account ? '待首次登录' : '已有账号'}</Badge>
-        : <span className="text-xs text-slate-500">系统成员</span>,
+      cell: ({ row }) => {
+        const user = row.original
+        if (!user.directory_identity_id && !user.directory_source) return <span className="text-xs text-slate-500">系统成员</span>
+        const employed = memberEmployment(user) === 'active'
+        const firstLoginPending = user.directory_pending_account === true && user.membership_status === 'invited' && user.status === 'inactive'
+        return <Badge variant={employed && firstLoginPending ? 'outline' : 'secondary'}>
+          {!employed ? '不可登录' : firstLoginPending ? '待首次登录' : user.login_enabled === false ? '登录已禁用' : '已有账号'}
+        </Badge>
+      },
     },
     {
       accessorKey: 'role_names',
@@ -395,11 +428,11 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
       size: 180,
       cell: ({ row }) => (
         <div className="flex flex-wrap gap-1 max-w-[170px]">
-          {row.original.role_names?.split(',').map((role, i) => (
+          {row.original.role_names?.trim() ? row.original.role_names.split(',').filter(role => role.trim()).map((role, i) => (
             <Badge key={i} variant="secondary" className="text-xs">
               {role.trim()}
             </Badge>
-          )) || <span className="text-slate-400">-</span>}
+          )) : <span className="text-slate-400">-</span>}
         </div>
       ),
     },
@@ -407,30 +440,13 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
       accessorKey: 'status',
       header: '状态',
       size: 90,
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <span className={`inline-block h-2 w-2 rounded-full ${
-            row.original.directory_status
-              ? (row.original.directory_status === 'active' ? 'bg-emerald-400' : 'bg-amber-400')
-              : row.original.membership_status === 'invited'
-              ? 'bg-blue-400'
-              : row.original.status === 'active'
-                ? 'bg-emerald-400'
-                : 'bg-amber-400'
-          }`} />
-          <span className="text-sm text-slate-600">
-            {row.original.directory_status
-              ? (row.original.directory_status === 'active' ? '在职' : row.original.directory_status === 'ended' ? '已离职' : '已停用')
-              : row.original.membership_status === 'invited'
-              ? '待激活'
-              : row.original.status === 'active'
-                ? '在职'
-                : row.original.status === 'suspended'
-                  ? '已停用'
-                  : '已离职'}
-          </span>
+      cell: ({ row }) => {
+        const employment = memberEmployment(row.original)
+        return <div className="flex items-center gap-2">
+          <span className={'inline-block h-2 w-2 rounded-full ' + (employment === 'active' ? 'bg-emerald-400' : employment === 'unknown' ? 'bg-slate-400' : 'bg-amber-400')} />
+          <span className="text-sm text-slate-600">{EMPLOYMENT_LABELS[employment]}</span>
         </div>
-      ),
+      },
     },
     {
       id: 'actions',
@@ -442,29 +458,31 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
         const isLoginDisabled = user.login_enabled === false
         const isInvited = user.membership_status === 'invited'
         const isDirectoryPending = user.directory_pending_account === true
+        const isDirectoryManaged = Boolean(user.directory_identity_id || user.directory_source)
+        const directoryUnavailable = isDirectoryManaged && memberEmployment(user) !== 'active'
         const roleMutationRestriction = getRoleMutationRestriction(user, currentUserId)
 
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" aria-label={'管理' + user.display_name}>
                 <MoreHorizontalIcon className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="z-[100]">
               {/* P0: 编辑 */}
-              <DropdownMenuItem onSelect={() => onEditUser(user)}>
+              <DropdownMenuItem disabled={isDirectoryManaged} title={isDirectoryManaged ? '人员资料与在职状态由外部目录管理' : undefined} onSelect={() => onEditUser(user)}>
                 <EditIcon className="h-4 w-4 mr-2" />
                 编辑
               </DropdownMenuItem>
 
               {/* P0: 分配角色 */}
               <DropdownMenuItem
-                disabled={Boolean(roleMutationRestriction) || isInvited}
+                disabled={Boolean(roleMutationRestriction) || isInvited || directoryUnavailable}
                 onSelect={() => {
-                  if (!roleMutationRestriction && !isInvited) onAssignRole(user)
+                  if (!roleMutationRestriction && !isInvited && !directoryUnavailable) onAssignRole(user)
                 }}
-                title={roleMutationRestriction?.reason || (isDirectoryPending ? '请员工首次通过纷享登录后再分配业务角色' : undefined)}
+                title={roleMutationRestriction?.reason || (directoryUnavailable ? '非在职目录成员不可分配角色' : undefined) || (isDirectoryPending ? '请员工首次通过纷享登录后再分配业务角色' : undefined)}
               >
                 {roleMutationRestriction ? (
                   <LockIcon className="h-4 w-4 mr-2" />
@@ -483,7 +501,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
 
               <DropdownMenuSeparator />
 
-              {user.directory_identity_id ? (
+              {isDirectoryManaged ? (
                 <DropdownMenuItem disabled>
                   <FingerprintIcon className="h-4 w-4 mr-2" />
                   已由纷享目录关联，无需逐人绑定
@@ -498,6 +516,11 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
                 </DropdownMenuItem>
               )}
 
+              {isDirectoryManaged ? (
+                <DropdownMenuItem disabled>
+                  在职状态由{user.directory_source === 'fxiaoke' ? '纷享销客' : '外部目录'}管理；请在来源系统变更后同步
+                </DropdownMenuItem>
+              ) : <>
               {isDirectoryPending ? (
                 <DropdownMenuItem disabled>纷享员工无需邀请码；首次登录即可查看，业务操作另按授权</DropdownMenuItem>
               ) : <>
@@ -698,6 +721,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
                   移出当前组织
                 </DropdownMenuItem>
               )}
+              </>}
             </DropdownMenuContent>
           </DropdownMenu>
         )
@@ -814,21 +838,23 @@ export default function OrgStructureTab({
   const departments = useMemo(() => orgSummary?.departments ?? [], [orgSummary?.departments])
   const users = useMemo(() => orgSummary?.users ?? [], [orgSummary?.users])
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null)
+  const [employmentFilter, setEmploymentFilter] = useState<MemberEmployment | 'all'>('active')
+  const statusUsers = useMemo(() => users.filter(user => employmentFilter === 'all' || memberEmployment(user) === employmentFilter), [users, employmentFilter])
 
   // 根据选中部门过滤成员
   const filteredUsers = useMemo(() => {
-    if (!selectedDeptId) return users
+    if (!selectedDeptId) return statusUsers
     const allowedDeptIds = getAllChildDeptIds(departments, selectedDeptId)
-    return users.filter(u => [...(u.department_ids ?? []), ...(u.primary_dept_id ? [u.primary_dept_id] : [])].some(id => allowedDeptIds.has(id)))
-  }, [users, departments, selectedDeptId])
+    return statusUsers.filter(user => [...memberDepartmentIds(user)].some(id => allowedDeptIds.has(id)))
+  }, [statusUsers, departments, selectedDeptId])
 
   // 统计信息
   const stats = useMemo(() => ({
     deptCount: (orgSummary?.departments ?? []).length,
-    userCount: (orgSummary?.users ?? []).length,
+    userCount: statusUsers.length,
     spaceCount: (orgSummary?.spaces ?? []).length,
     filteredCount: filteredUsers.length,
-  }), [orgSummary, filteredUsers.length])
+  }), [orgSummary, statusUsers.length, filteredUsers.length])
 
   const selectedDept = useMemo(() => {
     const departments = orgSummary?.departments ?? []
@@ -840,7 +866,7 @@ export default function OrgStructureTab({
   const [assigningUser, setAssigningUser] = useState<OrgSummaryUser | null>(null)
   const [bindingUser, setBindingUser] = useState<OrgSummaryUser | null>(null)
 
-  const isEmptyState = stats.deptCount === 0 && stats.userCount === 0
+  const isEmptyState = departments.length === 0 && users.length === 0
 
   return (
     <div className="space-y-6">
@@ -848,12 +874,21 @@ export default function OrgStructureTab({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-wrap gap-2">
           <StatCard icon={<BuildingIcon size={18} />} label="部门" value={stats.deptCount} />
-          <StatCard icon={<UsersIcon size={18} />} label="成员" value={stats.userCount} />
+          <StatCard icon={<UsersIcon size={18} />} label={employmentFilter === 'all' ? '全部成员' : EMPLOYMENT_LABELS[employmentFilter] + '成员'} value={stats.userCount} />
           <StatCard icon={<BuildingIcon size={18} />} label="销售空间" value={stats.spaceCount} />
         </div>
         <div className="text-sm text-slate-500">
           {selectedDept ? `当前筛选：${selectedDept.name}` : '当前筛选：全部成员'}
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-white px-4 py-3">
+        <label htmlFor="member-employment-filter" className="text-sm font-medium text-slate-700">成员状态</label>
+        <select id="member-employment-filter" value={employmentFilter} onChange={event => setEmploymentFilter(event.target.value as MemberEmployment | 'all')}
+          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm">
+          <option value="active">在职</option><option value="departed">已离职</option><option value="suspended">已停用</option><option value="unknown">待核对</option><option value="all">全部</option>
+        </select>
+        <span className="text-xs text-slate-500">默认显示在职成员；离职和历史记录可切换查询。</span>
       </div>
 
       {/* A3: 空数据状态提示 */}
@@ -896,6 +931,7 @@ export default function OrgStructureTab({
               <DepartmentTree
                 departments={departments}
                 users={users}
+                countUsers={statusUsers}
                 selectedDeptId={selectedDeptId}
                 onSelectDept={setSelectedDeptId}
                 onRefresh={onRefresh}
@@ -953,6 +989,12 @@ export default function OrgStructureTab({
         </div>
 
         <div className="min-w-0 space-y-4">
+          <div className="rounded-lg border bg-white p-4">
+            <h3 className="font-medium text-slate-900">员工登录</h3>
+            <p className="mt-2 text-xs leading-5 text-slate-600">在职员工使用自己的纷享销客账号登录 ICU；尚未登录纷享时，登录流程会引导完成认证。无需逐人发邀请码。已离职人员不可登录。</p>
+            <a href="/login" target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex text-sm font-medium text-blue-700 underline">打开员工登录页</a>
+            <p className="mt-2 text-xs leading-5 text-slate-500">可把本网站登录页链接发给员工；此入口使用打开它的人的身份，不会代替表格中的员工登录。</p>
+          </div>
           <div className="rounded-lg border bg-white p-4">
             <h3 className="font-medium text-slate-900">当前组织目录</h3>
             <p className="mt-1 text-xs leading-5 text-slate-500">

@@ -39,3 +39,61 @@ it('cascades department selection through primary and secondary memberships and 
   expect(screen.queryByText('待关联员工甲')).not.toBeInTheDocument()
   expect(screen.getByText('财务员工乙')).toBeInTheDocument()
 })
+
+const statusPayload: OrgSummaryPayload = {
+  roles: [], spaces: [], departments: [
+    { id: 'sales', name: '销售父部门', parent_name: null, parent_id: null, member_count: 99 },
+    { id: 'child', name: '销售子部门', parent_name: '销售父部门', parent_id: 'sales', member_count: 88 },
+  ], users: [
+    { id: 'active-pending', display_name: '在职待登录甲', email: '', title: '', role_names: '', status: 'inactive', login_enabled: false, membership_status: 'invited', directory_identity_id: 'i-active', directory_source: 'fxiaoke', directory_status: 'active', directory_pending_account: true, primary_dept_id: 'child', primary_dept_name: '销售子部门', department_ids: ['sales', 'child'] },
+    { id: 'departed', display_name: '纷享离职乙', email: '', title: '', role_names: '', status: 'active', login_enabled: true, membership_status: 'active', directory_identity_id: 'i-left', directory_source: 'fxiaoke', directory_status: 'suspended', directory_pending_account: true, primary_dept_id: 'sales', primary_dept_name: '销售父部门', department_ids: ['sales'] },
+    { id: 'manual-disabled', display_name: '本地停用丙', email: '', title: '', role_names: '', status: 'suspended', login_enabled: false, primary_dept_id: 'sales', primary_dept_name: '销售父部门' },
+    { id: 'unknown', display_name: '目录待核对丁', email: '', title: '', role_names: '', status: 'active', login_enabled: true, directory_identity_id: 'i-unknown', directory_source: 'fxiaoke', directory_status: 'unknown', primary_dept_id: 'sales', primary_dept_name: '销售父部门' },
+  ],
+}
+
+it('defaults to employed members, preserves active directory newcomers and counts department members once', () => {
+  render(<OrgStructureTab orgSummary={statusPayload} currentUserId="actor" />)
+  expect(screen.getByText('在职待登录甲')).toBeInTheDocument()
+  expect(screen.getByText('待首次登录')).toBeInTheDocument()
+  expect(screen.queryByText('纷享离职乙')).not.toBeInTheDocument()
+  expect(screen.queryByText('本地停用丙')).not.toBeInTheDocument()
+  expect(screen.queryByText('目录待核对丁')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /^销售父部门/ })).toHaveTextContent('1')
+  fireEvent.click(screen.getByRole('button', { name: /^销售父部门/ }))
+  expect(screen.getByText('在职待登录甲')).toBeInTheDocument()
+  expect(screen.getByText('共 1 人（含子部门）')).toBeInTheDocument()
+})
+
+it('shows stopped Fxiaoke employees as departed and unable to log in without inviting first login', async () => {
+  render(<OrgStructureTab orgSummary={statusPayload} currentUserId="actor" />)
+  fireEvent.change(screen.getByLabelText('成员状态'), { target: { value: 'departed' } })
+  const row = screen.getByText('纷享离职乙').closest('tr')!
+  expect(within(row).getByText('已离职')).toBeInTheDocument()
+  expect(within(row).getByText('不可登录')).toBeInTheDocument()
+  expect(within(row).queryByText('待首次登录')).not.toBeInTheDocument()
+  expect(screen.queryByText('在职待登录甲')).not.toBeInTheDocument()
+  fireEvent.keyDown(within(row).getByRole('button', { name: '管理纷享离职乙' }), { key: 'ArrowDown' })
+  expect(await screen.findByRole('menuitem', { name: /在职状态由纷享销客管理/ })).toHaveAttribute('aria-disabled', 'true')
+  expect(screen.queryByRole('menuitem', { name: /启用用户|允许登录|恢复在职|办理离职/ })).not.toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: '编辑' })).toHaveAttribute('aria-disabled', 'true')
+})
+
+it('distinguishes manual suspension and unknown directory status and provides an employee login link', () => {
+  render(<OrgStructureTab orgSummary={statusPayload} currentUserId="actor" />)
+  expect(screen.getByRole('link', { name: '打开员工登录页' })).toHaveAttribute('href', '/login')
+  expect(screen.getByText(/在职员工使用自己的纷享销客账号登录/)).toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('成员状态'), { target: { value: 'all' } })
+  expect(within(screen.getByText('本地停用丙').closest('tr')!).getByText('已停用')).toBeInTheDocument()
+  expect(within(screen.getByText('目录待核对丁').closest('tr')!).getByText('待核对')).toBeInTheDocument()
+  expect(within(screen.getByText('目录待核对丁').closest('tr')!).queryByText('在职')).not.toBeInTheDocument()
+})
+
+it('does not call a previously active directory account a first-login account after local login is disabled', () => {
+  const user = { ...statusPayload.users[0], id: 'previously-active', display_name: '已登录后禁用戊', status: 'active', membership_status: 'active' as const }
+  render(<OrgStructureTab orgSummary={{ ...statusPayload, users: [user] }} currentUserId="actor" />)
+  const row = screen.getByText('已登录后禁用戊').closest('tr')!
+  expect(within(row).getByText('登录已禁用')).toBeInTheDocument()
+  expect(within(row).queryByText('待首次登录')).not.toBeInTheDocument()
+  expect(within(row).getByText('在职')).toBeInTheDocument()
+})
