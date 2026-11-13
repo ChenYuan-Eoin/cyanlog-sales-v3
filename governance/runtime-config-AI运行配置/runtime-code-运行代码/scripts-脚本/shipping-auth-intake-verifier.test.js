@@ -96,3 +96,20 @@ test('verifier collects only five anonymous GET probes and binds raw receipts', 
   t.after(() => { Date.now = now })
   assert.deepEqual(v.productionEvidenceBlockers(proof, { ...expected, runtime: f.runtime }), [])
 })
+
+test('retired public endpoints may be rejected by authentication middleware first', async t => {
+  const f = fixture(t)
+  global.fetch = async (url) => {
+    const isPage = !String(url).includes('/api/')
+    return new Response(isPage ? '' : '{"error":"Unauthorized"}', {
+      status: isPage ? 307 : 401,
+      headers: isPage ? { location: '/login' } : { 'content-type': 'application/json' },
+    })
+  }
+  t.after(() => { global.fetch = nativeFetch })
+  const proof = await v.verify({ runtime: f.runtime, operator: f.save(), ...expected })
+  assert.deepEqual(v.productionEvidenceBlockers(proof, { ...expected, runtime: f.runtime }), [])
+  const accessible = structuredClone(proof)
+  accessible.verifier.payload.probes[2].status = 200
+  assert.ok(v.productionEvidenceBlockers(accessible, { ...expected, runtime: f.runtime }).length)
+})

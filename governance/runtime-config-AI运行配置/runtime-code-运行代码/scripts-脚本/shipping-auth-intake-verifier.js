@@ -94,8 +94,10 @@ function probeBlockers(probes) {
     if (expected.kind === 'login_redirect') {
       if (![302, 303, 307, 308].includes(item?.status) || item?.location !== '/login') errors.push(`Anonymous page did not redirect to login: ${expected.path}`)
     } else if (expected.kind === 'retired_json') {
-      if (item?.status !== 410 || !/^application\/json(?:\s*;|$)/i.test(item?.content_type || '')
-        || item?.code !== 'AUTHENTICATED_INTAKE_REQUIRED') errors.push(`Retired public API is still accessible: ${expected.path}`)
+      const rejectedByMiddleware = item?.status === 401 && typeof item?.error === 'string'
+      const rejectedByRoute = item?.status === 410 && item?.code === 'AUTHENTICATED_INTAKE_REQUIRED'
+      if ((!rejectedByMiddleware && !rejectedByRoute)
+        || !/^application\/json(?:\s*;|$)/i.test(item?.content_type || '')) errors.push(`Retired public API is still accessible: ${expected.path}`)
     } else if (item?.status !== 401 || !/^application\/json(?:\s*;|$)/i.test(item?.content_type || '') || typeof item?.error !== 'string') {
       errors.push(`Anonymous API did not return application JSON 401: ${expected.path}`)
     }
