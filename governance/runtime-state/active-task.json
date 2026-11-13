@@ -260,8 +260,8 @@
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
-    "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-auth-intake-verifier.js",
-    "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-auth-intake-verifier.test.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-auth-intake-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-auth-intake-verifier.test.js",
       "product-truth/product-code/app/shipping/page.tsx",
       "product-truth/product-code/app/shipping/page.test.tsx",
       "product-truth/product-code/app/shipping/workbench.tsx",
@@ -290,7 +290,7 @@
       "product-truth/product-code/middleware.ts",
       "product-truth/product-code/middleware.test.ts",
       "product-truth/product-code/lib/shipping/collaboration.ts",
-    "product-truth/product-code/lib/shipping/collaboration.org.test.ts",
+      "product-truth/product-code/lib/shipping/collaboration.org.test.ts",
       "product-truth/product-code/lib/shipping/contacts.fxiaoke.test.ts",
       "product-truth/product-code/components/layout/AppShell.tsx"
     ],
@@ -346,11 +346,11 @@
       },
       "production_release_authorization": {
         "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261113-009",
+        "final_release_approval_id": "IN-20261113-012",
         "micro_fix_approval_id": "IN-20261016-009",
         "clarification_id": "IN-20261016-015",
         "micro_fix_scope": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
-        "final_scope": "WP35 合并发布：关闭匿名提报和全组织公开记录；在职纷享员工可单票或多票提报待确认工单，按当前账号和组织只读本人 owner_web 记录；恢复寄件地址选择。发布验收不提交真实工单、不调用顺丰、不写生产数据库或改旧单。",
+        "final_scope": "WP35 合并发布：关闭匿名提报和全组织公开记录；在职纷享员工在统一页面单票或多票提报待确认工单，按当前账号和组织只读本人 owner_web 记录，恢复寄件地址选择；所属团队使用 ICU 当前有效部门，寄件配置保存部门名单后限制员工提报，父部门包含下级，首次上线默认保持现有范围。操作员顺丰发单权限不变。发布验收不提交真实工单、不调用顺丰、不写生产数据库或改旧单。",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
         "carrier_calls_authorized": false,
@@ -358,10 +358,10 @@
         "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
         "legacy_scope_only": false,
         "new_scope_release_authorized": true,
-        "authorization_interpretation": "IN-20261113-008/009 combine the user-approved scope and one Production release after the product code is complete. Live verification is read-only and uses the existing Chrome."
+        "authorization_interpretation": "IN-20261113-009 authorized the combined code-only release; IN-20261113-010/011 and the user decision in IN-20261113-012 extend that one release to unified intake UI and department-scoped proposals. Live verification remains read-only in existing Chrome."
       },
-      "manual_delivery_gate_approval_id": "IN-20261113-009",
-      "preview_order_exception_approval_id": "IN-20261113-009",
+      "manual_delivery_gate_approval_id": "IN-20261113-012",
+      "preview_order_exception_approval_id": "IN-20261113-012",
       "blocking_acceptance_defects": [],
       "runtime_contract_version": "f054-auth-intake-v1"
     },
