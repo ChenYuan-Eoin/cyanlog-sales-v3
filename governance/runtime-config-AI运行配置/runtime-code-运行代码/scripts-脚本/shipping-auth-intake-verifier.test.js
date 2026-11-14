@@ -120,3 +120,15 @@ test('retired public endpoints may be rejected by authentication middleware firs
   accessible.verifier.payload.probes[2].status = 200
   assert.ok(v.productionEvidenceBlockers(accessible, { ...expected, runtime: f.runtime }).length)
 })
+
+
+test('manual code gate accepts a new explicit scoped WP35 release approval and rejects wider access', () => {
+  const registry = require('./project-registry')
+  const record = { id:'IN-20261114-002', type:'final_production_release_authorization', source:'user_explicit', state:'approved', scope:'restore existing sales intake', manual_code_evidence_authorized:true, harness_auto_interception_authorized:false }
+  const status = { activeId:'WP35', featureId:'F054', runtimeProfile:'shipping_workspace', runtimeContractVersion:v.CONTRACT,
+    manualDeliveryGateApprovalId:record.id, manualDeliveryGateApprovalRecord:record, productionReleaseAuthorization:{final_scope:record.scope},
+    harness:{mode:'permissive',phase:'idle'} }
+  assert.equal(registry.manualDeliveryGateApproved(status),true)
+  assert.equal(registry.manualDeliveryGateApproved({...status,manualDeliveryGateApprovalRecord:{...record,scope:'different'}}),false)
+  assert.equal(registry.manualDeliveryGateApproved({...status,manualDeliveryGateApprovalRecord:{...record,source:'agent_assumed'}}),false)
+})

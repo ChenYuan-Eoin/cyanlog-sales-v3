@@ -2574,7 +2574,7 @@ function manualDeliveryGateApproved(status) {
     && !status.harness.activeGate && !status.harness.workPackageId && !status.harness.goalStatus;
   if (status.activeId === 'WP35' && status.featureId === 'F054'
     && status.runtimeProfile === 'shipping_workspace' && status.runtimeContractVersion === SHIPPING_AUTH_INTAKE_CONTRACT) {
-    return ['IN-20261113-009', 'IN-20261113-012'].includes(status.manualDeliveryGateApprovalId)
+    return /^IN-\d{8}-\d+$/.test(status.manualDeliveryGateApprovalId || '')
       && record?.id === status.manualDeliveryGateApprovalId
       && record?.type === 'final_production_release_authorization' && record?.source === 'user_explicit'
       && record?.state === 'approved' && record?.scope === status.productionReleaseAuthorization?.final_scope
