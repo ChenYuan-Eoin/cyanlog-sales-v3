@@ -59,6 +59,8 @@ export default function SalesBatchProposal({ sender, team, departmentId, departm
   const ready = prepared.filter(({ row, errors }) => !errors.length && !row.result)
   const invalid = prepared.filter(({ errors }) => errors.length).length
   const uncertain = rows.some(row => row.result === 'unknown' || row.result === 'pending' || row.result === 'conflict')
+  const unresolved = rows.some(row => row.result === 'unknown' || row.result === 'pending')
+  const conflicted = rows.some(row => row.result === 'conflict')
   const locked = busy || rows.some(row => Boolean(row.result))
   useEffect(() => { onLockedChange?.(locked) }, [locked, onLockedChange])
 
@@ -137,7 +139,7 @@ export default function SalesBatchProposal({ sender, team, departmentId, departm
         <div className={styles.batchActions}><button type="button" disabled={!ready.length || !accessReady || !senderReady || busy} onClick={() => { setPreviewSenderKey(senderKey); setPreview(true) }}>预览 {ready.length} 票</button><button type="button" disabled={!previewCurrent || !ready.length || !accessReady || !senderReady || busy} onClick={() => void submit()}>{busy ? '提报中…' : `确认提交 ${ready.length} 票`}</button></div>
       </section>}
     </>
-  if (embedded) return <>{content}{!uncertain && <button type="button" disabled={busy} onClick={onClear}>结束本批，继续填写</button>}</>
+  if (embedded) return <>{content}{!unresolved && <button type="button" disabled={busy} onClick={onClear}>{conflicted ? '已核对原工单，结束本批' : '结束本批，继续填写'}</button>}</>
   return <main className={styles.page}>
     <header className={styles.header}><div className={styles.brand}><span>O</span><div><strong>自助收寄</strong><small>销售寄件提报</small></div></div><div className={styles.secure}>纷享身份已验证 · 顺丰连接{connectionStatus === 'connected' ? '已验证' : connectionStatus === 'failed' ? '待维护' : connectionStatus === 'unconfigured' ? '待配置' : '待验证'}</div></header>
     <div className={styles.hero}><div><p>SALES SHIPPING REQUEST</p><h1>发起寄件</h1><span>一位或多位收件人都可提报，核对后进入待确认工单。</span></div></div>

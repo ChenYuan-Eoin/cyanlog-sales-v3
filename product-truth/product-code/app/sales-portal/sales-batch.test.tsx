@@ -103,3 +103,16 @@ it('keeps inherited customer and cargo visible after success and an unknown resp
   expect(screen.getByLabelText('第2票托寄物')).toHaveProperty('value','样品')
   expect(screen.queryAllByRole('alert')).toHaveLength(1)
 })
+
+
+it('offers an explicit finish action for a checked conflict while keeping unknown requests protected', async () => {
+  fetcher.mockImplementation(async ()=>new Response(JSON.stringify({error:'原请求冲突'}),{status:409}))
+  const finish=vi.fn()
+  render(<SalesBatchProposal embedded onClear={finish} initialText={addresses} sender={sender} team="销售部" rules={rules} services={[{id:2,name:'顺丰标快',preference:'standard'}]} accessReady defaults={{customerName:'星河科技',cargo:'样品',weight:'2',serviceId:'2',specialRequirements:'易碎'}}/>)
+  fireEvent.click(screen.getByRole('button',{name:'预览 2 票'}))
+  fireEvent.click(screen.getByRole('button',{name:'确认提交 2 票'}))
+  await waitFor(()=>expect(screen.getByRole('button',{name:'已核对原工单，结束本批'})).toHaveProperty('disabled',false))
+  fireEvent.click(screen.getByRole('button',{name:'已核对原工单，结束本批'}))
+  expect(finish).toHaveBeenCalledTimes(1)
+  expect(fetcher).toHaveBeenCalledTimes(2)
+})
