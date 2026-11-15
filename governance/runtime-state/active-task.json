@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-14T03:57:43.041688+00:00",
+  "updated_at": "2026-11-15T19:04:23.619803+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -240,10 +240,10 @@
     "name": "销售寄件提报体验",
     "kind": "product",
     "status": "active",
-    "objective": "恢复销售自助提报原有表单、手工填写、逐字段校验、物品选项、预览、寄件摘要、移动端与记录区；在同一页面增量支持多地址解析，保留登录、部门范围、本人记录隔离和原请求幂等恢复。记录继续仅本人可见并解释历史归属，不改生产旧单或调用顺丰。",
+    "objective": "完成WP35未通过验收：消除工作台首屏或切票的自动承运商查询，保留原销售表单、多地址增量解析、本人记录与部门范围，精确版本真实重放后关闭。",
     "started_at": "2026-10-16T07:43:35.475527+00:00",
     "activation_basis": "IN-20261114-001：继续原聊天最后的生产验收反馈，已复现新页面以批量组件替换原表单；依据证据推翻当前实现方向的插队条件，先恢复原销售提报能力，WP97未提交候选保留。",
-    "execution_workspace": "/private/tmp/price-v3-sales-intake-repair",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/queue-business-closure/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
@@ -371,7 +371,14 @@
       "authority": "IN-20261113-004",
       "requested_target": "production_released",
       "constraint": "No production data write, migration or carrier call; user approval required before push, PR or Production deployment."
-    }
+    },
+    "micro_fixes": [
+      {
+        "id": "IN-20261116-001",
+        "scope": "删除选中项effect自动轨迹轮询；保留显式查询/刷新及迟到响应保护",
+        "evidence": "/private/tmp/price-v3-wp97-apl-resume/.git/worktrees/price-v3-sales-intake-repair/codex-runtime/sales-intake-repair/production-observations.json"
+      }
+    ]
   },
   "execution_queue": {
     "active": {
@@ -383,8 +390,8 @@
       "id": "WP97",
       "slug": "crm-intake-icu-gateway",
       "name": "ICU 面向 CRM 的寄件受理网关",
-      "entry_gate": "组织成员身份展示及登录说明修复后恢复APL保留候选",
-      "entry_gate_status": "waiting_wp94_status_feedback"
+      "entry_gate": "WP35副作用修复及精确生产用户路径通过；WP94只读入口候选独立续接，不按旧标题自动放行WP97",
+      "entry_gate_status": "waiting_wp35_acceptance"
     },
     "ready": [
       {
@@ -1791,6 +1798,46 @@
         ],
         "entry_gate": "WP97 在真实纷享审批路径生成唯一待确认工单；重复触发返回同一单、waybill=null、申请人与客户可追溯，且无承运商调用",
         "entry_gate_status": "waiting_previous_production_acceptance"
+      },
+      {
+        "id": "WP40",
+        "slug": "shipping-settings-consolidation",
+        "name": "配置可维护",
+        "acceptance_state": "历史候选；完整复验未完成",
+        "remaining_acceptance": "顺丰与企业接入字段清晰、无挤压，错误可定位、草稿保留",
+        "acceptance_owner": "WP80",
+        "reason": "F099有未关闭责任但本版调度槽位遗漏；本轮恢复parked，保留候选和未验收断言，不自动插队",
+        "reconciliation_source": "IN-20261116-001"
+      },
+      {
+        "id": "WP65",
+        "slug": "organization-fresh-authorization",
+        "name": "权限安全",
+        "acceptance_state": "代码通过；生产未验收",
+        "remaining_acceptance": "人员/组织/角色API逐条验证新鲜授权和跨组织拒绝",
+        "acceptance_owner": "WP65",
+        "reason": "F099有未关闭责任但本版调度槽位遗漏；本轮恢复parked，保留候选和未验收断言，不自动插队",
+        "reconciliation_source": "IN-20261116-001"
+      },
+      {
+        "id": "WP92",
+        "slug": "directory-cutover",
+        "name": "组织来源",
+        "acceptance_state": "parked；code_green候选未验收",
+        "remaining_acceptance": "预览差异→确认同步/主来源切换→原子回滚；旧飞书和手工数据不丢",
+        "acceptance_owner": "WP92",
+        "reason": "F099有未关闭责任但本版调度槽位遗漏；本轮恢复parked，保留候选和未验收断言，不自动插队",
+        "reconciliation_source": "IN-20261116-001"
+      },
+      {
+        "id": "WP94",
+        "slug": "fxiaoke-sso-federated-identity",
+        "name": "纷享联合身份与受限账号入口",
+        "acceptance_state": "main_integrated；受限账号版本已部署，双入口真实登录仍未验收，UI候选待发布",
+        "remaining_acceptance": "修复当前employee_profile空结果根因；两种入口真实管理员/员工登录、稳定主体和完整拒绝矩阵；密码列/RPC/入口删除按IN013后置，不作为本批提前关闭已批准账号入口的条件",
+        "acceptance_owner": "WP94",
+        "reason": "F099有未关闭责任但本版调度槽位遗漏；本轮恢复parked，保留候选和未验收断言，不自动插队",
+        "reconciliation_source": "IN-20261116-001"
       }
     ],
     "completed": [
@@ -2891,15 +2938,15 @@
     "decision_gate": "closed_and_verified_20260718：WP06 所有退出门禁通过；WP07 只有在生成独立结构化目标后才能接替 Active。"
   },
   "workspace": {
-    "repo_root": "/Users/nsss/Price-v3",
+    "repo_root": "/Users/nsss/.codex/worktrees/queue-business-closure/Price-v3",
     "code_root": "product-truth/product-code",
     "truth_root": "product-truth",
     "registry_path": "product-truth/REQ_REGISTRY.yml",
     "inbox_path": "governance/runtime-state/demand-inbox.jsonl",
     "source_dirty_workspace": "/Users/nsss/Price-v3",
     "role": "canonical_execution_candidate",
-    "branch": "codex/wp40-shipping-settings-consolidation",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/wp91-domain-verifier/Price-v3",
+    "branch": "detached",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/queue-business-closure/Price-v3",
     "workspace_strategy": "reuse-primary-worktree"
   },
   "entry": {
@@ -5831,15 +5878,15 @@
     "reason": "复用旧WP76代码，所有旧工作区保留。"
   },
   "queue_reconciliation": {
-    "source": "IN-20261028-010",
-    "version": "2026-10-28.2",
+    "source": "IN-20261116-001",
+    "version": "2026-11-16.1",
     "objective": "销售只提交一次真实收件信息，系统正确生成归属本人的待确认工单；授权人员核对并确认后，顺丰只下单一次，真实运单号回到原销售及原CRM业务记录。全部入口共享组织身份、权限、寄件校验及订单状态；错误可定位、原单可恢复、数据不串人不串企业。正式站未跑通的功能不得标记交付。",
-    "inventory_count": 95,
-    "scope": "当前队列、20个本地工作树队列、暂停快照、Inbox及F099；历史仅保留，其他工作树未修改",
-    "implementation_started": false,
+    "inventory_count": 100,
+    "scope": "实时远端d8006804、全部现存工作树与private/tmp保留候选核对；逐项结果沿用F099与队列，不以历史代码或部署关闭。",
+    "implementation_started": true,
     "execution_before_goal_feedback": false,
-    "active_unchanged": "WP91",
-    "next": "WP95",
+    "active_unchanged": "WP35",
+    "next": "WP97",
     "evidence_policy": "历史completed_at/result只保留在historical_record；代码和Preview不等于生产验收；同一工作包只在一个调度槽位出现",
     "legacy_non_wp_records": [
       {
@@ -5856,13 +5903,14 @@
       }
     ],
     "open_delivery_evidence_issue": "IN-20261028-011",
-    "complete_source_index": "codex-runtime/goal-consolidation-20261028/inventory-before.json",
+    "complete_source_index": "codex-runtime/queue-closure-20261116/queue-inventory.json",
     "last_scoped_batch": {
       "id": "WP40",
       "result": "生产代码事实保留；用户于2026-11-06明确要求先推进 ICU 侧 CRM 受理能力。",
       "switched_at": "2026-11-06T00:00:00.000000+00:00",
       "authority": "IN-20261106-001"
-    }
+    },
+    "inventory_count_definition": "100个WP00-WP99，包括唯一执行槽位及deprecated_merged责任映射；不等于100个待开发任务"
   },
   "release_policy": {
     "authority": "IN-20261029-002",
