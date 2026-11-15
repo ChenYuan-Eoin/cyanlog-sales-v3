@@ -358,19 +358,17 @@
         "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
         "legacy_scope_only": false,
         "new_scope_release_authorized": true,
-        "authorization_interpretation": "用户已授权本次原表单修复发布；5746527d后冲突恢复和历史归属说明是同一范围内必要修正，不包含新业务权限。"
+        "authorization_interpretation": "保留既有WP35代码发布范围授权；新候选不继承旧产品树的Preview例外、手工代码门禁或生产完成证据，须按正常阶段重新取得精确版本证据。无生产数据或承运商授权。"
       },
       "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f054-auth-intake-v1",
-      "manual_delivery_gate_approval_id": "IN-20261114-002",
-      "preview_order_exception_approval_id": "IN-20261114-002"
+      "runtime_contract_version": "f054-auth-intake-v1"
     },
     "feature_id": "F054",
     "integration_decision": {
       "strategy": "isolated_candidate_from_verified_production_base",
       "authority": "IN-20261113-004",
       "requested_target": "production_released",
-      "constraint": "No production data write, migration or carrier call; user approval required before push, PR or Production deployment."
+      "constraint": "本候选未发布；旧授权记录保留历史，不继承旧候选例外；生产数据、承运商和真实路径边界不变。"
     },
     "micro_fixes": [
       {
