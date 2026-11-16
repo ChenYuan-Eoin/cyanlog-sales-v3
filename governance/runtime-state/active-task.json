@@ -331,7 +331,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "Authenticated one-or-many sales intake plus owner-only records and ICU department-scoped proposal permission; one combined Production release after all code is ready. No carrier order or production data migration.",
+      "note": "WP35当前自动轨迹副作用修复；Preview真实登录not_passed，IN-20261116-003明确批准精确候选生产先行只读验收。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -346,11 +346,11 @@
       },
       "production_release_authorization": {
         "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261114-002",
+        "final_release_approval_id": "IN-20261116-003",
         "micro_fix_approval_id": "IN-20261016-009",
         "clarification_id": "IN-20261016-015",
         "micro_fix_scope": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
-        "final_scope": "WP35销售提报修复：恢复原表单、手工填写、物品、特殊需求、预览、摘要和移动端入口，增量支持多地址解析与原请求安全恢复；继续仅本人记录并解释历史归属。仅代码发布并用现有Chrome只读复验，无迁移、不改旧单、不提交生产工单、不调用顺丰。",
+        "final_scope": "仅WP35工作台隐式轨迹查询修复：首屏/切票/展开不自动调用顺丰，保留显式查询及原销售表单、多地址解析、本人记录、部门范围；生产先行后现有浏览器只读验收。不迁移、不改旧单、不提交工单、不调用顺丰。",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
         "carrier_calls_authorized": false,
@@ -358,10 +358,11 @@
         "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
         "legacy_scope_only": false,
         "new_scope_release_authorized": true,
-        "authorization_interpretation": "保留既有WP35代码发布范围授权；新候选不继承旧产品树的Preview例外、手工代码门禁或生产完成证据，须按正常阶段重新取得精确版本证据。无生产数据或承运商授权。"
+        "authorization_interpretation": "用户已针对PR #8候选9956d3be明确答复批准生产先行只读验收；仅绑定同一产品树和回滚点，不扩大生产数据或承运商权限。"
       },
       "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f054-auth-intake-v1"
+      "runtime_contract_version": "f054-auth-intake-v1",
+      "preview_order_exception_approval_id": "IN-20261116-003"
     },
     "feature_id": "F054",
     "integration_decision": {
