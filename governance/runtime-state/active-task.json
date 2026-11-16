@@ -235,15 +235,15 @@
     }
   },
   "active_task": {
-    "id": "WP35",
-    "slug": "sales-intake-experience",
-    "name": "销售寄件提报体验",
+    "id": "WP97",
+    "slug": "apl-icu-intake",
+    "name": "APL驱动ICU寄件受理",
     "kind": "product",
     "status": "active",
-    "objective": "按用户标注修正销售提报页：页头Logo与正文对齐、身份卡移页头右侧、正文上移、本人记录说明精简、多票物品重量服务需求逐票隔离；保留单票原表单与现有幂等恢复。",
+    "objective": "完成APL驱动ICU的最小受理接口：已授权客户端发送本票签名数据，ICU预检缺项、幂等创建唯一待确认工单并回传来源和原单；不以资料同步或通用查询为前置。真实APL、唯一生产工单及操作员确认顺丰出号逐项验收。",
     "started_at": "2026-10-16T07:43:35.475527+00:00",
-    "activation_basis": "IN-20261114-001：继续原聊天最后的生产验收反馈，已复现新页面以批量组件替换原表单；依据证据推翻当前实现方向的插队条件，先恢复原销售提报能力，WP97未提交候选保留。",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/queue-business-closure/Price-v3",
+    "activation_basis": "IN-20261116-019：用户明确收敛APL驱动ICU下单主线，先接口、再真实APL、唯一待确认工单、最后操作员确认顺丰出号。",
+    "execution_workspace": "/private/tmp/price-v3-sales-intake-repair",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
@@ -292,17 +292,17 @@
       "product-truth/product-code/lib/shipping/collaboration.ts",
       "product-truth/product-code/lib/shipping/collaboration.org.test.ts",
       "product-truth/product-code/lib/shipping/contacts.fxiaoke.test.ts",
-      "product-truth/product-code/components/layout/AppShell.tsx"
+      "product-truth/product-code/components/layout/AppShell.tsx",
+      "product-truth/product-code/lib/shipping/crm-intake.ts",
+      "product-truth/product-code/lib/shipping/crm-intake.test.ts",
+      "product-truth/product-code/app/api/shipping/crm",
+      "product-truth/product-code/lib/shipping/fxiaoke-apl/tenant/README.md"
     ],
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "code_green",
       "allowed_states": [
         "executing",
-        "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -317,11 +317,13 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "sales_intake",
+        "shipping_workspace",
+        "shipping_tracking",
         "shipping_access"
       ],
       "required_production_runtime_evidence": [
-        "sales_intake",
+        "shipping_workspace",
+        "shipping_tracking",
         "shipping_access"
       ],
       "required_production_evidence": [
@@ -331,7 +333,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "WP35用户附图修正；本候选Preview真实登录not_passed，IN-20261116-005明确批准生产先行只读验收。",
+      "note": "本轮仅最小API候选；真实APL及真实工单/顺丰分里程碑验收，未获得本轮生产写单或承运商调用授权。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -344,25 +346,8 @@
         "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
         "production_database_mode": "read_only"
       },
-      "production_release_authorization": {
-        "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261116-005",
-        "micro_fix_approval_id": "IN-20261016-009",
-        "clarification_id": "IN-20261016-015",
-        "micro_fix_scope": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
-        "final_scope": "仅WP35用户附图页面修复：Logo与正文对齐、员工身份移页头右侧并上移正文、多票物品重量服务需求逐票隔离、本人记录提示精简；保留单票表单与原请求恢复。生产先行后现有浏览器只读验收，不迁移、不改旧单、不提交工单、不调用顺丰。",
-        "database_write_authorized": false,
-        "production_database_write_authorized": false,
-        "carrier_calls_authorized": false,
-        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
-        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
-        "legacy_scope_only": false,
-        "new_scope_release_authorized": true,
-        "authorization_interpretation": "用户针对PR #9候选e7c0da33明确批准本次页面修复生产先行验收；后续仅发布同产品树和批准记录，不扩大数据、承运商或权限范围。"
-      },
       "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f054-auth-intake-v1",
-      "preview_order_exception_approval_id": "IN-20261116-005"
+      "runtime_contract_version": "f054-v1"
     },
     "feature_id": "F054",
     "integration_decision": {
@@ -386,16 +371,15 @@
   },
   "execution_queue": {
     "active": {
-      "id": "WP35",
-      "slug": "sales-intake-experience",
-      "name": "销售寄件提报体验"
+      "id": "WP97",
+      "slug": "apl-icu-intake",
+      "name": "APL驱动ICU寄件受理"
     },
     "next": {
-      "id": "WP97",
-      "slug": "crm-intake-icu-gateway",
-      "name": "ICU 面向 CRM 的寄件受理网关",
-      "entry_gate": "WP35副作用修复及精确生产用户路径通过；WP94只读入口候选独立续接，不按旧标题自动放行WP97",
-      "entry_gate_status": "waiting_wp35_acceptance"
+      "id": "WP35",
+      "slug": "sales-intake-experience",
+      "name": "销售寄件提报体验",
+      "entry_gate": "APL驱动ICU主线验收后恢复原候选"
     },
     "ready": [
       {

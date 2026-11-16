@@ -72,26 +72,9 @@ function eventLookup(data: unknown) {
   return chain
 }
 
-function directoryLookup(data: unknown, error: unknown = null) {
-  const chain: Record<string, ReturnType<typeof vi.fn>> = {}
-  chain.select = vi.fn(() => chain)
-  chain.eq = vi.fn(() => chain)
-  chain.in = vi.fn(() => chain)
-  chain.limit = vi.fn().mockResolvedValue({ data, error })
-  return chain
-}
-
-const directorySource = { id: 'source-1', connection_state: 'verified', authority_scope: { directory: 'authoritative', identity: 'evidence' } }
-const directoryEmployees = [
-  { external_user_id: body.applicant.employeeId, directory_status: 'active' },
-  { external_user_id: 'sales-2000', directory_status: 'active' },
-]
-
 beforeEach(() => {
   vi.resetAllMocks()
   mocks.from.mockImplementation((table: string) => {
-    if (table === 'organization_sources') return directoryLookup([directorySource])
-    if (table === 'external_identities') return directoryLookup(directoryEmployees)
     throw new Error(`Unexpected database table: ${table}`)
   })
   mocks.options.mockResolvedValue({
@@ -201,7 +184,7 @@ describe('CRM intake preflight', () => {
       },
       missing: [],
     })
-    expect(mocks.from.mock.calls.map(([table]) => table)).toEqual(['organization_sources', 'external_identities'])
+    expect(mocks.from).not.toHaveBeenCalled()
     expect(mocks.rpc).not.toHaveBeenCalled()
   })
 
@@ -276,72 +259,32 @@ describe('CRM intake preflight', () => {
   })
 })
 
-describe('CRM business directory identity', () => {
-  it('rejects nonexistent applicant and salesperson references without writing', async () => {
-    mocks.from.mockReturnValueOnce(directoryLookup([directorySource]))
-    mocks.from.mockReturnValueOnce(directoryLookup([]))
-    const result = await preflightCrmIntakeRequest(client, rawBody({ ...body, sales: { employeeId: 'unknown-sales', name: '未知销售' } }))
-    expect(result).toMatchObject({ ready: false, normalized: null, missing: [
-      { field: 'applicant.employeeId', issue: 'unknown_employee' },
-      { field: 'sales.employeeId', issue: 'unknown_employee' },
-    ] })
-    expect(mocks.rpc).not.toHaveBeenCalled()
-  })
-
-  it('scopes stable employee IDs to the authenticated organization and its one verified directory', async () => {
-    const sourceQuery = directoryLookup([directorySource])
-    const employeeQuery = directoryLookup(directoryEmployees)
-    mocks.from.mockReturnValueOnce(sourceQuery).mockReturnValueOnce(employeeQuery)
+describe('signed CRM source without a synchronized directory prerequisite', () => {
+  it('preflights source fields from the enterprise-bound caller without reading copied people', async () => {
     const result = await preflightCrmIntakeRequest(client, rawBody())
-    expect(result.ready).toBe(true)
-    expect(sourceQuery.eq).toHaveBeenCalledWith('system_org_id', client.orgId)
-    expect(sourceQuery.eq).toHaveBeenCalledWith('provider', 'fxiaoke')
-    expect(sourceQuery.eq).toHaveBeenCalledWith('status', 'active')
-    expect(employeeQuery.eq).toHaveBeenCalledWith('system_org_id', client.orgId)
-    expect(employeeQuery.eq).toHaveBeenCalledWith('source_id', directorySource.id)
-    expect(employeeQuery.in).toHaveBeenCalledWith('external_user_id', [body.applicant.employeeId])
-    expect(mocks.from.mock.calls.map(([table]) => table)).not.toContain('users')
-  })
-
-  it.each(['inactive', null])('rejects a directory employee whose active status is not established: %s', async status => {
-    mocks.from.mockReturnValueOnce(directoryLookup([directorySource]))
-    mocks.from.mockReturnValueOnce(directoryLookup([{ ...directoryEmployees[0], directory_status: status }]))
-    expect(await preflightCrmIntakeRequest(client, rawBody())).toMatchObject({ ready: false, missing: [
-      { field: 'applicant.employeeId', issue: 'inactive_employee' },
-    ] })
-  })
-
-  it('rejects duplicate identity evidence instead of choosing a row', async () => {
-    mocks.from.mockReturnValueOnce(directoryLookup([directorySource]))
-    mocks.from.mockReturnValueOnce(directoryLookup([directoryEmployees[0], directoryEmployees[0]]))
-    expect(await preflightCrmIntakeRequest(client, rawBody())).toMatchObject({ ready: false, missing: [
-      { field: 'applicant.employeeId', issue: 'ambiguous_employee' },
-    ] })
-  })
-
-  it.each([
-    { sources: [] }, { sources: [directorySource, { ...directorySource, id: 'source-2' }] },
-    { sources: [{ ...directorySource, connection_state: 'failed' }] },
-    { sources: [{ ...directorySource, authority_scope: { directory: 'evidence' } }] },
-  ])('fails closed when the organization has no single usable directory: $sources', async ({ sources }) => {
-    mocks.from.mockReturnValueOnce(directoryLookup(sources))
-    await expect(preflightCrmIntakeRequest(client, rawBody())).rejects.toMatchObject({ status: 503, code: 'CRM_DIRECTORY_NOT_READY' })
+    expect(result).toMatchObject({ ready: true, source: { applicant: body.applicant, customer: body.customer } })
+    expect(mocks.from).not.toHaveBeenCalled()
     expect(mocks.rpc).not.toHaveBeenCalled()
   })
-
-  it('fails closed on a directory database error', async () => {
-    mocks.from.mockReturnValueOnce(directoryLookup([directorySource]))
-    mocks.from.mockReturnValueOnce(directoryLookup(null, { message: 'unavailable' }))
-    await expect(preflightCrmIntakeRequest(client, rawBody())).rejects.toMatchObject({ status: 503, code: 'CRM_DIRECTORY_UNAVAILABLE' })
+  it('rejects a caller with no enterprise binding before consulting organization defaults', async () => {
+    const { enterpriseId: _enterprise, ...unbound } = client
+    await expect(preflightCrmIntakeRequest(unbound, rawBody())).rejects.toMatchObject({ status: 503, code: 'CRM_ENTERPRISE_NOT_BOUND' })
+    expect(mocks.options).not.toHaveBeenCalled()
     expect(mocks.rpc).not.toHaveBeenCalled()
   })
-
-  it('prevents new order creation for an unknown employee', async () => {
-    mocks.from.mockReturnValueOnce(eventLookup(null))
-    mocks.from.mockReturnValueOnce(directoryLookup([directorySource]))
-    mocks.from.mockReturnValueOnce(directoryLookup([]))
-    await expect(createCrmIntake(client, rawBody())).rejects.toMatchObject({ status: 422, code: 'CRM_INTAKE_INCOMPLETE' })
+  it('still requires the applicant stable employee ID and department evidence in the request', async () => {
+    for (const field of ['employeeId', 'departmentName'] as const) {
+      const applicant: Record<string, unknown> = { ...body.applicant }; delete applicant[field]
+      expect(await preflightCrmIntakeRequest(client, rawBody({ ...body, applicant }))).toMatchObject({ ready: false })
+    }
     expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+  it('parses exactly one textual recipient and rejects multiple tickets or mixed text fields', async () => {
+    const payload = { ...body, shipment: { ...body.shipment, recipient: { text: '张三 13700000000 广东省深圳市南山区科技园1号' } } }
+    expect(await preflightCrmIntakeRequest(client, rawBody(payload))).toMatchObject({ ready: true, normalized: { recipient: body.shipment.recipient } })
+    const multi = { ...payload, shipment: { ...payload.shipment, recipient: { text: payload.shipment.recipient.text + String.fromCharCode(10, 10) + '李四 13800000000 广东省深圳市南山区科苑路2号' } } }
+    expect(await preflightCrmIntakeRequest(client, rawBody(multi))).toMatchObject({ ready: false })
+    expect(await preflightCrmIntakeRequest(client, rawBody({ ...payload, shipment: { ...payload.shipment, recipient: { ...payload.shipment.recipient, name: '覆盖姓名' } } }))).toMatchObject({ ready: false })
   })
 })
 
@@ -366,7 +309,7 @@ describe('CRM intake create-pending idempotency', () => {
     mocks.rpc.mockResolvedValueOnce({ data: { created: false, order_id: 'order-1', order_no: 'SO-20261106-ABC12345', status: 'awaiting_confirmation' }, error: null })
 
     const receipt = await createCrmIntake(client, rawBody())
-    expect(receipt).toMatchObject({ created: false, orderId: 'order-1', orderNo: 'SO-20261106-ABC12345', status: 'awaiting_confirmation' })
+    expect(receipt).toMatchObject({ created: false, event: body.event, orderId: 'order-1', orderNo: 'SO-20261106-ABC12345', status: 'awaiting_confirmation' })
     expect(mocks.options).not.toHaveBeenCalled()
     expect(mocks.rpc).toHaveBeenCalledWith('replay_shipping_crm_intake', {
       p_org_id: client.orgId,
@@ -423,7 +366,7 @@ describe('CRM intake create-pending idempotency', () => {
   it('creates only an awaiting-confirmation order and passes explicit CRM evidence to the atomic RPC', async () => {
     mocks.from.mockReturnValueOnce(eventLookup(null))
     await expect(createCrmIntake(client, rawBody())).resolves.toMatchObject({
-      accepted: true, created: true, orderId: 'order-1', status: 'awaiting_confirmation', waybill: null,
+      accepted: true, created: true, event: body.event, orderId: 'order-1', status: 'awaiting_confirmation', waybill: null,
     })
     expect(mocks.rpc).toHaveBeenCalledWith('create_shipping_crm_intake', expect.objectContaining({
       p_org_id: client.orgId,

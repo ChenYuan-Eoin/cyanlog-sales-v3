@@ -2,6 +2,7 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { contactSchema } from './validation'
+import { parseShippingText, prepareBatchRecipient } from './batch-text'
 import { DOMESTIC_SHIPPING_PHONE_PATTERN } from './phone'
 import { createShipmentReceiptToken, newShippingOrderNo, nextShippingReviewAt } from './collaboration'
 import { loadDefaultShippingSender } from './sender-profile'
@@ -55,8 +56,37 @@ const crmSalesSchema = z.object({
   departmentName: z.string().trim().min(1).max(80).optional(),
 }).strict()
 
+// Reuse the existing one-or-many parser, then require exactly one recipient.
+const crmRecipientSchema = z.unknown().transform((value, ctx) => {
+  let recipient = value
+  if (value && typeof value === 'object' && !Array.isArray(value) && 'text' in value) {
+    const text = z.object({ text: z.string().trim().min(1).max(4000) }).strict().safeParse(value)
+    if (!text.success) {
+      for (const issue of text.error.issues) ctx.addIssue({ ...issue })
+      return z.NEVER
+    }
+    const rows = parseShippingText(text.data.text)
+    if (rows.length !== 1) {
+      ctx.addIssue({ code: 'custom', path: ['text'], message: '收件地址文本必须恰好包含一票，请拆分后逐票提报。' })
+      return z.NEVER
+    }
+    const prepared = prepareBatchRecipient(rows[0])
+    if (prepared.errors.length) {
+      for (const message of prepared.errors) ctx.addIssue({ code: 'custom', path: ['text'], message })
+      return z.NEVER
+    }
+    recipient = prepared.recipient
+  }
+  const parsed = contactSchema.safeParse(recipient)
+  if (!parsed.success) {
+    for (const issue of parsed.error.issues) ctx.addIssue({ ...issue })
+    return z.NEVER
+  }
+  return parsed.data
+})
+
 const crmShipmentSchema = z.object({
-  recipient: contactSchema,
+  recipient: crmRecipientSchema,
   cargo: z.string().trim().min(1, '请填写物品').max(60),
   weight: z.number().finite().positive('重量必须大于 0').max(20),
   serviceId: z.number().int().positive().optional(),
@@ -134,6 +164,7 @@ export type CrmIntakePreflight = {
 }
 
 export type CrmIntakeReceipt = {
+  event: CrmEventIdentity
   accepted: true
   created: boolean
   eventKey: string
@@ -288,63 +319,22 @@ export function crmEventKey(client: CrmIntakeClient, event: CrmEventIdentity) {
 }
 
 function assertEnterpriseScope(client: CrmIntakeClient, event: CrmEventIdentity) {
-  if (client.enterpriseId && client.enterpriseId !== event.enterpriseId) {
+  if (!client.enterpriseId) throw new CrmIntakeError(503, 'CRM_ENTERPRISE_NOT_BOUND', 'CRM 客户端尚未绑定企业，请管理员核对接入配置。')
+  if (client.enterpriseId !== event.enterpriseId) {
     throw new CrmIntakeError(403, 'CRM_ENTERPRISE_MISMATCH', 'CRM 企业与已核准组织不匹配。')
   }
 }
 
-async function inspectCrmDirectoryEmployees(client: CrmIntakeClient, payload: CrmIntakePayload): Promise<CrmMissingField[]> {
-  // The authenticated client binds enterpriseId to orgId. Directory external_tenant_id
-  // is the Fxiaoke EA, which is a different identifier from the CRM tenantId.
-  const sources = await supabaseAdmin.from('organization_sources')
-    .select('id,connection_state,authority_scope')
-    .eq('system_org_id', client.orgId)
-    .eq('provider', 'fxiaoke')
-    .eq('status', 'active')
-    .limit(2)
-  if (sources.error) throw new CrmIntakeError(503, 'CRM_DIRECTORY_UNAVAILABLE', '组织人员目录暂时无法核对，请稍后重试。')
-  const source = sources.data?.[0]
-  if (sources.data?.length !== 1 || source.connection_state !== 'verified' || source.authority_scope?.directory !== 'authoritative') {
-    throw new CrmIntakeError(503, 'CRM_DIRECTORY_NOT_READY', '当前组织尚无唯一、已验证且启用的纷享人员目录。')
-  }
-
-  const references = [
-    { field: 'applicant.employeeId', label: '申请人', employeeId: payload.applicant.employeeId },
-    ...(payload.sales ? [{ field: 'sales.employeeId', label: '归属销售', employeeId: payload.sales.employeeId }] : []),
-  ]
-  const employeeIds = [...new Set(references.map(reference => reference.employeeId))]
-  const employees = await supabaseAdmin.from('external_identities')
-    .select('external_user_id,directory_status:profile_snapshot->>status')
-    .eq('system_org_id', client.orgId)
-    .eq('source_id', source.id)
-    .in('external_user_id', employeeIds)
-    .limit(employeeIds.length + 1)
-  if (employees.error) throw new CrmIntakeError(503, 'CRM_DIRECTORY_UNAVAILABLE', '组织人员目录暂时无法核对，请稍后重试。')
-
-  const missing: CrmMissingField[] = []
-  for (const reference of references) {
-    const matches = (employees.data || []).filter(employee => employee.external_user_id === reference.employeeId)
-    const employee = matches[0]
-    if (!employee) {
-      missing.push({ field: reference.field, issue: 'unknown_employee', message: `${reference.label}的员工 ID 不在当前组织的纷享目录中，请核对稳定员工 ID。` })
-    } else if (matches.length !== 1) {
-      missing.push({ field: reference.field, issue: 'ambiguous_employee', message: `${reference.label}的目录身份存在冲突，请先核实。` })
-    } else if (employee.directory_status !== 'active') {
-      missing.push({ field: reference.field, issue: 'inactive_employee', message: `${reference.label}在当前纷享目录中未确认为有效在职人员。` })
-    }
-  }
-  // This validates business references only. An ICU login, canonical account binding,
-  // identity authority, or role grant is deliberately not a prerequisite for APL intake.
-  return missing
-}
-
+// The enterprise-bound HMAC client is the trusted source for this ticket.
+// Provider lookups are independent read-only capabilities, never a prerequisite
+// to receiving signed business data. Intake stores only its own order evidence.
 export async function preflightCrmIntake(client: CrmIntakeClient, payload: CrmIntakePayload): Promise<CrmIntakePreflight> {
   assertEnterpriseScope(client, payload.event)
-  const [options, sender, missing] = await Promise.all([
+  const [options, sender] = await Promise.all([
     loadIntakeOptionsForOrg(client.orgId),
     loadDefaultShippingSender(client.orgId),
-    inspectCrmDirectoryEmployees(client, payload),
   ])
+  const missing: CrmMissingField[] = []
   const parsedSender = contactSchema.safeParse(sender)
   if (!parsedSender.success) missing.push(...zodMissing('sender', parsedSender.error))
 
@@ -438,7 +428,7 @@ function shippingInputFromPreflight(preflight: CrmIntakePreflight): ShippingInpu
   }
 }
 
-async function existingReceipt(client: CrmIntakeClient, event: { payload_hash: string }, payloadHash: string, eventKey: string): Promise<CrmIntakeReceipt> {
+async function existingReceipt(client: CrmIntakeClient, event: { payload_hash: string }, payloadHash: string, eventKey: string, sourceEvent: CrmEventIdentity): Promise<CrmIntakeReceipt> {
   if (event.payload_hash !== payloadHash) {
     throw new CrmIntakeError(409, 'CRM_EVENT_PAYLOAD_CONFLICT', '同一 CRM 事件的内容发生变化，已拒绝覆盖原工单。')
   }
@@ -459,6 +449,7 @@ async function existingReceipt(client: CrmIntakeClient, event: { payload_hash: s
     throw new CrmIntakeError(503, 'CRM_EVENT_RECOVERY_FAILED', '原 CRM 工单暂时无法读取，请稍后重试。')
   }
   return {
+    event: sourceEvent,
     accepted: true,
     created: false,
     eventKey,
@@ -487,7 +478,7 @@ export async function createCrmIntake(client: CrmIntakeClient, rawBody: string):
     .eq('event_key', eventKey)
     .maybeSingle()
   if (prior.error) throw new CrmIntakeError(503, 'CRM_EVENT_READ_FAILED', 'CRM 事件核对暂不可用。')
-  if (prior.data) return existingReceipt(client, prior.data, payloadHash, eventKey)
+  if (prior.data) return existingReceipt(client, prior.data, payloadHash, eventKey, payload.event)
 
   const preflight = await preflightCrmIntake(client, payload)
   if (!preflight.ready || !preflight.normalized) throw new CrmIntakeIncompleteError(preflight)
@@ -534,7 +525,7 @@ export async function createCrmIntake(client: CrmIntakeClient, rawBody: string):
       const retry = await supabaseAdmin.from('shipping_crm_intake_events')
         .select('payload_hash,shipping_order_id')
         .eq('org_id', client.orgId).eq('integration_client_id', client.clientId).eq('event_key', eventKey).single()
-      if (!retry.error && retry.data) return existingReceipt(client, retry.data, payloadHash, eventKey)
+      if (!retry.error && retry.data) return existingReceipt(client, retry.data, payloadHash, eventKey, payload.event)
     }
     throw new CrmIntakeError(503, 'CRM_INTAKE_WRITE_FAILED', 'CRM 工单暂未保存，请稍后重试。')
   }
@@ -543,6 +534,7 @@ export async function createCrmIntake(client: CrmIntakeClient, rawBody: string):
     throw new CrmIntakeError(503, 'CRM_INTAKE_READBACK_FAILED', 'CRM 工单已提交，但回读结果不完整，请用同一事件重试。')
   }
   return {
+    event: payload.event,
     accepted: true,
     created: result.created === true,
     eventKey,
