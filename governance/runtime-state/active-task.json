@@ -331,7 +331,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "WP35附图反馈修正；此前自动轨迹修复已production_released，新产品树不继承旧发布例外。",
+      "note": "WP35用户附图修正；本候选Preview真实登录not_passed，IN-20261116-005明确批准生产先行只读验收。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -346,11 +346,11 @@
       },
       "production_release_authorization": {
         "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261116-003",
+        "final_release_approval_id": "IN-20261116-005",
         "micro_fix_approval_id": "IN-20261016-009",
         "clarification_id": "IN-20261016-015",
         "micro_fix_scope": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
-        "final_scope": "仅WP35工作台隐式轨迹查询修复：首屏/切票/展开不自动调用顺丰，保留显式查询及原销售表单、多地址解析、本人记录、部门范围；生产先行后现有浏览器只读验收。不迁移、不改旧单、不提交工单、不调用顺丰。",
+        "final_scope": "仅WP35用户附图页面修复：Logo与正文对齐、员工身份移页头右侧并上移正文、多票物品重量服务需求逐票隔离、本人记录提示精简；保留单票表单与原请求恢复。生产先行后现有浏览器只读验收，不迁移、不改旧单、不提交工单、不调用顺丰。",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
         "carrier_calls_authorized": false,
@@ -358,10 +358,11 @@
         "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
         "legacy_scope_only": false,
         "new_scope_release_authorized": true,
-        "authorization_interpretation": "用户已针对PR #8候选9956d3be明确答复批准生产先行只读验收；仅绑定同一产品树和回滚点，不扩大生产数据或承运商权限。"
+        "authorization_interpretation": "用户针对PR #9候选e7c0da33明确批准本次页面修复生产先行验收；后续仅发布同产品树和批准记录，不扩大数据、承运商或权限范围。"
       },
       "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f054-auth-intake-v1"
+      "runtime_contract_version": "f054-auth-intake-v1",
+      "preview_order_exception_approval_id": "IN-20261116-005"
     },
     "feature_id": "F054",
     "integration_decision": {
