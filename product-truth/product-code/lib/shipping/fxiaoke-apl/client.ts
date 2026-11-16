@@ -40,6 +40,7 @@ const preflightResponseSchema = z.object({
 }).passthrough()
 
 const receiptResponseSchema = z.object({
+  event: eventSchema,
   accepted: z.literal(true),
   created: z.boolean(),
   eventKey: z.string(),
@@ -261,7 +262,7 @@ export async function runFxiaokeAplContract(args: {
     return errorResult(error, 'create')
   }
   const receiptParsed = receiptResponseSchema.safeParse(createCall.content)
-  if (!receiptParsed.success || receiptParsed.data.eventKey !== preflight.eventKey) {
+  if (!receiptParsed.success || receiptParsed.data.eventKey !== preflight.eventKey || !sameEvent(receiptParsed.data.event, expectedEvent)) {
     return errorResult(new FxiaokeAplContractError('APL_RESPONSE_INVALID', 'ICU 受理响应与预检事件不一致', {
       issues: receiptParsed.success ? [] : receiptParsed.error.issues,
     }), 'create')

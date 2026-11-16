@@ -177,6 +177,7 @@ function runtime(options: RuntimeOptions = {}) {
       return options.create?.(body, createCalls) ?? {
         statusCode: 202,
         content: {
+          event: body.event,
           accepted: true,
           created: true,
           eventKey: 'a'.repeat(64),
@@ -335,11 +336,12 @@ describe('Fxiaoke APL contract', () => {
 
   it('replays the exact raw body when create transport fails and never enables transport retry', async () => {
     const fake = runtime({
-      create: (_body, call) => call === 1
+      create: (body, call) => call === 1
         ? { statusCode: 503, content: { code: 'TEMPORARY' } }
         : {
             statusCode: 202,
             content: {
+              event: body.event,
               accepted: true,
               created: false,
               eventKey: 'a'.repeat(64),
@@ -368,6 +370,29 @@ describe('Fxiaoke APL contract', () => {
     expect(result).toMatchObject({ status: 'error', code: 'APL_HTTP_CREATE_FAILED', stage: 'create', retryable: false })
     expect(fake.calls.filter(call => call.pathname === '/api/shipping/crm/orders')).toHaveLength(1)
   })
+
+  it.each(['enterpriseId', 'workflowInstanceId', 'objectApiName', 'recordId', 'shipmentDetailId', 'taskId', 'stageId', 'revisionId'])(
+    'rejects a receipt with a different %s even when the event key matches', async field => {
+      const fake = runtime({
+        create: body => ({
+          statusCode: 202,
+          content: {
+            event: { ...(body.event as Record<string, unknown>), [field]: 'different-source' },
+            accepted: true,
+            created: true,
+            eventKey: 'a'.repeat(64),
+            orderId: '00000000-0000-4000-8000-000000000001',
+            orderNo: 'SO-20261106-APL00001',
+            status: 'awaiting_confirmation',
+            waybill: null,
+            nextAction: 'operator_confirmation',
+          },
+        }),
+      })
+      const result = await runFxiaokeAplContract({ runtime: fake.value, mapping, endpoint, secret, source, mode: 'create' })
+      expect(result).toMatchObject({ status: 'error', code: 'APL_RESPONSE_INVALID', stage: 'create' })
+    },
+  )
 })
 
 describe('canonical APL request identity', () => {

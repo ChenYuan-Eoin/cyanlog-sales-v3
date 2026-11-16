@@ -296,7 +296,9 @@
       "product-truth/product-code/lib/shipping/crm-intake.ts",
       "product-truth/product-code/lib/shipping/crm-intake.test.ts",
       "product-truth/product-code/app/api/shipping/crm",
-      "product-truth/product-code/lib/shipping/fxiaoke-apl/tenant/README.md"
+      "product-truth/product-code/lib/shipping/fxiaoke-apl/tenant/README.md",
+      "product-truth/product-code/lib/shipping/fxiaoke-apl/client.ts",
+      "product-truth/product-code/lib/shipping/fxiaoke-apl/apl-contract.test.ts"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -347,7 +349,21 @@
         "production_database_mode": "read_only"
       },
       "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f054-v1"
+      "runtime_contract_version": "f054-v1",
+      "production_release_authorization": {
+        "status": "approved_code_only",
+        "final_release_approval_id": "IN-20261116-020",
+        "micro_fix_approval_id": "IN-20261116-019",
+        "clarification_id": "IN-20261116-019",
+        "final_scope": "仅WP97最小ICU接口代码交付：企业绑定签名请求的资料预检、单票文本地址、来源回执及幂等受理；先推送独立分支/PR及检查候选部署。正式发布和真实工单验收独立，不执行迁移、不改已有工单、凭据、角色或部门、不调用顺丰。",
+        "micro_fix_scope": "仅WP97最小ICU接口代码交付：企业绑定签名请求的资料预检、单票文本地址、来源回执及幂等受理；先推送独立分支/PR及检查候选部署。正式发布和真实工单验收独立，不执行迁移、不改已有工单、凭据、角色或部门、不调用顺丰。",
+        "database_write_authorized": false,
+        "production_database_write_authorized": false,
+        "carrier_calls_authorized": false,
+        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "authorization_interpretation": "接续用户已批准WP97推送/PR/必要ICU代码发布和本轮明确继续解决指令，仅绑定最小接口候选，不声称用户逐SHA审阅；未继承旧候选Preview例外。"
+      }
     },
     "feature_id": "F054",
     "integration_decision": {
