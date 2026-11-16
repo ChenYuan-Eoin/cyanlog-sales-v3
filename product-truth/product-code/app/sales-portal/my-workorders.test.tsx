@@ -24,7 +24,7 @@ it('loads shared records anonymously, appends pages and refreshes from the newes
 it('reads only the authenticated owner endpoint in employee mode', async()=>{
  fetcher.mockResolvedValue(response({orders:[],nextPage:null}))
  render(<MyWorkorders scope="owner"/>)
- expect(await screen.findByText('仅我的提报 · 按提报日期分组')).toBeTruthy()
+ expect(await screen.findByText('仅本人的提报及单号 · 按日期分组')).toBeTruthy()
  expect(fetcher).toHaveBeenCalledWith('/api/shipping/owner/orders?page=0',{cache:'no-store',credentials:'same-origin'})
  expect(fetcher.mock.calls.some(([url])=>String(url).includes('/public/orders'))).toBe(false)
 })

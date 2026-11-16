@@ -32,8 +32,8 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0 }: { sco
   }
   const canExpand = (orders?.length || 0) > 5 || nextPage !== null
   return <section className={styles.card}>
-    <p className={styles.hint}>{scope === 'owner' ? '仅我的提报 · 按提报日期分组' : '全部快递 · 按提报日期分组'}</p>
-    {scope === 'owner' && <p className={styles.hint}>这里只显示当前账号在本组织提报的工单。历史匿名或他人代提的工单不会自动归入本人；如需核对，请向操作员提供原工单号。已有查询链接登录后仍可查看该票进度。</p>}
+    <p className={styles.hint}>{scope === 'owner' ? '仅本人的提报及单号 · 按日期分组' : '全部快递 · 按提报日期分组'}</p>
+    {scope === 'owner' && <p className={styles.hint}>审核并下单后才会生成物流单号。请稍后点击下方“刷新提报记录”获取。</p>}
     <div className={styles.recordToolbar}>
       <button type="button" disabled={busy} onClick={() => void load()}>{busy ? '正在读取…' : '刷新提报记录'}</button>
       {canExpand && <button type="button" aria-expanded={expanded} aria-controls={listId} onClick={() => { if (!expanded) setExpandedHeight(Math.max(720, (listRef.current?.getBoundingClientRect().height || 0) + 160)); setExpanded(current => !current) }}>{expanded ? '收起 · 最近5条' : '查看更早记录'}</button>}

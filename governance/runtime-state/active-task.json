@@ -240,7 +240,7 @@
     "name": "销售寄件提报体验",
     "kind": "product",
     "status": "active",
-    "objective": "完成WP35未通过验收：消除工作台首屏或切票的自动承运商查询，保留原销售表单、多地址增量解析、本人记录与部门范围，精确版本真实重放后关闭。",
+    "objective": "按用户标注修正销售提报页：页头Logo与正文对齐、身份卡移页头右侧、正文上移、本人记录说明精简、多票物品重量服务需求逐票隔离；保留单票原表单与现有幂等恢复。",
     "started_at": "2026-10-16T07:43:35.475527+00:00",
     "activation_basis": "IN-20261114-001：继续原聊天最后的生产验收反馈，已复现新页面以批量组件替换原表单；依据证据推翻当前实现方向的插队条件，先恢复原销售提报能力，WP97未提交候选保留。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/queue-business-closure/Price-v3",
@@ -331,7 +331,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "WP35当前自动轨迹副作用修复；Preview真实登录not_passed，IN-20261116-003明确批准精确候选生产先行只读验收。",
+      "note": "WP35附图反馈修正；此前自动轨迹修复已production_released，新产品树不继承旧发布例外。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -361,8 +361,7 @@
         "authorization_interpretation": "用户已针对PR #8候选9956d3be明确答复批准生产先行只读验收；仅绑定同一产品树和回滚点，不扩大生产数据或承运商权限。"
       },
       "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f054-auth-intake-v1",
-      "preview_order_exception_approval_id": "IN-20261116-003"
+      "runtime_contract_version": "f054-auth-intake-v1"
     },
     "feature_id": "F054",
     "integration_decision": {
@@ -376,6 +375,11 @@
         "id": "IN-20261116-001",
         "scope": "删除选中项effect自动轨迹轮询；保留显式查询/刷新及迟到响应保护",
         "evidence": "/private/tmp/price-v3-wp97-apl-resume/.git/worktrees/price-v3-sales-intake-repair/codex-runtime/sales-intake-repair/production-observations.json"
+      },
+      {
+        "id": "IN-20261116-004",
+        "scope": "页面问题多，改掉；按附图：Logo对齐、身份卡移页头右侧并上移正文、本人记录提示、销售多票逐票物品/重量/服务/需求，不提供批量设置。",
+        "evidence": "/var/folders/vm/8p67qbts0yb50prnyd72frhc0000gn/T/codex-clipboard-c0e57d5c-3c51-4e7b-afda-f875ca5483b0.png"
       }
     ]
   },

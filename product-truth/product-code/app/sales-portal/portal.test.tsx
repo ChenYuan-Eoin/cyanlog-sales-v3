@@ -1,6 +1,6 @@
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import SalesPortal, { FxiaokeShippingProposal, SalesRequestForm } from './portal'
 import { ownerOrderSchema } from '@/lib/shipping/validation'
 vi.mock('./my-workorders', () => ({default: ({scope}: {scope?: string}) => <p>{scope === 'owner' ? '仅我的记录' : '全部快递记录'}</p>}))
@@ -19,7 +19,7 @@ describe('sales shipping portal', () => {
     render(<FxiaokeShippingProposal profile={fxProfile} rules={{companyName:{enabled:true,required:true,minLength:4},team:{enabled:true,required:true,minLength:1},teamOptions:[]}} services={[{id:2,name:'顺丰标快',preference:'standard'}]}/>)
     expect(screen.queryByRole('navigation',{name:'销售提报方式'})).toBeNull()
     expect(screen.getByRole('heading',{name:'发起寄件'})).toBeTruthy()
-    expect(screen.getByText(/纷享身份已验证/)).toBeTruthy()
+    expect(within(screen.getByRole('region',{name:'员工身份'})).getByText('纷享销客已连接')).toBeTruthy()
     expect(screen.getByText('仅我的记录')).toBeTruthy()
     expect(screen.queryByText('全部快递记录')).toBeNull()
     expect(screen.getByLabelText('所属团队')).toHaveProperty('value','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
@@ -198,24 +198,56 @@ it('keeps manual entry, cargo choices, summary and personal history before parsi
   expect(fetcher.mock.calls.some(([,init])=>init?.method==='POST')).toBe(false)
 })
 
-it('adds multiple parsed recipients to the original form and preserves common cargo and special requirements', async () => {
+it('keeps cargo, weight, service and requirements independent for each parsed ticket', async () => {
   fetcher.mockResolvedValue(new Response(JSON.stringify({orderNo:'SO-MULTI',status:'awaiting_confirmation'}),{status:202}))
-  render(<SalesRequestForm employee={employee} mode="fxiaoke" accessReady services={[{id:2,name:'顺丰标快',preference:'standard'}]}/> )
+  render(<SalesRequestForm employee={employee} mode="fxiaoke" accessReady services={[{id:2,name:'顺丰标快',preference:'standard'},{id:1,name:'顺丰特快',preference:'urgent'}]}/> )
   fireEvent.change(screen.getByLabelText('客户公司名称'),{target:{value:'星河科技'}})
   fireEvent.change(screen.getByRole('combobox',{name:'托寄物'}),{target:{value:'样品'}})
+  fireEvent.change(screen.getByLabelText('预估重量（kg）'),{target:{value:'3'}})
+  fireEvent.change(screen.getByRole('combobox',{name:'顺丰服务产品'}),{target:{value:'1'}})
   fireEvent.change(screen.getByLabelText(/我的特殊需求/),{target:{value:'易碎请联系'}})
   fireEvent.change(screen.getByLabelText('智能地址一键粘贴'),{target:{value:'张三 13900139000 广东省深圳市南山区科技路1号\n\n李四 13900139001 浙江省杭州市西湖区文三路9号'}})
   fireEvent.click(screen.getByRole('button',{name:'识别并填充'}))
   expect(screen.getByLabelText('第1票收件人')).toHaveProperty('value','张三')
   expect(screen.getByLabelText('第2票收件人')).toHaveProperty('value','李四')
   expect(screen.getByRole('region',{name:'本次寄件摘要'}).textContent).toContain('2')
-  expect(screen.getByRole('heading',{name:/物品与特殊需求/})).toBeTruthy()
+  expect(screen.queryByRole('heading',{name:/物品与特殊需求/})).toBeNull()
+  expect(screen.queryByRole('combobox',{name:'托寄物'})).toBeNull()
+  expect(screen.getByLabelText('第1票托寄物')).toHaveProperty('value','合同')
+  expect(screen.getByLabelText('第2票重量')).toHaveProperty('value','1')
+  expect(screen.getByLabelText('第2票顺丰服务产品')).toHaveProperty('value','2')
+  expect(screen.getByLabelText('第2票特殊需求')).toHaveProperty('value','')
+  expect(within(screen.getByRole('region',{name:'本次寄件摘要'})).getByText('物品与服务按票核对')).toBeTruthy()
+  fireEvent.change(screen.getByLabelText('第1票托寄物'),{target:{value:'样品'}})
+  fireEvent.change(screen.getByLabelText('第1票重量'),{target:{value:'2'}})
+  fireEvent.change(screen.getByLabelText('第1票顺丰服务产品'),{target:{value:'1'}})
+  fireEvent.change(screen.getByLabelText('第1票特殊需求'),{target:{value:'样品易碎'}})
+  expect(screen.getByLabelText('第2票托寄物')).toHaveProperty('value','合同')
   fireEvent.click(screen.getByRole('button',{name:'预览 2 票'}))
   fireEvent.click(screen.getByRole('button',{name:'确认提交 2 票'}))
   await waitFor(()=>expect(fetcher.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(2))
   const payloads=fetcher.mock.calls.filter(([,init])=>init?.method==='POST').map(([,init])=>JSON.parse(init.body))
   expect(payloads.map(x=>x.input.recipient.name)).toEqual(['张三','李四'])
-  expect(payloads.every(x=>x.input.cargo==='样品'&&x.input.specialRequirements==='易碎请联系'&&x.input.customerName==='星河科技')).toBe(true)
+  expect(payloads[0].input).toMatchObject({cargo:'样品',weight:2,serviceId:1,specialRequirements:'样品易碎',customerName:'星河科技'})
+  expect(payloads[1].input).toMatchObject({cargo:'合同',weight:1,serviceId:2,specialRequirements:'',customerName:'星河科技'})
+})
+
+it('returns to the preserved single-ticket item draft after multi-ticket review', () => {
+  render(<SalesRequestForm employee={employee} mode="fxiaoke" accessReady services={[{id:2,name:'顺丰标快',preference:'standard'}]}/>)
+  fireEvent.change(screen.getByRole('combobox',{name:'托寄物'}),{target:{value:'礼品'}})
+  fireEvent.change(screen.getByLabelText('智能地址一键粘贴'),{target:{value:'张三 13900139000 广东省深圳市南山区科技路1号\n\n李四 13900139001 浙江省杭州市西湖区文三路9号'}})
+  fireEvent.click(screen.getByRole('button',{name:'识别并填充'}))
+  expect(screen.queryByRole('combobox',{name:'托寄物'})).toBeNull()
+  fireEvent.click(screen.getByRole('button',{name:'结束本批，继续填写'}))
+  expect(screen.getByRole('combobox',{name:'托寄物'})).toHaveProperty('value','礼品')
+})
+
+it('places employee identity in the header without a separate identity row', async () => {
+  const profile={...employee,fxiaoke:true,identityName:'员工身份姓名',departmentId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',departments:[{id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',name:'大客户部',path:'销售部 / 大客户部',isPrimary:true}],senderChoices:{company:employee.sender,personal:null},senderSource:'company' as const}
+  fetcher.mockResolvedValue(new Response(JSON.stringify({employee:profile})))
+  const view=render(<FxiaokeShippingProposal profile={profile} rules={{companyName:{enabled:true,required:true,minLength:4},team:{enabled:true,required:true,minLength:1},teamOptions:[]}} services={[{id:2,name:'顺丰标快',preference:'standard'}]}/>)
+  await waitFor(()=>expect(screen.getByRole('button',{name:'预览工单'})).toHaveProperty('disabled',false))
+  expect(within(view.container.querySelector('header')!).getByRole('region',{name:'员工身份'})).toBeTruthy()
 })
 
 
