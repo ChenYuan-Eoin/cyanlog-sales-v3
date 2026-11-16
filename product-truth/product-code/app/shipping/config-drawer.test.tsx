@@ -18,15 +18,52 @@ async function waitForConfiguration() {
 }
 
 describe('shipping configuration drawer', () => {
-  it('references organization permissions without another editable employee list', async () => {
-    fetcher.mockResolvedValue(Response.json({configuration:{connections:[],billingAccounts:[],sender:null},operatorAccess:{operators:[{id:'staff',name:'寄件同事',enabled:true,canOperate:true}],legacyImportAvailable:false}}))
+  it('edits operator authorization directly and keeps disabled members unselectable', async () => {
+    let selected = ['staff']
+    fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.includes('intake-settings')) return Response.json({rules:DEFAULT_INTAKE_RULES,departments:[]})
+      if (init?.method === 'POST') selected = JSON.parse(String(init.body)).userIds
+      return Response.json({configuration:{connections:[],billingAccounts:[],sender:null},operatorAccess:{operators:[{id:'staff',name:'寄件同事',enabled:true,canOperate:selected.includes('staff')},{id:'inactive',name:'停用同事',enabled:false,canOperate:false}],legacyImportAvailable:false}})
+    })
     render(<ShippingConfigDrawer embedded />)
     await waitForConfiguration()
     fireEvent.click(screen.getByText('审核与下单权限'))
-    expect(screen.getByRole('link',{name:'查看组织与权限 →'}).getAttribute('href')).toBe('/configs?tab=role-access')
-    expect(screen.queryByRole('checkbox',{name:'寄件同事'})).toBeNull()
-    expect(screen.queryByRole('button',{name:'保存确认人员权限'})).toBeNull()
-    expect(fetcher.mock.calls.some(([,init])=>init?.method==='POST')).toBe(false)
+    const staff = screen.getByRole('checkbox',{name:'寄件同事'})
+    expect(staff).toHaveProperty('checked',true)
+    expect(screen.getByRole('checkbox',{name:/停用同事/})).toHaveProperty('disabled',true)
+    fireEvent.click(staff)
+    fireEvent.click(screen.getByRole('button',{name:'保存操作员授权'}))
+    await screen.findByText('操作员授权已保存。')
+    expect(selected).toEqual([])
+    expect(staff).toHaveProperty('checked',false)
+    expect(fetcher.mock.calls.some(([,init])=>init?.method==='POST' && JSON.parse(String(init.body)).action==='save_operator_access')).toBe(true)
+  })
+  it('keeps department authorization inside permissions and company rules separate', async () => {
+    fetcher.mockImplementation(async (url: string) => url.includes('intake-settings')
+      ? Response.json({ rules: DEFAULT_INTAKE_RULES, departments: [{id:'root',name:'总部',path:'总部',parentId:null}] })
+      : Response.json({ configuration:{connections:[],billingAccounts:[],sender:null},operatorAccess:{operators:[],legacyImportAvailable:false} }))
+    render(<ShippingConfigDrawer embedded />)
+    await waitForConfiguration()
+    const permissions=screen.getByText('审核与下单权限').closest('details')!
+    const rules=screen.getByText('寄件提报规则').closest('details')!
+    expect(await within(permissions).findByRole('radio',{name:'全部有效部门'})).toBeTruthy()
+    expect(within(rules).queryByRole('radio',{name:'全部有效部门'})).toBeNull()
+    expect(within(rules).getByLabelText('公司名称最少字数')).toBeTruthy()
+  })
+  it('preserves unsaved operator selection after an authorization save failure', async () => {
+    fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
+      if(url.includes('intake-settings')) return Response.json({rules:DEFAULT_INTAKE_RULES,departments:[]})
+      if(init?.method==='POST') return Response.json({error:'授权保存失败，请重试。'},{status:503})
+      return Response.json({configuration:{connections:[],billingAccounts:[],sender:null},operatorAccess:{operators:[{id:'staff',name:'寄件同事',enabled:true,canOperate:false}],legacyImportAvailable:false}})
+    })
+    render(<ShippingConfigDrawer embedded />)
+    await waitForConfiguration()
+    fireEvent.click(screen.getByText('审核与下单权限'))
+    fireEvent.click(screen.getByRole('checkbox',{name:'寄件同事'}))
+    fireEvent.click(screen.getByRole('button',{name:'保存操作员授权'}))
+    await screen.findByText('授权保存失败，请重试。')
+    expect(screen.getByRole('checkbox',{name:'寄件同事'})).toHaveProperty('checked',true)
+    expect(screen.queryByText('操作员授权已保存。')).toBeNull()
   })
   it('retains a visible legacy-access notice without silently migrating grants', async () => {
     fetcher.mockResolvedValue(Response.json({configuration:{connections:[],billingAccounts:[],sender:null},operatorAccess:{operators:[],legacyImportAvailable:true}}))
@@ -354,4 +391,18 @@ it('shows connection validation in the viewport feedback before the long configu
   expect(status.getAttribute('role')).toBe('status')
   expect(status.className).toContain('feedback')
   expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+})
+
+it('allows revoking an existing grant from a disabled operator', async () => {
+ fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
+  if(url.includes('intake-settings')) return Response.json({rules:DEFAULT_INTAKE_RULES,departments:[]})
+  return Response.json({configuration:{connections:[],billingAccounts:[],sender:null},operatorAccess:{operators:[{id:'inactive',name:'停用旧操作员',enabled:false,canOperate:!init?.method}],legacyImportAvailable:false}})
+ })
+ render(<ShippingConfigDrawer embedded/>);await waitForConfiguration()
+ fireEvent.click(screen.getByText('审核与下单权限'))
+ const box=screen.getByRole('checkbox',{name:/停用旧操作员/})
+ expect(box).toHaveProperty('disabled',false);fireEvent.click(box)
+ fireEvent.click(screen.getByRole('button',{name:'保存操作员授权'}))
+ await screen.findByText('操作员授权已保存。')
+ expect(JSON.parse(String(fetcher.mock.calls.find(([,init])=>init?.method==='POST')?.[1].body)).userIds).toEqual([])
 })

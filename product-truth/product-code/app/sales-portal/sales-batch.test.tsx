@@ -80,27 +80,28 @@ it('requires another preview after the selected pickup address changes', async (
 })
 
 
-it('invalidates batch preview when inherited cargo changes before submission', () => {
-  const defaults={customerName:'星河科技',cargo:'合同',weight:'1',serviceId:'2',specialRequirements:''}
-  const view=render(<SalesBatchProposal embedded initialText={addresses} sender={sender} team="销售部" rules={rules} services={[{id:2,name:'顺丰标快',preference:'standard'}]} accessReady defaults={defaults}/>)
+it('invalidates preview after a ticket edit without changing another ticket', () => {
+  render(<SalesBatchProposal embedded initialText={addresses} sender={sender} team="销售部" rules={rules} services={[{id:2,name:'顺丰标快',preference:'standard'}]} accessReady defaults={{customerName:'星河科技'}}/>)
   fireEvent.click(screen.getByRole('button',{name:'预览 2 票'}))
   expect(screen.getByRole('button',{name:'确认提交 2 票'})).toHaveProperty('disabled',false)
-  view.rerender(<SalesBatchProposal embedded initialText={addresses} sender={sender} team="销售部" rules={rules} services={[{id:2,name:'顺丰标快',preference:'standard'}]} accessReady defaults={{...defaults,cargo:'样品'}}/>)
+  fireEvent.change(screen.getByLabelText('第1票托寄物'),{target:{value:'样品'}})
   expect(screen.getByRole('button',{name:'确认提交 2 票'})).toHaveProperty('disabled',true)
+  expect(screen.getByLabelText('第2票托寄物')).toHaveProperty('value','合同')
   expect(fetcher).not.toHaveBeenCalled()
 })
 
 
-it('keeps inherited customer and cargo visible after success and an unknown response', async () => {
+it('keeps each ticket value frozen after success and an unknown response', async () => {
   fetcher.mockResolvedValueOnce(new Response(JSON.stringify({orderNo:'SO-ONE',status:'awaiting_confirmation'}),{status:202})).mockRejectedValueOnce(new TypeError('lost'))
-  render(<SalesBatchProposal embedded initialText={addresses} sender={sender} team="销售部" rules={rules} services={[{id:2,name:'顺丰标快',preference:'standard'}]} accessReady defaults={{customerName:'星河科技',cargo:'样品',weight:'2',serviceId:'2',specialRequirements:'易碎'}}/>)
+  render(<SalesBatchProposal embedded initialText={addresses} sender={sender} team="销售部" rules={rules} services={[{id:2,name:'顺丰标快',preference:'standard'}]} accessReady defaults={{customerName:'星河科技'}}/>)
+  fireEvent.change(screen.getByLabelText('第1票托寄物'),{target:{value:'样品'}})
   fireEvent.click(screen.getByRole('button',{name:'预览 2 票'}))
   fireEvent.click(screen.getByRole('button',{name:'确认提交 2 票'}))
   await screen.findByRole('button',{name:'重取第 2 票工单回执'})
   expect(screen.getByLabelText('第1票客户公司')).toHaveProperty('value','星河科技')
   expect(screen.getByLabelText('第2票客户公司')).toHaveProperty('value','星河科技')
   expect(screen.getByLabelText('第1票托寄物')).toHaveProperty('value','样品')
-  expect(screen.getByLabelText('第2票托寄物')).toHaveProperty('value','样品')
+  expect(screen.getByLabelText('第2票托寄物')).toHaveProperty('value','合同')
   expect(screen.queryAllByRole('alert')).toHaveLength(1)
 })
 
@@ -108,7 +109,7 @@ it('keeps inherited customer and cargo visible after success and an unknown resp
 it('offers an explicit finish action for a checked conflict while keeping unknown requests protected', async () => {
   fetcher.mockImplementation(async ()=>new Response(JSON.stringify({error:'原请求冲突'}),{status:409}))
   const finish=vi.fn()
-  render(<SalesBatchProposal embedded onClear={finish} initialText={addresses} sender={sender} team="销售部" rules={rules} services={[{id:2,name:'顺丰标快',preference:'standard'}]} accessReady defaults={{customerName:'星河科技',cargo:'样品',weight:'2',serviceId:'2',specialRequirements:'易碎'}}/>)
+  render(<SalesBatchProposal embedded onClear={finish} initialText={addresses} sender={sender} team="销售部" rules={rules} services={[{id:2,name:'顺丰标快',preference:'standard'}]} accessReady defaults={{customerName:'星河科技'}}/>)
   fireEvent.click(screen.getByRole('button',{name:'预览 2 票'}))
   fireEvent.click(screen.getByRole('button',{name:'确认提交 2 票'}))
   await waitFor(()=>expect(screen.getByRole('button',{name:'已核对原工单，结束本批'})).toHaveProperty('disabled',false))

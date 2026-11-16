@@ -52,3 +52,25 @@ it('rejects a suspended employee and cross-organization or inactive configuratio
   await expect(validateShippingDepartmentRoots('org-1', [id.inactive])).rejects.toMatchObject({ status: 400 })
   await expect(validateShippingDepartmentRoots('org-1', [id.other, id.other])).rejects.toMatchObject({ status: 400 })
 })
+
+it('keeps only the most specific own memberships, including independent departments', async () => {
+  db.assignments = [{ department_id: id.root, is_primary: true }, { department_id: id.child, is_primary: false }, { department_id: id.other, is_primary: false }]
+  const departments = await loadEmployeeShippingDepartments('person-1', 'org-1', DEFAULT_INTAKE_RULES)
+  expect(departments.map(item => item.id).sort()).toEqual([id.child, id.other].sort())
+  expect(() => resolveEmployeeShippingDepartment(departments, id.root)).toThrow('所属部门未开放提报')
+})
+
+it('removes ancestors through intermediate hierarchy levels and keeps a single standard leaf id', async () => {
+  const leaf = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+  db.departments = [...rows, { id: leaf, name: '绩效组', parent_id: id.child, status: 'active' }]
+  db.assignments = [{ department_id: id.root, is_primary: true }, { department_id: leaf, is_primary: false }]
+  const departments = await loadEmployeeShippingDepartments('person-1', 'org-1', DEFAULT_INTAKE_RULES)
+  expect(departments.map(item => ({ id: item.id, name: item.name }))).toEqual([{ id: leaf, name: '绩效组' }])
+  expect(resolveEmployeeShippingDepartment(departments, leaf).path).toBe('销售 / 一部 / 绩效组')
+})
+
+it('does not promote an assigned parent when the own leaf department has become inactive', async () => {
+  db.departments = rows.map(row => row.id === id.inactive ? { ...row, parent_id: id.root } : row)
+  db.assignments = [{ department_id: id.root, is_primary: true }, { department_id: id.inactive, is_primary: false }]
+  expect(await loadEmployeeShippingDepartments('person-1', 'org-1', DEFAULT_INTAKE_RULES)).toEqual([])
+})

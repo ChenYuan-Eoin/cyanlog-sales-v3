@@ -1,6 +1,6 @@
 import React from 'react'
 import {afterEach,beforeEach,expect,it,vi} from 'vitest'
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react'
+import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react'
 import EmployeeAccess from './employee-access'
 const fetcher=vi.fn()
 const profile={id:'staff-1',email:'',wecom:true,companyName:'示例企业',team:'华南组',updatedAt:'2026-10-10T00:00:00Z',phoneSource:'wecom' as const,sender:{name:'陈源',phone:'13800000000',province:'广东省',city:'深圳市',county:'南山区',address:'示例路88号'}}
@@ -106,7 +106,12 @@ it('restores Fxiaoke company, common and custom pickup with account-bound profil
  expect(screen.getByLabelText('当前寄件地址')).toHaveProperty('textContent','公司路1号')
  expect(screen.getByText('公司前台')).toBeTruthy()
  expect(screen.getByText('陈源')).toBeTruthy()
- fireEvent.change(screen.getByLabelText('所属团队'),{target:{value:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'}})
+ const departmentSelect = screen.getByRole('combobox', { name: '所属部门' })
+ expect(within(departmentSelect).getByRole('option', { name: '销售部' })).toBeTruthy()
+ expect(within(departmentSelect).queryByRole('option', { name: '总部 / 销售部' })).toBeNull()
+ expect(screen.getByText('部门路径：总部 / 销售部')).toBeTruthy()
+ fireEvent.change(departmentSelect,{target:{value:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'}})
+ expect(screen.getByText('部门路径：总部 / 市场部')).toBeTruthy()
  fireEvent.click(screen.getByRole('radio',{name:/自定义地址/}))
  fireEvent.change(screen.getByLabelText('寄件人姓名'),{target:{value:'本次揽收人'}})
  fireEvent.change(screen.getByLabelText('寄件人联系电话'),{target:{value:'13600000000'}})

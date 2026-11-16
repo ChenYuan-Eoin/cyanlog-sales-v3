@@ -1,6 +1,6 @@
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import ShippingWorkbench from './workbench'
 import { workbenchOrdersForTest } from '@/lib/shipping/workbench-test-fixtures'
 import { parseAddress } from '@/lib/shipping/address'
@@ -341,7 +341,7 @@ describe('self-service shipping workbench', () => {
     expect(sent.map(item => item.url)).toEqual(pending.map(order => `/api/shipping/ledger/${order.id}/confirm`))
     expect(sent.every(item => !('sender' in item.body) && !('input' in item.body))).toBe(true)
     expect(ledgerLoads).toBe(2)
-    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/tracking'))).toBe(true)
+    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/tracking'))).toBe(false)
     expect(middle.queryAllByRole('checkbox')).toHaveLength(0)
   })
 
@@ -600,11 +600,28 @@ describe('self-service shipping workbench', () => {
     expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
   })
 
-  it('refreshes the selected waybill automatically, stores pickup status and removes cancellation without another ledger request', async () => {
+  it.each(['waybill_created', 'in_transit'] as const)('keeps loading, selecting and expanding %s orders free of carrier calls', async status => {
+    vi.useFakeTimers()
+    try {
+      const first = { ...fixtureOrders[1], status }
+      const second = { ...fixtureOrders[2], status, id: 'second-shipped-order', waybill: 'SF1234567890124' }
+      useLedger([first, second])
+      render(<ShippingWorkbench settings={settings}/>)
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+      fireEvent.click(screen.getByRole('button', { name: `展开递送信息 ${second.waybill}` }))
+      expect(screen.getByRole('region', { name: `工单 ${second.orderNo} 递送信息` })).toBeTruthy()
+      await act(async () => { await vi.advanceTimersByTimeAsync(2 * 60 * 1000) })
+      expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/shipping/ledger?limit=50'])
+      expect(screen.getByRole('button', { name: '刷新递送信息' })).toHaveProperty('disabled', false)
+    } finally { vi.useRealTimers() }
+  })
+
+  it('refreshes the selected waybill only after an explicit click, stores pickup status and removes cancellation without another ledger request', async () => {
     const order = { ...fixtureOrders[1], status: 'waybill_created' as const }
     fetcher.mockImplementation(async (url: string) => new Response(JSON.stringify(url.startsWith('/api/shipping/ledger') ? { records: [order] } : { waybill: order.waybill, queriedAt: '2026-09-27T00:00:00Z', shipmentStatus: 'in_transit', events: [{ time: '2026-09-27 08:00:00', location: '深圳市', description: '顺丰速运 已收取快件', status: 'in_transit' }] }), { status: 200 }))
     render(<ShippingWorkbench settings={settings}/>)
     await screen.findAllByText('远景能源')
+    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
     expect(await screen.findByText('顺丰速运 已收取快件')).toBeTruthy()
     expect(screen.getByRole('heading', { name: '运输中' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
@@ -663,6 +680,7 @@ describe('self-service shipping workbench', () => {
 
     const deliveryExpand = screen.getByRole('button', { name: '收起递送信息 SF1234567890123' })
     expect(deliveryExpand.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: '刷新递送信息' }))
     await waitFor(() => {
       const delivery = screen.getByRole('region', { name: `工单 ${current.orderNo} 递送信息` })
       expect(within(delivery).getByText('递送信息')).toBeTruthy()

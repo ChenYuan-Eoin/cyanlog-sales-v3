@@ -13,7 +13,6 @@ import styles from './workbench.module.css'
 
 const statusLabel: Record<ShipmentOrderStatus, string> = { accepted: '已受理', awaiting_confirmation: '待审核', returned: '工单已退回', confirmed: '已确认', ordering: '下单中', order_unknown: '结果待确认', waybill_created: '待揽收', in_transit: '运输中', delivered: '已签收', cancelled: '已取消', order_failed: '异常件' }
 const statusTone: Record<ShipmentOrderStatus, string> = { accepted: 'orange', awaiting_confirmation: 'orange', returned: 'red', confirmed: 'blue', ordering: 'blue', order_unknown: 'red', waybill_created: 'blue', in_transit: 'blue', delivered: 'green', cancelled: 'gray', order_failed: 'red' }
-const TRACKING_FRESHNESS_MS = 2 * 60 * 1000
 type IntakeInput = Omit<ShippingInput, 'sender'> & { sender?: ShippingInput['sender'] }
 type BatchRow = Omit<BatchDraftRow, 'result'> & { result?: 'pending' | 'unknown' | 'success' | 'failed'; orderId?: string; orderNo?: string; intakeInput?: IntakeInput }
 type SubmissionResult = { id?: string; orderId?: string; orderNo?: string; status?: ShipmentOrderStatus; waybill?: string | null }
@@ -120,7 +119,6 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   const reconciliationRequests = useRef(new Set<string>())
   const batchRunning = useRef(false)
   const [dateRange, setDateRange] = useState<'all' | 'today' | 'three-days' | 'week'>('all')
-  const automaticTrackingAttempts = useRef(new Map<string, number>())
 
   useEffect(() => {
     let active = true
@@ -552,30 +550,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
       if (currentRequest === trackingRequest.current) { setMessage((error as Error).message); setTrackingError((error as Error).message) }
     } finally { if (currentRequest === trackingRequest.current) setTrackingBusy(false) }
   }
-  useEffect(() => {
-    const waybill = selected?.waybill
-    const now = Date.now()
-    const queriedAt = tracking && waybill && tracking.waybill === waybill && tracking.queriedAt
-      ? new Date(tracking.queriedAt).getTime()
-      : Number.NaN
-    const trackingIsFresh = Number.isFinite(queriedAt) && now - queriedAt < TRACKING_FRESHNESS_MS
-    if (
-      !waybill
-      || !selected
-      || !['waybill_created', 'in_transit'].includes(selected.status)
-      || trackingIsFresh
-      || trackingBusy
-    ) return
-    const lastAttempt = automaticTrackingAttempts.current.get(waybill) ?? 0
-    const waitMs = Math.max(0, TRACKING_FRESHNESS_MS - (now - lastAttempt))
-    const timer = window.setTimeout(() => {
-      automaticTrackingAttempts.current.set(waybill, Date.now())
-      void refreshTracking(waybill)
-    }, waitMs)
-    return () => window.clearTimeout(timer)
-    // The attempt set prevents repeated requests; manual refresh remains available after failure.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.id, selected?.waybill, selected?.status, tracking?.waybill, tracking?.queriedAt, trackingBusy])
+
   async function cancelSelected() {
     if (!selected || selected.status !== 'waybill_created' || confirmationRunning.current || busy) return
     setBusy(selected.id)
@@ -785,9 +760,9 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                 <div className={styles.reviewKeyFacts}>
                   <div><small>运单号</small><strong>{order.waybill || '结果待确认'}</strong><span>{order.waybill ? '承运商单据' : '先查回原单'}</span></div>
                   <div><small>收件人</small><strong>{order.input.recipient.name}</strong><span>{cityOf(order)}</span></div>
-                  <div><small>最近查询</small><strong>{tracking?.waybill === order.waybill ? new Date(tracking.queriedAt).toLocaleString('zh-CN') : '尚未读取'}</strong><span>{tracking?.waybill === order.waybill ? `${trackingEvents.length} 个节点` : '选中后自动刷新'}</span></div>
+                  <div><small>最近查询</small><strong>{tracking?.waybill === order.waybill ? new Date(tracking.queriedAt).toLocaleString('zh-CN') : '尚未读取'}</strong><span>{tracking?.waybill === order.waybill ? `${trackingEvents.length} 个节点` : '点击刷新获取最新轨迹'}</span></div>
                 </div>
-                {tracking?.waybill === order.waybill && trackingEvents.length > 0 ? <ol className={styles.compactTimeline}>{trackingEvents.slice(0, 3).map((event, index) => <li key={`${event.time}-${index}`}><time>{event.time}</time><span>{event.description}</span><small>{event.location}</small></li>)}</ol> : <p className={styles.intakeHint}>{order.waybill ? '正在读取或尚未取得最新轨迹；失败时保留本地状态并提示原因。' : '尚未生成运单，不能展示递送轨迹。'}</p>}
+                {tracking?.waybill === order.waybill && trackingEvents.length > 0 ? <ol className={styles.compactTimeline}>{trackingEvents.slice(0, 3).map((event, index) => <li key={`${event.time}-${index}`}><time>{event.time}</time><span>{event.description}</span><small>{event.location}</small></li>)}</ol> : <p className={styles.intakeHint}>{order.waybill ? (trackingBusy && trackingTarget === order.waybill ? '正在查询这票运单…' : '点击刷新递送信息查询最新轨迹；查询前保留台账状态。') : '尚未生成运单，不能展示递送轨迹。'}</p>}
                 {order.waybill && <button type="button" className={styles.secondaryButton} disabled={trackingBusy} onClick={() => void refreshTracking(order.waybill || '')}>{trackingBusy ? '刷新中…' : '刷新递送信息'}</button>}
               </section>
             )}
@@ -871,7 +846,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
             <section className={styles.trackingPane}>
               <div className={styles.trackTop}>
                 <div>
-                  <small>最新物流状态</small>
+                  <small>台账物流状态</small>
                   <h3><span/> {selected.status === 'cancelled' ? '已取消' : selected.status === 'delivered' ? '已签收' : selected.status === 'in_transit' ? '运输中' : selected.status === 'order_unknown' || selected.status === 'ordering' ? '下单结果待确认' : selected.waybill ? '等待揽收' : '尚未出单'}</h3>
                   <p className={styles.courier}>{tracking?.courier ? [tracking.courier.name, tracking.courier.employeeId, tracking.courier.phone].filter(Boolean).join(' · ') : '当前轨迹未提供快递员姓名、工号或电话'}</p>
                 </div>

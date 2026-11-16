@@ -65,6 +65,8 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   const [probePassed, setProbePassed] = useState(false)
   const [accessState, setAccessState] = useState<'checking' | 'ready' | 'unavailable'>('checking')
   const [operatorAccess, setOperatorAccess] = useState<OperatorAccess | null>(null)
+  const [operatorIds, setOperatorIds] = useState<string[]>([])
+  const [operatorSearch, setOperatorSearch] = useState('')
   const [legacyConfigurationAvailable, setLegacyConfigurationAvailable] = useState<Record<'sandbox' | 'production', boolean>>({ sandbox: false, production: false })
   const [legacyMigrationReport, setLegacyMigrationReport] = useState<{ imported: string[]; needsAttention: string[] } | null>(null)
 
@@ -83,6 +85,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
     if (data.legacyConfigurationAvailable) setLegacyConfigurationAvailable(data.legacyConfigurationAvailable)
     if (data.operatorAccess) {
       setOperatorAccess(data.operatorAccess)
+      setOperatorIds(data.operatorAccess.operators.filter(item => item.canOperate).map(item => item.id))
     }
     const savedSender = data.configuration.sender
     if (savedSender) {
@@ -109,11 +112,12 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       if (data.configuration) setConfiguration(data.configuration)
       if (data.operatorAccess) {
         setOperatorAccess(data.operatorAccess)
+      setOperatorIds(data.operatorAccess.operators.filter(item => item.canOperate).map(item => item.id))
       }
       if (data.legacyConfigurationAvailable) setLegacyConfigurationAvailable(data.legacyConfigurationAvailable)
       if (data.imported || data.needsAttention) setLegacyMigrationReport({ imported: data.imported || [], needsAttention: data.needsAttention || [] })
       if (!data.configuration && !data.operatorAccess) throw new Error('配置更新成功，但服务器未返回最新配置。请刷新后检查。')
-      setMessage(`${label === 'connection' ? '顺丰连接' : label === 'services' ? '可提报服务' : label === 'account' ? '月结账号' : label === 'sender' ? '默认寄件资料' : '配置'}已保存。`)
+      setMessage(`${label === 'connection' ? '顺丰连接' : label === 'services' ? '可提报服务' : label === 'account' ? '月结账号' : label === 'sender' ? '默认寄件资料' : label === 'operators' ? '操作员授权' : '配置'}已保存。`)
       return data
     } catch (error) { setMessage((error as Error).message); setSaveFailed(true); return null } finally { setBusy('') }
   }
@@ -282,9 +286,21 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
           <details><summary>寄件提报规则</summary><IntakeConfiguration/></details>
           <details>
             <summary>审核与下单权限</summary>
-            <p className={styles.hint}>审核、下单和配置权限在“组织与权限”中管理。</p>
-            {operatorAccess?.legacyImportAvailable && <p className={styles.message}>存在历史授权，请联系管理员核对。</p>}
-            <a href="/configs?tab=role-access">查看组织与权限 →</a>
+            <IntakeConfiguration mode="departments"/>
+            <section className={styles.section} aria-label="寄件操作员授权">
+              <h3>审核与下单操作员</h3>
+              <p className={styles.hint}>直接授权当前组织成员办理审核、下单及后续寄件操作。组织角色已有权限由“组织与权限”管理，取消直接授权不会撤销角色权限。</p>
+              {operatorAccess ? <fieldset className={styles.formGroup} disabled={!!busy}>
+                <label>搜索操作员<input value={operatorSearch} onChange={event => setOperatorSearch(event.target.value)} placeholder="成员姓名"/></label>
+                <div role="group" aria-label="操作员名单" style={{ maxHeight: 260, overflowY: 'auto' }}>
+                  {operatorAccess.operators.filter(item => item.name.includes(operatorSearch.trim())).map(item => <label className={styles.checkbox} key={item.id}><input type="checkbox" disabled={(!item.enabled && !operatorIds.includes(item.id)) || operatorAccess.legacyImportAvailable} checked={operatorIds.includes(item.id)} onChange={event => setOperatorIds(current => event.target.checked ? [...current, item.id] : current.filter(id => id !== item.id))}/>{item.name}{!item.enabled && '（未启用）'}</label>)}
+                  {!operatorAccess.operators.length && <p>当前组织暂无可配置成员。</p>}
+                </div>
+                {operatorAccess.legacyImportAvailable && <><p className={styles.message}>存在历史授权，请联系管理员核对。</p><button type="button" onClick={() => void mutate('operators', 'import_legacy_operator_access')}>迁入历史操作员授权</button></>}
+                <button type="button" disabled={operatorAccess.legacyImportAvailable} onClick={() => void mutate('operators', 'save_operator_access', { userIds: operatorIds })}>{busy === 'operators' ? '保存中…' : '保存操作员授权'}</button>
+              </fieldset> : <p role="status">操作员授权暂不可用，请刷新后重试。</p>}
+              <a href="/configs?tab=role-access">查看组织角色权限 →</a>
+            </section>
           </details>
         </section>
       </div>

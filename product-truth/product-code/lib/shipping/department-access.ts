@@ -23,16 +23,20 @@ export function activeShippingDepartments(rows: DepartmentRow[]): ShippingDepart
     .sort((a, b) => a.path.localeCompare(b.path, 'zh-CN'))
 }
 
-export async function loadShippingDepartments(orgId: string): Promise<ShippingDepartment[]> {
+async function loadShippingDepartmentRows(orgId: string): Promise<DepartmentRow[]> {
   const { data, error } = await supabaseAdmin.from('departments')
     .select('id,name,parent_id,status').eq('org_id', orgId).order('id').limit(1000)
   if (error || !data || data.length === 1000) throw new ShippingError(503, '组织部门暂不可用，请稍后重试。')
-  return activeShippingDepartments(data as DepartmentRow[])
+  return data as DepartmentRow[]
+}
+
+export async function loadShippingDepartments(orgId: string): Promise<ShippingDepartment[]> {
+  return activeShippingDepartments(await loadShippingDepartmentRows(orgId))
 }
 
 export async function loadEmployeeShippingDepartments(userId: string, orgId: string, rules: IntakeRules): Promise<EmployeeShippingDepartment[]> {
-  const [departments, membership, assignments] = await Promise.all([
-    loadShippingDepartments(orgId),
+  const [departmentRows, membership, assignments] = await Promise.all([
+    loadShippingDepartmentRows(orgId),
     supabaseAdmin.from('user_organizations').select('status,employment_status').eq('org_id', orgId).eq('user_id', userId).maybeSingle(),
     supabaseAdmin.from('user_departments').select('department_id,is_primary').eq('org_id', orgId).eq('user_id', userId).limit(1000),
   ])
@@ -41,12 +45,27 @@ export async function loadEmployeeShippingDepartments(userId: string, orgId: str
     throw new ShippingError(403, '当前员工已停用，不能提报寄件工单。')
   }
   if (assignments.data.length === 1000) throw new ShippingError(503, '员工部门归属不完整，请联系管理员。')
+  const departments = activeShippingDepartments(departmentRows)
   const allowed = effectiveShippingDepartmentIds(departments, rules.allowedDepartmentIds)
   const byId = new Map(departments.map(item => [item.id, item]))
-  return assignments.data.flatMap(item => {
+  const ownDepartments = new Map(assignments.data.flatMap(item => {
     const department = byId.get(item.department_id)
-    return department && allowed.has(department.id) ? [{ ...department, isPrimary: item.is_primary === true }] : []
-  }).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.path.localeCompare(b.path, 'zh-CN'))
+    return department ? [[department.id, { ...department, isPrimary: item.is_primary === true }] as const] : []
+  }))
+  const assignedAncestors = new Set<string>()
+  const hierarchy = new Map(departmentRows.map(item => [item.id, item.parent_id]))
+  for (const assignment of assignments.data) {
+    let parentId = hierarchy.get(assignment.department_id)
+    const visited = new Set<string>()
+    while (parentId && !visited.has(parentId)) {
+      visited.add(parentId)
+      assignedAncestors.add(parentId)
+      parentId = hierarchy.get(parentId) || null
+    }
+  }
+  return [...ownDepartments.values()]
+    .filter(department => !assignedAncestors.has(department.id) && allowed.has(department.id))
+    .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.path.localeCompare(b.path, 'zh-CN'))
 }
 
 export function resolveEmployeeShippingDepartment(departments: EmployeeShippingDepartment[], departmentId: string | undefined, oldTeamName?: string): EmployeeShippingDepartment {
