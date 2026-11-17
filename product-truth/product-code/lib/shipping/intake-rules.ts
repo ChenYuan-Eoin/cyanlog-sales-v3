@@ -27,3 +27,26 @@ export function intakeFieldSchema(rule: IntakeRules['companyName'], label: strin
     if (value && options.length && !options.includes(value)) ctx.addIssue({ code: 'custom', message: `请选择后台配置的${label}` })
   }).transform(value => rule.enabled ? value : '')
 }
+
+export function toggleShippingDepartmentSubtree<T extends { id: string; parentId: string | null }>(departments: T[], roots: string[], id: string, checked: boolean): string[] {
+  const byId = new Map(departments.map(department => [department.id, department]))
+  if (!byId.has(id)) return roots
+  const subtree = effectiveShippingDepartmentIds(departments, [id])
+  const covered = effectiveShippingDepartmentIds(departments, roots)
+  for (const childId of subtree) {
+    if (checked) covered.add(childId)
+    else covered.delete(childId)
+  }
+  if (!checked) {
+    // The stored contract grants whole subtrees. Split an inherited parent
+    // grant into the remaining siblings so the removed child stays excluded.
+    let parent = byId.get(id)?.parentId
+    const visited = new Set<string>()
+    while (parent && !visited.has(parent)) {
+      visited.add(parent)
+      covered.delete(parent)
+      parent = byId.get(parent)?.parentId
+    }
+  }
+  return departments.filter(department => covered.has(department.id) && (!department.parentId || !covered.has(department.parentId))).map(department => department.id)
+}

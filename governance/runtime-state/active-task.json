@@ -235,66 +235,32 @@
     }
   },
   "active_task": {
-    "id": "WP35",
-    "slug": "sales-intake-experience",
-    "name": "销售寄件提报体验",
+    "id": "WP40",
+    "slug": "shipping-authorization-configuration",
+    "name": "寄件部门与操作员授权配置",
     "kind": "product",
     "status": "active",
-    "objective": "完成员工自助收寄布局验收纠正：以寄件任务为中心的紧凑页头、稳定预览确认操作、主表单和摘要记录两栏；后台身份归属、本人记录、逐票公司及幂等保护保留。",
+    "objective": "管理员以动态全部有效部门或指定部门树配置员工提报范围；寄件操作员统一由现有组织角色管理，业务配置不再加载或维护人员名单，已有授权数据保持。",
     "started_at": "2026-10-16T07:43:35.475527+00:00",
-    "activation_basis": "IN-20261114-001：继续原聊天最后的生产验收反馈，已复现新页面以批量组件替换原表单；依据证据推翻当前实现方向的插队条件，先恢复原销售提报能力，WP97未提交候选保留。",
+    "activation_basis": "IN-20261117-015 用户明确要求修正当前配置UI和无效账号防呆；员工布局候选6e5bf4a6已独立提交保留。",
     "execution_workspace": "/private/tmp/price-v3-sales-intake-repair",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/product-code/app/sales-portal",
-      "product-truth/product-code/lib/shipping/wecom-session.ts",
-      "product-truth/product-code/lib/shipping/wecom-session.test.ts",
       "product-truth/product-code/app/shipping/config-drawer.tsx",
       "product-truth/product-code/app/shipping/config-drawer.test.tsx",
-      "product-truth/product-code/app/api/shipping/settings/route.ts",
-      "product-truth/product-code/app/api/shipping/settings/route.test.ts",
-      "product-truth/feature-packets/F054-sf-self-service-order.md",
-      "product-truth/REQ_REGISTRY.yml",
-      "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-auth-intake-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-auth-intake-verifier.test.js",
-      "product-truth/product-code/app/shipping/page.tsx",
-      "product-truth/product-code/app/shipping/page.test.tsx",
-      "product-truth/product-code/app/shipping/workbench.tsx",
-      "product-truth/product-code/app/shipping/workbench.test.tsx",
-      "product-truth/product-code/app/api/shipping/public",
-      "product-truth/product-code/app/api/shipping/owner",
-      "product-truth/product-code/app/api/shipping/contacts/route.ts",
-      "product-truth/product-code/app/api/shipping/contacts/route.test.ts",
-      "product-truth/product-code/lib/shipping/contacts.ts",
-      "product-truth/product-code/lib/shipping/department-access.ts",
-      "product-truth/product-code/lib/shipping/department-access.test.ts",
-      "product-truth/product-code/lib/shipping/intake-rules.ts",
-      "product-truth/product-code/lib/shipping/intake-rules.test.ts",
-      "product-truth/product-code/lib/shipping/intake-settings.ts",
-      "product-truth/product-code/lib/shipping/intake-settings.test.ts",
-      "product-truth/product-code/lib/shipping/types.ts",
-      "product-truth/product-code/lib/shipping/validation.ts",
-      "product-truth/product-code/app/api/shipping/intake-settings",
+      "product-truth/product-code/app/shipping/config-drawer.module.css",
       "product-truth/product-code/app/shipping/intake-configuration.tsx",
       "product-truth/product-code/app/shipping/intake-configuration.test.tsx",
+      "product-truth/product-code/lib/shipping/operator-access.ts",
+      "product-truth/product-code/lib/shipping/operator-access.test.ts",
+      "product-truth/product-code/lib/shipping/intake-rules.ts",
+      "product-truth/product-code/lib/shipping/intake-rules.test.ts",
+      "product-truth/product-code/app/api/shipping/settings",
       "product-truth/product-code/node_modules",
       "product-truth/product-code/.next",
       "product-truth/product-code/tsconfig.tsbuildinfo",
-      "product-truth/product-code/lib/shipping/http.ts",
-      "product-truth/product-code/lib/shipping/intake-options.ts",
-      "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/middleware.test.ts",
-      "product-truth/product-code/lib/shipping/collaboration.ts",
-      "product-truth/product-code/lib/shipping/collaboration.org.test.ts",
-      "product-truth/product-code/lib/shipping/contacts.fxiaoke.test.ts",
-      "product-truth/product-code/components/layout/AppShell.tsx",
-      "product-truth/product-code/lib/shipping/operator-access.ts",
-      "product-truth/product-code/lib/shipping/operator-access.test.ts"
+      "product-truth/product-code/app/api/shipping/shipping-routes.test.ts"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -315,11 +281,11 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "sales_intake",
+        "shipping_settings",
         "shipping_access"
       ],
       "required_production_runtime_evidence": [
-        "sales_intake",
+        "shipping_settings",
         "shipping_access"
       ],
       "required_production_evidence": [
@@ -329,7 +295,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "用户已批准布局实现；新产品树不继承上一候选Production-first例外，先完成候选与真实目标回归。",
+      "note": "仅配置候选实现与验证，既有数据不变；员工布局6e5bf4a6保留，发布授权另绑定精确产品树。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -343,33 +309,22 @@
         "production_database_mode": "read_only"
       },
       "production_release_authorization": {
-        "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261117-009",
-        "micro_fix_approval_id": "IN-20261016-009",
-        "clarification_id": "IN-20261016-015",
-        "micro_fix_scope": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
-        "final_scope": "仅逐票公司核验及单一部门展示微调：多票不显示或校验顶部统一公司，不传播单票公司默认值，各票公司保持独立必填与长度校验；单一部门自动绑定并隐藏重复控件，多部门选择与服务端归属校验保留。发布后现有Chrome只读验收，不提交五票工单、不改授权名单、不调用顺丰、不迁移。",
+        "status": "not_authorized_for_current_candidate",
+        "prior_wp35_approval_id": "IN-20261117-009",
+        "final_scope": "当前WP40仅实现并验证部门范围和统一角色入口；前一WP35精确候选的发布批准不继承到本轮。",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
-        "carrier_calls_authorized": false,
-        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
-        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
-        "legacy_scope_only": false,
-        "new_scope_release_authorized": true,
-        "authorization_interpretation": "用户在具体候选与影响说明后明确批准发布并正式站验收。"
+        "carrier_calls_authorized": false
       },
-      "blocking_acceptance_defects": [
-        "IN-20261116-006",
-        "IN-20261116-007"
-      ],
-      "runtime_contract_version": "f054-auth-intake-v1"
+      "blocking_acceptance_defects": [],
+      "runtime_contract_version": "f054-shipping-settings-v1"
     },
     "feature_id": "F054",
     "integration_decision": {
-      "strategy": "isolated_candidate_from_verified_production_base",
-      "authority": "IN-20261113-004",
-      "requested_target": "production_released",
-      "constraint": "本候选未发布；旧授权记录保留历史，不继承旧候选例外；生产数据、承运商和真实路径边界不变。"
+      "strategy": "preserve_employee_candidate_and_finish_scoped_configuration",
+      "authority": "IN-20261117-017",
+      "requested_target": "code_green",
+      "constraint": "现有授权数据保持；不将旧WP35精确发布批准继承至当前WP40，候选发布与正式站验收独立判断。"
     },
     "micro_fixes": [
       {
@@ -386,9 +341,9 @@
   },
   "execution_queue": {
     "active": {
-      "id": "WP35",
-      "slug": "sales-intake-experience",
-      "name": "销售寄件提报体验"
+      "id": "WP40",
+      "slug": "shipping-authorization-configuration",
+      "name": "寄件部门与操作员授权配置"
     },
     "next": {
       "id": "WP97",
@@ -1288,6 +1243,15 @@
     ],
     "parked": [
       {
+        "id": "WP35",
+        "slug": "sales-intake-experience",
+        "name": "销售寄件提报体验",
+        "acceptance_state": "本地布局候选已提交；本轮未发布",
+        "remaining_acceptance": "移除身份卡与重复页头、稳定预览/确认位置、摘要与本人记录布局的精确版本正式站复验",
+        "reason": "切换WP40时遗漏队列槽位；恢复待发布责任，候选6e5bf4a6和已发布e2b6e3cd分别保留，不切换Active",
+        "source_input": "IN-20261117-014"
+      },
+      {
         "id": "WP11",
         "slug": "shipping-collaboration",
         "name": "复用台账与安全存储",
@@ -1802,16 +1766,6 @@
         ],
         "entry_gate": "WP97 在真实纷享审批路径生成唯一待确认工单；重复触发返回同一单、waybill=null、申请人与客户可追溯，且无承运商调用",
         "entry_gate_status": "waiting_previous_production_acceptance"
-      },
-      {
-        "id": "WP40",
-        "slug": "shipping-settings-consolidation",
-        "name": "配置可维护",
-        "acceptance_state": "历史候选；完整复验未完成",
-        "remaining_acceptance": "顺丰与企业接入字段清晰、无挤压，错误可定位、草稿保留",
-        "acceptance_owner": "WP80",
-        "reason": "F099有未关闭责任但本版调度槽位遗漏；本轮恢复parked，保留候选和未验收断言，不自动插队",
-        "reconciliation_source": "IN-20261116-001"
       },
       {
         "id": "WP65",

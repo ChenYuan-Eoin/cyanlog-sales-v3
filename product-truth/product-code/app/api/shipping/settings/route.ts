@@ -19,7 +19,7 @@ import { canImportLegacyShippingConfiguration } from '@/lib/shipping/legacy-conf
 import { probeSfConnection } from '@/lib/shipping/sf-client'
 import { ShippingError } from '@/lib/shipping/config'
 import { requireShippingConnectionManager } from '@/lib/shipping/connection-authorization'
-import { requireShippingOperator, loadShippingOperatorAccess, saveShippingOperatorAccess, importLegacyShippingOperatorAccess } from '@/lib/shipping/operator-access'
+import { requireShippingOperator } from '@/lib/shipping/operator-access'
 export const runtime = 'nodejs'
 
 export async function GET(req: NextRequest) {
@@ -31,14 +31,13 @@ export async function GET(req: NextRequest) {
     }
     try {
       const orgId = await requireShippingConnectionManager(user.id)
-      const [configuration, operatorAccess] = await Promise.all([loadShippingConfiguration(orgId), loadShippingOperatorAccess(orgId)])
+      const configuration = await loadShippingConfiguration(orgId)
       const legacy = { sandbox: hasLegacyShippingConfiguration('sandbox', configuration), production: hasLegacyShippingConfiguration('production', configuration) }
       const legacyAllowed = (legacy.sandbox || legacy.production) && await canImportLegacyShippingConfiguration(orgId)
       return NextResponse.json({
         deploymentEnvironment: ['production', 'preview', 'development'].includes(process.env.VERCEL_ENV || '') ? process.env.VERCEL_ENV : 'unknown',
         credentialStorageReady: /^[a-fA-F0-9]{64}$/.test(process.env.SHIPPING_CREDENTIALS_ENCRYPTION_KEY || ''),
         configuration,
-        operatorAccess,
         legacyConfigurationAvailable: {
           sandbox: Boolean(legacyAllowed && legacy.sandbox),
           production: Boolean(legacyAllowed && legacy.production),
@@ -77,19 +76,15 @@ export async function POST(req: NextRequest) {
         const result = await importLegacyShippingConfiguration(orgId, user.id, environment)
         return {
           ...result,
-          operatorAccess: await loadShippingOperatorAccess(orgId),
           legacyConfigurationAvailable: {
             sandbox: hasLegacyShippingConfiguration('sandbox', result.configuration),
             production: hasLegacyShippingConfiguration('production', result.configuration),
           },
         }
       }
-      case 'save_operator_access': return { operatorAccess: await saveShippingOperatorAccess(orgId, user.id, input.userIds) }
-      case 'import_legacy_operator_access': {
-        const result = await importLegacyShippingOperatorAccess(orgId, user.id)
-        const { importedCount, ...operatorAccess } = result
-        return { importedCount, operatorAccess }
-      }
+      case 'save_operator_access':
+      case 'import_legacy_operator_access':
+        throw new ShippingError(410, '寄件操作人员请在“组织与权限”中通过角色管理，当前页面不再分配操作员。')
       case 'test_sandbox_connection':
       case 'test_production_connection': {
         const environment = action === 'test_sandbox_connection' ? 'sandbox' : 'production'
