@@ -2375,7 +2375,10 @@ function approvedSsoProductionFirst(scope) {
   const serviceSelection = scope.activeId === 'WP52' && scope.featureId === 'F054'
     && scope.runtimeProfile === 'shipping_workspace' && scope.runtimeContractVersion === SHIPPING_SERVICE_SELECTION_CONTRACT
     && scope.previewOrderException?.approved === true;
-  return sso || serviceSelection;
+  const authenticatedIntake = scope.activeId === 'WP35' && scope.featureId === 'F054'
+    && scope.runtimeProfile === 'shipping_workspace' && scope.runtimeContractVersion === SHIPPING_AUTH_INTAKE_CONTRACT
+    && scope.previewOrderException?.approved === true;
+  return sso || serviceSelection || authenticatedIntake;
 }
 
 function unresolvedBlockingDefects(state, runtimeDefects = {}, head = '', previewArtifacts = {}, productionArtifacts = {}, repoRoot = '', stage = 'production_released', previewOrderException = null) {

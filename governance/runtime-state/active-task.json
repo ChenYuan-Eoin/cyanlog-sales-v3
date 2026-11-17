@@ -333,7 +333,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "本次eb018f40产品树已获明确代码发布批准；Preview仍须实际检查，Production最终由现有Chrome验收。",
+      "note": "本候选Production-first获明确批准；Preview保持not_passed，正式站精确版本及现有Chrome实际重放是完成线。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -348,7 +348,7 @@
       },
       "production_release_authorization": {
         "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261116-008",
+        "final_release_approval_id": "IN-20261117-002",
         "micro_fix_approval_id": "IN-20261016-009",
         "clarification_id": "IN-20261016-015",
         "micro_fix_scope": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
@@ -360,13 +360,14 @@
         "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
         "legacy_scope_only": false,
         "new_scope_release_authorized": true,
-        "authorization_interpretation": "用户在已展示eb018f40候选、通过检查及代码发布范围后明确要求线上验收；授权push/PR/Production。不能把旧Preview例外冒充为本次验证。"
+        "authorization_interpretation": "用户已明确批准本候选直接发布正式站并只读验收。"
       },
       "blocking_acceptance_defects": [
         "IN-20261116-006",
         "IN-20261116-007"
       ],
-      "runtime_contract_version": "f054-auth-intake-v1"
+      "runtime_contract_version": "f054-auth-intake-v1",
+      "preview_order_exception_approval_id": "IN-20261117-002"
     },
     "feature_id": "F054",
     "integration_decision": {

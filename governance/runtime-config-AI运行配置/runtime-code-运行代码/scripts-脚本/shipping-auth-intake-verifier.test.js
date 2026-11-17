@@ -5,6 +5,8 @@ const os = require('os')
 const path = require('path')
 const crypto = require('crypto')
 const v = require('./shipping-auth-intake-verifier')
+const { execFileSync } = require('node:child_process')
+const registry = require('./project-registry')
 
 const nativeFetch = global.fetch
 const sha = value => crypto.createHash('sha256').update(value).digest('hex')
@@ -73,6 +75,39 @@ test('Production-first exception stays on the approved code tree and read-only s
   assert.ok(v.productionFirstExceptionBlockers({ ...scope, changedPaths: ['product-truth/product-code/app/shipping/page.tsx'] }).length)
   assert.ok(v.productionFirstExceptionBlockers({ ...scope, productTree: 'd'.repeat(40) }).length)
   assert.ok(v.productionFirstExceptionBlockers({ ...scope, approval: { ...approval, carrier_calls_authorized: true } }).length)
+})
+
+test('approved authenticated intake closes each defect only with exact Production replay', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'auth-intake-defect-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  execFileSync('git', ['init', '--quiet', root])
+  const runtime = path.join(root, '.git', 'codex-runtime')
+  fs.mkdirSync(runtime)
+  const envelope = (name, payload) => {
+    const bytes = Buffer.from(JSON.stringify(payload))
+    fs.writeFileSync(path.join(runtime, name), bytes)
+    return { artifact_path: name, sha256: sha(bytes), payload }
+  }
+  const defect = 'IN-20261116-006'
+  const state = { active_task: { id: 'WP35', feature_id: 'F054', delivery_contract: {
+    target_state: 'production_released', runtime_profile: 'shipping_workspace', runtime_contract_version: v.CONTRACT,
+    blocking_acceptance_defects: [defect],
+  } } }
+  const acceptance = envelope('production.json', { commit: expected.commit, actions: [...v.ACTIONS] })
+  const proof = { verified: true, root_cause: 'The department correction remained on an unintegrated candidate branch.',
+    reproduction: envelope('reproduction.json', { actual: 'Old department path remains in Production.' }),
+    production_verified: true, production_commit: expected.commit, production_regression_artifact_sha256: acceptance.sha256 }
+  const exception = { approved: true, preview_status: 'not_passed' }
+  const unresolved = (patch = {}, approval = exception, artifacts = { browser_acceptance: acceptance }, stage = 'production_released') =>
+    registry.unresolvedBlockingDefects(state, { [defect]: { ...proof, ...patch } }, expected.commit, {}, artifacts, root, stage, approval)
+  assert.deepEqual(unresolved(), [])
+  assert.deepEqual(unresolved({}, exception, {}, 'integration_ready'), [defect])
+  assert.deepEqual(unresolved({}, { approved: false }), [defect])
+  assert.deepEqual(unresolved({ production_commit: 'b'.repeat(40) }), [defect])
+  assert.deepEqual(unresolved({ production_verified: false }), [defect])
+  assert.deepEqual(unresolved({ production_regression_artifact_sha256: '0'.repeat(64) }), [defect])
+  fs.appendFileSync(path.join(runtime, 'production.json'), 'tampered')
+  assert.deepEqual(unresolved(), [defect])
 })
 
 test('verifier collects only five anonymous GET probes and binds raw receipts', async t => {
