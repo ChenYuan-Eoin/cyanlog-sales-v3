@@ -56,7 +56,7 @@
       }
     }
   },
-  "updatedAt": "2026-11-17T04:59:33.173Z",
+  "updatedAt": "2026-11-17T05:08:24.800Z",
   "releaseControl": {
     "production_branch": "production",
     "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
@@ -75,9 +75,11 @@
     "production_release_clarification_id": "IN-20261016-015",
     "production_release_scope": "仅本次部门与权限配置修复：本人最细一级标准部门；授权寄件部门与操作员在审核与下单权限内实际配置；保留现有单票、多票、本人记录与幂等恢复。发布后用户现有Chrome只读验收，不自动变更授权名单、不提交工单、不调用顺丰、不迁移。",
     "production_release_commit_authorized": "912b73775ff73c600c1790130295160294a40dbf",
-    "production_release_method": "vercel_git_production_branch"
+    "production_release_method": "vercel_git_production_branch",
+    "production_commit_after": "d5027a78375ee5411959c7125bcb48d852291c55",
+    "production_deployment_id_after": "dpl_5BKMJ5G8usTBRdfHVscrqkpfWcPZ"
   },
-  "completionState": "integration_ready",
+  "completionState": "main_integrated",
   "gateSnapshots": {
     "integration_ready": {
       "stage": "integration_ready",
@@ -173,12 +175,290 @@
         "worktree": "git status --porcelain=v1 --untracked-files=all",
         "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
       }
+    },
+    "main_integrated": {
+      "stage": "main_integrated",
+      "checkedAt": "2026-11-17T05:08:24.782Z",
+      "head": "912b73775ff73c600c1790130295160294a40dbf",
+      "originMain": "912b73775ff73c600c1790130295160294a40dbf",
+      "remoteMain": "912b73775ff73c600c1790130295160294a40dbf",
+      "remoteProduction": "d5027a78375ee5411959c7125bcb48d852291c55",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": true,
+      "localAttestationRefOid": "f7284945a454e9ef09ab67805733602a0f2a6809",
+      "remoteAttestationRefOid": "f7284945a454e9ef09ab67805733602a0f2a6809",
+      "remoteSnapshotCheckedAt": "2026-11-17T05:08:17.163Z",
+      "vercelProduction": {
+        "version": 1,
+        "source": "live-vercel-api",
+        "checkedAt": "2026-11-17T05:08:22.025Z",
+        "contract": {
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "projectName": "cyanlog-sales-v3",
+          "rootDirectory": "product-truth/product-code",
+          "domain": "sales.cyanlog.icu",
+          "productionBranch": "production"
+        },
+        "endpoints": {
+          "project": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "domain": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF/domains/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "alias": "/v4/aliases/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "deployment": "/v13/deployments/dpl_5BKMJ5G8usTBRdfHVscrqkpfWcPZ?teamId=team_xayPRcgRTNOgdPdNf7bOV017"
+        },
+        "project": {
+          "id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "name": "cyanlog-sales-v3",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "rootDirectory": "product-truth/product-code",
+          "productionBranch": "production",
+          "productionDeploymentId": "dpl_5BKMJ5G8usTBRdfHVscrqkpfWcPZ"
+        },
+        "domain": {
+          "name": "sales.cyanlog.icu",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "verified": true
+        },
+        "alias": {
+          "name": "sales.cyanlog.icu",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "deploymentId": "dpl_5BKMJ5G8usTBRdfHVscrqkpfWcPZ",
+          "deploymentReferenceId": "dpl_5BKMJ5G8usTBRdfHVscrqkpfWcPZ",
+          "redirect": null,
+          "deletedAt": null
+        },
+        "deployment": {
+          "id": "dpl_5BKMJ5G8usTBRdfHVscrqkpfWcPZ",
+          "name": "cyanlog-sales-v3",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "target": "production",
+          "readyState": "READY",
+          "readySubstate": "PROMOTED",
+          "status": "READY",
+          "gitCommitSha": "d5027a78375ee5411959c7125bcb48d852291c55",
+          "gitCommitSources": [
+            "gitSource.sha",
+            "meta.githubCommitSha"
+          ]
+        },
+        "remoteProduction": "d5027a78375ee5411959c7125bcb48d852291c55",
+        "raw": {
+          "project": {
+            "artifact_path": "vercel-production-verifier/main_integrated/2026-11-17T05-08-22-025Z-29751-project.json",
+            "sha256": "7994004e30ba7686711fc7891d14890b47fa1026534e37ba8d0102685cdbd412"
+          },
+          "domain": {
+            "artifact_path": "vercel-production-verifier/main_integrated/2026-11-17T05-08-22-025Z-29751-domain.json",
+            "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+          },
+          "alias": {
+            "artifact_path": "vercel-production-verifier/main_integrated/2026-11-17T05-08-22-025Z-29751-alias.json",
+            "sha256": "65d377d7855f78f88359faf867e68f710fc2c455b6d7de386f12b780e47013ab"
+          },
+          "deployment": {
+            "artifact_path": "vercel-production-verifier/main_integrated/2026-11-17T05-08-22-025Z-29751-deployment.json",
+            "sha256": "cec87433ff672c7e5080a81b087b33969a8e0ff6cf9bb7a526a0fb377a004a27"
+          }
+        }
+      },
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+      }
     }
   },
-  "previousAttestationDigest": null,
-  "previousAttestation": null,
-  "revision": 1,
-  "contentDigest": "ece06fae7d6b684189528765dd2d44c4b7d60b5a2a3606835541950a27792ca3",
-  "sealedAt": "2026-11-17T04:59:33.173Z",
-  "attestationDigest": "2c3863ba9205582ffddd34216ced3b310a1c5c87a9627405c240925b3b72c976"
+  "previousAttestationDigest": "2c3863ba9205582ffddd34216ced3b310a1c5c87a9627405c240925b3b72c976",
+  "previousAttestation": {
+    "version": 1,
+    "activeId": "WP35",
+    "commit": "912b73775ff73c600c1790130295160294a40dbf",
+    "evidence": {
+      "code": {
+        "commit": "912b73775ff73c600c1790130295160294a40dbf",
+        "checks": {
+          "target_tests": true,
+          "full_tests": true,
+          "lint": true,
+          "typecheck": true,
+          "build": true
+        },
+        "commands": [
+          {
+            "name": "target_tests",
+            "command": "bash /private/tmp/price-v3-sales-intake-repair/governance/ai-behavior-准则/checks/check-03-test.sh",
+            "exit_code": 0,
+            "artifact_path": "/private/tmp/price-v3-wp97-apl-resume/.git/worktrees/price-v3-sales-intake-repair/codex-runtime/check-logs/7a89bbfca8e65f0478e71e51539767dc9010d8a8/check-03-test.log",
+            "log_sha256": "d84cd88847052dde2144d3f5f42a66c5c82e9a16a71d9e02a3c2f475e54afcbe"
+          },
+          {
+            "name": "full_tests",
+            "command": "bash /private/tmp/price-v3-sales-intake-repair/governance/ai-behavior-准则/checks/check-03-test.sh",
+            "exit_code": 0,
+            "artifact_path": "/private/tmp/price-v3-wp97-apl-resume/.git/worktrees/price-v3-sales-intake-repair/codex-runtime/check-logs/7a89bbfca8e65f0478e71e51539767dc9010d8a8/check-03-test.log",
+            "log_sha256": "d84cd88847052dde2144d3f5f42a66c5c82e9a16a71d9e02a3c2f475e54afcbe"
+          },
+          {
+            "name": "lint",
+            "command": "bash /private/tmp/price-v3-sales-intake-repair/governance/ai-behavior-准则/checks/check-02-lint.sh",
+            "exit_code": 0,
+            "artifact_path": "/private/tmp/price-v3-wp97-apl-resume/.git/worktrees/price-v3-sales-intake-repair/codex-runtime/check-logs/7a89bbfca8e65f0478e71e51539767dc9010d8a8/check-02-lint.log",
+            "log_sha256": "7e2a0aff2ef1eeaf3830cbcb16a4937b54e21e6f631e065afd8d94571900d419"
+          },
+          {
+            "name": "typecheck",
+            "command": "bash /private/tmp/price-v3-sales-intake-repair/governance/ai-behavior-准则/checks/check-01-typecheck.sh",
+            "exit_code": 0,
+            "artifact_path": "/private/tmp/price-v3-wp97-apl-resume/.git/worktrees/price-v3-sales-intake-repair/codex-runtime/check-logs/7a89bbfca8e65f0478e71e51539767dc9010d8a8/check-01-typecheck.log",
+            "log_sha256": "bc793247a744682b1383388578ca2742fe53a07e4fbe917c471dc70d2fdaf348"
+          },
+          {
+            "name": "build",
+            "command": "pnpm build",
+            "exit_code": 0,
+            "artifact_path": "/private/tmp/price-v3-wp97-apl-resume/.git/worktrees/price-v3-sales-intake-repair/codex-runtime/sales-department-permissions/build-resume.log",
+            "log_sha256": "51ac82c36ea61240c1f78e4ee890c866b45ef6b2e917ab15ab418f17404147c8"
+          }
+        ],
+        "behavior_log": {
+          "artifact_path": "/private/tmp/price-v3-wp97-apl-resume/.git/worktrees/price-v3-sales-intake-repair/codex-runtime/behavior-log.jsonl",
+          "sha256": "62ac24435171165332ec0432cb6be5c100f52c997e837d42b5c92273f56440cb",
+          "entry_sha256": "2153db1f46790b8895f54d9e9413ea33df5aa926a5b4e09b6bf6c8f30a88c2b3"
+        }
+      }
+    },
+    "updatedAt": "2026-11-17T04:59:33.173Z",
+    "releaseControl": {
+      "production_branch": "production",
+      "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+      "production_branch_evidence": {
+        "artifact_path": "/private/tmp/price-v3-wp97-apl-resume/.git/worktrees/price-v3-sales-intake-repair/codex-runtime/sales-department-permissions/production-branch.json",
+        "sha256": "cc50fa494c087c5c203f094ed4c2f06af0c8d2e588c05df8897b1c11755ca231",
+        "payload": {
+          "branch": "production",
+          "project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "observed_at": "2026-11-17T04:32:55.702Z"
+        }
+      },
+      "production_commit_before": "d5027a78375ee5411959c7125bcb48d852291c55",
+      "production_deployment_id_before": "dpl_5BKMJ5G8usTBRdfHVscrqkpfWcPZ",
+      "production_release_approval_id": "IN-20261117-002",
+      "production_release_clarification_id": "IN-20261016-015",
+      "production_release_scope": "仅本次部门与权限配置修复：本人最细一级标准部门；授权寄件部门与操作员在审核与下单权限内实际配置；保留现有单票、多票、本人记录与幂等恢复。发布后用户现有Chrome只读验收，不自动变更授权名单、不提交工单、不调用顺丰、不迁移。",
+      "production_release_commit_authorized": "912b73775ff73c600c1790130295160294a40dbf",
+      "production_release_method": "vercel_git_production_branch"
+    },
+    "completionState": "integration_ready",
+    "gateSnapshots": {
+      "integration_ready": {
+        "stage": "integration_ready",
+        "checkedAt": "2026-11-17T04:59:33.155Z",
+        "head": "912b73775ff73c600c1790130295160294a40dbf",
+        "originMain": "d5027a78375ee5411959c7125bcb48d852291c55",
+        "remoteMain": "d5027a78375ee5411959c7125bcb48d852291c55",
+        "remoteProduction": "d5027a78375ee5411959c7125bcb48d852291c55",
+        "defaultBranch": "main",
+        "originMainFresh": true,
+        "originMainIsAncestor": true,
+        "mainIntegrated": false,
+        "localAttestationRefOid": "509e74b87bd001ab9c36f97e6079e6e51d1534bc",
+        "remoteAttestationRefOid": "3959d6fa9289ace087d8da3fb2f5a5ea1cf1f91b",
+        "remoteSnapshotCheckedAt": "2026-11-17T04:59:25.027260+00:00",
+        "vercelProduction": {
+          "version": 1,
+          "source": "live-vercel-api",
+          "checkedAt": "2026-11-17T04:59:29.905Z",
+          "contract": {
+            "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+            "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+            "projectName": "cyanlog-sales-v3",
+            "rootDirectory": "product-truth/product-code",
+            "domain": "sales.cyanlog.icu",
+            "productionBranch": "production"
+          },
+          "endpoints": {
+            "project": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+            "domain": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF/domains/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+            "alias": "/v4/aliases/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+            "deployment": "/v13/deployments/dpl_5BKMJ5G8usTBRdfHVscrqkpfWcPZ?teamId=team_xayPRcgRTNOgdPdNf7bOV017"
+          },
+          "project": {
+            "id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+            "name": "cyanlog-sales-v3",
+            "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+            "rootDirectory": "product-truth/product-code",
+            "productionBranch": "production",
+            "productionDeploymentId": "dpl_5BKMJ5G8usTBRdfHVscrqkpfWcPZ"
+          },
+          "domain": {
+            "name": "sales.cyanlog.icu",
+            "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+            "verified": true
+          },
+          "alias": {
+            "name": "sales.cyanlog.icu",
+            "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+            "deploymentId": "dpl_5BKMJ5G8usTBRdfHVscrqkpfWcPZ",
+            "deploymentReferenceId": "dpl_5BKMJ5G8usTBRdfHVscrqkpfWcPZ",
+            "redirect": null,
+            "deletedAt": null
+          },
+          "deployment": {
+            "id": "dpl_5BKMJ5G8usTBRdfHVscrqkpfWcPZ",
+            "name": "cyanlog-sales-v3",
+            "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+            "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+            "target": "production",
+            "readyState": "READY",
+            "readySubstate": "PROMOTED",
+            "status": "READY",
+            "gitCommitSha": "d5027a78375ee5411959c7125bcb48d852291c55",
+            "gitCommitSources": [
+              "gitSource.sha",
+              "meta.githubCommitSha"
+            ]
+          },
+          "remoteProduction": "d5027a78375ee5411959c7125bcb48d852291c55",
+          "raw": {
+            "project": {
+              "artifact_path": "vercel-production-verifier/integration_ready/2026-11-17T04-59-29-905Z-25326-project.json",
+              "sha256": "75faa7b2274cd3b86202fad2bf8f1a54f9e43d03c0503b40258fde852bb1e714"
+            },
+            "domain": {
+              "artifact_path": "vercel-production-verifier/integration_ready/2026-11-17T04-59-29-905Z-25326-domain.json",
+              "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+            },
+            "alias": {
+              "artifact_path": "vercel-production-verifier/integration_ready/2026-11-17T04-59-29-905Z-25326-alias.json",
+              "sha256": "65d377d7855f78f88359faf867e68f710fc2c455b6d7de386f12b780e47013ab"
+            },
+            "deployment": {
+              "artifact_path": "vercel-production-verifier/integration_ready/2026-11-17T04-59-29-905Z-25326-deployment.json",
+              "sha256": "cec87433ff672c7e5080a81b087b33969a8e0ff6cf9bb7a526a0fb377a004a27"
+            }
+          }
+        },
+        "verifier": {
+          "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+          "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+          "worktree": "git status --porcelain=v1 --untracked-files=all",
+          "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+        }
+      }
+    },
+    "previousAttestationDigest": null,
+    "previousAttestation": null,
+    "revision": 1,
+    "contentDigest": "ece06fae7d6b684189528765dd2d44c4b7d60b5a2a3606835541950a27792ca3",
+    "sealedAt": "2026-11-17T04:59:33.173Z",
+    "attestationDigest": "2c3863ba9205582ffddd34216ced3b310a1c5c87a9627405c240925b3b72c976"
+  },
+  "revision": 2,
+  "contentDigest": "cc2a4b5fe6ab944c22cf01087e87233d4b59ddcdbc05b2d30118c165aa9377e8",
+  "sealedAt": "2026-11-17T05:08:24.800Z",
+  "attestationDigest": "8520097e7c761c6ac1b0d475ea144c2092f0b4ea2acb7f1dc532b8c2055081dd"
 }
