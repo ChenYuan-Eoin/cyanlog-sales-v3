@@ -12,6 +12,31 @@ const mount = () => render(<SalesBatchProposal sender={sender} team="销售部" 
 beforeEach(() => { vi.stubGlobal('React', React); vi.stubGlobal('fetch', fetcher); fetcher.mockReset() })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
+it('binds the sole authorized department to every ticket without repeating its selector', async () => {
+  const departmentId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  let sequence = 0
+  fetcher.mockImplementation(async () => new Response(JSON.stringify({ orderNo: `SO-DEPT-${++sequence}`, status: 'awaiting_confirmation', waybill: null }), { status: 202 }))
+  render(<SalesBatchProposal embedded initialText={addresses} sender={sender} team="销售部" departmentId={departmentId} departments={[{ id: departmentId, name: '销售部', path: '总部 / 销售部' }]} rules={rules} accessReady defaults={{ customerName: '星河科技' }}/>)
+  expect(screen.queryByRole('combobox', { name: '第1票所属部门' })).toBeNull()
+  expect(screen.queryByRole('combobox', { name: '第2票所属部门' })).toBeNull()
+  expect(screen.queryByText('部门路径：总部 / 销售部')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '预览 2 票' }))
+  fireEvent.click(screen.getByRole('button', { name: '确认提交 2 票' }))
+  await screen.findByText(/SO-DEPT-2/)
+  const posts = fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')
+  expect(posts).toHaveLength(2)
+  for (const [, init] of posts) expect(JSON.parse(init.body).input.submittedBy).toMatchObject({ team: '销售部', departmentId })
+})
+
+it('keeps multiple authorized departments selectable per ticket', () => {
+  const first = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const second = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  render(<SalesBatchProposal embedded initialText={addresses} sender={sender} team="销售部" departmentId={first} departments={[{ id: first, name: '销售部', path: '总部 / 销售部' }, { id: second, name: '市场部', path: '总部 / 市场部' }]} rules={rules} accessReady defaults={{ customerName: '星河科技' }}/>)
+  fireEvent.change(screen.getByRole('combobox', { name: '第1票所属部门' }), { target: { value: second } })
+  expect(screen.getByRole('combobox', { name: '第1票所属部门' })).toHaveProperty('value', second)
+  expect(screen.getByRole('combobox', { name: '第2票所属部门' })).toHaveProperty('value', first)
+})
+
 it('reuses the operator multi-address parser, previews and creates two owner pending orders only', async () => {
   let sequence = 0
   fetcher.mockImplementation(async () => new Response(JSON.stringify({ orderNo: `SO-MINE-${++sequence}`, status: 'awaiting_confirmation', waybill: null }), { status: 202 }))

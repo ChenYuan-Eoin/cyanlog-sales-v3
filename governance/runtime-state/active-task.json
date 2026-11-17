@@ -297,14 +297,10 @@
       "product-truth/product-code/lib/shipping/operator-access.test.ts"
     ],
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "code_green",
       "allowed_states": [
         "executing",
-        "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -333,7 +329,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "本候选Production-first获明确批准；Preview保持not_passed，正式站精确版本及现有Chrome实际重放是完成线。",
+      "note": "当前用户验收微调：单一部门控件隐藏但自动归属保留。新产品树先完成代码检查，旧精确树Preview例外不继承。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -366,8 +362,7 @@
         "IN-20261116-006",
         "IN-20261116-007"
       ],
-      "runtime_contract_version": "f054-auth-intake-v1",
-      "preview_order_exception_approval_id": "IN-20261117-002"
+      "runtime_contract_version": "f054-auth-intake-v1"
     },
     "feature_id": "F054",
     "integration_decision": {
