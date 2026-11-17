@@ -10,11 +10,12 @@ import type { ShippingServiceOption } from '@/lib/shipping/sf-service-catalog'
 import MyWorkorders from './my-workorders'
 import styles from './sales-portal.module.css'
 
+export type BatchReviewSummary = { total: number; complete: number; invalid: number }
 type Result = 'pending' | 'unknown' | 'success' | 'failed' | 'conflict'
 type Row = Omit<BatchDraftRow, 'result' | 'error'> & { overrides?: string[]; weight: string; preference: 'standard' | 'urgent'; serviceId: string; departmentId: string; specialRequirements: string; result?: Result; orderNo?: string; error?: string; frozenPayload?: string }
 
-export default function SalesBatchProposal({ sender, team, departmentId, departments, rules, services, accessReady, accessHint, identityControls, accessControls, connectionStatus, embedded = false, initialText = '', defaults, onSuccess, onLockedChange, onClear }: {
-  embedded?: boolean; initialText?: string; defaults?: { customerName: string }; onSuccess?: () => void; onLockedChange?: (locked: boolean) => void; onClear?: () => void
+export default function SalesBatchProposal({ sender, team, departmentId, departments, rules, services, accessReady, accessHint, identityControls, accessControls, connectionStatus, embedded = false, initialText = '', defaults, onSuccess, onLockedChange, onReviewChange, onClear }: {
+  embedded?: boolean; initialText?: string; defaults?: { customerName: string }; onSuccess?: () => void; onLockedChange?: (locked: boolean) => void; onReviewChange?: (summary: BatchReviewSummary) => void; onClear?: () => void
   sender: Contact; team: string; rules: IntakeRules; accessReady: boolean; accessHint?: string
   departmentId?: string; departments?: Array<{ id: string; name: string; path: string }>; services?: ShippingServiceOption[]; identityControls?: ReactNode; accessControls?: ReactNode; connectionStatus?: string
 }) {
@@ -58,6 +59,7 @@ export default function SalesBatchProposal({ sender, team, departmentId, departm
   }), [rows, rules, sender, services, departments, defaults])
   const ready = prepared.filter(({ row, errors }) => !errors.length && !row.result)
   const invalid = prepared.filter(({ errors }) => errors.length).length
+  useEffect(() => { onReviewChange?.({ total: rows.length, complete: rows.length - invalid, invalid }) }, [rows.length, invalid, onReviewChange])
   const uncertain = rows.some(row => row.result === 'unknown' || row.result === 'pending' || row.result === 'conflict')
   const unresolved = rows.some(row => row.result === 'unknown' || row.result === 'pending')
   const conflicted = rows.some(row => row.result === 'conflict')
@@ -124,7 +126,7 @@ export default function SalesBatchProposal({ sender, team, departmentId, departm
         <div className={styles.batchActions}><button type="button" disabled={!raw.trim() || busy || uncertain} onClick={parse}>识别收件信息</button>{rows.length > 0 && !uncertain && <button type="button" disabled={busy} onClick={() => { setRows([]); setRaw(''); setPreview(false); setMessage('') }}>重新填写地址</button>}</div>
         {message && <p role="status">{message}</p>}{!senderReady && <p role="alert">请先补齐上方寄件地址，再提交。</p>}{!accessReady && accessHint && <p role="status">{accessHint}</p>}
       </section>}
-      {rows.length > 0 && <section className={styles.card}><h2>逐票核对 · {rows.length} 票</h2><p className={styles.hint}>{invalid} 票资料待修正；资料完整的票可先提交。客户公司和团队按当前提报规则填写。</p>
+      {rows.length > 0 && <section className={styles.card}><h2>逐票核对 · {rows.length} 票</h2><p className={styles.hint}>{invalid} 票资料待修正；资料完整的票可先提交。客户公司按票核验，资料完整后可预览。</p>
         <div className={styles.batchRows}>{prepared.map(({ row, recipient, errors }) => <div key={row.id}><fieldset className={styles.batchRow} disabled={busy || ['pending', 'unknown', 'success', 'conflict'].includes(row.result || '')}>
           <legend>第 {row.id} 票 {row.result === 'success' ? `· 已提报 ${row.orderNo}` : row.result === 'unknown' ? '· 回执待查' : row.result === 'conflict' ? '· 原请求冲突' : ''}</legend>
           <div className={styles.grid2}><label>收件人<input aria-label={`第${row.id}票收件人`} value={row.recipient} onChange={event => edit(row.id, 'recipient', event.target.value)}/></label><label>联系电话<input aria-label={`第${row.id}票联系电话`} value={row.phone} onChange={event => edit(row.id, 'phone', event.target.value)}/></label></div>
@@ -135,8 +137,8 @@ export default function SalesBatchProposal({ sender, team, departmentId, departm
           <p className={styles.hint}>识别结果：{recipient.province}{recipient.city}{recipient.county}{recipient.address}</p>
           {errors.length > 0 && <p className={styles.error} role="alert">{errors.join('；')}</p>}{row.error && <p className={styles.error} role="alert">{row.error}</p>}
         </fieldset>{row.result === 'unknown' && <button type="button" disabled={busy} onClick={() => void retry(row.id)}>重取第 {row.id} 票工单回执</button>}</div>)}</div>
-        {previewCurrent && ready.length > 0 && <section aria-label="寄件提报预览" className={styles.batchPreview}><h3>本次将提报 {ready.length} 票</h3><p>寄件人：{sender.name} · {sender.phone} · {sender.province}{sender.city}{sender.county}{sender.address}</p><ul>{ready.map(({ row, recipient }) => <li key={row.id}>第 {row.id} 票：{recipient.name} · {recipient.phone} · {recipient.province}{recipient.city}{recipient.county}{recipient.address} · {row.customerName || '未填客户'} · {row.cargo} · {row.weight} kg · {services?.find(service => String(service.id) === row.serviceId)?.name || (row.preference === 'urgent' ? '加急偏好' : '标准偏好')}{row.specialRequirements && ` · ${row.specialRequirements}`}</li>)}</ul><small>只创建待确认工单；服务由操作员最终核对后才可能向顺丰下单。</small></section>}
-        <div className={styles.batchActions}><button type="button" disabled={!ready.length || !accessReady || !senderReady || busy} onClick={() => { setPreviewSenderKey(senderKey); setPreview(true) }}>预览 {ready.length} 票</button><button type="button" disabled={!previewCurrent || !ready.length || !accessReady || !senderReady || busy} onClick={() => void submit()}>{busy ? '提报中…' : `确认提交 ${ready.length} 票`}</button></div>
+        {previewCurrent && ready.length > 0 && <section tabIndex={0} aria-label="寄件提报预览" className={styles.batchPreview}><h3>本次将提报 {ready.length} 票</h3><p>寄件人：{sender.name} · {sender.phone} · {sender.province}{sender.city}{sender.county}{sender.address}</p><ul>{ready.map(({ row, recipient }) => <li key={row.id}>第 {row.id} 票：{recipient.name} · {recipient.phone} · {recipient.province}{recipient.city}{recipient.county}{recipient.address} · {row.customerName || '未填客户'} · {row.cargo} · {row.weight} kg · {services?.find(service => String(service.id) === row.serviceId)?.name || (row.preference === 'urgent' ? '加急偏好' : '标准偏好')}{row.specialRequirements && ` · ${row.specialRequirements}`}</li>)}</ul><small>只创建待确认工单；服务由操作员最终核对后才可能向顺丰下单。</small></section>}
+        <footer className={styles.reviewActionBar} aria-label="多票提报操作"><div><strong>{ready.length} 票可提报</strong><span role="status">{!senderReady ? '请先补齐揽收资料' : !accessReady ? accessHint || '寄件资料暂不可用' : previewCurrent ? '已预览，确认后交给前台审核' : invalid ? `${invalid} 票待补充，可先预览完整的票` : '先预览核对，再确认提报'}</span></div><button type="button" disabled={!ready.length || !accessReady || !senderReady || busy} onClick={event => { if (event.detail > 1) return; if (previewCurrent) { void submit() } else { setPreviewSenderKey(senderKey); setPreview(true) } }}>{busy ? '提报中…' : `${previewCurrent ? '确认提交' : '预览'} ${ready.length} 票`}</button></footer>
       </section>}
     </>
   if (embedded) return <>{content}{!unresolved && <button type="button" disabled={busy} onClick={onClear}>{conflicted ? '已核对原工单，结束本批' : '结束本批，继续填写'}</button>}</>

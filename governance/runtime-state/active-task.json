@@ -240,7 +240,7 @@
     "name": "销售寄件提报体验",
     "kind": "product",
     "status": "active",
-    "objective": "完成销售寄件提报验收纠正：本人最细一级标准部门标识；授权寄件部门和操作员在审核与下单权限内可配置、保存与回读。保留原表单、多地址、本人记录、幂等恢复及禁止代他人/跨部门边界。",
+    "objective": "完成员工自助收寄布局验收纠正：以寄件任务为中心的紧凑页头、稳定预览确认操作、主表单和摘要记录两栏；后台身份归属、本人记录、逐票公司及幂等保护保留。",
     "started_at": "2026-10-16T07:43:35.475527+00:00",
     "activation_basis": "IN-20261114-001：继续原聊天最后的生产验收反馈，已复现新页面以批量组件替换原表单；依据证据推翻当前实现方向的插队条件，先恢复原销售提报能力，WP97未提交候选保留。",
     "execution_workspace": "/private/tmp/price-v3-sales-intake-repair",
@@ -297,14 +297,10 @@
       "product-truth/product-code/lib/shipping/operator-access.test.ts"
     ],
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "code_green",
       "allowed_states": [
         "executing",
-        "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -333,7 +329,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "本次309639b4产品树获明确生产先行批准；Preview仍未通过，现有Chrome逐票公司和部门展示复验后关闭。",
+      "note": "用户已批准布局实现；新产品树不继承上一候选Production-first例外，先完成候选与真实目标回归。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -366,8 +362,7 @@
         "IN-20261116-006",
         "IN-20261116-007"
       ],
-      "runtime_contract_version": "f054-auth-intake-v1",
-      "preview_order_exception_approval_id": "IN-20261117-009"
+      "runtime_contract_version": "f054-auth-intake-v1"
     },
     "feature_id": "F054",
     "integration_decision": {

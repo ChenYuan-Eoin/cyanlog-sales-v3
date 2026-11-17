@@ -31,9 +31,9 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0 }: { sco
     groups.set(date, [...(groups.get(date) || []), order])
   }
   const canExpand = (orders?.length || 0) > 5 || nextPage !== null
-  return <section className={styles.card}>
-    <p className={styles.hint}>{scope === 'owner' ? '仅本人的提报及单号 · 按日期分组' : '全部快递 · 按提报日期分组'}</p>
-    {scope === 'owner' && <p className={styles.hint}>审核并下单后才会生成物流单号。请稍后点击下方“刷新提报记录”获取。</p>}
+  return <div>
+    <p className={styles.hint}>{scope === 'owner' ? '仅显示本人的提报记录' : '全部快递 · 按提报日期分组'}</p>
+    {scope === 'owner' && <p className={styles.hint}>审核下单后显示运单号。</p>}
     <div className={styles.recordToolbar}>
       <button type="button" disabled={busy} onClick={() => void load()}>{busy ? '正在读取…' : '刷新提报记录'}</button>
       {canExpand && <button type="button" aria-expanded={expanded} aria-controls={listId} onClick={() => { if (!expanded) setExpandedHeight(Math.max(720, (listRef.current?.getBoundingClientRect().height || 0) + 160)); setExpanded(current => !current) }}>{expanded ? '收起 · 最近5条' : '查看更早记录'}</button>}
@@ -54,5 +54,5 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0 }: { sco
       {expanded && nextPage !== null && <button type="button" disabled={busy} onClick={() => void load(nextPage)}>加载更多快递</button>}
       {orders.length > 0 && <p className={styles.hint}>{!expanded && canExpand ? `最近 ${visibleOrders.length} 条` : `已显示 ${visibleOrders.length} 条${nextPage === null ? '，已加载全部记录' : ''}`}</p>}
     </>}
-  </section>
+  </div>
 }
