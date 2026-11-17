@@ -297,10 +297,14 @@
       "product-truth/product-code/lib/shipping/operator-access.test.ts"
     ],
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -329,7 +333,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "当前用户验收微调：单一部门控件隐藏但自动归属保留。新产品树先完成代码检查，旧精确树Preview例外不继承。",
+      "note": "本次309639b4产品树获明确生产先行批准；Preview仍未通过，现有Chrome逐票公司和部门展示复验后关闭。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -344,11 +348,11 @@
       },
       "production_release_authorization": {
         "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261117-002",
+        "final_release_approval_id": "IN-20261117-009",
         "micro_fix_approval_id": "IN-20261016-009",
         "clarification_id": "IN-20261016-015",
         "micro_fix_scope": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
-        "final_scope": "仅本次部门与权限配置修复：本人最细一级标准部门；授权寄件部门与操作员在审核与下单权限内实际配置；保留现有单票、多票、本人记录与幂等恢复。发布后用户现有Chrome只读验收，不自动变更授权名单、不提交工单、不调用顺丰、不迁移。",
+        "final_scope": "仅逐票公司核验及单一部门展示微调：多票不显示或校验顶部统一公司，不传播单票公司默认值，各票公司保持独立必填与长度校验；单一部门自动绑定并隐藏重复控件，多部门选择与服务端归属校验保留。发布后现有Chrome只读验收，不提交五票工单、不改授权名单、不调用顺丰、不迁移。",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
         "carrier_calls_authorized": false,
@@ -356,13 +360,14 @@
         "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
         "legacy_scope_only": false,
         "new_scope_release_authorized": true,
-        "authorization_interpretation": "用户已明确批准本候选直接发布正式站并只读验收。"
+        "authorization_interpretation": "用户在具体候选与影响说明后明确批准发布并正式站验收。"
       },
       "blocking_acceptance_defects": [
         "IN-20261116-006",
         "IN-20261116-007"
       ],
-      "runtime_contract_version": "f054-auth-intake-v1"
+      "runtime_contract_version": "f054-auth-intake-v1",
+      "preview_order_exception_approval_id": "IN-20261117-009"
     },
     "feature_id": "F054",
     "integration_decision": {
