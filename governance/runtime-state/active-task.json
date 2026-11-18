@@ -267,14 +267,21 @@
       "product-truth/product-code/app/api/admin/users/[id]/roles/route.ts",
       "product-truth/product-code/app/api/admin/users/[id]/roles/route.test.ts",
       "product-truth/product-code/app/api/admin/org/route.ts",
-      "product-truth/product-code/app/api/admin/org/route.test.ts"
+      "product-truth/product-code/app/api/admin/org/route.test.ts",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/prelogin-role-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/prelogin-role-verifier.test.js"
     ],
     "feature_id": "F003",
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -289,16 +296,14 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "role_edit_save",
-        "role_access_enforcement"
+        "prelogin_role_eligibility"
       ],
-      "note": "首登前组织角色分配独立候选，生产发布和数据库迁移须分别获准。",
+      "note": "在指定迁移确认后发布67a3ff41网站产品树，使用既有Chrome只读核验刘楠楠是否可预分配角色；不为其分配或激活角色，不操作其他员工，不发单。",
       "production_database_mode": "read_only",
       "runtime_profile": "application",
-      "runtime_contract_version": "f003-role-permissions-v1",
+      "runtime_contract_version": "f003-prelogin-role-v1",
       "required_production_runtime_evidence": [
-        "role_edit_save",
-        "role_access_enforcement"
+        "prelogin_role_eligibility"
       ],
       "final_acceptance": {
         "origin": "https://sales.cyanlog.icu",
@@ -318,17 +323,25 @@
         "trusted_existing_chrome_operator_attestation"
       ],
       "production_release_authorization": {
-        "status": "not_authorized_for_current_candidate",
+        "status": "approved_code_only",
+        "final_release_approval_id": "IN-20261118-048",
+        "final_scope": "在指定迁移确认后发布67a3ff41网站产品树，使用既有Chrome只读核验刘楠楠是否可预分配角色；不为其分配或激活角色，不操作其他员工，不发单。",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
-        "carrier_calls_authorized": false
-      }
+        "carrier_calls_authorized": false,
+        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "micro_fix_approval_id": "IN-20261118-046",
+        "clarification_id": "IN-20261118-047",
+        "micro_fix_scope": "在指定迁移确认后发布67a3ff41网站产品树，使用既有Chrome只读核验刘楠楠是否可预分配角色；不为其分配或激活角色，不操作其他员工，不发单。"
+      },
+      "preview_order_exception_approval_id": "IN-20261118-048"
     },
     "started_at": "2026-11-18T09:23:37.814859+00:00",
     "integration_decision": {
       "strategy": "isolated_role_assignment_candidate",
-      "authority": "IN-20261118-046",
-      "requested_target": "code_green"
+      "authority": "IN-20261118-048",
+      "requested_target": "production_released"
     }
   },
   "execution_queue": {

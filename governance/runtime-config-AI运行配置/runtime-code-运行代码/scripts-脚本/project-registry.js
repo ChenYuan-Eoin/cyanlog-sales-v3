@@ -43,6 +43,7 @@ const VERCEL_PRODUCTION_CONTRACT = Object.freeze({
 const SHIPPING_RUNTIME_ITEMS = Object.freeze(['shipping_provider', 'shipping_request', 'shipping_tracking', 'shipping_access']);
 const APPLICATION_PERMISSION_ITEMS = Object.freeze(['role_edit_save', 'role_access_enforcement']);
 const APPLICATION_PERMISSION_PRODUCTION_ITEMS = Object.freeze(['role_read_edit', 'role_unauthorized_access']);
+const PRELOGIN_ROLE_CONTRACT = 'f003-prelogin-role-v1';
 const APPLICATION_PERMISSION_CONTRACT = 'f003-role-permissions-v1';
 const ORGANIZATION_CONNECTIONS_CONTRACT = 'f003-organization-connections-v1';
 const ORGANIZATION_CONNECTIONS_ITEMS = Object.freeze(['organization_connection_lifecycle', 'organization_directory_preview']);
@@ -338,6 +339,7 @@ function runtimeContractVersionOf(state) {
   return state.active_task?.delivery_contract?.runtime_contract_version || null;
 }
 function requiredReplayActions(state, environment = 'preview') {
+  if (runtimeContractVersionOf(state) === PRELOGIN_ROLE_CONTRACT) return require('./prelogin-role-verifier').ACTIONS;
   if (runtimeContractVersionOf(state) === NAVIGATION_PERFORMANCE_CONTRACT) return require('./navigation-performance-verifier').ROUTES;
   if (runtimeProfileOf(state) === 'shipping_workspace' && runtimeContractVersionOf(state) === CRM_INTAKE_CONTRACT) {
     const verifier = require('./crm-intake-verifier');
@@ -537,10 +539,21 @@ function getPreviewOrderException(state, repoRoot, inboxRecords) {
         : isSsoFamily(contractVersion)
           ? './fxiaoke-sso-verifier'
           : './fxiaoke-connection-verifier';
-  const verifierModule = contractVersion === NAVIGATION_PERFORMANCE_CONTRACT ? require('./navigation-performance-verifier') : isSsoFamily(contractVersion) ? ssoVerifier(contractVersion) : require(verifier);
+  const verifierModule = contractVersion === PRELOGIN_ROLE_CONTRACT ? require('./prelogin-role-verifier') : contractVersion === NAVIGATION_PERFORMANCE_CONTRACT ? require('./navigation-performance-verifier') : isSsoFamily(contractVersion) ? ssoVerifier(contractVersion) : require(verifier);
   const blockers = verifierModule.productionFirstExceptionBlockers({
     approval, activeId: state.active_task?.id, contractVersion,
     ...([SHIPPING_SETTINGS_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_AUTH_INTAKE_CONTRACT].includes(contractVersion) ? { featureId: state.active_task?.feature_id, runtimeProfile: runtimeProfileOf(state) } : {}),
+    ...(contractVersion === PRELOGIN_ROLE_CONTRACT ? {
+      migrationApproval: inboxRecords.find(record => record.id === approval?.migration_authority_id),
+      migrationSha256: fileSha256(path.join(repoRoot, 'product-truth/product-code/supabase/migrations/20261118095000_fxiaoke_prelogin_role_assignment.sql')),
+      migrationReceipt: (() => {
+        const local = path.join(path.dirname(getDeliveryRuntimePath(repoRoot)), 'prelogin-role/production-migration-receipt.json');
+        if (fs.existsSync(local)) { try { return JSON.parse(fs.readFileSync(local, 'utf8')); } catch { return null; } }
+        const note = loadDeliveryNote(repoRoot, runGit(repoRoot, ['rev-parse', 'HEAD']), state.active_task.id);
+        const sealed = note.releaseControl?.migration_receipt;
+        return sealed && sealed.sha256 === crypto.createHash('sha256').update(JSON.stringify(sealed.payload)).digest('hex') ? sealed.payload : null;
+      })()
+    } : {}),
     productTree: runGit(repoRoot, ['rev-parse', 'HEAD:product-truth/product-code'], { allowFailure: true }),
     candidateIsAncestor: Boolean(base && runGit(repoRoot, ['merge-base', '--is-ancestor', base, 'HEAD'], { allowFailure: true }) !== null),
     changedPaths: changed === null ? null : changed.split('\0').filter(Boolean),
@@ -652,7 +665,7 @@ function validateSchedulerSnapshot(options, candidate) {
   if (!['ai', 'shipping', 'shipping_workspace', 'application', 'navigation'].includes(profile)) errors.push('Unknown runtime evidence profile');
   if (profile === 'application' && (
     state.active_task?.feature_id !== 'F003'
-    || (deliveryContract.target_state !== 'code_green' && ![APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT, MEMBER_UI_CONTRACT].includes(runtimeContractVersionOf(state)))
+    || (deliveryContract.target_state !== 'code_green' && ![PRELOGIN_ROLE_CONTRACT, APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT, MEMBER_UI_CONTRACT].includes(runtimeContractVersionOf(state)))
     || (!fxiaokeProduction && !fxiaokeSsoProduction && deliveryContract.production_database_mode !== 'read_only')
   )) errors.push('Application profile requires F003 and a scoped contract; only explicitly approved Fxiaoke connection saves may write Production');
   if (organizationConnectionsCode) {
@@ -683,7 +696,7 @@ function validateSchedulerSnapshot(options, candidate) {
     if (JSON.stringify(requiredRuntimeEvidence) !== JSON.stringify(DIRECTORY_SCOPE_ITEMS)) errors.push('Directory scope evidence must contain only snapshot and scope verification');
   }
   if (['shipping', 'shipping_workspace'].includes(profile) && state.active_task?.feature_id !== 'F054') errors.push('Shipping evidence profile requires the F054 feature binding');
-  const applicationRelease = profile === 'application' && [APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, DIRECTORY_SCOPE_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT, MEMBER_UI_CONTRACT].includes(contractVersion);
+  const applicationRelease = profile === 'application' && [PRELOGIN_ROLE_CONTRACT, APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, DIRECTORY_SCOPE_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT, MEMBER_UI_CONTRACT].includes(contractVersion);
   if (contractVersion && !navigationRelease && !applicationRelease && (profile !== 'shipping_workspace' || !['f054-v1', 'f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', SHIPPING_PARSER_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_SETTINGS_CONTRACT, SHIPPING_AUTH_INTAKE_CONTRACT, CRM_INTAKE_CONTRACT].includes(contractVersion))) errors.push('Unknown or mismatched runtime contract version');
   if (parserRelease && (state.active_task.id !== 'WP95' || deliveryContract.production_database_mode !== 'read_only')) errors.push('Parser contract is limited to WP95 without business writes');
   if (serviceSelectionRelease && (state.active_task.id !== 'WP52' || deliveryContract.production_database_mode !== 'read_only')) errors.push('Service selection contract is limited to read-only WP52');
@@ -704,7 +717,9 @@ function validateSchedulerSnapshot(options, candidate) {
   }
   if (fxiaokeSsoRelease && state.active_task.id !== 'WP94') errors.push('Fxiaoke SSO contract is limited to WP94');
   if (contractVersion === 'f054-config-ui-v1' && (!['code_green', 'clean_preview_green'].includes(deliveryContract.target_state) || deliveryContract.production_database_mode !== 'read_only')) errors.push('Configuration UI contract is limited to read-only Preview acceptance');
-  const canonicalRuntimeEvidence = navigationRelease ? require('./navigation-performance-verifier').ITEMS : organizationConnectionsCode
+  const preloginRole = profile === 'application' && contractVersion === PRELOGIN_ROLE_CONTRACT;
+  if (preloginRole && (activeId !== 'WP44' || deliveryContract.production_database_mode !== 'read_only')) errors.push('Prelogin role verification requires the read-only WP44 contract');
+  const canonicalRuntimeEvidence = preloginRole ? require('./prelogin-role-verifier').ITEMS : navigationRelease ? require('./navigation-performance-verifier').ITEMS : organizationConnectionsCode
     ? ORGANIZATION_CONNECTIONS_ITEMS
     : directoryScopeCode
       ? DIRECTORY_SCOPE_ITEMS
@@ -755,7 +770,7 @@ function validateSchedulerSnapshot(options, candidate) {
       ? FXIAOKE_CONNECTION_PRODUCTION_ITEMS
       : fxiaokeSsoRelease
         ? (ssoVerifier(contractVersion).PRODUCTION_ITEMS || FXIAOKE_SSO_PRODUCTION_ITEMS)
-        : applicationRelease
+        : preloginRole ? canonicalRuntimeEvidence : applicationRelease
           ? APPLICATION_PERMISSION_PRODUCTION_ITEMS
           : crmIntakeRelease
             ? require('./crm-intake-verifier').ITEMS
@@ -2151,8 +2166,10 @@ function productionRuntimeEvidenceBlockers(evidence, requiredItems, repoRoot, ex
     blockers.push(...verifier.productionBlockers(section, expected));
     return blockers;
   }
-  if (expected.runtimeContractVersion === APPLICATION_PERMISSION_CONTRACT) {
-    for (const item of ['verifier', ...APPLICATION_PERMISSION_PRODUCTION_ITEMS]) {
+  if ([PRELOGIN_ROLE_CONTRACT, APPLICATION_PERMISSION_CONTRACT].includes(expected.runtimeContractVersion)) {
+    const prelogin = expected.runtimeContractVersion === PRELOGIN_ROLE_CONTRACT;
+    const verifier = prelogin ? require('./prelogin-role-verifier') : require('./application-permissions-verifier');
+    for (const item of ['verifier', ...(prelogin ? verifier.ITEMS : APPLICATION_PERMISSION_PRODUCTION_ITEMS)]) {
       const envelope = section[item];
       if (!evidenceEnvelopeValid(envelope, repoRoot) || !evidenceEnvelopeUnderPrefix(envelope, 'production-runtime-verifier')) {
         blockers.push(`Application Production controlled evidence missing or invalid: ${item}`);
@@ -2163,7 +2180,7 @@ function productionRuntimeEvidenceBlockers(evidence, requiredItems, repoRoot, ex
       if (!isExactProductionUrl(payload.origin) || payload.environment !== 'production') blockers.push(`Application Production evidence origin/environment mismatch: ${item}`);
       if (!Array.isArray(payload.attachments) || payload.attachments.length === 0) blockers.push(`Application Production evidence has no raw attachment: ${item}`);
     }
-    blockers.push(...require('./application-permissions-verifier').productionBlockers(section, expected));
+    blockers.push(...verifier.productionBlockers(section, expected));
     return blockers;
   }
   const securityGate = section.security_gate;
@@ -2388,7 +2405,9 @@ function approvedSsoProductionFirst(scope) {
   const authenticatedIntake = scope.activeId === 'WP35' && scope.featureId === 'F054'
     && scope.runtimeProfile === 'shipping_workspace' && scope.runtimeContractVersion === SHIPPING_AUTH_INTAKE_CONTRACT
     && scope.previewOrderException?.approved === true;
-  return sso || serviceSelection || authenticatedIntake;
+  const prelogin = scope.activeId === 'WP44' && scope.featureId === 'F003' && scope.runtimeProfile === 'application'
+    && scope.runtimeContractVersion === PRELOGIN_ROLE_CONTRACT && scope.previewOrderException?.approved === true;
+  return sso || serviceSelection || authenticatedIntake || prelogin;
 }
 
 function unresolvedBlockingDefects(state, runtimeDefects = {}, head = '', previewArtifacts = {}, productionArtifacts = {}, repoRoot = '', stage = 'production_released', previewOrderException = null) {
@@ -2696,7 +2715,7 @@ function checkDeliveryStage(stage, options = {}) {
     if (evidence.preview?.ready !== true) blockers.push('Preview is not READY');
     if (evidence.preview?.git_dirty !== false) blockers.push('Preview was built from dirty source');
     if (!apiOnlyCrmIntake) {
-      const applicationPermissions = status.runtimeProfile === 'application' && [APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT, MEMBER_UI_CONTRACT].includes(status.runtimeContractVersion);
+      const applicationPermissions = status.runtimeProfile === 'application' && [PRELOGIN_ROLE_CONTRACT, APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT, MEMBER_UI_CONTRACT].includes(status.runtimeContractVersion);
       for (const journey of applicationPermissions ? ['desktop', 'blocking_defect_replay'] : ['desktop', 'ipad', 'blocking_defect_replay']) {
         if (evidence.preview?.journeys?.[journey] !== true) blockers.push(`Preview journey missing: ${journey}`);
       }
@@ -2728,7 +2747,7 @@ function checkDeliveryStage(stage, options = {}) {
       } else {
         if (envelope.payload.commit !== status.git.head) blockers.push(`runtime evidence commit mismatch: ${item}`);
         if (envelope.payload.deployment_id !== evidence.preview?.deployment_id) blockers.push(`runtime evidence deployment mismatch: ${item}`);
-        if (['f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', SHIPPING_SETTINGS_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, CRM_INTAKE_CONTRACT, APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT, MEMBER_UI_CONTRACT].includes(status.runtimeContractVersion)) {
+        if (['f054-v2', 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', 'f054-config-ui-v1', SHIPPING_SETTINGS_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, CRM_INTAKE_CONTRACT, PRELOGIN_ROLE_CONTRACT, APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, FXIAOKE_SSO_CONTRACT, MEMBER_UI_CONTRACT].includes(status.runtimeContractVersion)) {
           try {
             const origin = new URL(envelope.payload.origin);
             if (origin.protocol !== 'https:' || origin.origin !== new URL(evidence.preview.url).origin) blockers.push(`runtime evidence origin mismatch: ${item}`);
@@ -2745,6 +2764,8 @@ function checkDeliveryStage(stage, options = {}) {
       blockers.push(...verifier.previewBlockers(evidence.runtime?.[status.runtimeContractVersion === MEMBER_UI_CONTRACT ? 'org_member_ui' : 'fxiaoke_sso']?.payload, { commit: status.git.head, deploymentId: evidence.preview?.deployment_id }));
     } else if (status.runtimeProfile === 'application' && status.runtimeContractVersion === FXIAOKE_CONNECTION_CONTRACT) {
       blockers.push(...require('./fxiaoke-connection-verifier').previewBlockers(evidence.runtime?.fxiaoke_connection?.payload, { commit: status.git.head, deploymentId: evidence.preview?.deployment_id }));
+    } else if (status.runtimeContractVersion === PRELOGIN_ROLE_CONTRACT) {
+      blockers.push('WP44 isolated Preview was not passed, preserve this fact');
     } else if (status.runtimeProfile === 'application' && status.runtimeContractVersion === APPLICATION_PERMISSION_CONTRACT) {
       blockers.push(...require('./application-permissions-verifier').previewBlockers(evidence.runtime || {}));
     } else if (status.runtimeContractVersion === CRM_INTAKE_CONTRACT) {
@@ -2892,7 +2913,7 @@ function checkDeliveryStage(stage, options = {}) {
     if (status.git.remoteProduction !== status.git.head) blockers.push('origin/production does not equal released candidate HEAD');
     const codeOnly = status.productionReleaseAuthorization?.status === 'approved_code_only';
     if (!codeOnly && status.productionReleaseAuthorization?.status !== 'approved_for_final_release') blockers.push('Final Production release authorization is still pending');
-    if (codeOnly ? status.productionDatabaseMode !== 'read_only' || ![NAVIGATION_PERFORMANCE_CONTRACT, 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', SHIPPING_PARSER_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_SETTINGS_CONTRACT, SHIPPING_AUTH_INTAKE_CONTRACT, APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, MEMBER_UI_CONTRACT].includes(status.runtimeContractVersion) : status.productionDatabaseMode !== 'controlled_write_approved') blockers.push('Production database boundary does not match the authorized release mode');
+    if (codeOnly ? status.productionDatabaseMode !== 'read_only' || ![NAVIGATION_PERFORMANCE_CONTRACT, 'f054-ui-v1', 'f054-recovery-v1', 'f054-intake-v1', SHIPPING_PARSER_CONTRACT, SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_SETTINGS_CONTRACT, SHIPPING_AUTH_INTAKE_CONTRACT, PRELOGIN_ROLE_CONTRACT, APPLICATION_PERMISSION_CONTRACT, ORGANIZATION_CONNECTIONS_CONTRACT, DIRECTORY_CUTOVER_CONTRACT, FXIAOKE_CONNECTION_CONTRACT, MEMBER_UI_CONTRACT].includes(status.runtimeContractVersion) : status.productionDatabaseMode !== 'controlled_write_approved') blockers.push('Production database boundary does not match the authorized release mode');
     if ([SHIPPING_SERVICE_SELECTION_CONTRACT, SHIPPING_SETTINGS_CONTRACT, SHIPPING_AUTH_INTAKE_CONTRACT].includes(status.runtimeContractVersion)) blockers.push(...shippingProductionVerifierScopeBlockers(status));
     const approvalRecord = status.productionReleaseAuthorizationRecord;
     if (approvalRecord?.type !== 'final_production_release_authorization') blockers.push('Final Production authorization record type is invalid');
@@ -2967,12 +2988,14 @@ function checkDeliveryStage(stage, options = {}) {
         commit: status.git.head, deploymentId: liveVercel.snapshot?.deployment?.id
       }));
       if (evidence.production_runtime?.org_member_ui?.payload?.source_operator_sha256 !== evidence.production?.browser_acceptance?.sha256) blockers.push('Member UI controlled runtime is not bound to accepted IAB evidence');
-    } else if (status.runtimeProfile === 'application' && status.runtimeContractVersion === APPLICATION_PERMISSION_CONTRACT) {
-      blockers.push(...require('./application-permissions-verifier').productionOperatorBlockers(evidence.production?.browser_acceptance?.payload, {
+    } else if (status.runtimeProfile === 'application' && [PRELOGIN_ROLE_CONTRACT, APPLICATION_PERMISSION_CONTRACT].includes(status.runtimeContractVersion)) {
+      const prelogin = status.runtimeContractVersion === PRELOGIN_ROLE_CONTRACT;
+      const verifier = prelogin ? require('./prelogin-role-verifier') : require('./application-permissions-verifier');
+      blockers.push(...verifier.productionOperatorBlockers(evidence.production?.browser_acceptance?.payload, {
         commit: status.git.head, deploymentId: liveVercel.snapshot?.deployment?.id,
         now: Date.parse(evidence.production_runtime?.verifier?.payload?.observed_at || '')
       }));
-      if (evidence.production_runtime?.role_read_edit?.payload?.source_operator_sha256 !== evidence.production?.browser_acceptance?.sha256) blockers.push('Application Production runtime is not bound to the accepted Chrome operator evidence');
+      if (evidence.production_runtime?.[prelogin ? 'prelogin_role_eligibility' : 'role_read_edit']?.payload?.source_operator_sha256 !== evidence.production?.browser_acceptance?.sha256) blockers.push('Application Production runtime is not bound to the accepted Chrome operator evidence');
     }
 
     if (!options.skipSealCheck && !deliveryStateAtLeast(status.sealedCompletionState, stage)) {
@@ -3080,7 +3103,7 @@ async function verifyFxiaokeSsoProduction(options = {}) {
 async function verifyApplicationPermissionsProduction(options = {}) {
   const status = getDeliveryStatus(options), repoRoot = status.repoRoot;
   if (!status.scheduler.ok || status.featureId !== 'F003' || status.runtimeProfile !== 'application'
-    || status.runtimeContractVersion !== APPLICATION_PERMISSION_CONTRACT || status.targetState !== 'production_released'
+    || ![PRELOGIN_ROLE_CONTRACT, APPLICATION_PERMISSION_CONTRACT].includes(status.runtimeContractVersion) || status.targetState !== 'production_released'
     || status.productionReleaseAuthorization?.status !== 'approved_code_only' || status.productionDatabaseMode !== 'read_only') {
     throw new Error('Application verifier requires the scoped F003 code-only read-only Production release');
   }
@@ -3089,11 +3112,12 @@ async function verifyApplicationPermissionsProduction(options = {}) {
   if (live.blockers.length) throw new Error(live.blockers.join('; '));
   const expected = { commit: status.git.head, deploymentId: live.snapshot.deployment.id, runtimeContractVersion: status.runtimeContractVersion };
   const operatorBlockers = productionBrowserOperatorAttestationBlockers(options.operator, repoRoot, expected);
-  operatorBlockers.push(...require('./application-permissions-verifier').productionOperatorBlockers(options.operator?.payload, expected));
+  const verifier = status.runtimeContractVersion === PRELOGIN_ROLE_CONTRACT ? require('./prelogin-role-verifier') : require('./application-permissions-verifier');
+  operatorBlockers.push(...verifier.productionOperatorBlockers(options.operator?.payload, expected));
   if (operatorBlockers.length) throw new Error(operatorBlockers.join('; '));
   const { runtimePath } = loadDeliveryMutableBase({ repoRoot });
   // Only verified fields enter the live verifier; callers cannot inject HTTP or target overrides.
-  const payload = await require('./application-permissions-verifier').verify({
+  const payload = await verifier.verify({
     runtime: path.dirname(runtimePath), operator: options.operator, commit: expected.commit, deploymentId: expected.deploymentId
   });
   const blockers = productionRuntimeEvidenceBlockers({ production_runtime: payload }, status.requiredProductionRuntimeEvidence, repoRoot, expected);
