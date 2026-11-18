@@ -170,56 +170,38 @@ function roleRecordOf(value: unknown): { id: string; code: string; permissions: 
 
 async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthContext | null> {
   const rest = createMiddlewareRestClient()
-  const tokenRows = await rest.selectRows<{ user_id: string; created_at?: string; expires_at: string | null; auth_method?: string }>(
-    'auth_tokens',
-    { token },
-    'user_id,created_at,expires_at,auth_method',
-  )
-  const tokenRecord = tokenRows[0]
-
-  if (!tokenRecord || (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date())) {
-    return null
-  }
-  if (tokenRecord.auth_method === 'fxiaoke' && !fxiaokeSessionDeadline(tokenRecord)) return null
-
-  const userId = tokenRecord.user_id
-  const [userRows, membershipRows] = await Promise.all([
-    rest.selectRows<{
+  const tokenRows = await rest.selectRows<{
+    user_id: string
+    created_at?: string
+    expires_at: string | null
+    auth_method?: string
+    user: {
       id: string
-      org_id: string | null
       status: string
       login_enabled: boolean | null
-    }>('users', { id: userId }, 'id,org_id,status,login_enabled'),
-    rest.selectRows<{ org_id: string; employment_status: string }>('user_organizations', {
-      user_id: userId,
-      status: 'active',
-      is_default: 'true',
-    }, 'org_id,employment_status'),
-  ])
-  const userRow = userRows[0]
+      memberships: Array<{ org_id: string; employment_status: string }>
+    } | null
+  }>(
+    'auth_tokens',
+    { token, 'user.memberships.status': 'active', 'user.memberships.is_default': 'true' },
+    'user_id,created_at,expires_at,auth_method,user:users!auth_tokens_user_id_fkey('
+      + 'id,status,login_enabled,memberships:user_organizations!user_organizations_user_id_fkey(org_id,employment_status))',
+  )
+  const tokenRecord = tokenRows[0]
+  if (!tokenRecord || (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date())) return null
 
-  if (
-    !userRow
-    || userRow.status !== 'active'
-    || userRow.login_enabled !== true
-  ) return null
+  const usesFxiaoke = tokenRecord.auth_method === 'fxiaoke'
+  if (usesFxiaoke && !fxiaokeSessionDeadline(tokenRecord)) return null
 
-  const orgId = membershipRows[0]?.org_id
-  if (!orgId) return null
+  const userId = tokenRecord.user_id
+  const user = tokenRecord.user
+  if (!user || user.id !== userId || user.status !== 'active' || user.login_enabled !== true) return null
+  if (user.memberships?.length !== 1) return null
+  const membership = user.memberships[0]
+  const orgId = membership.org_id
+  if (!orgId || (usesFxiaoke && membership.employment_status !== 'active')) return null
 
-  if (tokenRecord.auth_method === 'fxiaoke') {
-    if (membershipRows[0]?.employment_status !== 'active') return null
-    const sources = await rest.selectRows<FxiaokeSourceRow>(
-      'organization_sources',
-      { system_org_id: orgId, provider: 'fxiaoke', status: 'active' },
-      'authority_scope,connection_state,effective_revision',
-      2,
-    )
-    if (sources.length !== 1 || sources[0].authority_scope?.identity !== 'authoritative'
-      || sources[0].connection_state !== 'verified' || !sources[0].effective_revision) return null
-  }
-
-  const [userRolesData, organizationRows] = await Promise.all([
+  const [userRolesData, organizationRows, sources] = await Promise.all([
     rest.selectRows<{ scope_type: string; scope_id: string | null; roles: unknown }>(
       'user_roles',
       { user_id: userId, scope_type: 'org', scope_id: orgId },
@@ -227,7 +209,16 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
       100,
     ),
     rest.selectRows<{ settings: unknown }>('organizations', { id: orgId }, 'settings'),
+    usesFxiaoke ? rest.selectRows<FxiaokeSourceRow>(
+      'organization_sources',
+      { system_org_id: orgId, provider: 'fxiaoke', status: 'active' },
+      'authority_scope,connection_state,effective_revision',
+      2,
+    ) : [],
   ])
+  if (usesFxiaoke && (sources.length !== 1 || sources[0].authority_scope?.identity !== 'authoritative'
+    || sources[0].connection_state !== 'verified' || !sources[0].effective_revision)) return null
+
   const organization = organizationRows[0]
   if (!organization) throw new Error('auth middleware organization permissions unavailable')
 

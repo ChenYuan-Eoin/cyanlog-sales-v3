@@ -42,6 +42,7 @@ function mockExactOrgAuth(options: {
   token: string
   orgId: string
   roles: Array<{ roles: { id?: string; code: string; permissions: string[] } }>
+  memberships?: Array<{ org_id: string; employment_status: string }>
   settings?: unknown
   settingsError?: unknown
   status?: string
@@ -57,19 +58,22 @@ function mockExactOrgAuth(options: {
     const url = new URL(String(input))
     const table = url.pathname.split('/').pop()
     if (table === 'auth_tokens') {
-      return Response.json([{ user_id: 'user-1', created_at: options.sessionCreatedAt ?? new Date().toISOString(), expires_at: options.sessionExpiresAt ?? (options.authMethod === 'fxiaoke' ? new Date(Date.now() + 30 * 60_000).toISOString() : '2099-01-01T00:00:00.000Z'), auth_method: options.authMethod ?? 'local' }])
-    }
-    if (table === 'users') {
+      expect(url.searchParams.get('user.memberships.status')).toBe('eq.active')
+      expect(url.searchParams.get('user.memberships.is_default')).toBe('eq.true')
+      expect(url.searchParams.get('select')).toContain('memberships:user_organizations!user_organizations_user_id_fkey')
       return Response.json([{
-        id: 'user-1',
-        org_id: 'legacy-org',
-        must_change_password: false,
-        status: options.status ?? 'active',
-        login_enabled: options.loginEnabled ?? true,
+        user_id: 'user-1',
+        created_at: options.sessionCreatedAt ?? new Date().toISOString(),
+        expires_at: options.sessionExpiresAt ?? (options.authMethod === 'fxiaoke'
+          ? new Date(Date.now() + 30 * 60_000).toISOString() : '2099-01-01T00:00:00.000Z'),
+        auth_method: options.authMethod ?? 'local',
+        user: {
+          id: 'user-1',
+          status: options.status ?? 'active',
+          login_enabled: options.loginEnabled ?? true,
+          memberships: options.memberships ?? [{ org_id: options.orgId, employment_status: options.employmentStatus ?? 'active' }],
+        },
       }])
-    }
-    if (table === 'user_organizations') {
-      return Response.json([{ org_id: options.orgId, employment_status: options.employmentStatus ?? 'active' }])
     }
     if (table === 'user_roles') {
       return Response.json(options.roles)
@@ -460,6 +464,19 @@ describe('middleware exact organization authorization', () => {
     expect((await middleware(req)).headers.get('location')).toContain('denied=admin%3Aaccess')
     mockExactOrgAuth({token:'example-empty-override',orgId:'org-a',roles:[],settingsError:new Error('read failed')})
     expect((await middleware(req)).status).toBe(503)
+  })
+
+  it('requires an unambiguous active default membership before reading tenant permissions', async () => {
+    for (const memberships of [[], [
+      { org_id: 'org-a', employment_status: 'active' },
+      { org_id: 'org-b', employment_status: 'active' },
+    ]]) {
+      const { fetchMock } = mockExactOrgAuth({ token: 'example-membership', orgId: 'org-a', roles: [], memberships })
+      const req = makeRequest('https://sales.cyanlog.icu/api/configs', { host: 'sales.cyanlog.icu' })
+      req.cookies.get = vi.fn().mockReturnValue({ value: 'example-membership' })
+      expect((await middleware(req)).status).toBe(401)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    }
   })
 
   it('用户停用后旧 token 下一次请求立即失效', async () => {

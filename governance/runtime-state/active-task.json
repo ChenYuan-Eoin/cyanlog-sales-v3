@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-18T07:46:53.414605+00:00",
+  "updated_at": "2026-11-18T07:55:28.910972+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -235,44 +235,30 @@
     }
   },
   "active_task": {
-    "id": "WP94",
-    "slug": "fxiaoke-sso-federated-identity",
-    "name": "纷享登录回调性能与专用出口恢复",
+    "id": "WP77",
+    "slug": "navigation-performance",
+    "name": "受保护页面切换耗时",
     "kind": "product",
     "status": "active",
-    "objective": "修复正式站员工登录在出口通知断开后空等的问题。正常授权回调到成功返回最多2秒，逐次核对真实耗时。",
-    "started_at": "2026-11-18T07:18:17.085311+00:00",
-    "activation_basis": "IN-20261118-017 为已复现的生产事故，IN-20261118-018 明确2秒成功响应要求。",
-    "execution_workspace": "/private/tmp/price-v3-sales-intake-repair",
+    "objective": "已有登录会话打开页面到内容可用不超过3秒。先处理已复现超时的标书、知识库、日程的共享鉴权路径。",
+    "execution_workspace": "/private/tmp/price-v3-navigation-latency",
+    "activation_basis": "IN-20261118-019 用户要求解决整站超时；真实Chrome中标书6.060秒、知识库4.571秒、日程3.693秒。",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/product-code/lib/fxiaoke/egress/worker.mjs",
-      "product-truth/product-code/lib/fxiaoke/egress/worker.test.ts",
-      "product-truth/product-code/lib/fxiaoke/egress/server.ts",
-      "product-truth/product-code/lib/fxiaoke/egress/server.test.ts",
-      "product-truth/product-code/app/api/auth/fxiaoke/callback",
-      "product-truth/product-code/lib/fxiaoke/client.ts",
-      "product-truth/product-code/lib/fxiaoke/client.test.ts",
+      "product-truth/product-code/middleware.ts",
+      "product-truth/product-code/middleware.test.ts",
+      "product-truth/product-code/app/knowledge/page.tsx",
       "product-truth/product-code/node_modules",
       "product-truth/product-code/.next",
-      "product-truth/product-code/tsconfig.tsbuildinfo",
-      "product-truth/product-code/lib/fxiaoke/egress/login-job.ts",
-      "product-truth/product-code/lib/fxiaoke/egress/login-job.test.ts",
-      "product-truth/product-code/lib/fxiaoke/egress/vite.config.mts",
-      "product-truth/product-code/lib/fxiaoke/egress/README.md",
-      "product-truth/product-code/app/login/page.tsx",
-      "product-truth/product-code/app/login/page.test.tsx"
+      "product-truth/product-code/tsconfig.tsbuildinfo"
     ],
+    "feature_id": "F054",
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "code_green",
       "allowed_states": [
         "executing",
-        "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -287,62 +273,22 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "fxiaoke_sso"
+        "shipping_workspace",
+        "shipping_tracking",
+        "shipping_access"
       ],
-      "required_production_runtime_evidence": [
-        "fxiaoke_sso_login",
-        "fxiaoke_sso_denials"
-      ],
-      "required_production_evidence": [
-        "exact_production_commit",
-        "vercel_deployment_ready_and_promoted",
-        "sales.cyanlog.icu_alias",
-        "controlled_production_security_and_runtime_verifier",
-        "trusted_existing_chrome_operator_attestation"
-      ],
-      "note": "发布 a73bd28f 登录修复，先升级既有纷享专用服务器，再发布正式站实测登录2秒目标。仅此产品树；无数据库迁移、业务数据修改或发单。",
+      "note": "候选验证与构建，发布另按本次候选批准。",
       "production_database_mode": "read_only",
-      "runtime_profile": "application",
-      "final_acceptance": {
-        "origin": "https://sales.cyanlog.icu",
-        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
-        "new_local_browser_or_context_prohibited": true,
-        "new_tab_prohibited": true,
-        "local_and_preview_role": "diagnostic_only_not_completion",
-        "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
-        "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
-        "production_database_mode": "read_only"
-      },
-      "production_release_authorization": {
-        "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261118-020",
-        "final_scope": "发布 a73bd28f 登录修复，先升级既有纷享专用服务器，再发布正式站实测登录2秒目标。仅此产品树；无数据库迁移、业务数据修改或发单。",
-        "database_write_authorized": false,
-        "production_database_write_authorized": false,
-        "carrier_calls_authorized": false,
-        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
-        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
-        "micro_fix_approval_id": "IN-20261118-017",
-        "clarification_id": "IN-20261118-018",
-        "micro_fix_scope": "登录回调性能与专用服务器订阅恢复"
-      },
-      "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f003-fxiaoke-sso-v1",
-      "preview_order_exception_approval_id": "IN-20261118-020"
+      "runtime_profile": "shipping_workspace",
+      "runtime_contract_version": "f054-recovery-v1"
     },
-    "feature_id": "F003",
-    "integration_decision": {
-      "strategy": "release_exact_approved_login_product_tree",
-      "authority": "IN-20261118-020",
-      "requested_target": "production_released",
-      "constraint": "发布 a73bd28f 登录修复，先升级既有纷享专用服务器，再发布正式站实测登录2秒目标。仅此产品树；无数据库迁移、业务数据修改或发单。"
-    }
+    "started_at": "2026-11-18T07:55:28.910972+00:00"
   },
   "execution_queue": {
     "active": {
-      "id": "WP94",
-      "slug": "fxiaoke-sso-federated-identity",
-      "name": "纷享登录回调性能与专用出口恢复"
+      "id": "WP77",
+      "slug": "navigation-performance",
+      "name": "受保护页面切换耗时"
     },
     "next": {
       "id": "WP35",
@@ -429,27 +375,6 @@
           "name": "原子权限勾选与实际访问一致",
           "slug": "atomic-permission-consistency",
           "reason": "权限code_green候选保留；接续用户要求的机器人真实链路。"
-        }
-      },
-      {
-        "id": "WP77",
-        "slug": "navigation-performance",
-        "name": "导航性能真实读取复验",
-        "scheduling_group": "性能",
-        "acceptance_state": "生产目标未通过",
-        "remaining_acceptance": "冷启动首页及自助收寄→配置中心点击至可操作均<500ms",
-        "acceptance_owner": "WP77",
-        "source_records": [
-          "current_queue.parked",
-          "suspended_wp77",
-          "suspended_wp77_20261027"
-        ],
-        "reconciliation_source": "IN-20261028-010",
-        "historical_record": {
-          "id": "WP77",
-          "slug": "navigation-performance",
-          "name": "导航性能真实读取复验",
-          "reason": "按用户对WP83–WP90方案的执行指令暂缓；全部已有修改保留，生产性能未验收，不标完成。"
         }
       },
       {
@@ -2903,8 +2828,8 @@
     "inbox_path": "governance/runtime-state/demand-inbox.jsonl",
     "source_dirty_workspace": "/Users/nsss/Price-v3",
     "role": "canonical_execution_candidate",
-    "branch": "detached",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/queue-business-closure/Price-v3",
+    "branch": "codex/wp77-navigation-latency",
+    "execution_workspace": "/private/tmp/price-v3-navigation-latency",
     "workspace_strategy": "reuse-primary-worktree"
   },
   "entry": {
@@ -6058,5 +5983,110 @@
     "per_candidate_confirmation_required": false,
     "production_acceptance_required": true,
     "business_confirmation_boundaries_preserved": true
+  },
+  "suspended_wp94_login_latency": {
+    "id": "WP94",
+    "slug": "fxiaoke-sso-federated-identity",
+    "name": "纷享登录回调性能与专用出口恢复",
+    "kind": "product",
+    "status": "active",
+    "objective": "修复正式站员工登录在出口通知断开后空等的问题。正常授权回调到成功返回最多2秒，逐次核对真实耗时。",
+    "started_at": "2026-11-18T07:18:17.085311+00:00",
+    "activation_basis": "IN-20261118-017 为已复现的生产事故，IN-20261118-018 明确2秒成功响应要求。",
+    "execution_workspace": "/private/tmp/price-v3-sales-intake-repair",
+    "allowed_paths": [
+      "governance/runtime-state/active-task.json",
+      "governance/runtime-state/demand-inbox.jsonl",
+      "product-truth/product-code/lib/fxiaoke/egress/worker.mjs",
+      "product-truth/product-code/lib/fxiaoke/egress/worker.test.ts",
+      "product-truth/product-code/lib/fxiaoke/egress/server.ts",
+      "product-truth/product-code/lib/fxiaoke/egress/server.test.ts",
+      "product-truth/product-code/app/api/auth/fxiaoke/callback",
+      "product-truth/product-code/lib/fxiaoke/client.ts",
+      "product-truth/product-code/lib/fxiaoke/client.test.ts",
+      "product-truth/product-code/node_modules",
+      "product-truth/product-code/.next",
+      "product-truth/product-code/tsconfig.tsbuildinfo",
+      "product-truth/product-code/lib/fxiaoke/egress/login-job.ts",
+      "product-truth/product-code/lib/fxiaoke/egress/login-job.test.ts",
+      "product-truth/product-code/lib/fxiaoke/egress/vite.config.mts",
+      "product-truth/product-code/lib/fxiaoke/egress/README.md",
+      "product-truth/product-code/app/login/page.tsx",
+      "product-truth/product-code/app/login/page.test.tsx"
+    ],
+    "delivery_contract": {
+      "target_state": "production_released",
+      "allowed_states": [
+        "executing",
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
+      ],
+      "integration_branch": "main",
+      "production_branch": "production",
+      "production_release_separate": true,
+      "same_release_commit_required": true,
+      "attestation_ref": "refs/notes/price-v3-delivery",
+      "required_code_checks": [
+        "target_tests",
+        "full_tests",
+        "lint",
+        "typecheck",
+        "build"
+      ],
+      "required_runtime_evidence": [
+        "fxiaoke_sso"
+      ],
+      "required_production_runtime_evidence": [
+        "fxiaoke_sso_login",
+        "fxiaoke_sso_denials"
+      ],
+      "required_production_evidence": [
+        "exact_production_commit",
+        "vercel_deployment_ready_and_promoted",
+        "sales.cyanlog.icu_alias",
+        "controlled_production_security_and_runtime_verifier",
+        "trusted_existing_chrome_operator_attestation"
+      ],
+      "note": "发布 a73bd28f 登录修复，先升级既有纷享专用服务器，再发布正式站实测登录2秒目标。仅此产品树；无数据库迁移、业务数据修改或发单。",
+      "production_database_mode": "read_only",
+      "runtime_profile": "application",
+      "final_acceptance": {
+        "origin": "https://sales.cyanlog.icu",
+        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+        "new_local_browser_or_context_prohibited": true,
+        "new_tab_prohibited": true,
+        "local_and_preview_role": "diagnostic_only_not_completion",
+        "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
+        "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
+        "production_database_mode": "read_only"
+      },
+      "production_release_authorization": {
+        "status": "approved_code_only",
+        "final_release_approval_id": "IN-20261118-020",
+        "final_scope": "发布 a73bd28f 登录修复，先升级既有纷享专用服务器，再发布正式站实测登录2秒目标。仅此产品树；无数据库迁移、业务数据修改或发单。",
+        "database_write_authorized": false,
+        "production_database_write_authorized": false,
+        "carrier_calls_authorized": false,
+        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "micro_fix_approval_id": "IN-20261118-017",
+        "clarification_id": "IN-20261118-018",
+        "micro_fix_scope": "登录回调性能与专用服务器订阅恢复"
+      },
+      "blocking_acceptance_defects": [],
+      "runtime_contract_version": "f003-fxiaoke-sso-v1",
+      "preview_order_exception_approval_id": "IN-20261118-020"
+    },
+    "feature_id": "F003",
+    "integration_decision": {
+      "strategy": "release_exact_approved_login_product_tree",
+      "authority": "IN-20261118-020",
+      "requested_target": "production_released",
+      "constraint": "发布 a73bd28f 登录修复，先升级既有纷享专用服务器，再发布正式站实测登录2秒目标。仅此产品树；无数据库迁移、业务数据修改或发单。"
+    },
+    "reason": "登录版本在独立发布工作区继续正式站验证。"
   }
 }

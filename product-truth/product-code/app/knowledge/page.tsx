@@ -4,6 +4,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -23,10 +24,9 @@ import {
   PlusIcon,
   SearchIcon,
 } from 'lucide-react'
-import NotionEditor, { type Block } from '@/components/knowledge/NotionEditor'
+import type { Block } from '@/components/knowledge/NotionEditor'
 
-// Notion Blocks 类型（在NotionEditor组件中定义）
-// interface Block { ... }
+const NotionEditor = dynamic(() => import('@/components/knowledge/NotionEditor'))
 
 interface KnowledgePage {
   id: string
