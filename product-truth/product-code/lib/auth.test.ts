@@ -39,7 +39,7 @@ describe('Auth Module', () => {
         if (table === 'auth_tokens') return {
           select: () => ({ eq: () => ({ single: async () => ({
             data: {
-              user_id: 'sso-user', auth_method: 'fxiaoke', expires_at: null,
+              user_id: 'sso-user', auth_method: 'fxiaoke', created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
               user: { id: 'sso-user', org_id: 'org-1', status: 'active', login_enabled: true },
             }, error: null,
           }) }) }),
@@ -72,7 +72,7 @@ describe('Auth Module', () => {
       ;(supabaseAdmin.from as any).mockImplementation((table: string) => {
         if (table === 'auth_tokens') return {
           select: () => ({ eq: () => ({ single: async () => ({
-            data: { user_id: 'sso-user', auth_method: 'fxiaoke', expires_at: null,
+            data: { user_id: 'sso-user', auth_method: 'fxiaoke', created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
               user: { id: 'sso-user', org_id: 'org-1', status: 'active', login_enabled: true } },
             error: null,
           }) }) }),

@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-17T10:41:05.796386+00:00",
+  "updated_at": "2026-11-18T04:14:15.443389+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -235,66 +235,33 @@
     }
   },
   "active_task": {
-    "id": "WP35",
-    "slug": "sales-intake-experience",
-    "name": "销售寄件提报体验",
+    "id": "WP94",
+    "slug": "fxiaoke-sso-federated-identity",
+    "name": "纷享会话安全与退出联动",
     "kind": "product",
     "status": "active",
-    "objective": "让销售使用同一个按钮分两步完成预览与提报，清楚知道首次预览不会发送、再次确认才提交及修改后须重新预览；单票多票一致，保留校验、幂等和未知回执恢复。",
+    "objective": "纷享登录会话空闲30分钟失效、绝对8小时重新认证；由服务端强制执行，不将轮询视作用户活动；核实纷享退出联动能力，不伪称已支持即时单点退出。",
     "started_at": "2026-10-16T07:43:35.475527+00:00",
-    "activation_basis": "IN-20261117-023 最新用户明确验收澄清；WP40代码候选封存后恢复WP35。",
+    "activation_basis": "IN-20261118-003 用户明确批准优先收紧会话并核实联动",
     "execution_workspace": "/private/tmp/price-v3-sales-intake-repair",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/product-code/app/sales-portal",
-      "product-truth/product-code/lib/shipping/wecom-session.ts",
-      "product-truth/product-code/lib/shipping/wecom-session.test.ts",
-      "product-truth/product-code/app/shipping/config-drawer.tsx",
-      "product-truth/product-code/app/shipping/config-drawer.test.tsx",
-      "product-truth/product-code/app/api/shipping/settings/route.ts",
-      "product-truth/product-code/app/api/shipping/settings/route.test.ts",
-      "product-truth/feature-packets/F054-sf-self-service-order.md",
-      "product-truth/REQ_REGISTRY.yml",
-      "product-truth/feature-packets/F099-current-goal-ledger.md",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-auth-intake-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-auth-intake-verifier.test.js",
-      "product-truth/product-code/app/shipping/page.tsx",
-      "product-truth/product-code/app/shipping/page.test.tsx",
-      "product-truth/product-code/app/shipping/workbench.tsx",
-      "product-truth/product-code/app/shipping/workbench.test.tsx",
-      "product-truth/product-code/app/api/shipping/public",
-      "product-truth/product-code/app/api/shipping/owner",
-      "product-truth/product-code/app/api/shipping/contacts/route.ts",
-      "product-truth/product-code/app/api/shipping/contacts/route.test.ts",
-      "product-truth/product-code/lib/shipping/contacts.ts",
-      "product-truth/product-code/lib/shipping/department-access.ts",
-      "product-truth/product-code/lib/shipping/department-access.test.ts",
-      "product-truth/product-code/lib/shipping/intake-rules.ts",
-      "product-truth/product-code/lib/shipping/intake-rules.test.ts",
-      "product-truth/product-code/lib/shipping/intake-settings.ts",
-      "product-truth/product-code/lib/shipping/intake-settings.test.ts",
-      "product-truth/product-code/lib/shipping/types.ts",
-      "product-truth/product-code/lib/shipping/validation.ts",
-      "product-truth/product-code/app/api/shipping/intake-settings",
-      "product-truth/product-code/app/shipping/intake-configuration.tsx",
-      "product-truth/product-code/app/shipping/intake-configuration.test.tsx",
+      "product-truth/product-code/lib/auth.ts",
+      "product-truth/product-code/lib/auth.test.ts",
+      "product-truth/product-code/lib/auth/session-response.ts",
+      "product-truth/product-code/lib/auth/session-response.test.ts",
+      "product-truth/product-code/lib/auth/fxiaoke-session.ts",
+      "product-truth/product-code/lib/auth/fxiaoke-session.test.ts",
+      "product-truth/product-code/app/api/auth/activity",
+      "product-truth/product-code/components/layout/AppShell.tsx",
+      "product-truth/product-code/components/layout/SessionActivity.tsx",
+      "product-truth/product-code/components/layout/SessionActivity.test.tsx",
       "product-truth/product-code/node_modules",
       "product-truth/product-code/.next",
       "product-truth/product-code/tsconfig.tsbuildinfo",
-      "product-truth/product-code/lib/shipping/http.ts",
-      "product-truth/product-code/lib/shipping/intake-options.ts",
       "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/middleware.test.ts",
-      "product-truth/product-code/lib/shipping/collaboration.ts",
-      "product-truth/product-code/lib/shipping/collaboration.org.test.ts",
-      "product-truth/product-code/lib/shipping/contacts.fxiaoke.test.ts",
-      "product-truth/product-code/components/layout/AppShell.tsx",
-      "product-truth/product-code/app/shipping/workbench.module.css",
-      "product-truth/product-code/app/shipping/workbench.responsive.test.ts"
+      "product-truth/product-code/middleware.test.ts"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -315,12 +282,11 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "sales_intake",
-        "shipping_access"
+        "fxiaoke_sso"
       ],
       "required_production_runtime_evidence": [
-        "sales_intake",
-        "shipping_access"
+        "fxiaoke_sso_login",
+        "fxiaoke_sso_denials"
       ],
       "required_production_evidence": [
         "exact_production_commit",
@@ -331,7 +297,7 @@
       ],
       "note": "仅销售提报两步指引候选验证和构建，不发布。",
       "production_database_mode": "read_only",
-      "runtime_profile": "shipping_workspace",
+      "runtime_profile": "application",
       "final_acceptance": {
         "origin": "https://sales.cyanlog.icu",
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
@@ -344,15 +310,12 @@
       },
       "production_release_authorization": {
         "status": "not_authorized_for_current_candidate",
-        "final_scope": "本次仅本地修改、验证与构建",
-        "database_write_authorized": false,
-        "production_database_write_authorized": false,
-        "carrier_calls_authorized": false
+        "final_scope": "仅实现并验证已批准会话策略；无生产迁移或数据修改"
       },
       "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f054-auth-intake-v1"
+      "runtime_contract_version": "f003-fxiaoke-sso-v1"
     },
-    "feature_id": "F054",
+    "feature_id": "F003",
     "integration_decision": {
       "strategy": "preserve_combined_candidate_and_correct_sales_guidance",
       "authority": "IN-20261117-023",
@@ -370,27 +333,15 @@
   },
   "execution_queue": {
     "active": {
-      "id": "WP35",
-      "slug": "sales-intake-experience",
-      "name": "销售寄件提报体验"
-    },
-    "next": {
       "id": "WP94",
       "slug": "fxiaoke-sso-federated-identity",
-      "name": "纷享联合身份与受限账号入口",
-      "acceptance_state": "已发布实际登录及受限访问；完整角色和停用矩阵待复验",
-      "remaining_acceptance": "按当前正式版本核对普通员工和管理员登录、角色分流、撤权/停用后新请求拒绝、跨组织拒绝；历史employee_profile空结果已被后续登录成功证据取代，不再作为当前未解决根因",
-      "acceptance_owner": "WP94",
-      "reason": "F099有未关闭责任但本版调度槽位遗漏；本轮恢复parked，保留候选和未验收断言，不自动插队",
-      "reconciliation_source": "IN-20261117-020",
-      "entry_gate": "当前WP35/WP40组合候选处理后接续现有登录与权限路径复验",
-      "entry_gate_status": "waiting_current_candidate",
-      "progress_evidence": [
-        "IN-20261112-018：正式站纷享登录与本人提报页面通过",
-        "IN-20261112-019：目录匹配员工自动映射，无需逐人绑定",
-        "IN-20261112-024：只读角色组合修复；该提交为当前正式版本祖先",
-        "90add950成员状态UI为当前正式版本祖先"
-      ]
+      "name": "纷享会话安全与退出联动"
+    },
+    "next": {
+      "id": "WP35",
+      "slug": "sales-intake-experience",
+      "name": "销售寄件候选发布与正式站验收",
+      "entry_gate": "优先完成WP94会话安全候选后恢复，保留30c5cdb9"
     },
     "ready": [
       {
@@ -4524,11 +4475,11 @@
       "slug": "sales-intake-experience",
       "name": "销售寄件提报体验",
       "kind": "product",
-      "status": "paused",
-      "objective": "让已登录在职员工在统一页面完成一票或多票自助寄件提报，并只查看本人的提报记录；关闭匿名提交与全组织公开记录，恢复身份连接状态及寄件地址选择。所属团队使用 ICU 真实组织部门；寄件配置可按部门及下级限制员工提报待确认工单，首次上线保持既有范围，操作员仍独立确认顺丰发单。页面修复与部门范围完成后合并发布，不改生产旧单。",
+      "status": "active",
+      "objective": "让销售使用同一个按钮分两步完成预览与提报，清楚知道首次预览不会发送、再次确认才提交及修改后须重新预览；单票多票一致，保留校验、幂等和未知回执恢复。",
       "started_at": "2026-10-16T07:43:35.475527+00:00",
-      "activation_basis": "IN-20261113-004：用户看过匿名路径关闭、历史回执和地址数据隔离的影响评估后，明确批准优先切换。",
-      "execution_workspace": "/Users/nsss/.codex/worktrees/wp35-authenticated-shipping-intake/Price-v3",
+      "activation_basis": "IN-20261117-023 最新用户明确验收澄清；WP40代码候选封存后恢复WP35。",
+      "execution_workspace": "/private/tmp/price-v3-sales-intake-repair",
       "allowed_paths": [
         "governance/runtime-state/active-task.json",
         "governance/runtime-state/demand-inbox.jsonl",
@@ -4577,17 +4528,15 @@
         "product-truth/product-code/lib/shipping/collaboration.ts",
         "product-truth/product-code/lib/shipping/collaboration.org.test.ts",
         "product-truth/product-code/lib/shipping/contacts.fxiaoke.test.ts",
-        "product-truth/product-code/components/layout/AppShell.tsx"
+        "product-truth/product-code/components/layout/AppShell.tsx",
+        "product-truth/product-code/app/shipping/workbench.module.css",
+        "product-truth/product-code/app/shipping/workbench.responsive.test.ts"
       ],
       "delivery_contract": {
-        "target_state": "production_released",
+        "target_state": "code_green",
         "allowed_states": [
           "executing",
-          "code_green",
-          "clean_preview_green",
-          "integration_ready",
-          "main_integrated",
-          "production_released"
+          "code_green"
         ],
         "integration_branch": "main",
         "production_branch": "production",
@@ -4616,7 +4565,7 @@
           "controlled_production_security_and_runtime_verifier",
           "trusted_existing_chrome_operator_attestation"
         ],
-        "note": "Authenticated one-or-many sales intake plus owner-only records and ICU department-scoped proposal permission; one combined Production release after all code is ready. No carrier order or production data migration.",
+        "note": "仅销售提报两步指引候选验证和构建，不发布。",
         "production_database_mode": "read_only",
         "runtime_profile": "shipping_workspace",
         "final_acceptance": {
@@ -4630,34 +4579,30 @@
           "production_database_mode": "read_only"
         },
         "production_release_authorization": {
-          "status": "approved_code_only",
-          "final_release_approval_id": "IN-20261113-012",
-          "micro_fix_approval_id": "IN-20261016-009",
-          "clarification_id": "IN-20261016-015",
-          "micro_fix_scope": "WP35销售寄件提报体验代码上线：已确认原型的身份卡片、公司/个人/本次地址选择及预填、草稿保护、页面布局配色和提交校验反馈；不含数据库迁移、企微企业替换、机器人权限变更、顺丰真实下单或取消修改。",
-          "final_scope": "WP35 合并发布：关闭匿名提报和全组织公开记录；在职纷享员工在统一页面单票或多票提报待确认工单，按当前账号和组织只读本人 owner_web 记录，恢复寄件地址选择；所属团队使用 ICU 当前有效部门，寄件配置保存部门名单后限制员工提报，父部门包含下级，首次上线默认保持现有范围。操作员顺丰发单权限不变。发布验收不提交真实工单、不调用顺丰、不写生产数据库或改旧单。",
+          "status": "not_authorized_for_current_candidate",
+          "final_scope": "本次仅本地修改、验证与构建",
           "database_write_authorized": false,
           "production_database_write_authorized": false,
-          "carrier_calls_authorized": false,
-          "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
-          "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
-          "legacy_scope_only": false,
-          "new_scope_release_authorized": true,
-          "authorization_interpretation": "IN-20261113-009 authorized the combined code-only release; IN-20261113-010/011 and the user decision in IN-20261113-012 extend that one release to unified intake UI and department-scoped proposals. Live verification remains read-only in existing Chrome."
+          "carrier_calls_authorized": false
         },
-        "manual_delivery_gate_approval_id": "IN-20261113-012",
-        "preview_order_exception_approval_id": "IN-20261113-012",
         "blocking_acceptance_defects": [],
         "runtime_contract_version": "f054-auth-intake-v1"
       },
       "feature_id": "F054",
       "integration_decision": {
-        "strategy": "isolated_candidate_from_verified_production_base",
-        "authority": "IN-20261113-004",
-        "requested_target": "production_released",
-        "constraint": "No production data write, migration or carrier call; user approval required before push, PR or Production deployment."
+        "strategy": "preserve_combined_candidate_and_correct_sales_guidance",
+        "authority": "IN-20261117-023",
+        "requested_target": "code_green",
+        "constraint": "不发布、不写生产业务数据、不调用顺丰。"
       },
-      "paused_reason": "原候选已发布，本工作区继续WP94验收反馈"
+      "paused_reason": "原候选已发布，本工作区继续WP94验收反馈",
+      "micro_fixes": [
+        {
+          "id": "IN-20261118-001",
+          "scope": "操作员核对展开与修改工单布局：隔离字段网格和操作按钮样式，约束卡片内字段尺寸及列表列宽，不改接口或流程。",
+          "evidence": "用户正式站截图584dd0b6-df3d-4bac-af70-98cd5f028c47.png；现有Safari管理员页读取及源码CSS级联核对"
+        }
+      ]
     },
     "WP40_current": {
       "id": "WP40",

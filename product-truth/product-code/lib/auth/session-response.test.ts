@@ -72,8 +72,11 @@ describe('system session issuance', () => {
   })
 
   it('marks a Fxiaoke session so disabling SSO can revoke only provider sessions', async () => {
-    await issueSystemSession(userId, orgId, 'fxiaoke')
+    const session = await issueSystemSession(userId, orgId, 'fxiaoke')
     expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({ user_id: userId, auth_method: 'fxiaoke' }))
+    const row = mocks.insert.mock.calls[0][0]
+    expect(Date.parse(row.expires_at) - Date.parse(row.created_at)).toBe(30 * 60_000)
+    expect(session.expiresAt.getTime() - Date.parse(row.created_at)).toBe(8 * 60 * 60_000)
   })
 
   it('fails closed when the identity was disabled between mapping and session issue', async () => {

@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { getRequestAuthToken } from './auth-token'
 import { supabaseAdmin } from './supabase'
+import { fxiaokeSessionDeadline } from './auth/fxiaoke-session'
 
 export interface AuthUser {
   id: string
@@ -40,11 +41,12 @@ async function hasActiveFxiaokeSessionSource(userId: string, orgId: string | nul
 export async function getAuthUserByToken(token: string): Promise<AuthUser | null> {
   const { data: tokenRecord } = await supabaseAdmin
     .from('auth_tokens')
-    .select('user_id, expires_at, auth_method, user:users(id, email, phone, display_name, org_id, status, login_enabled)')
+    .select('user_id, created_at, expires_at, auth_method, user:users(id, email, phone, display_name, org_id, status, login_enabled)')
     .eq('token', token)
     .single()
 
   if (!tokenRecord) return null
+  if (tokenRecord.auth_method === 'fxiaoke' && !fxiaokeSessionDeadline(tokenRecord)) return null
   if (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date()) return null
 
   const joinedUser = Array.isArray(tokenRecord.user)

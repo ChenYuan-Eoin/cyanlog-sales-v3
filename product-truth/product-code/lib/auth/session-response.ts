@@ -15,6 +15,7 @@ import {
   getOrgRoleCodes,
 } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
+import { FXIAOKE_SESSION_IDLE_SECONDS, FXIAOKE_SESSION_MAX_SECONDS } from './fxiaoke-session'
 
 export class SessionIssueError extends Error {
   constructor(readonly code: string, message: string) {
@@ -32,6 +33,7 @@ export type IssuedSystemSession = {
   sessionId: string
   token: string
   expiresAt: Date
+  maxAgeSeconds?: number
   authContextCookie: string | null
 }
 
@@ -74,12 +76,16 @@ export async function issueSystemSession(
 
   const token = randomUUID()
   const sessionId = randomUUID()
-  const expiresAt = createSessionExpiry()
+  const createdAt = new Date()
+  const expiresAt = authMethod === 'fxiaoke'
+    ? new Date(createdAt.getTime() + FXIAOKE_SESSION_IDLE_SECONDS * 1000)
+    : createSessionExpiry(createdAt)
   const { error } = await supabaseAdmin.from('auth_tokens').insert({
     id: sessionId,
     token,
     user_id: userId,
     auth_method: authMethod,
+    created_at: createdAt.toISOString(),
     expires_at: expiresAt.toISOString(),
   })
   if (error) throw new SessionIssueError('SESSION_CREATE_FAILED', '系统会话创建失败。')
@@ -96,7 +102,11 @@ export async function issueSystemSession(
     throw new SessionIssueError('SESSION_SIGNING_FAILED', '系统会话签名暂时不可用。')
   }
 
-  return { sessionId, token, expiresAt, authContextCookie }
+  // Browser cookies last through the absolute lifetime; only the server may
+  // extend the idle deadline. No background request extends a session.
+  return { sessionId, token, expiresAt: authMethod === 'fxiaoke'
+    ? new Date(createdAt.getTime() + FXIAOKE_SESSION_MAX_SECONDS * 1000) : expiresAt,
+    maxAgeSeconds: authMethod === 'fxiaoke' ? FXIAOKE_SESSION_MAX_SECONDS : SESSION_MAX_AGE_SECONDS, authContextCookie }
 }
 
 export function applySystemSessionCookies(response: NextResponse, session: IssuedSystemSession) {
@@ -104,7 +114,7 @@ export function applySystemSessionCookies(response: NextResponse, session: Issue
     sameSite: 'lax' as const,
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: SESSION_MAX_AGE_SECONDS,
+    maxAge: session.maxAgeSeconds ?? SESSION_MAX_AGE_SECONDS,
     expires: session.expiresAt,
   }
   response.cookies.set('token', session.token, { ...common, httpOnly: true })

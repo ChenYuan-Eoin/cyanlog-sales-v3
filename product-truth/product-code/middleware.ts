@@ -34,6 +34,7 @@ import { getRequestAuthToken } from '@/lib/auth-token'
 import { createMiddlewareRestClient } from '@/lib/middleware-rest-client'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
 import { resolveRolePermissions } from '@/lib/role-permission-resolution'
+import { fxiaokeSessionDeadline } from '@/lib/auth/fxiaoke-session'
 
 const PUBLIC_PATHS = ['/login', '/accept-invitation']
 const RETIRED_EXACT_PATHS = new Set([
@@ -169,16 +170,17 @@ function roleRecordOf(value: unknown): { id: string; code: string; permissions: 
 
 async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthContext | null> {
   const rest = createMiddlewareRestClient()
-  const tokenRows = await rest.selectRows<{ user_id: string; expires_at: string | null; auth_method?: string }>(
+  const tokenRows = await rest.selectRows<{ user_id: string; created_at?: string; expires_at: string | null; auth_method?: string }>(
     'auth_tokens',
     { token },
-    'user_id,expires_at,auth_method',
+    'user_id,created_at,expires_at,auth_method',
   )
   const tokenRecord = tokenRows[0]
 
   if (!tokenRecord || (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date())) {
     return null
   }
+  if (tokenRecord.auth_method === 'fxiaoke' && !fxiaokeSessionDeadline(tokenRecord)) return null
 
   const userId = tokenRecord.user_id
   const [userRows, membershipRows] = await Promise.all([
@@ -318,6 +320,9 @@ export async function middleware(request: NextRequest) {
       }
       return NextResponse.redirect(buildRedirectUrl(request, '/login'))
     }
+
+    // Session management is authenticated but does not require a business role.
+    if (pathname === '/api/auth/activity' && ['GET', 'POST'].includes(request.method)) return NextResponse.next()
 
     // Some legacy business APIs check only authentication. A role-free SSO
     // member may view only the waiting page and sign out; no business route

@@ -50,12 +50,14 @@ function mockExactOrgAuth(options: {
   employmentStatus?: string
   sourceIdentity?: 'authoritative' | 'evidence'
   shippingDirectGrant?: boolean
+  sessionCreatedAt?: string
+  sessionExpiresAt?: string
 }) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input))
     const table = url.pathname.split('/').pop()
     if (table === 'auth_tokens') {
-      return Response.json([{ user_id: 'user-1', expires_at: '2099-01-01T00:00:00.000Z', auth_method: options.authMethod ?? 'local' }])
+      return Response.json([{ user_id: 'user-1', created_at: options.sessionCreatedAt ?? new Date().toISOString(), expires_at: options.sessionExpiresAt ?? (options.authMethod === 'fxiaoke' ? new Date(Date.now() + 30 * 60_000).toISOString() : '2099-01-01T00:00:00.000Z'), auth_method: options.authMethod ?? 'local' }])
     }
     if (table === 'users') {
       return Response.json([{
@@ -97,6 +99,22 @@ function mockExactOrgAuth(options: {
 }
 
 describe('middleware host routing', () => {
+  it('allows session management for a role-free SSO member without allowing business writes', async () => {
+    mockExactOrgAuth({ token: 'activity-token', orgId: 'org-a', roles: [], authMethod: 'fxiaoke' })
+    for (const method of ['GET', 'POST']) {
+      expect((await middleware(makeRequest('https://sales.cyanlog.icu/api/auth/activity', { authorization: 'Bearer activity-token' }, method))).status).toBe(200)
+    }
+    expect((await middleware(makeRequest('https://sales.cyanlog.icu/api/quotes', { authorization: 'Bearer activity-token' }, 'POST'))).status).toBe(403)
+  })
+
+  it('rejects old seven-day Fxiaoke sessions on both page and API paths', async () => {
+    mockExactOrgAuth({ token: 'old-token', orgId: 'org-a', roles: [], authMethod: 'fxiaoke',
+      sessionExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60_000).toISOString() })
+    expect((await middleware(makeRequest('https://sales.cyanlog.icu/api/auth/activity', { authorization: 'Bearer old-token' }))).status).toBe(401)
+    const page = await middleware(makeRequest('https://sales.cyanlog.icu/shipping', { authorization: 'Bearer old-token' }))
+    expect(page.headers.get('location')).toBe('https://sales.cyanlog.icu/login')
+  })
+
   it('redirects quote subdomain to sales quotes entry', async () => {
     const res = await middleware(
       makeRequest('https://quote.cyanlog.icu/', { host: 'quote.cyanlog.icu' }),
