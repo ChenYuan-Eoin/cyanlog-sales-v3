@@ -1,0 +1,181 @@
+{
+  "version": 1,
+  "activeId": "WP94",
+  "commit": "a814daa9f357ce035790a92aefee0c106f20afed",
+  "evidence": {
+    "code": {
+      "commit": "a814daa9f357ce035790a92aefee0c106f20afed",
+      "checks": {
+        "target_tests": true,
+        "full_tests": true,
+        "lint": true,
+        "typecheck": true,
+        "build": true
+      },
+      "commands": [
+        {
+          "name": "target_tests",
+          "exit_code": 0,
+          "artifact_path": "/private/tmp/price-v3-wp97-apl-resume/.git/worktrees/price-v3-sales-intake-repair/codex-runtime/wp94-sso-latency/target-release.log",
+          "log_sha256": "f40deac4af88250acd3ba50062086578640de258841940ac7b622e137de7f2c5"
+        },
+        {
+          "name": "full_tests",
+          "exit_code": 0,
+          "artifact_path": "/private/tmp/price-v3-wp97-apl-resume/.git/worktrees/price-v3-sales-intake-repair/codex-runtime/wp94-sso-latency/final-full-test.log",
+          "log_sha256": "9f750bf283b16901b8cad52c2320e37e64f45d702c3937e70123d4934cdc773d"
+        },
+        {
+          "name": "lint",
+          "exit_code": 0,
+          "artifact_path": "/private/tmp/price-v3-wp97-apl-resume/.git/worktrees/price-v3-sales-intake-repair/codex-runtime/wp94-sso-latency/strict-ready.log",
+          "log_sha256": "68b8f362b1c9b1349ccd0fbb9a7b005828593543cbcde568443e2340a49b918b"
+        },
+        {
+          "name": "typecheck",
+          "exit_code": 0,
+          "artifact_path": "/private/tmp/price-v3-wp97-apl-resume/.git/worktrees/price-v3-sales-intake-repair/codex-runtime/wp94-sso-latency/strict-ready.log",
+          "log_sha256": "68b8f362b1c9b1349ccd0fbb9a7b005828593543cbcde568443e2340a49b918b"
+        },
+        {
+          "name": "build",
+          "exit_code": 0,
+          "artifact_path": "/private/tmp/price-v3-wp97-apl-resume/.git/worktrees/price-v3-sales-intake-repair/codex-runtime/wp94-sso-latency/final-build.log",
+          "log_sha256": "bb2e71033cb85c8bb5fd3df5bde38fccb49f565ed641c235ebc9d7d15e03ebd8"
+        }
+      ],
+      "behavior_log": {
+        "artifact_path": "behavior-log.jsonl",
+        "sha256": "8eb4165a163fe20ebdc7ab3fdac7209c1af3a68bedbcfff9cf4f04406f32ae00",
+        "entry_sha256": "a3a60cd0b1706042e443e50bcf950fb7b533847854c181e2717f84ee51cc0daf"
+      }
+    }
+  },
+  "updatedAt": "2026-11-18T07:54:06.820Z",
+  "releaseControl": {
+    "production_branch": "production",
+    "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+    "production_commit_before": "1eb8b8431b1c414487b06875bad063f97b2d4735",
+    "production_deployment_id_before": "dpl_999UQeDniqg6VTzGxkDG2fHi5yAC",
+    "production_branch_evidence": {
+      "artifact_path": "wp94-sso-latency/release-baseline.json",
+      "sha256": "dee38fc5dca6e89797c3ee7fbedcc309f613e4f4fb5124f8396b9298ec29ca60",
+      "payload": {
+        "branch": "production",
+        "project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "deployment_id": "dpl_999UQeDniqg6VTzGxkDG2fHi5yAC",
+        "commit": "1eb8b8431b1c414487b06875bad063f97b2d4735",
+        "observed_at": "2026-11-18T07:51:37.672Z"
+      }
+    },
+    "production_release_approval_id": "IN-20261118-020",
+    "production_release_clarification_id": "IN-20261118-018",
+    "production_release_scope": "发布 a73bd28f 登录修复，先升级既有纷享专用服务器，再发布正式站实测登录2秒目标。仅此产品树；无数据库迁移、业务数据修改或发单。",
+    "production_release_commit_authorized": "a814daa9f357ce035790a92aefee0c106f20afed",
+    "production_release_method": "vercel_git_production_branch"
+  },
+  "completionState": "integration_ready",
+  "gateSnapshots": {
+    "integration_ready": {
+      "stage": "integration_ready",
+      "checkedAt": "2026-11-18T07:54:06.797Z",
+      "head": "a814daa9f357ce035790a92aefee0c106f20afed",
+      "originMain": "1eb8b8431b1c414487b06875bad063f97b2d4735",
+      "remoteMain": "1eb8b8431b1c414487b06875bad063f97b2d4735",
+      "remoteProduction": "1eb8b8431b1c414487b06875bad063f97b2d4735",
+      "defaultBranch": "main",
+      "originMainFresh": true,
+      "originMainIsAncestor": true,
+      "mainIntegrated": false,
+      "localAttestationRefOid": "3fb82b9eaba6c9ca5cc992a385b14946c86434e1",
+      "remoteAttestationRefOid": "3fb82b9eaba6c9ca5cc992a385b14946c86434e1",
+      "remoteSnapshotCheckedAt": "2026-11-18T07:54:00.754Z",
+      "vercelProduction": {
+        "version": 1,
+        "source": "live-vercel-api",
+        "checkedAt": "2026-11-18T07:54:03.120Z",
+        "contract": {
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "projectName": "cyanlog-sales-v3",
+          "rootDirectory": "product-truth/product-code",
+          "domain": "sales.cyanlog.icu",
+          "productionBranch": "production"
+        },
+        "endpoints": {
+          "project": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "domain": "/v9/projects/prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF/domains/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "alias": "/v4/aliases/sales.cyanlog.icu?teamId=team_xayPRcgRTNOgdPdNf7bOV017",
+          "deployment": "/v13/deployments/dpl_999UQeDniqg6VTzGxkDG2fHi5yAC?teamId=team_xayPRcgRTNOgdPdNf7bOV017"
+        },
+        "project": {
+          "id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "name": "cyanlog-sales-v3",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "rootDirectory": "product-truth/product-code",
+          "productionBranch": "production",
+          "productionDeploymentId": "dpl_999UQeDniqg6VTzGxkDG2fHi5yAC"
+        },
+        "domain": {
+          "name": "sales.cyanlog.icu",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "verified": true
+        },
+        "alias": {
+          "name": "sales.cyanlog.icu",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "deploymentId": "dpl_999UQeDniqg6VTzGxkDG2fHi5yAC",
+          "deploymentReferenceId": "dpl_999UQeDniqg6VTzGxkDG2fHi5yAC",
+          "redirect": null,
+          "deletedAt": null
+        },
+        "deployment": {
+          "id": "dpl_999UQeDniqg6VTzGxkDG2fHi5yAC",
+          "name": "cyanlog-sales-v3",
+          "projectId": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "teamId": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "target": "production",
+          "readyState": "READY",
+          "readySubstate": "PROMOTED",
+          "status": "READY",
+          "gitCommitSha": "1eb8b8431b1c414487b06875bad063f97b2d4735",
+          "gitCommitSources": [
+            "gitSource.sha",
+            "meta.githubCommitSha"
+          ]
+        },
+        "remoteProduction": "1eb8b8431b1c414487b06875bad063f97b2d4735",
+        "raw": {
+          "project": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-11-18T07-54-03-120Z-43425-project.json",
+            "sha256": "448e8fa2aad123d776d1e125a2415e8de63c1a0f84d31665e9160d156049a146"
+          },
+          "domain": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-11-18T07-54-03-120Z-43425-domain.json",
+            "sha256": "b4882aa18634e7c0b269a9f054c5108c05c72b80ce9a9453b0f0952ec74f89bc"
+          },
+          "alias": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-11-18T07-54-03-120Z-43425-alias.json",
+            "sha256": "fc45d07d46e18dca038790ea8458c25eaeec6f40fbc6ab6552a50cdc145ec282"
+          },
+          "deployment": {
+            "artifact_path": "vercel-production-verifier/integration_ready/2026-11-18T07-54-03-120Z-43425-deployment.json",
+            "sha256": "7fc55641dd645487f8beb92083f59136db68dada49ccc43c917ac2c35f30abab"
+          }
+        }
+      },
+      "verifier": {
+        "remoteRefs": "git ls-remote --symref origin HEAD refs/heads/main refs/heads/production refs/notes/price-v3-delivery",
+        "ancestor": "git merge-base --is-ancestor origin/main HEAD",
+        "worktree": "git status --porcelain=v1 --untracked-files=all",
+        "vercelProduction": "official api.vercel.com live GET batch via isolated node:https with verified TLS and one shared Agent; existing CLI credential only through stdin"
+      }
+    }
+  },
+  "previousAttestationDigest": null,
+  "previousAttestation": null,
+  "revision": 1,
+  "contentDigest": "5821820d0f397dccf0acf546498af7a321703475d09056f45ed8b70e43dfb857",
+  "sealedAt": "2026-11-18T07:54:06.821Z",
+  "attestationDigest": "5fbefefdc1375977ebad3a8ee0f439405bdadffb505fe338ee6f447d4dd08d08"
+}
