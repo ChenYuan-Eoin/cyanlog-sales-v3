@@ -28,7 +28,7 @@ describe('sales shipping portal', () => {
     fireEvent.change(screen.getByLabelText('智能地址一键粘贴'), { target: { value: '张三 13900139000 广东省深圳市南山区科技路1号' } })
     fireEvent.click(screen.getByRole('button', { name: '识别并填充' }))
     expect(screen.getByLabelText('收件人')).toHaveProperty('value','张三')
-    fireEvent.change(screen.getByLabelText('客户公司名称'), { target: { value: '星河科技' } })
+    fireEvent.change(screen.getByLabelText('单票客户公司名称'), { target: { value: '星河科技' } })
     fireEvent.change(screen.getByLabelText(/我的特殊需求/), { target: { value: '上门前联系' } })
     await waitFor(() => expect(screen.getByRole('button', { name: '预览工单' })).toHaveProperty('disabled', false))
     fireEvent.click(screen.getByRole('button', { name: '预览工单' }))
@@ -191,7 +191,7 @@ it('keeps manual entry, cargo choices, summary and personal history before parsi
   const profile={...employee,fxiaoke:true,departmentId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',departments:[{id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',name:'大客户部',path:'销售部 / 大客户部',isPrimary:true}],senderChoices:{company:employee.sender,personal:null},senderSource:'company' as const}
   fetcher.mockResolvedValue(new Response(JSON.stringify({employee:profile})))
   render(<FxiaokeShippingProposal profile={profile} rules={{companyName:{enabled:true,required:true,minLength:4},team:{enabled:true,required:true,minLength:1},teamOptions:[]}} services={[{id:2,name:'顺丰标快',preference:'standard'}]}/> )
-  expect(screen.getByLabelText('客户公司名称')).toBeTruthy()
+  expect(screen.getByLabelText('单票客户公司名称')).toBeTruthy()
   expect(screen.getByLabelText('收件人')).toBeTruthy()
   expect(screen.getByLabelText('省份')).toBeTruthy()
   expect(screen.getByRole('combobox',{name:'托寄物'}).textContent).toContain('样品')
@@ -199,7 +199,7 @@ it('keeps manual entry, cargo choices, summary and personal history before parsi
   expect(screen.getByRole('navigation',{name:'提报与记录'})).toBeTruthy()
   expect(screen.getByText('仅我的记录')).toBeTruthy()
   await waitFor(()=>expect(screen.getByRole('button',{name:'预览工单'})).toHaveProperty('disabled',false))
-  for(const [label,value] of [['客户公司名称','星河科技'],['收件人','张三'],['联系电话','13900139000'],['省份','广东省'],['城市','深圳市'],['区县','南山区'],['详细地址','科技路1号']]) fireEvent.change(screen.getByLabelText(label),{target:{value}})
+  for(const [label,value] of [['单票客户公司名称','星河科技'],['收件人','张三'],['联系电话','13900139000'],['省份','广东省'],['城市','深圳市'],['区县','南山区'],['详细地址','科技路1号']]) fireEvent.change(screen.getByLabelText(label),{target:{value}})
   fireEvent.click(screen.getByRole('button',{name:'预览工单'}))
   expect(screen.getByRole('region',{name:'寄出预览'}).textContent).toContain('张三')
   expect(fetcher.mock.calls.some(([,init])=>init?.method==='POST')).toBe(false)
@@ -208,7 +208,7 @@ it('keeps manual entry, cargo choices, summary and personal history before parsi
 it('keeps cargo, weight, service and requirements independent for each parsed ticket', async () => {
   fetcher.mockResolvedValue(new Response(JSON.stringify({orderNo:'SO-MULTI',status:'awaiting_confirmation'}),{status:202}))
   render(<SalesRequestForm employee={employee} mode="fxiaoke" accessReady services={[{id:2,name:'顺丰标快',preference:'standard'},{id:1,name:'顺丰特快',preference:'urgent'}]}/> )
-  fireEvent.change(screen.getByLabelText('客户公司名称'),{target:{value:'星河科技'}})
+  fireEvent.change(screen.getByLabelText('单票客户公司名称'),{target:{value:'星河科技'}})
   fireEvent.change(screen.getByRole('combobox',{name:'托寄物'}),{target:{value:'样品'}})
   fireEvent.change(screen.getByLabelText('预估重量（kg）'),{target:{value:'3'}})
   fireEvent.change(screen.getByRole('combobox',{name:'顺丰服务产品'}),{target:{value:'1'}})
@@ -245,11 +245,14 @@ it('validates batch companies per ticket without a shared company requirement or
   let sequence = 0
   fetcher.mockImplementation(async () => new Response(JSON.stringify({ orderNo: `SO-COMPANY-${++sequence}`, status: 'awaiting_confirmation' }), { status: 202 }))
   render(<SalesRequestForm employee={employee} mode="fxiaoke" accessReady rules={{companyName:{enabled:true,required:true,minLength:2},team:{enabled:true,required:true,minLength:1},teamOptions:[]}} services={[{id:2,name:'顺丰标快',preference:'standard'}]}/>)
-  fireEvent.blur(screen.getByLabelText('客户公司名称'))
-  expect(screen.getByText('请填写公司名称')).toBeTruthy()
+  const pasteBox = screen.getByRole('textbox', { name: '智能地址一键粘贴' })
+  const singleCompany = screen.getByRole('textbox', { name: '单票客户公司名称' })
+  expect(pasteBox.compareDocumentPosition(singleCompany) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(screen.getByText('可一次粘贴多位收件人，识别后逐票填写客户公司')).toBeTruthy()
+  expect(singleCompany).toHaveProperty('value', '')
   fireEvent.change(screen.getByLabelText('智能地址一键粘贴'), { target: { value: '张三 13900139000 广东省深圳市南山区科技路1号\n\n李四 13900139001 浙江省杭州市西湖区文三路9号' } })
   fireEvent.click(screen.getByRole('button', { name: '识别并填充' }))
-  expect(screen.queryByLabelText('客户公司名称')).toBeNull()
+  expect(screen.queryByLabelText(/客户公司名称$/)).toBeNull()
   expect(screen.queryAllByText('请填写公司名称')).toHaveLength(2)
   expect(screen.getByRole('button', { name: '预览 0 票' })).toHaveProperty('disabled', true)
   fireEvent.change(screen.getByLabelText('第1票客户公司'), { target: { value: '星' } })
@@ -265,13 +268,13 @@ it('validates batch companies per ticket without a shared company requirement or
 
 it('does not copy a single-ticket company draft into every batch ticket', () => {
   render(<SalesRequestForm employee={employee} mode="fxiaoke" accessReady services={[{id:2,name:'顺丰标快',preference:'standard'}]}/>)
-  fireEvent.change(screen.getByLabelText('客户公司名称'), { target: { value: '原单票公司' } })
+  fireEvent.change(screen.getByLabelText('单票客户公司名称'), { target: { value: '原单票公司' } })
   fireEvent.change(screen.getByLabelText('智能地址一键粘贴'), { target: { value: '张三 13900139000 广东省深圳市南山区科技路1号\n\n李四 13900139001 浙江省杭州市西湖区文三路9号' } })
   fireEvent.click(screen.getByRole('button', { name: '识别并填充' }))
   expect(screen.getByLabelText('第1票客户公司')).toHaveProperty('value', '')
   expect(screen.getByLabelText('第2票客户公司')).toHaveProperty('value', '')
   fireEvent.click(screen.getByRole('button', { name: '结束本批，继续填写' }))
-  expect(screen.getByLabelText('客户公司名称')).toHaveProperty('value', '原单票公司')
+  expect(screen.getByLabelText('单票客户公司名称')).toHaveProperty('value', '原单票公司')
 })
 
 it('returns to the preserved single-ticket item draft after multi-ticket review', () => {
@@ -301,7 +304,7 @@ it('keeps authenticated identity implicit while preserving actual pickup details
 it('keeps an unknown batch request mounted while the original address input cannot be reparsed', async () => {
   fetcher.mockRejectedValue(new TypeError('connection lost'))
   render(<SalesRequestForm employee={employee} mode="fxiaoke" accessReady services={[{id:2,name:'顺丰标快',preference:'standard'}]}/>)
-  fireEvent.change(screen.getByLabelText('客户公司名称'),{target:{value:'星河科技'}})
+  fireEvent.change(screen.getByLabelText('单票客户公司名称'),{target:{value:'星河科技'}})
   fireEvent.change(screen.getByLabelText('智能地址一键粘贴'),{target:{value:'张三 13900139000 广东省深圳市南山区科技路1号\n\n李四 13900139001 浙江省杭州市西湖区文三路9号'}})
   fireEvent.click(screen.getByRole('button',{name:'识别并填充'}))
   fireEvent.change(screen.getByLabelText('第1票客户公司'),{target:{value:'星河科技'}})
@@ -319,7 +322,7 @@ it('submits the chosen express preference and accepts the authoritative ICU depa
   const profile={...employee,fxiaoke:true,departmentId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',departments:[{id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',name:'大客户部',path:'销售部 / 大客户部',isPrimary:true}]}
   fetcher.mockResolvedValue(new Response(JSON.stringify({orderNo:'SO-URGENT',status:'awaiting_confirmation'}),{status:202}))
   render(<SalesRequestForm employee={profile} draftTeam="大客户部" departmentId={profile.departmentId} departments={profile.departments} mode="fxiaoke" accessReady rules={{companyName:{enabled:true,required:true,minLength:4},team:{enabled:true,required:true,minLength:1},teamOptions:['旧部门']}} services={[{id:2,name:'顺丰标快',preference:'standard'},{id:1,name:'顺丰特快',preference:'urgent'}]}/>)
-  for(const [label,value] of [['客户公司名称','星河科技'],['收件人','张三'],['联系电话','13900139000'],['省份','广东省'],['城市','深圳市'],['区县','南山区'],['详细地址','科技路1号']]) fireEvent.change(screen.getByLabelText(label),{target:{value}})
+  for(const [label,value] of [['单票客户公司名称','星河科技'],['收件人','张三'],['联系电话','13900139000'],['省份','广东省'],['城市','深圳市'],['区县','南山区'],['详细地址','科技路1号']]) fireEvent.change(screen.getByLabelText(label),{target:{value}})
   fireEvent.change(screen.getByRole('combobox',{name:'顺丰服务产品'}),{target:{value:'1'}})
   fireEvent.click(screen.getByRole('button',{name:'预览工单'}))
   fireEvent.click(screen.getByRole('button',{name:'确认提交工单'}))

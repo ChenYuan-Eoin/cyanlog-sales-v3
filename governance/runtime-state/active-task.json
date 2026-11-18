@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-18T05:50:43.830312+00:00",
+  "updated_at": "2026-11-18T06:31:08.765211+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -235,35 +235,22 @@
     }
   },
   "active_task": {
-    "id": "WP94",
-    "slug": "fxiaoke-sso-federated-identity",
-    "name": "纷享会话安全与退出联动",
+    "id": "WP35",
+    "slug": "sales-intake-experience",
+    "name": "销售寄件提报体验",
     "kind": "product",
     "status": "active",
-    "objective": "纷享登录会话空闲30分钟失效、绝对8小时重新认证；由服务端强制执行，不将轮询视作用户活动；核实纷享退出联动能力，不伪称已支持即时单点退出。",
-    "started_at": "2026-10-16T07:43:35.475527+00:00",
-    "activation_basis": "IN-20261118-003 用户明确批准优先收紧会话并核实联动",
+    "objective": "员工在左对齐的寄件表单可直接粘贴多地址，逐票独立填写公司并预览；继承已验证的跨标签换号候选。",
+    "started_at": "2026-11-18T06:31:08.765211+00:00",
+    "activation_basis": "IN-20261118-011/012；用户要求开始开发这三项并在完成后验收。",
     "execution_workspace": "/private/tmp/price-v3-sales-intake-repair",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/product-code/lib/auth.ts",
-      "product-truth/product-code/lib/auth.test.ts",
-      "product-truth/product-code/lib/auth/session-response.ts",
-      "product-truth/product-code/lib/auth/session-response.test.ts",
-      "product-truth/product-code/lib/auth/fxiaoke-session.ts",
-      "product-truth/product-code/lib/auth/fxiaoke-session.test.ts",
-      "product-truth/product-code/app/api/auth/activity",
-      "product-truth/product-code/components/layout/AppShell.tsx",
-      "product-truth/product-code/components/layout/SessionActivity.tsx",
-      "product-truth/product-code/components/layout/SessionActivity.test.tsx",
+      "product-truth/product-code/app/sales-portal",
       "product-truth/product-code/node_modules",
       "product-truth/product-code/.next",
-      "product-truth/product-code/tsconfig.tsbuildinfo",
-      "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/middleware.test.ts",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-sso-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-sso-verifier.test.js"
+      "product-truth/product-code/tsconfig.tsbuildinfo"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -284,11 +271,12 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "fxiaoke_sso"
+        "sales_intake",
+        "shipping_access"
       ],
       "required_production_runtime_evidence": [
-        "fxiaoke_sso_login",
-        "fxiaoke_sso_denials"
+        "sales_intake",
+        "shipping_access"
       ],
       "required_production_evidence": [
         "exact_production_commit",
@@ -297,9 +285,9 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "仅销售提报两步指引候选验证和构建，不发布。",
+      "note": "本轮实现、验证和构建，待精确组合候选发布与现有 Chrome 验收。",
       "production_database_mode": "read_only",
-      "runtime_profile": "application",
+      "runtime_profile": "shipping_workspace",
       "final_acceptance": {
         "origin": "https://sales.cyanlog.icu",
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
@@ -312,45 +300,44 @@
       },
       "production_release_authorization": {
         "status": "not_authorized_for_current_candidate",
-        "final_scope": "新发现的跨标签账号切换状态残留仅本地修复验证，已发布61791a01及其批准保留，不继承本次候选发布权限",
+        "final_scope": "本次仅本地修改、验证与构建",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
         "carrier_calls_authorized": false
       },
       "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f003-fxiaoke-sso-v1"
+      "runtime_contract_version": "f054-auth-intake-v1"
     },
-    "feature_id": "F003",
+    "feature_id": "F054",
     "integration_decision": {
-      "strategy": "preserve_combined_candidate_and_correct_sales_guidance",
-      "authority": "IN-20261117-023",
-      "requested_target": "code_green",
-      "constraint": "User approved current product tree code release; no schema or business data write; user performs Production acceptance."
+      "strategy": "combine_verified_session_change_with_employee_intake_feedback",
+      "authority": "IN-20261118-011",
+      "requested_target": "code_green"
     },
-    "paused_reason": "原候选已发布，本工作区继续WP94验收反馈",
     "micro_fixes": [
       {
-        "id": "IN-20261118-001",
-        "scope": "操作员核对展开与修改工单布局：隔离字段网格和操作按钮样式，约束卡片内字段尺寸及列表列宽，不改接口或流程。",
-        "evidence": "用户正式站截图584dd0b6-df3d-4bac-af70-98cd5f028c47.png；现有Safari管理员页读取及源码CSS级联核对"
+        "id": "IN-20261118-011",
+        "scope": "多单直接粘贴地址，识别后每票独立填写客户公司。",
+        "evidence": "见同编号正式页复现记录"
+      },
+      {
+        "id": "IN-20261118-012",
+        "scope": "员工页宽屏标题与寄件内容从主区域左边对齐。",
+        "evidence": "见同编号正式页复现记录"
       }
-    ],
-    "blocking_items": [
-      "跨标签换账号时旧页身份、记录和表单状态残留；本轮复现待修复",
-      "即时纷享退出联动仍缺当前应用协议证据"
     ]
   },
   "execution_queue": {
     "active": {
-      "id": "WP94",
-      "slug": "fxiaoke-sso-federated-identity",
-      "name": "纷享会话安全与退出联动"
-    },
-    "next": {
       "id": "WP35",
       "slug": "sales-intake-experience",
-      "name": "销售寄件候选发布与正式站验收",
-      "entry_gate": "优先完成WP94会话安全候选后恢复，保留30c5cdb9"
+      "name": "销售寄件提报体验"
+    },
+    "next": {
+      "id": "WP94",
+      "slug": "fxiaoke-sso-federated-identity",
+      "name": "纷享会话安全与退出联动",
+      "entry_gate": "组合版本验收时复核换号；即时退出联动需独立确认提供方能力。"
     },
     "ready": [
       {
@@ -4479,140 +4466,6 @@
       "reason": "IN028批准统一接入后联合双登录验收；UI发布分支及真实网络阻断证据保留，未宣称Production关闭。",
       "paused_reason": "IN-20261113-004 approved priority switch to authenticated shipping intake; UI candidate preserved in codex/wp94-baseline-view-actions at 55830b5b."
     },
-    "WP35": {
-      "id": "WP35",
-      "slug": "sales-intake-experience",
-      "name": "销售寄件提报体验",
-      "kind": "product",
-      "status": "active",
-      "objective": "让销售使用同一个按钮分两步完成预览与提报，清楚知道首次预览不会发送、再次确认才提交及修改后须重新预览；单票多票一致，保留校验、幂等和未知回执恢复。",
-      "started_at": "2026-10-16T07:43:35.475527+00:00",
-      "activation_basis": "IN-20261117-023 最新用户明确验收澄清；WP40代码候选封存后恢复WP35。",
-      "execution_workspace": "/private/tmp/price-v3-sales-intake-repair",
-      "allowed_paths": [
-        "governance/runtime-state/active-task.json",
-        "governance/runtime-state/demand-inbox.jsonl",
-        "product-truth/product-code/app/sales-portal",
-        "product-truth/product-code/lib/shipping/wecom-session.ts",
-        "product-truth/product-code/lib/shipping/wecom-session.test.ts",
-        "product-truth/product-code/app/shipping/config-drawer.tsx",
-        "product-truth/product-code/app/shipping/config-drawer.test.tsx",
-        "product-truth/product-code/app/api/shipping/settings/route.ts",
-        "product-truth/product-code/app/api/shipping/settings/route.test.ts",
-        "product-truth/feature-packets/F054-sf-self-service-order.md",
-        "product-truth/REQ_REGISTRY.yml",
-        "product-truth/feature-packets/F099-current-goal-ledger.md",
-        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.js",
-        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-workspace-verifier.test.js",
-        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-auth-intake-verifier.js",
-        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/shipping-auth-intake-verifier.test.js",
-        "product-truth/product-code/app/shipping/page.tsx",
-        "product-truth/product-code/app/shipping/page.test.tsx",
-        "product-truth/product-code/app/shipping/workbench.tsx",
-        "product-truth/product-code/app/shipping/workbench.test.tsx",
-        "product-truth/product-code/app/api/shipping/public",
-        "product-truth/product-code/app/api/shipping/owner",
-        "product-truth/product-code/app/api/shipping/contacts/route.ts",
-        "product-truth/product-code/app/api/shipping/contacts/route.test.ts",
-        "product-truth/product-code/lib/shipping/contacts.ts",
-        "product-truth/product-code/lib/shipping/department-access.ts",
-        "product-truth/product-code/lib/shipping/department-access.test.ts",
-        "product-truth/product-code/lib/shipping/intake-rules.ts",
-        "product-truth/product-code/lib/shipping/intake-rules.test.ts",
-        "product-truth/product-code/lib/shipping/intake-settings.ts",
-        "product-truth/product-code/lib/shipping/intake-settings.test.ts",
-        "product-truth/product-code/lib/shipping/types.ts",
-        "product-truth/product-code/lib/shipping/validation.ts",
-        "product-truth/product-code/app/api/shipping/intake-settings",
-        "product-truth/product-code/app/shipping/intake-configuration.tsx",
-        "product-truth/product-code/app/shipping/intake-configuration.test.tsx",
-        "product-truth/product-code/node_modules",
-        "product-truth/product-code/.next",
-        "product-truth/product-code/tsconfig.tsbuildinfo",
-        "product-truth/product-code/lib/shipping/http.ts",
-        "product-truth/product-code/lib/shipping/intake-options.ts",
-        "product-truth/product-code/middleware.ts",
-        "product-truth/product-code/middleware.test.ts",
-        "product-truth/product-code/lib/shipping/collaboration.ts",
-        "product-truth/product-code/lib/shipping/collaboration.org.test.ts",
-        "product-truth/product-code/lib/shipping/contacts.fxiaoke.test.ts",
-        "product-truth/product-code/components/layout/AppShell.tsx",
-        "product-truth/product-code/app/shipping/workbench.module.css",
-        "product-truth/product-code/app/shipping/workbench.responsive.test.ts"
-      ],
-      "delivery_contract": {
-        "target_state": "code_green",
-        "allowed_states": [
-          "executing",
-          "code_green"
-        ],
-        "integration_branch": "main",
-        "production_branch": "production",
-        "production_release_separate": true,
-        "same_release_commit_required": true,
-        "attestation_ref": "refs/notes/price-v3-delivery",
-        "required_code_checks": [
-          "target_tests",
-          "full_tests",
-          "lint",
-          "typecheck",
-          "build"
-        ],
-        "required_runtime_evidence": [
-          "sales_intake",
-          "shipping_access"
-        ],
-        "required_production_runtime_evidence": [
-          "sales_intake",
-          "shipping_access"
-        ],
-        "required_production_evidence": [
-          "exact_production_commit",
-          "vercel_deployment_ready_and_promoted",
-          "sales.cyanlog.icu_alias",
-          "controlled_production_security_and_runtime_verifier",
-          "trusted_existing_chrome_operator_attestation"
-        ],
-        "note": "仅销售提报两步指引候选验证和构建，不发布。",
-        "production_database_mode": "read_only",
-        "runtime_profile": "shipping_workspace",
-        "final_acceptance": {
-          "origin": "https://sales.cyanlog.icu",
-          "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
-          "new_local_browser_or_context_prohibited": true,
-          "new_tab_prohibited": true,
-          "local_and_preview_role": "diagnostic_only_not_completion",
-          "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
-          "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
-          "production_database_mode": "read_only"
-        },
-        "production_release_authorization": {
-          "status": "not_authorized_for_current_candidate",
-          "final_scope": "本次仅本地修改、验证与构建",
-          "database_write_authorized": false,
-          "production_database_write_authorized": false,
-          "carrier_calls_authorized": false
-        },
-        "blocking_acceptance_defects": [],
-        "runtime_contract_version": "f054-auth-intake-v1"
-      },
-      "feature_id": "F054",
-      "integration_decision": {
-        "strategy": "preserve_combined_candidate_and_correct_sales_guidance",
-        "authority": "IN-20261117-023",
-        "requested_target": "code_green",
-        "constraint": "不发布、不写生产业务数据、不调用顺丰。"
-      },
-      "paused_reason": "原候选已发布，本工作区继续WP94验收反馈",
-      "micro_fixes": [
-        {
-          "id": "IN-20261118-001",
-          "scope": "操作员核对展开与修改工单布局：隔离字段网格和操作按钮样式，约束卡片内字段尺寸及列表列宽，不改接口或流程。",
-          "evidence": "用户正式站截图584dd0b6-df3d-4bac-af70-98cd5f028c47.png；现有Safari管理员页读取及源码CSS级联核对"
-        }
-      ]
-    },
     "WP40_current": {
       "id": "WP40",
       "slug": "shipping-authorization-configuration",
@@ -4718,6 +4571,112 @@
         }
       ],
       "reason": "代码候选90dd98f4与组合构建已通过；用户继续修正销售提报指引，生产未发布"
+    },
+    "WP94_session_security": {
+      "id": "WP94",
+      "slug": "fxiaoke-sso-federated-identity",
+      "name": "纷享会话安全与退出联动",
+      "kind": "product",
+      "status": "suspended",
+      "objective": "纷享登录会话空闲30分钟失效、绝对8小时重新认证；由服务端强制执行，不将轮询视作用户活动；核实纷享退出联动能力，不伪称已支持即时单点退出。",
+      "started_at": "2026-10-16T07:43:35.475527+00:00",
+      "activation_basis": "IN-20261118-003 用户明确批准优先收紧会话并核实联动",
+      "execution_workspace": "/private/tmp/price-v3-sales-intake-repair",
+      "allowed_paths": [
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "product-truth/product-code/lib/auth.ts",
+        "product-truth/product-code/lib/auth.test.ts",
+        "product-truth/product-code/lib/auth/session-response.ts",
+        "product-truth/product-code/lib/auth/session-response.test.ts",
+        "product-truth/product-code/lib/auth/fxiaoke-session.ts",
+        "product-truth/product-code/lib/auth/fxiaoke-session.test.ts",
+        "product-truth/product-code/app/api/auth/activity",
+        "product-truth/product-code/components/layout/AppShell.tsx",
+        "product-truth/product-code/components/layout/SessionActivity.tsx",
+        "product-truth/product-code/components/layout/SessionActivity.test.tsx",
+        "product-truth/product-code/node_modules",
+        "product-truth/product-code/.next",
+        "product-truth/product-code/tsconfig.tsbuildinfo",
+        "product-truth/product-code/middleware.ts",
+        "product-truth/product-code/middleware.test.ts",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-sso-verifier.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-sso-verifier.test.js"
+      ],
+      "delivery_contract": {
+        "target_state": "code_green",
+        "allowed_states": [
+          "executing",
+          "code_green"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "fxiaoke_sso"
+        ],
+        "required_production_runtime_evidence": [
+          "fxiaoke_sso_login",
+          "fxiaoke_sso_denials"
+        ],
+        "required_production_evidence": [
+          "exact_production_commit",
+          "vercel_deployment_ready_and_promoted",
+          "sales.cyanlog.icu_alias",
+          "controlled_production_security_and_runtime_verifier",
+          "trusted_existing_chrome_operator_attestation"
+        ],
+        "note": "仅销售提报两步指引候选验证和构建，不发布。",
+        "production_database_mode": "read_only",
+        "runtime_profile": "application",
+        "final_acceptance": {
+          "origin": "https://sales.cyanlog.icu",
+          "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+          "new_local_browser_or_context_prohibited": true,
+          "new_tab_prohibited": true,
+          "local_and_preview_role": "diagnostic_only_not_completion",
+          "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
+          "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
+          "production_database_mode": "read_only"
+        },
+        "production_release_authorization": {
+          "status": "not_authorized_for_current_candidate",
+          "final_scope": "新发现的跨标签账号切换状态残留仅本地修复验证，已发布61791a01及其批准保留，不继承本次候选发布权限",
+          "database_write_authorized": false,
+          "production_database_write_authorized": false,
+          "carrier_calls_authorized": false
+        },
+        "blocking_acceptance_defects": [],
+        "runtime_contract_version": "f003-fxiaoke-sso-v1"
+      },
+      "feature_id": "F003",
+      "integration_decision": {
+        "strategy": "preserve_combined_candidate_and_correct_sales_guidance",
+        "authority": "IN-20261117-023",
+        "requested_target": "code_green",
+        "constraint": "User approved current product tree code release; no schema or business data write; user performs Production acceptance."
+      },
+      "paused_reason": "跨标签候选已保留；用户要求继续完成员工提报页面后合版验收。",
+      "micro_fixes": [
+        {
+          "id": "IN-20261118-001",
+          "scope": "操作员核对展开与修改工单布局：隔离字段网格和操作按钮样式，约束卡片内字段尺寸及列表列宽，不改接口或流程。",
+          "evidence": "用户正式站截图584dd0b6-df3d-4bac-af70-98cd5f028c47.png；现有Safari管理员页读取及源码CSS级联核对"
+        }
+      ],
+      "blocking_items": [
+        "换账号后的正式站复验",
+        "即时退出联动仍缺当前应用协议证据"
+      ]
     }
   },
   "parked_tasks": {
