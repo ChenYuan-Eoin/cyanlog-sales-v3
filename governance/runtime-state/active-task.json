@@ -270,10 +270,14 @@
       "product-truth/product-code/lib/organization-connections/service.test.ts"
     ],
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -301,7 +305,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "正式站回调3.314秒，继续在2秒目标范围内优化；新候选发布须单独批准。",
+      "note": "在三个页面复测取证后，发布 dbb03e25 到正式站，使用现有 Chrome 和已登录的纷享会话复测点击至工作台可用 2 秒目标。只发网站代码，不迁移数据、不发单。",
       "production_database_mode": "read_only",
       "runtime_profile": "application",
       "final_acceptance": {
@@ -315,13 +319,21 @@
         "production_database_mode": "read_only"
       },
       "production_release_authorization": {
-        "status": "not_authorized_for_current_candidate",
+        "status": "approved_code_only",
+        "final_release_approval_id": "IN-20261118-033",
+        "final_scope": "在三个页面复测取证后，发布 dbb03e25 到正式站，使用现有 Chrome 和已登录的纷享会话复测点击至工作台可用 2 秒目标。只发网站代码，不迁移数据、不发单。",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
-        "carrier_calls_authorized": false
+        "carrier_calls_authorized": false,
+        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "micro_fix_approval_id": "IN-20261118-026",
+        "clarification_id": "IN-20261118-019",
+        "micro_fix_scope": "纠正正式站登录回调3.87秒并验证2秒目标"
       },
       "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f003-fxiaoke-sso-v1"
+      "runtime_contract_version": "f003-fxiaoke-sso-v1",
+      "preview_order_exception_approval_id": "IN-20261118-033"
     },
     "feature_id": "F003",
     "integration_decision": {
