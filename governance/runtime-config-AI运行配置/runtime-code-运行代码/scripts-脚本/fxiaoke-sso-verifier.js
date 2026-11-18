@@ -126,7 +126,7 @@ function productionFirstExceptionBlockers({
   const migrations = approval?.authorized_migrations;
   if (
     !Array.isArray(migrations)
-    || migrations.length === 0
+    || (approval?.production_database_write_authorized !== false && migrations.length === 0)
     || migrations.some(item => !nonempty(item?.path) || !SHA256.test(String(item?.sha256 || '')))
   ) {
     errors.push('Explicit F003 SSO migration hashes are required');

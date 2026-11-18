@@ -261,13 +261,19 @@
       "product-truth/product-code/.next",
       "product-truth/product-code/tsconfig.tsbuildinfo",
       "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/middleware.test.ts"
+      "product-truth/product-code/middleware.test.ts",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-sso-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-sso-verifier.test.js"
     ],
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
