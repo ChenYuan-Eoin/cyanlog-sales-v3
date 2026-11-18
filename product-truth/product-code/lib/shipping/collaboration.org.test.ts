@@ -169,3 +169,21 @@ it('shows only the current account and organization owner-web receipts, never an
  await expect(listOwnerShipmentReceipts('org-A','',0)).rejects.toMatchObject({status:401})
  await expect(listOwnerShipmentReceipts('org-A','owner-A',1001)).rejects.toMatchObject({status:400})
 })
+
+it('returns the saved reason only for the owner’s currently returned orders', async () => {
+  tables.shipping_orders = [
+    { ...row('returned', 'org-A'), created_by: 'owner-A', intake_source: 'owner_web', status: 'returned', returned_reason: '  请补充楼层  ' },
+    { ...row('historical', 'org-A'), created_by: 'owner-A', intake_source: 'owner_web', status: 'returned', returned_reason: ' ' },
+    { ...row('confirmed', 'org-A'), created_by: 'owner-A', intake_source: 'owner_web', status: 'confirmed', returned_reason: '过期原因' },
+    { ...row('coworker', 'org-A'), created_by: 'owner-B', intake_source: 'owner_web', status: 'returned', returned_reason: '同事的原因' },
+  ]
+  const { orders } = await listOwnerShipmentReceipts('org-A', 'owner-A')
+  expect(mocks.from.mock.results.at(-1)?.value.select).toHaveBeenCalledWith(expect.stringContaining('returned_reason'))
+  expect(orders.find(order => order.orderNo === 'returned')?.returnedReason).toBe('请补充楼层')
+  expect(orders.find(order => order.orderNo === 'historical')?.returnedReason).toBeNull()
+  expect(orders.find(order => order.orderNo === 'confirmed')).not.toHaveProperty('returnedReason')
+  expect(orders.some(order => order.orderNo === 'coworker')).toBe(false)
+  const shared = await listPublicShipmentReceipts('org-A')
+  expect(mocks.from.mock.results.at(-1)?.value.select).not.toHaveBeenCalledWith(expect.stringContaining('returned_reason'))
+  expect(shared.orders.every(order => !('returnedReason' in order))).toBe(true)
+})

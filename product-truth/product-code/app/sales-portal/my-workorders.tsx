@@ -45,9 +45,12 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0 }: { sco
       {[...groups].map(([date, dayOrders]) => <section className={styles.recordGroup} key={date} aria-label={date}>
         <h3>{date}</h3>
         <ul>{dayOrders.map(order => <li key={order.orderNo}>
-        <div className={styles.recordMeta}>{order.createdAt && <time dateTime={order.createdAt}>{timeFormat.format(new Date(order.createdAt))}</time>}<span>{labels[order.status] || '处理中'}</span></div>
+        <div className={styles.recordMeta}>{order.createdAt && <time dateTime={order.createdAt}>{timeFormat.format(new Date(order.createdAt))}</time>}<span>{scope === 'owner' && order.status === 'returned' ? '已退回' : labels[order.status] || '处理中'}</span></div>
         <span className={styles.recordCustomer} title={order.customerName || '未填客户'}>{order.customerName || '未填客户'}</span>
         <strong>{order.orderNo}</strong>
+        {scope === 'owner' && order.status === 'returned' && (
+          <p className={styles.returnReason}>退回原因：{order.returnedReason?.trim() || '此记录未保存退回原因'}</p>
+        )}
         {order.waybill && <span>顺丰运单号：<strong className={styles.waybillNumber}>{order.waybill}</strong></span>}
       </li>)}</ul></section>)}
       </div>

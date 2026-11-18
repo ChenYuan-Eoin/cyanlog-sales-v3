@@ -28,6 +28,26 @@ it('reads only the authenticated owner endpoint in employee mode', async()=>{
  expect(fetcher).toHaveBeenCalledWith('/api/shipping/owner/orders?page=0',{cache:'no-store',credentials:'same-origin'})
  expect(fetcher.mock.calls.some(([url])=>String(url).includes('/public/orders'))).toBe(false)
 })
+it('shows a returned order’s actual reason in the owner record and labels historical missing reasons', async () => {
+  fetcher.mockResolvedValue(response({ orders: [
+    { ...order('RETURNED'), status: 'returned', returnedReason: '收件地址缺少楼层' },
+    { ...order('HISTORICAL'), status: 'returned' },
+    { ...order('SHIPPED'), returnedReason: '旧原因' },
+  ], nextPage: null }))
+  render(<MyWorkorders scope="owner" />)
+  const current = (await screen.findByText('RETURNED')).closest('li')!
+  expect(within(current).getByText('已退回')).toBeTruthy()
+  expect(within(current).getByText('退回原因：收件地址缺少楼层')).toBeTruthy()
+  const old = screen.getByText('HISTORICAL').closest('li')!
+  expect(within(old).getByText('退回原因：此记录未保存退回原因')).toBeTruthy()
+  expect(screen.queryByText(/旧原因/)).toBeNull()
+})
+it('does not display a return reason in a shared receipt, even if supplied', async () => {
+  fetcher.mockResolvedValue(response({ orders: [{ ...order('SHARED'), status: 'returned', returnedReason: '私有备注' }], nextPage: null }))
+  render(<MyWorkorders />)
+  await screen.findByText('SHARED')
+  expect(screen.queryByText(/私有备注|退回原因/)).toBeNull()
+})
 it('keeps existing records when another page fails and lets visitors retry it',async()=>{
  fetcher.mockResolvedValueOnce(response({orders:[order('ONE')],nextPage:1}))
   .mockResolvedValueOnce(response({error:'记录暂不可用'},503))

@@ -239,7 +239,7 @@ export async function listOwnerShipmentReceipts(orgId: string, userId: string, p
   if (!Number.isSafeInteger(page) || page < 0 || page > 1000) throw new ShippingError(400, '记录页码无效。')
   const limit = 50
   const { data, error } = await supabaseAdmin.from('shipping_orders')
-    .select('order_no,status,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no)')
+    .select('order_no,status,returned_reason,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no)')
     .eq('org_id', orgId)
     .eq('created_by', userId)
     .eq('intake_source', 'owner_web')
@@ -252,6 +252,7 @@ export async function listOwnerShipmentReceipts(orgId: string, userId: string, p
     const waybills = Array.isArray(row.shipping_waybills) ? row.shipping_waybills : row.shipping_waybills ? [row.shipping_waybills] : []
     return { orderNo: row.order_no, status: row.status, waybill: waybills[0]?.waybill_no || null,
       nextReviewAt: row.next_review_at, createdAt: row.created_at,
+      ...(row.status === 'returned' ? { returnedReason: row.returned_reason?.trim() || null } : {}),
       customerName: typeof row.customer_name === 'string' && row.customer_name.trim() ? row.customer_name.trim() : null }
   })
   return { orders, nextPage: rows.length > limit ? page + 1 : null }
