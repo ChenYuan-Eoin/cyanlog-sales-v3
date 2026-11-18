@@ -255,7 +255,9 @@
       "product-truth/product-code/.next",
       "product-truth/product-code/tsconfig.tsbuildinfo",
       "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/middleware.test.ts"
+      "product-truth/product-code/middleware.test.ts",
+      "product-truth/product-code/app/api/shipping/ledger",
+      "product-truth/product-code/supabase/migrations/20261118101500_shipping_order_cancellation.sql"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -316,7 +318,13 @@
     "integration_decision": {
       "strategy": "isolated_owner_return_reason_candidate",
       "authority": "IN-20261118-058",
-      "requested_target": "code_green"
+      "requested_target": "code_green",
+      "scope": "整合已单独验证的本人取消与原单修改到同一提报记录的展开区",
+      "related": [
+        "IN-20261118-055",
+        "IN-20261118-056",
+        "IN-20261118-058"
+      ]
     },
     "micro_fixes": []
   },
