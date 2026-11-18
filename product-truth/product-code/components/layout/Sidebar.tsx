@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { Package } from 'lucide-react'
 import { BrandMark } from '@/components/branding/BrandMark'
 import { useBranding } from '@/components/branding/BrandingProvider'
+import { loadTendersListForCache } from '@/lib/core-page-warmup'
 import { logoutClientSession } from '@/lib/session-client'
 import {
   HomeIcon,
@@ -91,6 +92,17 @@ export function Sidebar() {
     return pathname.startsWith(href)
   }
 
+  function prepareNavigation(href: string) {
+    if (isActive(href) || !['/contracts', '/quotes', '/configs', '/tenders', '/knowledge', '/schedule'].includes(href)) return
+    router.prefetch(href)
+    if (href === '/tenders') {
+      const token = localStorage.getItem('token')
+      if (token) void loadTendersListForCache(token).catch(() => {
+        // The opened page retries through its normal list loader.
+      })
+    }
+  }
+
   const handleNavClick = useCallback(() => {
     setMobileOpen(false)
   }, [])
@@ -161,6 +173,8 @@ export function Sidebar() {
                 key={item.href}
                 href={item.href}
                 prefetch={false}
+                onMouseEnter={() => prepareNavigation(item.href)}
+                onFocus={() => prepareNavigation(item.href)}
                 onClick={handleNavClick}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors',

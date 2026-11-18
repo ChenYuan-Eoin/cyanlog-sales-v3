@@ -3,7 +3,6 @@
 import { useEffect, useCallback, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { scheduleCorePageWarmup } from '@/lib/core-page-warmup'
 import { HomeInitialAuthError, loadHomeInitialData } from '@/lib/home-data-client'
 import { clearClientSession, logoutClientSession } from '@/lib/session-client'
 import { normalizeSalesSpaceName } from '@/lib/scoped-access'
@@ -223,12 +222,6 @@ export default function HomePage() {
       controller.abort()
     }
   }, [applyDashboardPayload, router])
-
-  useEffect(() => {
-    if (loading || !profile) return
-    const token = localStorage.getItem('token')
-    scheduleCorePageWarmup(token, (href) => router.prefetch(href))
-  }, [loading, profile, router])
 
   // 切换销售空间
   const switchSpace = useCallback(async (spaceId: string) => {

@@ -3,7 +3,6 @@
 import { deleteBrowserCache, readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
 import type { AgendaItem } from '@/lib/agenda/types'
 
-type PrefetchRoute = (href: string) => void
 
 export type ContractsCachePayload = {
   contracts: unknown[]
@@ -43,13 +42,10 @@ export const CORE_PAGE_BACKGROUND_REFRESH_MS = 60 * 1000
 export const CORE_PAGE_VISIBLE_CACHE_TTL_MS = 5 * 60 * 1000
 export const QUOTE_DETAIL_BACKGROUND_REFRESH_MS = CORE_PAGE_BACKGROUND_REFRESH_MS
 export const QUOTE_DETAIL_VISIBLE_CACHE_TTL_MS = CORE_PAGE_VISIBLE_CACHE_TTL_MS
-const CONTRACTS_WARMUP_DELAY_MS = 150
 const WARMUP_DELAY_MS = 250
 const CONTRACTS_PAGE_SIZE = 20
 export const CONTRACTS_LIST_CACHE_PREFIX = 'contracts:list:v3'
 export const AGENDA_UPCOMING_CACHE_KEY = 'agenda:upcoming'
-const CORE_ROUTES = ['/contracts', '/quotes', '/tenders', '/configs', '/schedule'] as const
-const warmups = new Map<string, Promise<void>>()
 const contractListWarmups = new Map<string, Promise<ContractsCachePayload | null>>()
 const configProductsWarmups = new Map<string, Promise<unknown[] | null>>()
 const configCenterWarmups = new Map<string, Promise<unknown | null>>()
@@ -57,7 +53,6 @@ const agendaUpcomingWarmups = new Map<string, Promise<AgendaUpcomingCachePayload
 const quoteListWarmups = new Map<string, Promise<QuotesCachePayload | null>>()
 const quoteDetailWarmups = new Map<string, Promise<QuoteDetailCachePayload | null>>()
 const tenderListWarmups = new Map<string, Promise<TendersCachePayload | null>>()
-let scheduledToken: string | null = null
 
 function scheduleIdle(callback: () => void) {
   const run = () => {
@@ -76,13 +71,6 @@ function readFreshCache<T>(key: string): T | null {
   const entry = readBrowserCacheEntry<T>(key)
   if (!entry || Date.now() - entry.savedAt >= CORE_PAGE_BACKGROUND_REFRESH_MS) return null
   return entry.value
-}
-
-function prefetchCoreRoutes(prefetchRoute?: PrefetchRoute) {
-  if (!prefetchRoute) return
-  for (const href of CORE_ROUTES) {
-    prefetchRoute(href)
-  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -439,40 +427,4 @@ export function invalidateAgendaUpcomingCache(token: string | null | undefined) 
   const cacheKey = scopedCacheKey(token, AGENDA_UPCOMING_CACHE_KEY)
   agendaUpcomingWarmups.delete(cacheKey)
   deleteBrowserCache(cacheKey)
-}
-
-async function warmCoreData(token: string) {
-  await Promise.allSettled([
-    loadContractsListForCache(token),
-    loadQuotesListForCache(token),
-    loadTendersListForCache(token),
-    loadConfigProductsForCache(token),
-    loadConfigCenterForCache(token),
-    loadAgendaUpcomingForCache(token),
-  ])
-}
-
-export function scheduleCorePageWarmup(token: string | null | undefined, prefetchRoute?: PrefetchRoute) {
-  if (typeof window === 'undefined' || !token || scheduledToken === token) return
-
-  scheduledToken = token
-  prefetchCoreRoutes(prefetchRoute)
-  window.setTimeout(() => {
-    const pathname = window.location.pathname
-    if (pathname !== '/' && pathname !== '/contracts') return
-    void loadContractsListForCache(token).catch(() => {
-      // Visible contract page loads still own error handling.
-    })
-  }, CONTRACTS_WARMUP_DELAY_MS)
-  scheduleIdle(() => {
-    if (warmups.has(token)) return
-    const warmup = warmCoreData(token)
-      .catch(() => {
-        // Warmup is opportunistic; visible page loads still own error handling.
-      })
-      .finally(() => {
-        warmups.delete(token)
-      })
-    warmups.set(token, warmup)
-  })
 }

@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { Sidebar } from './Sidebar'
 
+const prefetch = vi.fn()
 let currentPathname = '/'
 vi.mock('next/navigation', () => ({
   usePathname: () => currentPathname,
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => ({ replace: vi.fn(), prefetch }),
 }))
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
@@ -46,6 +47,19 @@ describe('Sidebar shipping navigation lookup', () => {
     render(<Sidebar />)
     await Promise.resolve()
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('prefetches just the visible destination on hover or keyboard focus', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 403 })))
+    prefetch.mockClear()
+    render(<Sidebar />)
+    const knowledge = screen.getByRole('link', { name: '知识库' })
+    const agenda = screen.getByRole('link', { name: '日程' })
+    expect(prefetch).not.toHaveBeenCalled()
+    fireEvent.mouseEnter(knowledge)
+    fireEvent.focus(agenda)
+    expect(prefetch.mock.calls).toEqual([['/knowledge'], ['/schedule']])
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
   })
 
   it('shows proposal navigation and hides configuration for a baseline Fxiaoke member', async () => {
