@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { expect, it, vi } from 'vitest'
-import { createWorker, readWorkerConfig, readEgressIp } from './worker.mjs'
+import { createWorker, readWorkerConfig, readEgressIp, startWorker } from './worker.mjs'
 const config=readWorkerConfig({FXIAOKE_EGRESS_TOKEN:'12'.repeat(32),SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fixture'})
 it('uses only the existing project and rejects database privileged keys in the worker',() => {
   expect(()=>readWorkerConfig({FXIAOKE_EGRESS_TOKEN:'12'.repeat(32),SUPABASE_PUBLISHABLE_KEY:'service_role_secret'})).toThrow('INVALID_WORKER_CONFIGURATION')
@@ -54,4 +54,44 @@ it('stops processing on machine credential revocation instead of retrying foreve
   expect(worker.isStopped()).toBe(true)
   expect(await worker.tick()).toBe(false)
   expect(fetcher).toHaveBeenCalledTimes(2)
+})
+
+it('replaces a terminally closed channel and services a new wake before the idle heartbeat', async () => {
+  vi.useFakeTimers()
+  const statuses: ((status: string) => void)[] = []
+  const wakes: (() => void)[] = []
+  const channel = vi.fn(() => ({
+    on(_type: string, _filter: unknown, wake: () => void) {
+      wakes.push(wake)
+      return this
+    },
+    subscribe(callback: (status: string) => void) { statuses.push(callback) },
+  }))
+  const removeChannel = vi.fn().mockResolvedValue('ok')
+  const claim = vi.fn(async (url: string) => url.includes('myip')
+    ? new Response('192.0.2.10')
+    : Response.json({ data: { status: 'ready', job: null } }))
+  const stop = startWorker(config, {
+    clientFactory: () => ({ channel, removeChannel }), request: claim, report: vi.fn(),
+  })
+  try {
+    await vi.advanceTimersByTimeAsync(0)
+    statuses[0]('SUBSCRIBED')
+    statuses[0]('CLOSED')
+    await vi.advanceTimersByTimeAsync(300)
+    expect(channel).toHaveBeenCalledTimes(2)
+    statuses[1]('SUBSCRIBED')
+    await vi.advanceTimersByTimeAsync(300)
+    const calls = claim.mock.calls.length
+    statuses[0]('CLOSED')
+    wakes[1]()
+    await vi.advanceTimersByTimeAsync(300)
+    expect(claim.mock.calls.length).toBe(calls + 1)
+    statuses[1]('CLOSED')
+  } finally {
+    await stop()
+    await vi.advanceTimersByTimeAsync(60000)
+    vi.useRealTimers()
+  }
+  expect(channel).toHaveBeenCalledTimes(2)
 })

@@ -57,13 +57,13 @@ it('carries enterprise discovery through encrypted jobs and only broadcasts an e
   fake.wake.mockImplementation(async () => {
     expect(JSON.stringify(fake.tables)).not.toContain(credentials.appSecret)
     const claim = await workerClaim(egressConfig()!,ip)
-    expect(JSON.parse(claim.job!.request.body)).toMatchObject(credentials)
+    expect(JSON.parse('body' in claim.job!.request ? claim.job!.request.body : '')).toMatchObject(credentials)
     await workerComplete(egressConfig()!,{ id:claim.job!.id,lease:claim.job!.lease,result:{ status:200,body:JSON.stringify({errorCode:0,appId:credentials.appId,ea:'fixture-enterprise',accessToken:'example-token',openUserId:'FSCID_fixture'}) } })
     expect(JSON.stringify(fake.tables)).not.toContain('example-token')
     return { success:true }
   })
   expect(await discoverEnterprise(credentials,transportForOrganization(org))).toEqual({ ea:'fixture-enterprise', corpId:'FSCID_fixture' })
-  expect(fake.wake).toHaveBeenCalledWith('wake',{}, {timeout:3000})
+  expect(fake.wake).toHaveBeenCalledWith('wake',{}, {timeout:1500})
   expect(fake.tables.organization_fxiaoke_egress_jobs).toHaveLength(0)
   expect(JSON.stringify(fake.inserts)).not.toContain(credentials.appSecret)
 })
@@ -75,7 +75,7 @@ it('carries primary and supplementary departments through the worker protocol', 
   fake.wake.mockImplementation(async () => {
     const claim = await workerClaim(egressConfig()!, ip)
     expect(claim.job).not.toBeNull()
-    const body = JSON.parse(claim.job!.request.body)
+    const body = JSON.parse('body' in claim.job!.request ? claim.job!.request.body : '')
     let response: unknown
     if (requestIndex === 0) {
       expect(body).toMatchObject(credentials)
@@ -110,7 +110,7 @@ it('carries an OAuth code through an encrypted, single-use worker job without ex
   fake.wake.mockImplementation(async () => {
     expect(JSON.stringify(fake.tables)).not.toMatch(/fixture-authorization-code|example-private-secret/)
     const claim = await workerClaim(egressConfig()!, ip)
-    expect(JSON.parse(claim.job!.request.body)).toEqual({
+    expect(JSON.parse('body' in claim.job!.request ? claim.job!.request.body : '')).toEqual({
       appId: credentials.appId, appSecret: credentials.appSecret, ...input, grantType: 'authorization_code',
     })
     await workerComplete(egressConfig()!, { id: claim.job!.id, lease: claim.job!.lease, result: {
@@ -168,4 +168,38 @@ it('ignores caller-supplied organization IDs and rejects cross-tenant or wrong-l
   const foreignLease=randomUUID()
   fake.tables.organization_fxiaoke_egress_jobs=[{id:'11111111-1111-4111-8111-111111111111',system_org_id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',status:'running',lease_token:foreignLease,expires_at:new Date(Date.now()+10000).toISOString()}]
   await expect(workerComplete(egressConfig()!,{id:'11111111-1111-4111-8111-111111111111',lease:foreignLease,result:{status:200,body:'{}'}})).rejects.toMatchObject({code:'EGRESS_JOB_EXPIRED'})
+})
+
+it('finishes the complete FSUID login in one claimed job even when the first wake is lost', async () => {
+  const { createWorker } = await import('./worker.mjs')
+  const sso = { ...credentials, expectedCorpId: 'FSCID_fixture', expectedEa: 'fixture-enterprise', apiUserId: '1093' }
+  const subject = 'FSUID_employee'
+  const calls: string[] = []
+  const worker = createWorker({ config: { token }, report: vi.fn(), request: async (url: URL | RequestInfo, init?: RequestInit) => {
+    if (String(url).includes('myip')) return new Response(ip)
+    const body = JSON.parse(String(init?.body))
+    if (body.action === 'claim') return Response.json({ data: await workerClaim(egressConfig()!, ip) })
+    if (body.action === 'complete') return Response.json({ data: await workerComplete(egressConfig()!, body) })
+    if (body.grantType === 'authorization_code') {
+      calls.push(body.grantType)
+      return Response.json({ errorCode: 0, openUserId: subject, corpId: sso.expectedCorpId, accessToken: 'example-employee-token', expiresIn: 7200 })
+    }
+    if (body.grantType === 'app_secret') {
+      calls.push(body.grantType)
+      return Response.json({ errorCode: 0, appId: sso.appId, ea: sso.expectedEa, openUserId: sso.expectedCorpId, accessToken: 'example-app-token' })
+    }
+    calls.push(body.data.search_query_info.filters[0].field_name)
+    return Response.json({ errorCode: 0, data: { dataList: [{ _id: 'record1', user_id: body.convertUserId ? subject : '1093', name: '员工', status: '0' }] } })
+  } })
+  fake.wake.mockResolvedValueOnce({ success: true }).mockImplementation(async () => {
+    expect(await worker.tick()).toBe(true)
+    return { success: true }
+  })
+  const result = await transportForOrganization(org)!.verifyEmployee(sso,
+    { code: 'one-time-code', redirectUrl: 'https://sales.cyanlog.icu/api/auth/fxiaoke/callback' }, vi.fn())
+  expect(result.profile.directoryUserId).toBe('1093')
+  expect(calls).toEqual(['authorization_code', 'app_secret', 'user_id', '_id'])
+  expect(fake.inserts).toHaveLength(1)
+  expect(JSON.stringify([result, fake.inserts])).not.toMatch(/employee-token|app-token|one-time-code|example-private-secret/)
+  expect(fake.tables.organization_fxiaoke_egress_jobs).toHaveLength(0)
 })

@@ -5,7 +5,10 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { supabaseAdmin } from '@/lib/supabase'
 import { decryptCredentials, encryptCredentials } from '../crypto'
 import { FxiaokeError } from '../contracts'
-import { validRequest, validResult } from './protocol.mjs'
+import { validRequest, validResult, type EgressRequest } from './protocol.mjs'
+
+import { validLoginJob, type LoginJob, readLoginReply } from './login-job'
+import type { Credentials } from '../contracts'
 
 const JOBS = 'organization_fxiaoke_egress_jobs'
 const HOSTS = 'organization_fxiaoke_egress'
@@ -38,7 +41,7 @@ export async function workerClaim(config: NonNullable<ReturnType<typeof egressCo
   const row = claimed.data?.[0]
   if (!row) return { status, job: null, topic: config.topic }
   const request: unknown = JSON.parse(decryptCredentials(`${config.orgId}:${row.id}:request`, row.request_ciphertext))
-  if (!validRequest(request)) throw unavailable()
+  if (!validRequest(request) && !validLoginJob(request)) throw unavailable()
   return { status, topic: config.topic, job: { id: row.id, lease: row.lease_token, expiresAt: row.expires_at, request } }
 }
 export async function workerComplete(config: NonNullable<ReturnType<typeof egressConfig>>, body: Record<string, unknown>) {
@@ -53,46 +56,74 @@ export async function workerComplete(config: NonNullable<ReturnType<typeof egres
   if (!update.data) throw new FxiaokeError('EGRESS_JOB_EXPIRED', '此网络请求已过期或已处理。', 409)
   return { accepted: true }
 }
-export function transportForOrganization(orgId: string): typeof fetch | undefined {
+type EgressConfig = NonNullable<ReturnType<typeof egressConfig>>
+async function sendToWorker(config: EgressConfig, input: EgressRequest | LoginJob, signal?: AbortSignal | null) {
+  const { orgId } = config
+  signal?.throwIfAborted()
+  const health = await supabaseAdmin.from(HOSTS).select('last_seen_at,status').eq('system_org_id', orgId).maybeSingle()
+  dbError(health.error)
+  if (health.data?.status === 'ip_changed') throw new FxiaokeError('EGRESS_IP_CHANGED', '纷享接入主机的出口 IP 已变化，请联系系统管理员核对并更新纷享白名单。', 503)
+  if (!health.data || health.data.status !== 'ready' || Date.now() - Date.parse(health.data.last_seen_at) > 90000) throw unavailable()
+  const id = randomUUID()
+  const inserted = await supabaseAdmin.from(JOBS).insert({ id, system_org_id: orgId, expires_at: new Date(Date.now() + 20000).toISOString(),
+    request_ciphertext: encryptCredentials(`${orgId}:${id}:request`, JSON.stringify(input)) })
+  dbError(inserted.error)
+  try {
+    // The public wake signal contains no job ID, tenant ID, credentials, or response data.
+    async function wakeWorker() {
+      const channel = supabaseAdmin.channel(config.topic)
+      try { return (await channel.httpSend('wake', {}, { timeout: 1500 })).success }
+      catch { return false }
+      finally { await supabaseAdmin.removeChannel(channel) }
+    }
+    const started = Date.now()
+    await wakeWorker()
+    let wakeRepeated = false
+    const deadline = Date.now() + 18000
+    while (Date.now() < deadline) {
+      signal?.throwIfAborted()
+      const result = await supabaseAdmin.from(JOBS).select('status,response_ciphertext').eq('id', id).eq('system_org_id', orgId).maybeSingle()
+      dbError(result.error)
+      if (!result.data) throw unavailable()
+      if (result.data.status === 'finished') {
+        const reply: unknown = JSON.parse(decryptCredentials(`${orgId}:${id}:response`, result.data.response_ciphertext))
+        if (!validResult(reply)) throw unavailable()
+        if ('error' in reply) throw new FxiaokeError('EGRESS_PROVIDER_UNREACHABLE', '纷享接入主机未能取得接口响应，请联系系统管理员检查网络。', 502)
+        return new Response([204,205,304].includes(reply.status) ? null : reply.body, { status: reply.status, headers: { 'Content-Type': 'application/json' } })
+      }
+      const elapsed = Date.now() - started
+      if (result.data.status === 'queued' && !wakeRepeated && elapsed >= 300) {
+        wakeRepeated = true
+        await wakeWorker()
+        continue
+      }
+      if (result.data.status === 'queued' && elapsed >= 1800) {
+        throw new FxiaokeError('EGRESS_NOT_CLAIMED', '专用登录服务尚未接收请求。', 503)
+      }
+      await delay(elapsed < 1800 ? 100 : 250, undefined, { signal: signal ?? undefined })
+    }
+    throw unavailable()
+  } finally {
+    // Failed/aborted requests cannot be replayed later. The claim RPC also removes expired jobs.
+    await supabaseAdmin.from(JOBS).delete().eq('id', id).eq('system_org_id', orgId)
+  }
+}
+
+export function transportForOrganization(orgId: string) {
   const config = egressConfig()
   if (!config || config.orgId !== orgId) return undefined
-  return async (url, init) => {
-    const input = { url: String(url), headers: Object.fromEntries(new Headers(init?.headers).entries()), body: init?.body }
+  const send: typeof fetch = async (url, init) => {
+    const input = { url: String(url), headers: Object.fromEntries(new Headers(init?.headers)), body: init?.body }
     if (init?.method !== 'POST' || !validRequest(input)) throw new FxiaokeError('EGRESS_REQUEST_DENIED', '此纷享接口不在允许范围内。', 403)
-    init?.signal?.throwIfAborted()
-    const health = await supabaseAdmin.from(HOSTS).select('last_seen_at,status').eq('system_org_id', orgId).maybeSingle()
-    dbError(health.error)
-    if (health.data?.status === 'ip_changed') throw new FxiaokeError('EGRESS_IP_CHANGED', '纷享接入主机的出口 IP 已变化，请联系系统管理员核对并更新纷享白名单。', 503)
-    if (!health.data || health.data.status !== 'ready' || Date.now() - Date.parse(health.data.last_seen_at) > 90000) throw unavailable()
-    const id = randomUUID()
-    const inserted = await supabaseAdmin.from(JOBS).insert({ id, system_org_id: orgId, expires_at: new Date(Date.now() + 20000).toISOString(),
-      request_ciphertext: encryptCredentials(`${orgId}:${id}:request`, JSON.stringify(input)) })
-    dbError(inserted.error)
-    try {
-      // The public wake signal contains no job ID, tenant ID, credentials, or response data.
-      const channel = supabaseAdmin.channel(config.topic)
-      try {
-        const wake = await channel.httpSend('wake', {}, { timeout: 3000 })
-        if (!wake.success) throw unavailable()
-      } catch { throw unavailable() } finally { await supabaseAdmin.removeChannel(channel) }
-      const deadline = Date.now() + 18000
-      while (Date.now() < deadline) {
-        init?.signal?.throwIfAborted()
-        const result = await supabaseAdmin.from(JOBS).select('status,response_ciphertext').eq('id', id).eq('system_org_id', orgId).maybeSingle()
-        dbError(result.error)
-        if (!result.data) throw unavailable()
-        if (result.data.status === 'finished') {
-          const reply: unknown = JSON.parse(decryptCredentials(`${orgId}:${id}:response`, result.data.response_ciphertext))
-          if (!validResult(reply)) throw unavailable()
-          if ('error' in reply) throw new FxiaokeError('EGRESS_PROVIDER_UNREACHABLE', '纷享接入主机未能取得接口响应，请联系系统管理员检查网络。', 502)
-          return new Response([204,205,304].includes(reply.status) ? null : reply.body, { status: reply.status, headers: { 'Content-Type': 'application/json' } })
-        }
-        await delay(250, undefined, { signal: init?.signal ?? undefined })
-      }
-      throw unavailable()
-    } finally {
-      // Failed/aborted requests cannot be replayed later. The claim RPC also removes expired jobs.
-      await supabaseAdmin.from(JOBS).delete().eq('id', id).eq('system_org_id', orgId)
-    }
+    return sendToWorker(config, input, init.signal)
   }
+  return Object.assign(send, {
+    async verifyEmployee(credentials: Credentials, input: { code: string; redirectUrl: string }, setStage: Parameters<typeof readLoginReply>[2]) {
+      const { appId, appSecret, permanentCode, apiUserId, expectedEa, expectedCorpId } = credentials
+      const job = { kind: 'employee_login_v1', credentials: { appId, appSecret, permanentCode, apiUserId, expectedEa, ...(expectedCorpId ? { expectedCorpId } : {}) }, code: input.code, redirectUrl: input.redirectUrl }
+      if (!validLoginJob(job)) throw new FxiaokeError('EGRESS_REQUEST_DENIED', '员工登录请求无效。', 403)
+      const response = await sendToWorker(config, job, AbortSignal.timeout(15_000))
+      return readLoginReply(response, credentials, setStage)
+    },
+  })
 }

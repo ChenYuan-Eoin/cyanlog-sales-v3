@@ -235,32 +235,40 @@
     }
   },
   "active_task": {
-    "id": "WP35",
-    "slug": "sales-intake-experience",
-    "name": "销售寄件提报体验",
+    "id": "WP94",
+    "slug": "fxiaoke-sso-federated-identity",
+    "name": "纷享登录回调性能与专用出口恢复",
     "kind": "product",
     "status": "active",
-    "objective": "员工在左对齐的寄件表单可直接粘贴多地址，逐票独立填写公司并预览；继承已验证的跨标签换号候选。",
-    "started_at": "2026-11-18T06:31:08.765211+00:00",
-    "activation_basis": "IN-20261118-011/012；用户要求开始开发这三项并在完成后验收。",
+    "objective": "修复正式站员工登录在出口通知断开后空等的问题。正常授权回调到成功返回最多2秒，逐次核对真实耗时。",
+    "started_at": "2026-11-18T07:18:17.085311+00:00",
+    "activation_basis": "IN-20261118-017 为已复现的生产事故，IN-20261118-018 明确2秒成功响应要求。",
     "execution_workspace": "/private/tmp/price-v3-sales-intake-repair",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/product-code/app/sales-portal",
+      "product-truth/product-code/lib/fxiaoke/egress/worker.mjs",
+      "product-truth/product-code/lib/fxiaoke/egress/worker.test.ts",
+      "product-truth/product-code/lib/fxiaoke/egress/server.ts",
+      "product-truth/product-code/lib/fxiaoke/egress/server.test.ts",
+      "product-truth/product-code/app/api/auth/fxiaoke/callback",
+      "product-truth/product-code/lib/fxiaoke/client.ts",
+      "product-truth/product-code/lib/fxiaoke/client.test.ts",
       "product-truth/product-code/node_modules",
       "product-truth/product-code/.next",
-      "product-truth/product-code/tsconfig.tsbuildinfo"
+      "product-truth/product-code/tsconfig.tsbuildinfo",
+      "product-truth/product-code/lib/fxiaoke/egress/login-job.ts",
+      "product-truth/product-code/lib/fxiaoke/egress/login-job.test.ts",
+      "product-truth/product-code/lib/fxiaoke/egress/vite.config.mts",
+      "product-truth/product-code/lib/fxiaoke/egress/README.md",
+      "product-truth/product-code/app/login/page.tsx",
+      "product-truth/product-code/app/login/page.test.tsx"
     ],
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "code_green",
       "allowed_states": [
         "executing",
-        "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -275,12 +283,11 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "sales_intake",
-        "shipping_access"
+        "fxiaoke_sso"
       ],
       "required_production_runtime_evidence": [
-        "sales_intake",
-        "shipping_access"
+        "fxiaoke_sso_login",
+        "fxiaoke_sso_denials"
       ],
       "required_production_evidence": [
         "exact_production_commit",
@@ -289,9 +296,9 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "按本次明确批准发布同一产品树。用户在现有Chrome验收。",
+      "note": "仅销售提报两步指引候选验证和构建，不发布。",
       "production_database_mode": "read_only",
-      "runtime_profile": "shipping_workspace",
+      "runtime_profile": "application",
       "final_acceptance": {
         "origin": "https://sales.cyanlog.icu",
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
@@ -303,53 +310,34 @@
         "production_database_mode": "read_only"
       },
       "production_release_authorization": {
-        "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261118-013",
-        "micro_fix_approval_id": "IN-20261118-011",
-        "clarification_id": "IN-20261118-012",
-        "micro_fix_scope": "员工提报界面与既有跨标签候选",
-        "final_scope": "发布07a21fa0产品树的员工多单逐票公司入口、宽屏左对齐及跨标签换账号修复，用户在正式站验收。不迁移数据、不发单。",
+        "status": "not_authorized_for_current_candidate",
+        "final_scope": "修复开发中，本次新增候选待验证和批准。",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
-        "carrier_calls_authorized": false,
-        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
-        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
+        "carrier_calls_authorized": false
       },
       "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f054-auth-intake-v1",
-      "preview_order_exception_approval_id": "IN-20261118-013"
+      "runtime_contract_version": "f003-fxiaoke-sso-v1"
     },
-    "feature_id": "F054",
+    "feature_id": "F003",
     "integration_decision": {
-      "strategy": "combine_verified_session_change_with_employee_intake_feedback",
-      "authority": "IN-20261118-013",
-      "requested_target": "production_released",
-      "constraint": "限定已批准产品树，正式站由用户验收。"
-    },
-    "micro_fixes": [
-      {
-        "id": "IN-20261118-011",
-        "scope": "多单直接粘贴地址，识别后每票独立填写客户公司。",
-        "evidence": "见同编号正式页复现记录"
-      },
-      {
-        "id": "IN-20261118-012",
-        "scope": "员工页宽屏标题与寄件内容从主区域左边对齐。",
-        "evidence": "见同编号正式页复现记录"
-      }
-    ]
+      "strategy": "production_incident_local_candidate",
+      "authority": "IN-20261118-018",
+      "requested_target": "code_green",
+      "constraint": "独立候选验证；专用服务器与正式站发布按候选批准。"
+    }
   },
   "execution_queue": {
     "active": {
-      "id": "WP35",
-      "slug": "sales-intake-experience",
-      "name": "销售寄件提报体验"
-    },
-    "next": {
       "id": "WP94",
       "slug": "fxiaoke-sso-federated-identity",
-      "name": "纷享会话安全与退出联动",
-      "entry_gate": "组合版本验收时复核换号；即时退出联动需独立确认提供方能力。"
+      "name": "纷享登录回调性能与专用出口恢复"
+    },
+    "next": {
+      "id": "WP35",
+      "slug": "sales-intake-experience",
+      "name": "销售寄件提报体验",
+      "entry_gate": "认证恢复后继续既有寄件页面验收。"
     },
     "ready": [
       {
@@ -4689,6 +4677,112 @@
         "换账号后的正式站复验",
         "即时退出联动仍缺当前应用协议证据"
       ]
+    },
+    "WP35_employee_intake_acceptance": {
+      "id": "WP35",
+      "slug": "sales-intake-experience",
+      "name": "销售寄件提报体验",
+      "kind": "product",
+      "status": "active",
+      "objective": "员工在左对齐的寄件表单可直接粘贴多地址，逐票独立填写公司并预览；继承已验证的跨标签换号候选。",
+      "started_at": "2026-11-18T06:31:08.765211+00:00",
+      "activation_basis": "IN-20261118-011/012；用户要求开始开发这三项并在完成后验收。",
+      "execution_workspace": "/private/tmp/price-v3-sales-intake-repair",
+      "allowed_paths": [
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "product-truth/product-code/app/sales-portal",
+        "product-truth/product-code/node_modules",
+        "product-truth/product-code/.next",
+        "product-truth/product-code/tsconfig.tsbuildinfo"
+      ],
+      "delivery_contract": {
+        "target_state": "production_released",
+        "allowed_states": [
+          "executing",
+          "code_green",
+          "clean_preview_green",
+          "integration_ready",
+          "main_integrated",
+          "production_released"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "sales_intake",
+          "shipping_access"
+        ],
+        "required_production_runtime_evidence": [
+          "sales_intake",
+          "shipping_access"
+        ],
+        "required_production_evidence": [
+          "exact_production_commit",
+          "vercel_deployment_ready_and_promoted",
+          "sales.cyanlog.icu_alias",
+          "controlled_production_security_and_runtime_verifier",
+          "trusted_existing_chrome_operator_attestation"
+        ],
+        "note": "按本次明确批准发布同一产品树。用户在现有Chrome验收。",
+        "production_database_mode": "read_only",
+        "runtime_profile": "shipping_workspace",
+        "final_acceptance": {
+          "origin": "https://sales.cyanlog.icu",
+          "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+          "new_local_browser_or_context_prohibited": true,
+          "new_tab_prohibited": true,
+          "local_and_preview_role": "diagnostic_only_not_completion",
+          "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
+          "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
+          "production_database_mode": "read_only"
+        },
+        "production_release_authorization": {
+          "status": "approved_code_only",
+          "final_release_approval_id": "IN-20261118-013",
+          "micro_fix_approval_id": "IN-20261118-011",
+          "clarification_id": "IN-20261118-012",
+          "micro_fix_scope": "员工提报界面与既有跨标签候选",
+          "final_scope": "发布07a21fa0产品树的员工多单逐票公司入口、宽屏左对齐及跨标签换账号修复，用户在正式站验收。不迁移数据、不发单。",
+          "database_write_authorized": false,
+          "production_database_write_authorized": false,
+          "carrier_calls_authorized": false,
+          "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
+        },
+        "blocking_acceptance_defects": [],
+        "runtime_contract_version": "f054-auth-intake-v1",
+        "preview_order_exception_approval_id": "IN-20261118-013"
+      },
+      "feature_id": "F054",
+      "integration_decision": {
+        "strategy": "combine_verified_session_change_with_employee_intake_feedback",
+        "authority": "IN-20261118-013",
+        "requested_target": "production_released",
+        "constraint": "限定已批准产品树，正式站由用户验收。"
+      },
+      "micro_fixes": [
+        {
+          "id": "IN-20261118-011",
+          "scope": "多单直接粘贴地址，识别后每票独立填写客户公司。",
+          "evidence": "见同编号正式页复现记录"
+        },
+        {
+          "id": "IN-20261118-012",
+          "scope": "员工页宽屏标题与寄件内容从主区域左边对齐。",
+          "evidence": "见同编号正式页复现记录"
+        }
+      ],
+      "paused_reason": "员工认证生产故障阻断寄件验收，正式站延用已发布版本。"
     }
   },
   "parked_tasks": {

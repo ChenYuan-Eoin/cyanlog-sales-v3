@@ -24,6 +24,7 @@ const SSO_ERROR_MESSAGES: Record<string, string> = {
   SSO_STATE_INVALID: '企业登录状态已失效，请重新发起登录。',
   SSO_STATE_UNAVAILABLE: '企业登录状态暂时无法校验，请稍后重试。',
   SSO_PROVIDER_DENIED: '纷享登录授权未完成，请重新登录。',
+  SSO_DISPATCH_UNAVAILABLE: '寄件平台的企业登录服务暂未就绪，请重新发起登录。',
   SSO_PROVIDER_FAILED: '纷享登录服务暂时不可用，请稍后重试。',
   SSO_ENTERPRISE_MISMATCH: '当前纷享员工不属于系统绑定企业，登录已拒绝。',
   SSO_IDENTITY_REJECTED: '纷享身份验证未通过，请联系管理员核对企业账号及授权。',

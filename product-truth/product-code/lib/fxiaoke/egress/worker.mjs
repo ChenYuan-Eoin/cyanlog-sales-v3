@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
 import { pathToFileURL } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
+import { executeLoginJob, validLoginJob } from './login-job.ts';
 import { executeRequest, validRequest } from './protocol.mjs';
 
 const RUNTIME_URL = 'https://sales.cyanlog.icu/api/admin/organization-sources/fxiaoke/egress';
@@ -47,10 +48,13 @@ export function createWorker({ config, request = fetch, now = () => Date.now(), 
     const job = claim.job;
     if (!job) return false;
     if (typeof job.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(job.id) || typeof job.lease !== 'string'
-      || !/^[0-9a-f-]{36}$/i.test(job.lease) || !validRequest(job.request)) throw new Error('INVALID_BRIDGE_JOB');
+      || !/^[0-9a-f-]{36}$/i.test(job.lease) || (!validRequest(job.request) && !validLoginJob(job.request))) throw new Error('INVALID_BRIDGE_JOB');
     const remaining = Date.parse(job.expiresAt) - now() - 1000;
     if (!Number.isFinite(remaining) || remaining <= 0) return false;
-    const result = await executeRequest(job.request, request, Math.min(12000, remaining));
+    const timeout = Math.min(12000, remaining);
+    const result = job.request.kind === 'employee_login_v1'
+      ? await executeLoginJob(job.request, request, timeout)
+      : await executeRequest(job.request, request, timeout);
     await post({ action: 'complete', id: job.id, lease: job.lease, result });
     report(JSON.stringify({ event: 'request_finished', success: !('error' in result), http_status: result.status || null }));
     return true;
@@ -75,14 +79,47 @@ export function startWorker(config, dependencies = {}) {
     catch (error) { report(JSON.stringify({ event: 'worker_error', code: ['WORKER_AUTH_REJECTED','JOB_EXPIRED','INVALID_BRIDGE_JOB'].includes(error?.message) ? error.message : 'CONNECTION_FAILED' })); }
     finally { running = false; if (pending) void drain(); }
   }
-  const channel = supabase.channel(config.topic).on('broadcast', { event: 'wake' }, () => void drain()).subscribe(status => {
-    report(JSON.stringify({ event: 'wake_channel', status }));
-    if (status === 'SUBSCRIBED') void drain();
-  });
-  // One health/cleanup request per minute while idle; no rapid idle polling.
+  let channel;
+  let reconnectTimer;
+  let retryMs = 250;
+  function subscribe() {
+    if (worker.isStopped()) return;
+    const current = supabase.channel(config.topic);
+    channel = current;
+    current.on('broadcast', { event: 'wake' }, () => {
+      if (channel === current) void drain();
+    }).subscribe(status => {
+      if (channel !== current || worker.isStopped()) return;
+      report(JSON.stringify({ event: 'wake_channel', status }));
+      if (status === 'SUBSCRIBED') {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+        retryMs = 250;
+        void drain();
+      } else if (!reconnectTimer && ['CLOSED', 'CHANNEL_ERROR', 'TIMED_OUT'].includes(status)) {
+        // CLOSED can be terminal even while the service and HTTP heartbeat are healthy.
+        // Give transient disconnects a chance to recover through the SDK first.
+        reconnectTimer = setTimeout(async () => {
+          reconnectTimer = undefined;
+          channel = undefined;
+          try { await supabase.removeChannel(current); }
+          catch { report(JSON.stringify({ event: 'wake_channel_cleanup_failed' })); }
+          subscribe();
+        }, status === 'CLOSED' ? retryMs : Math.max(2000, retryMs));
+        retryMs = Math.min(retryMs * 2, 8000);
+      }
+    });
+  }
+  subscribe();
   const heartbeat = setInterval(() => void drain(), 60000);
   void drain();
-  return async () => { worker.stop(); clearInterval(heartbeat); clearTimeout(wakeTimer); await supabase.removeChannel(channel); };
+  return async () => {
+    worker.stop();
+    clearInterval(heartbeat);
+    clearTimeout(wakeTimer);
+    clearTimeout(reconnectTimer);
+    if (channel) await supabase.removeChannel(channel);
+  };
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {

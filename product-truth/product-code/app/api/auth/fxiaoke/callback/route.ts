@@ -8,11 +8,10 @@ import {
   oauthStatesMatch,
 } from '@/lib/auth/oauth-state'
 import { applySystemSessionCookies, issueSystemSession, SessionIssueError, type IssuedSystemSession } from '@/lib/auth/session-response'
-import { discoverEnterprise, readEmployeeIdentity } from '@/lib/fxiaoke/client'
+import { verifyProviderEmployee } from '@/lib/fxiaoke/egress/login-job'
 import { FxiaokeError } from '@/lib/fxiaoke/contracts'
 import { transportForOrganization } from '@/lib/fxiaoke/egress/server'
 import { resolveFxiaokeIdentity } from '@/lib/fxiaoke/identity'
-import { exchangeFxiaokeAuthorizationCode } from '@/lib/fxiaoke/oauth'
 import { resolveConfiguredOAuthOrganization } from '@/lib/fxiaoke/sso'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -62,6 +61,7 @@ function errorCode(error: unknown) {
     return error.code === 'OAUTH_STATE_INVALID' ? 'SSO_STATE_INVALID' : 'SSO_STATE_UNAVAILABLE'
   }
   if (error instanceof FxiaokeError) {
+    if (error.code === 'EGRESS_NOT_CLAIMED' || error.code === 'EGRESS_UNAVAILABLE') return 'SSO_DISPATCH_UNAVAILABLE'
     if (error.code === 'CROSS_ENTERPRISE_IDENTITY' || error.code === 'ENTERPRISE_MISMATCH') return 'SSO_ENTERPRISE_MISMATCH'
     if (error.code.startsWith('IDENTITY_') || error.code === 'EMPLOYEE_INACTIVE' || error.code === 'ORGANIZATION_MISMATCH' || error.code === 'BOOTSTRAP_ADMIN_INVALID') return 'SSO_IDENTITY_REJECTED'
     if (error.code === 'CONFIGURATION_REQUIRED' || error.code === 'CREDENTIALS_UNREADABLE' || error.code === 'SSO_ORGANIZATION_AMBIGUOUS' || error.code === 'SSO_ORGANIZATION_INVALID') return 'SSO_CONFIGURATION_INVALID'
@@ -79,7 +79,7 @@ const SAFE_DIAGNOSTIC_CODES = new Set([
   'PROVIDER_TLS', 'PROVIDER_CONNECTION', 'PROVIDER_UNREACHABLE', 'PROVIDER_REJECTED',
   'TENANT_MISMATCH', 'EMPLOYEE_INACTIVE', 'INVALID_IDENTITY',
   'IDENTITY_PROFILE_RESPONSE_INVALID', 'IDENTITY_PROFILE_NOT_FOUND', 'IDENTITY_PROFILE_AMBIGUOUS',
-  'EGRESS_UNAVAILABLE', 'EGRESS_REQUEST_DENIED', 'EGRESS_IP_CHANGED', 'EGRESS_PROVIDER_UNREACHABLE',
+  'EGRESS_UNAVAILABLE', 'EGRESS_NOT_CLAIMED', 'EGRESS_REQUEST_DENIED', 'EGRESS_IP_CHANGED', 'EGRESS_PROVIDER_UNREACHABLE',
 ])
 
 function reportFailure(stage: CallbackStage, error: unknown) {
@@ -93,27 +93,8 @@ function reportFailure(stage: CallbackStage, error: unknown) {
   console.warn('fxiaoke_sso_callback_failed', { stage, code, ...(status ? { status } : {}) })
 }
 
-async function verifyEnterprise(
-  credentials: Awaited<ReturnType<typeof resolveConfiguredOAuthOrganization>>['credentials'],
-  oauthCorpId: string,
-  transport: typeof fetch | undefined,
-) {
-  if (credentials.expectedCorpId) {
-    if (credentials.expectedCorpId !== oauthCorpId) {
-      throw new FxiaokeError('CROSS_ENTERPRISE_IDENTITY', '纷享登录身份不属于当前系统企业。', 403)
-    }
-    return
-  }
-
-  // Legacy rows did not persist the enterprise corp identifier. Verify the
-  // application-token enterprise on this callback and never trust the browser.
-  const enterprise = await discoverEnterprise(credentials, transport)
-  if (enterprise.ea !== credentials.expectedEa || enterprise.corpId !== oauthCorpId) {
-    throw new FxiaokeError('CROSS_ENTERPRISE_IDENTITY', '纷享登录身份不属于当前系统企业。', 403)
-  }
-}
-
 export async function GET(request: NextRequest) {
+  const started = performance.now()
   const state = request.nextUrl.searchParams.get('state')
   const cookieState = request.cookies.get(FXIAOKE_OAUTH_STATE_COOKIE)?.value
 
@@ -134,33 +115,28 @@ export async function GET(request: NextRequest) {
   if (providerError) return loginError(request, 'SSO_PROVIDER_DENIED')
   if (!code || code.length > 2048) return loginError(request, 'SSO_CODE_INVALID')
 
-  let stage: CallbackStage = 'configuration'
+  const progress: { stage: CallbackStage } = { stage: 'configuration' }
   let session: IssuedSystemSession | null = null
-  let profileLookup: { orgId: string; subject: string; apiUserId: string } | null = null
+  const profileLookup: { orgId?: string; subject?: string; apiUserId?: string } = {}
   try {
     const { orgId, credentials } = await resolveConfiguredOAuthOrganization()
     if (orgId !== consumed.orgId) {
       throw new FxiaokeError('SSO_ORGANIZATION_INVALID', '企业登录状态与当前配置企业不一致。', 409)
     }
     const transport = transportForOrganization(orgId)
-    stage = 'token_exchange'
-    const identity = await exchangeFxiaokeAuthorizationCode(credentials, {
-      code,
-      redirectUrl: consumed.redirectUrl,
-    }, transport)
-    stage = 'enterprise_verification'
-    await verifyEnterprise(credentials, identity.corpId, transport)
-    stage = 'employee_profile'
-    profileLookup = { orgId, subject: identity.openUserId, apiUserId: credentials.apiUserId }
-    const profile = await readEmployeeIdentity(
-      credentials,
-      identity.openUserId,
-      transport,
-    )
-    stage = 'identity_mapping'
+    progress.stage = 'token_exchange'
+    const input = { code, redirectUrl: consumed.redirectUrl }
+    const setStage: Parameters<typeof verifyProviderEmployee>[3] = (next, subject) => {
+      progress.stage = next
+      if (subject) Object.assign(profileLookup, { orgId, subject, apiUserId: credentials.apiUserId })
+    }
+    const { corpId, profile } = transport?.verifyEmployee
+      ? await transport.verifyEmployee(credentials, input, setStage)
+      : await verifyProviderEmployee(credentials, input, transport, setStage)
+    progress.stage = 'identity_mapping'
     const mapped = await resolveFxiaokeIdentity({
       orgId,
-      corpId: identity.corpId,
+      corpId,
       externalSubject: profile.directoryUserId,
       phone: profile.phone,
       employeeNumber: profile.employeeNumber,
@@ -169,9 +145,9 @@ export async function GET(request: NextRequest) {
       lifeStatus: profile.lifeStatus,
       loginDisabled: profile.loginDisabled,
     })
-    stage = 'session_issue'
+    progress.stage = 'session_issue'
     session = await issueSystemSession(mapped.userId, mapped.orgId, 'fxiaoke')
-    stage = 'login_audit'
+    progress.stage = 'login_audit'
     const audit = await supabaseAdmin.rpc('record_fxiaoke_sso_login_v1', {
       p_org_id: mapped.orgId,
       p_user_id: mapped.userId,
@@ -182,6 +158,7 @@ export async function GET(request: NextRequest) {
       throw new SessionIssueError('SESSION_AUDIT_FAILED', '纷享登录审计未完成。')
     }
     const response = successHandoff(request)
+    response.headers.set('Server-Timing', `fxiaoke_login;dur=${Math.round(performance.now() - started)}`)
     applySystemSessionCookies(response, session)
     return clearStateCookie(response)
   } catch (error) {
@@ -189,9 +166,9 @@ export async function GET(request: NextRequest) {
       // The browser must not receive a session whose success audit failed.
       try { await supabaseAdmin.from('auth_tokens').delete().eq('id', session.sessionId) } catch { /* no token reaches the browser */ }
     }
-    reportFailure(stage, error)
-    if (stage === 'employee_profile' && error instanceof FxiaokeError
-      && error.code === 'IDENTITY_PROFILE_NOT_FOUND' && profileLookup) {
+    reportFailure(progress.stage, error)
+    if (progress.stage === 'employee_profile' && error instanceof FxiaokeError
+      && error.code === 'IDENTITY_PROFILE_NOT_FOUND' && profileLookup.subject && profileLookup.orgId) {
       // Diagnose identifier drift without recording the OAuth subject, employee
       // profile, provider token or any credential in Production logs.
       let mapping: 'present' | 'absent' | 'unknown' = 'unknown'

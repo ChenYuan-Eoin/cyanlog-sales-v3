@@ -60,3 +60,7 @@ SUPABASE_PUBLISHABLE_KEY=<现有 cyanlog-sales-v3 的 publishable key>
 - 必须区分隔离故障测试与当前部署的实际连通性。受保护Preview缺少对应生产凭据、或敏感变量不可读取，都不能证明纷享直连成功或被IP拒绝。Production仍须以实际调用结果验证；不得放宽白名单或默认新购出口。
 
 生产验收仍必须在用户现有 Chrome、`sales.cyanlog.icu` 真实操作；本地测试或主机在线都不能代替。
+
+### 员工登录服务升级
+
+在 product-code 目录运行 `node node_modules/vite/bin/vite.js build --config lib/fxiaoke/egress/vite.config.mts`，将生成的 `node_modules/.cache/fxiaoke-egress/worker.mjs` 作为版本目录的 `worker.mjs`。此包包含与网站共用的企业、员工和账号状态校验。服务继续使用现有运行环境及锁定的 Supabase 客户端。先升级专用服务器并核对实时订阅，再发布发出合并登录任务的网站。回退顺序为网站在先，专用服务器在后。
