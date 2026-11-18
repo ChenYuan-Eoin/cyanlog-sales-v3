@@ -1,5 +1,5 @@
 // F003 / WP94. Start only from a fixed server-owned callback and one configured organization.
-import { NextRequest, NextResponse } from 'next/server'
+import { after, NextRequest, NextResponse } from 'next/server'
 import {
   FXIAOKE_OAUTH_STATE_COOKIE,
   FXIAOKE_OAUTH_STATE_MAX_AGE_SECONDS,
@@ -8,6 +8,8 @@ import {
 import { FxiaokeError } from '@/lib/fxiaoke/contracts'
 import { buildFxiaokeAuthorizationUrl } from '@/lib/fxiaoke/oauth'
 import { resolveConfiguredOAuthOrganization } from '@/lib/fxiaoke/sso'
+
+import { transportForOrganization } from '@/lib/fxiaoke/egress/server'
 
 export const runtime = 'nodejs'
 
@@ -57,6 +59,10 @@ export async function GET(request: NextRequest) {
       maxAge: FXIAOKE_OAUTH_STATE_MAX_AGE_SECONDS,
       expires: expiresAt,
     })
+    // The employee is now going to the provider. The worker can refresh its
+    // egress IP and TLS connection before the one-time authorization code returns.
+    const transport = transportForOrganization(orgId)
+    if (transport) after(transport.prepareLogin)
     return response
   } catch (error) {
     if (error instanceof FxiaokeError) {

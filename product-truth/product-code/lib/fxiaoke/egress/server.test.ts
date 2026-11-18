@@ -53,6 +53,17 @@ beforeEach(() => {
   fake.tables.organization_fxiaoke_egress=[{ system_org_id: org, last_seen_at:new Date().toISOString(),status:'ready' }]
 })
 afterEach(() => vi.unstubAllEnvs())
+it('prepares the configured worker with only an empty wake and no queued request', async () => {
+  fake.wake.mockResolvedValue({ success: true })
+  expect(transportForOrganization('unrelated-org')).toBeUndefined()
+  await transportForOrganization(org)!.prepareLogin()
+  expect(fake.wake).toHaveBeenCalledWith('wake', {}, { timeout: 1500 })
+  await transportForOrganization(org)!.prepareLogin()
+  expect(fake.wake).toHaveBeenCalledTimes(1)
+  expect(fake.inserts).toEqual([])
+  expect(fake.calls).toBe(0)
+})
+
 it('carries enterprise discovery through encrypted jobs and only broadcasts an empty wake signal',async () => {
   fake.wake.mockImplementation(async () => {
     expect(JSON.stringify(fake.tables)).not.toContain(credentials.appSecret)

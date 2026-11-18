@@ -6,7 +6,14 @@ const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
   state: vi.fn(),
   authorize: vi.fn(),
+  prepare: vi.fn(),
+  after: vi.fn(),
 }))
+vi.mock('next/server', async (importOriginal) => ({
+  ...await importOriginal<typeof import('next/server')>(),
+  after: mocks.after,
+}))
+vi.mock('@/lib/fxiaoke/egress/server', () => ({ transportForOrganization: () => ({ prepareLogin: mocks.prepare }) }))
 vi.mock('@/lib/fxiaoke/sso', () => ({ resolveConfiguredOAuthOrganization: mocks.resolve }))
 vi.mock('@/lib/auth/oauth-state', () => ({
   FXIAOKE_OAUTH_STATE_COOKIE: 'fxiaoke_oauth_state',
@@ -22,6 +29,7 @@ const request = (path = '/api/auth/fxiaoke/start') => new NextRequest(`https://s
 
 describe('Fxiaoke OAuth start', () => {
   beforeEach(() => {
+    mocks.after.mockClear()
     mocks.resolve.mockReset().mockResolvedValue({ orgId, credentials: { appId: 'FSAID_test' } })
     mocks.state.mockReset().mockResolvedValue({ state: 's'.repeat(32), expiresAt: new Date('2026-10-29T03:05:00Z') })
     mocks.authorize.mockReset().mockReturnValue(new URL('https://open.fxiaoke.com/oauth2.0/authorize?responseType=code'))
@@ -31,6 +39,7 @@ describe('Fxiaoke OAuth start', () => {
     const response = await GET(request(`/api/auth/fxiaoke/start?org=${orgId}`))
     expect(response.status).toBe(302)
     expect(mocks.resolve).toHaveBeenCalledWith()
+    expect(mocks.after).toHaveBeenCalledWith(mocks.prepare)
     expect(response.headers.get('location')).toMatch(/^https:\/\/open\.fxiaoke\.com\/oauth2\.0\/authorize/)
     expect(mocks.state).toHaveBeenCalledWith(orgId, 'https://sales.cyanlog.icu/api/auth/fxiaoke/callback')
     const cookie = response.headers.get('set-cookie') || ''
@@ -45,6 +54,7 @@ describe('Fxiaoke OAuth start', () => {
     mocks.resolve.mockRejectedValue(new Error('database credential secret'))
     const response = await GET(request())
     expect(response.status).toBe(302)
+    expect(mocks.after).not.toHaveBeenCalled()
     expect(response.headers.get('location')).toBe('https://sales.cyanlog.icu/login?sso_error=SSO_START_FAILED')
     expect(response.headers.get('location')).not.toContain('secret')
   })

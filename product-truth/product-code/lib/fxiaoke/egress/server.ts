@@ -57,6 +57,14 @@ export async function workerComplete(config: NonNullable<ReturnType<typeof egres
   return { accepted: true }
 }
 type EgressConfig = NonNullable<ReturnType<typeof egressConfig>>
+// Queue contents and employee credentials are never sent over the wake channel.
+async function wakeWorker(config: EgressConfig) {
+  const channel = supabaseAdmin.channel(config.topic)
+  try { await channel.httpSend('wake', {}, { timeout: 1500 }) }
+  catch { /* The authenticated queue remains authoritative. */ }
+  finally { await supabaseAdmin.removeChannel(channel) }
+}
+
 async function sendToWorker(config: EgressConfig, input: EgressRequest | LoginJob, signal?: AbortSignal | null) {
   const { orgId } = config
   signal?.throwIfAborted()
@@ -69,15 +77,8 @@ async function sendToWorker(config: EgressConfig, input: EgressRequest | LoginJo
     request_ciphertext: encryptCredentials(`${orgId}:${id}:request`, JSON.stringify(input)) })
   dbError(inserted.error)
   try {
-    // The public wake signal contains no job ID, tenant ID, credentials, or response data.
-    async function wakeWorker() {
-      const channel = supabaseAdmin.channel(config.topic)
-      try { return (await channel.httpSend('wake', {}, { timeout: 1500 })).success }
-      catch { return false }
-      finally { await supabaseAdmin.removeChannel(channel) }
-    }
     const started = Date.now()
-    await wakeWorker()
+    await wakeWorker(config)
     let wakeRepeated = false
     const deadline = Date.now() + 18000
     while (Date.now() < deadline) {
@@ -94,7 +95,7 @@ async function sendToWorker(config: EgressConfig, input: EgressRequest | LoginJo
       const elapsed = Date.now() - started
       if (result.data.status === 'queued' && !wakeRepeated && elapsed >= 300) {
         wakeRepeated = true
-        await wakeWorker()
+        await wakeWorker(config)
         continue
       }
       if (result.data.status === 'queued' && elapsed >= 1800) {
@@ -109,6 +110,7 @@ async function sendToWorker(config: EgressConfig, input: EgressRequest | LoginJo
   }
 }
 
+let lastPreparation: { topic: string; at: number } | undefined
 export function transportForOrganization(orgId: string) {
   const config = egressConfig()
   if (!config || config.orgId !== orgId) return undefined
@@ -118,6 +120,12 @@ export function transportForOrganization(orgId: string) {
     return sendToWorker(config, input, init.signal)
   }
   return Object.assign(send, {
+    async prepareLogin() {
+      const now = Date.now()
+      if (lastPreparation?.topic === config.topic && now - lastPreparation.at < 2000) return
+      lastPreparation = { topic: config.topic, at: now }
+      await wakeWorker(config)
+    },
     async verifyEmployee(credentials: Credentials, input: { code: string; redirectUrl: string }, setStage: Parameters<typeof readLoginReply>[2]) {
       const { appId, appSecret, permanentCode, apiUserId, expectedEa, expectedCorpId } = credentials
       const job = { kind: 'employee_login_v1', credentials: { appId, appSecret, permanentCode, apiUserId, expectedEa, ...(expectedCorpId ? { expectedCorpId } : {}) }, code: input.code, redirectUrl: input.redirectUrl }

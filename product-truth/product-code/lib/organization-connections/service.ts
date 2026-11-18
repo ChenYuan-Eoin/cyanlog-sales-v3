@@ -13,6 +13,7 @@ import { OrganizationConnectionError } from './errors'
 import {
   assertUnifiedConnectionStorage,
   detectConnectionStorageMode,
+  isMissingSchemaObject,
   type ConnectionStorageMode,
 } from './storage'
 import type {
@@ -843,30 +844,32 @@ export function hasIdentityAuthority(authorityScope: unknown) {
   )
 }
 
-export async function listIdentityAuthoritativeConnectionOrganizationIds(
-  provider: OrganizationConnectionProvider,
-  limit = 10,
-) {
+export async function listIdentityLoginConnections(provider: OrganizationConnectionProvider, limit = 2) {
   const boundedLimit = Math.max(1, Math.min(limit, 10))
-  if (await detectConnectionStorageMode() !== 'unified') {
-    return legacyVerifiedOrganizationIds(provider, boundedLimit, true)
-  }
-  const { data, error } = await supabaseAdmin
-    .from('organization_sources')
+  const { data, error } = await supabaseAdmin.from('organization_sources')
     .select(COLUMNS)
     .eq('provider', provider)
     .eq('status', 'active')
     .eq('connection_state', 'verified')
+    .eq('authority_scope->>identity', 'authoritative')
     .not('effective_revision', 'is', null)
     .order('updated_at', { ascending: false })
     .limit(boundedLimit)
-  if (error) throw storageFailure()
-  return Array.from(new Set(
-    (data || [])
-      .map(value => normalizeRow(value))
-      .filter(row => hasIdentityAuthority(row.authority_scope))
-      .map(row => row.system_org_id),
-  ))
+  if (error) {
+    if (!isMissingSchemaObject(error) || await detectConnectionStorageMode() !== 'legacy_fxiaoke_read_only') {
+      throw storageFailure()
+    }
+    const ids = await legacyVerifiedOrganizationIds(provider, boundedLimit, true)
+    return ids.map(orgId => ({
+      orgId,
+      readCredentials: async () => (await loadVerifiedConnection({ orgId, provider })).credentials,
+    }))
+  }
+  // Decrypt only after the caller has verified that exactly one tenant is eligible.
+  return (data || []).map(value => normalizeRow(value))
+    .filter(row => row.status === 'active' && row.connection_state === 'verified' &&
+      row.effective_revision && hasIdentityAuthority(row.authority_scope))
+    .map(row => ({ orgId: row.system_org_id, readCredentials: () => decryptEffective(row) }))
 }
 
 /** Explicit directory activation. A dormant identity authority must not become
