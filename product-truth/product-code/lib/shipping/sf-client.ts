@@ -148,7 +148,7 @@ async function getSfAccessToken(config: SfAuthConfig): Promise<SfSession> {
   try { return await request }
   finally { tokenRequests.delete(cacheKey) }
 }
-export function decodeSfResponse(raw: unknown, payloadField: 'msgData' | 'obj' = 'msgData'): unknown {
+export function decodeSfResponse(raw: unknown, payloadField: 'msgData' | 'obj' = 'msgData', requireSuccessCode = false): unknown {
   const outer = envelope.parse(raw)
   if (outer.apiResultCode !== 'A1000') {
     const code = /^[A-Z0-9_]{1,20}$/.test(outer.apiResultCode) ? outer.apiResultCode : 'unknown'
@@ -156,6 +156,7 @@ export function decodeSfResponse(raw: unknown, payloadField: 'msgData' | 'obj' =
   }
   const data = business.parse(typeof outer.apiResultData === 'string' ? JSON.parse(outer.apiResultData) : outer.apiResultData)
   if (data.success !== true && data.success !== 'true') throw new ShippingError(422, data.errorCode === '6150' ? '顺丰未找到该订单（6150）。' : `顺丰拒绝受理${data.errorCode ? `（${data.errorCode}）` : ''}，请核对资料或接口权限。`, 'provider_rejected')
+  if (requireSuccessCode && data.errorCode !== 'S0000') throw new ShippingError(502, '取消回执缺少明确的业务成功码，请先核实原单。', 'provider_invalid_response')
   return data[payloadField]
 }
 async function postSfService(serviceCode: string, message: unknown, config: SfAuthConfig, session: SfSession): Promise<unknown> {
@@ -262,14 +263,19 @@ export async function createSfOrder(id: string, input: ShippingInput, config: Sh
 export async function lookupSfOrder(id: string, config: ShippingRuntimeConfig) {
   return extractOrder(await sfCall('EXP_RECE_SEARCH_ORDER_RESP', { orderId: id, language: 'zh-CN', searchType: '1' }, config), id)
 }
-const cancelResult = z.object({ orderId: z.string() })
+const cancelResult = z.object({ orderId: z.string(), resStatus: z.unknown().optional() })
 export function extractCancellation(raw: unknown, expectedId: string) {
   const data = cancelResult.parse(raw)
   if (data.orderId !== expectedId) throw new ShippingError(502, '顺丰返回的取消订单编号不一致，请人工核对。')
+  if (data.resStatus !== 2 && data.resStatus !== '2') throw new ShippingError(502, '顺丰未确认该原单取消成功，请核实取消回执。', data.resStatus === 1 || data.resStatus === '1' ? 'provider_rejected' : 'provider_invalid_response')
   return true
 }
 export async function cancelSfOrder(orderId: string, config: ShippingRuntimeConfig) {
-  return extractCancellation(await sfCall('EXP_RECE_UPDATE_ORDER', { orderId, dealType: 2, language: 'zh-CN' }, config), orderId)
+  let session: SfSession
+  try { session = await getSfAccessToken(config) }
+  catch { throw new ShippingError(502, '未获得顺丰认证，本次未发送撤单。', 'provider_not_sent') }
+  const reply = await postSfService('EXP_RECE_UPDATE_ORDER', {orderId, dealType:2, language:'zh-CN'}, config, session)
+  return extractCancellation(decodeSfResponse(reply, 'msgData', true), orderId)
 }
 const routeData = z.object({ routeResps: z.array(z.object({ mailNo: z.string().nullable().optional(), routes: z.array(z.object({
   acceptTime: z.string(), acceptAddress: z.string().nullish(), remark: z.string(),

@@ -57,21 +57,68 @@ it('opens one owner receipt at a time and shows identifiers and the full reason 
   expect(screen.queryByText('SF-SECOND')).toBeNull()
   expect(screen.queryByText('退回原因：' + longReason)).toBeNull()
   expect(screen.queryByRole('button', { name: '修改' })).toBeNull()
+  expect(screen.queryByRole('button', { name: '取消' })).toBeNull()
   fireEvent.click(first)
   expect(first.getAttribute('aria-expanded')).toBe('true')
   expect(screen.getByText('FIRST')).toBeTruthy()
   expect(screen.getByText('退回原因：' + longReason)).toBeTruthy()
   expect(screen.getByRole('button', { name: '修改' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: '取消' })).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: /发运客户/ }))
   expect(screen.queryByText('FIRST')).toBeNull()
   expect(screen.queryByRole('button', { name: '修改' })).toBeNull()
   expect(screen.getByText('SF-SECOND')).toBeTruthy()
+})
+it('prevents editing or closing the record during cancellation and updates only the cancelled order', async () => {
+  let finish!: (value: Response) => void
+  fetcher.mockResolvedValueOnce(response({ orders: [
+    { ...order('ORIGINAL'), status: 'returned', waybill: null, customerName: '客户甲' },
+    { ...order('OTHER'), customerName: '客户乙' },
+  ], nextPage: null })).mockReturnValueOnce(new Promise<Response>(resolve => { finish = resolve }))
+  const onResubmit = vi.fn()
+  render(<MyWorkorders scope="owner" onResubmit={onResubmit} />)
+  const first = await screen.findByRole('button', { name: /客户甲/ })
+  fireEvent.click(first)
+  fireEvent.click(screen.getByRole('button', { name: '取消' }))
+  fireEvent.click(screen.getByRole('button', { name: '确认取消' }))
+  for (const button of [
+    first, screen.getByRole('button', { name: '修改' }), screen.getByRole('button', { name: /客户乙/ }),
+    screen.getByRole('button', { name: '刷新提报记录' }), screen.getByRole('button', { name: '正在取消…' }),
+  ]) {
+    expect((button as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(button)
+  }
+  expect(first.getAttribute('aria-expanded')).toBe('true')
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/shipping/owner/orders?page=0', '/api/shipping/owner/orders/ORIGINAL/cancel'])
+  expect(onResubmit).not.toHaveBeenCalled()
+  finish(response({ status: 'cancelled' }))
+  await screen.findByRole('button', { name: /客户甲.*已取消/ })
+  expect(screen.getByRole('button', { name: /客户乙.*运单已生成/ })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: /^(修改|取消)$/ })).toBeNull()
+})
+it('disables cancellation while loading the original for editing and unlocks after a read failure', async () => {
+  let finish!: (value: Response) => void
+  fetcher.mockResolvedValueOnce(response({ orders: [
+    { ...order('ORIGINAL'), status: 'returned', waybill: null, customerName: '客户甲' },
+  ], nextPage: null })).mockReturnValueOnce(new Promise<Response>(resolve => { finish = resolve }))
+  render(<MyWorkorders scope="owner" onResubmit={vi.fn()} />)
+  fireEvent.click(await screen.findByRole('button', { name: /客户甲/ }))
+  fireEvent.click(screen.getByRole('button', { name: '修改' }))
+  const cancel = screen.getByRole('button', { name: '取消' }) as HTMLButtonElement
+  expect(cancel.disabled).toBe(true)
+  fireEvent.click(cancel)
+  expect(screen.queryByRole('button', { name: '确认取消' })).toBeNull()
+  finish(response({ error: '工单状态已变化' }, 409))
+  await screen.findByText('工单状态已变化')
+  expect(cancel.disabled).toBe(false)
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/shipping/owner/orders?page=0', '/api/shipping/owner/orders/ORIGINAL/resubmit'])
 })
 it('does not display a return reason in a shared receipt, even if supplied', async () => {
   fetcher.mockResolvedValue(response({ orders: [{ ...order('SHARED'), status: 'returned', returnedReason: '私有备注' }], nextPage: null }))
   render(<MyWorkorders />)
   await screen.findByText('SHARED')
   expect(screen.queryByText(/私有备注|退回原因/)).toBeNull()
+  expect(screen.queryByRole('button', { name: '取消' })).toBeNull()
 })
 it('keeps existing records when another page fails and lets visitors retry it',async()=>{
  fetcher.mockResolvedValueOnce(response({orders:[order('ONE')],nextPage:1}))

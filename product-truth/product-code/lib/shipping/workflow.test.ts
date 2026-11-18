@@ -8,8 +8,8 @@ vi.mock('./carrier-adapter', async importOriginal => {
   return { ...real, getCarrierAdapter: (key: string) => adapterOverride.value?.key === key ? adapterOverride.value : real.getCarrierAdapter(key) }
 })
 
-const mocks = vi.hoisted(() => ({ from: vi.fn(), runtimeConfig: vi.fn(), service: vi.fn(), cancel: vi.fn(), lookup: vi.fn(), submit: vi.fn(), capability: vi.fn(), defaultOrg: vi.fn() }))
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from } }))
+const mocks = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), runtimeConfig: vi.fn(), service: vi.fn(), cancel: vi.fn(), lookup: vi.fn(), submit: vi.fn(), capability: vi.fn(), defaultOrg: vi.fn() }))
+vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from, rpc: mocks.rpc } }))
 vi.mock('@/lib/scoped-access', () => ({ getDefaultOrgId: mocks.defaultOrg }))
 vi.mock('./runtime-config', () => ({ getShippingRuntimeConfig: mocks.runtimeConfig, selectAuthorizedShippingService: mocks.service }))
 vi.mock('./sf-client', () => ({ cancelSfOrder: mocks.cancel, lookupSfOrder: mocks.lookup, createSfOrder: vi.fn() }))
@@ -61,6 +61,19 @@ beforeEach(() => {
   loadedOrder = { ...order }
   claimLost = false
   queries.length = 0
+  mocks.rpc.mockReset().mockImplementation(async (name, args) => {
+    if (name === 'claim_shipping_cancellation_v1') {
+      if (args.p_org !== loadedOrder.org_id) return {data:{result:'missing'}}
+      if (loadedOrder.status !== 'waybill_created' || !loadedOrder.carrier_connection_id) return {data:{id:order.id,result:loadedOrder.status === 'cancelled' ? 'cancelled' : 'unavailable'}}
+      return {data:{id:order.id,result:'dispatch', provider:loadedOrder.provider_key, providerOrderId:loadedOrder.provider_order_id,
+        connectionId:loadedOrder.carrier_connection_id, billingAccountId:loadedOrder.billing_account_id, environment:loadedOrder.connection_environment}}
+    }
+    if (args.p_outcome === 'accepted') {
+      if (loadedOrder.status === 'delivered') return {data:'manual_review'}
+      loadedOrder.status='cancelled'
+    }
+    return {data:args.p_outcome}
+  })
   mocks.from.mockReset().mockImplementation(makeQueryBuilder)
   mocks.runtimeConfig.mockReset().mockImplementation(async args => args.senderOverride ? { ...runtime, sender: args.senderOverride, senderProfileId: null, snapshot: { senderSource: 'workorder', senderProfileId: null } } : runtime)
   mocks.service.mockReset().mockReturnValue(runtime.services[0])
@@ -110,10 +123,11 @@ describe('work-order sender preservation at formal confirmation', () => {
 })
 
 describe('shipping order organization boundaries', () => {
-  it.each(actions)('$name rejects a returned row belonging to another organization before side effects', async ({ status, call }) => {
+  it.each(actions)('$name rejects a returned row belonging to another organization before side effects', async ({ name, status, call }) => {
     loadedOrder = { ...order, org_id: 'org-B', status }
     await expect(call('org-A')).rejects.toMatchObject({ status: 404 })
-    expect(queries[0].filters).toEqual(expect.arrayContaining([['id', 'order-1'], ['org_id', 'org-A']]))
+    if (name === 'cancel') expect(mocks.rpc).toHaveBeenCalledWith('claim_shipping_cancellation_v1', expect.objectContaining({p_reference:'order-1',p_org:'org-A',p_owner:false}))
+    else expect(queries[0].filters).toEqual(expect.arrayContaining([['id', 'order-1'], ['org_id', 'org-A']]))
     expect(queries.some(query => query.action !== 'select' || query.table !== 'shipping_orders')).toBe(false)
     expect(mocks.runtimeConfig).not.toHaveBeenCalled()
     expect(mocks.cancel).not.toHaveBeenCalled()
@@ -172,7 +186,7 @@ describe('historical carrier snapshot operations', () => {
     })
     await expect(cancelShipmentOrder('order-1', 'operator-1', 'org-A')).resolves.toEqual({ id: 'order-1', status: 'cancelled' })
     expect(loadedOrder.status).toBe('cancelled')
-    expect(queries.find(query => query.table === 'shipping_waybills' && query.action === 'update')?.values).toMatchObject({ latest_status: 'cancelled' })
+    expect(mocks.rpc).toHaveBeenCalledWith('finish_shipping_cancellation_v1', expect.objectContaining({ p_outcome:'accepted', p_org:'org-A' }))
   })
 
   it('does not overwrite a delivered order if tracking wins the cancellation race', async () => {
@@ -192,7 +206,7 @@ describe('historical carrier snapshot operations', () => {
     })
     await expect(cancelShipmentOrder('order-1', 'operator-1', 'org-A')).resolves.toEqual({ id: 'order-1', status: 'cancelled' })
     expect(loadedOrder.status).toBe('cancelled')
-    expect(queries.filter(query => query.table === 'shipping_orders' && query.action === 'select')).toHaveLength(2)
+    expect(mocks.cancel).toHaveBeenCalledTimes(1)
   })
 
   it.each(['provider_rejected', 'provider_unreachable'] as const)('does not mark cancellation when SF reports %s', async stage => {
