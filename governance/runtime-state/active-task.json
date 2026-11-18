@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-18T09:23:37.814859+00:00",
+  "updated_at": "2026-11-18T10:12:14.328332+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -235,53 +235,33 @@
     }
   },
   "active_task": {
-    "id": "WP44",
-    "slug": "organization-custom-roles",
-    "name": "组织自定义角色创建、复制与分配",
+    "id": "WP35",
+    "slug": "sales-intake-experience",
+    "name": "销售寄件提报体验",
     "kind": "product",
     "status": "active",
-    "objective": "组织管理员可以给已核对纷享身份的有效在职成员在首次登录前预分配角色；首次登录后角色生效。",
-    "execution_workspace": "/private/tmp/price-v3-first-login-assignment",
-    "activation_basis": "IN-20261118-046 用户报告的真实拒绝；按组织角色缺陷独立开发。",
+    "objective": "本人查看被退回的寄件提报时，看到操作员填写的原因及红色提示。",
+    "started_at": "2026-11-18T10:12:14.328332+00:00",
+    "activation_basis": "IN-20261118-055 正式站本人提报记录重现。",
+    "execution_workspace": "/private/tmp/price-v3-own-return-reason",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/product-code/app/configs/tabs/OrgStructureTab.tsx",
-      "product-truth/product-code/app/configs/tabs/OrgStructureTab.test.tsx",
-      "product-truth/product-code/app/configs/tabs/RoleDetailPanel.tsx",
-      "product-truth/product-code/app/configs/tabs/RoleDetailPanel.test.tsx",
-      "product-truth/product-code/app/configs/tabs/role-assignment-policy.ts",
-      "product-truth/product-code/app/configs/tabs/role-assignment-policy.test.ts",
-      "product-truth/product-code/lib/organization-connections/fxiaoke-sso-no-invite-migration.test.ts",
-      "product-truth/product-code/supabase/migrations/20261118095000_fxiaoke_prelogin_role_assignment.sql",
+      "product-truth/product-code/app/sales-portal/my-workorders.tsx",
+      "product-truth/product-code/app/sales-portal/my-workorders.test.tsx",
+      "product-truth/product-code/app/sales-portal/sales-portal.module.css",
+      "product-truth/product-code/lib/shipping/types.ts",
+      "product-truth/product-code/lib/shipping/collaboration.ts",
+      "product-truth/product-code/lib/shipping/collaboration.org.test.ts",
       "product-truth/product-code/node_modules",
       "product-truth/product-code/.next",
-      "product-truth/product-code/tsconfig.tsbuildinfo",
-      "product-truth/product-code/lib/organization-connections/fxiaoke-prelogin-role.test.ts",
-      "product-truth/product-code/lib/organization-connections/fxiaoke-prelogin-role.test.sql",
-      "product-truth/product-code/app/configs/tabs/components/RoleAssignmentDialog.tsx",
-      "product-truth/product-code/app/configs/types.ts",
-      "product-truth/product-code/app/configs/tabs/RoleAccessTab.tsx",
-      "product-truth/product-code/app/configs/tabs/RoleAccessTab.test.tsx",
-      "product-truth/product-code/app/configs/tabs/components/RoleAssignmentDialog.test.tsx",
-      "product-truth/product-code/app/api/admin/users/[id]/roles/route.ts",
-      "product-truth/product-code/app/api/admin/users/[id]/roles/route.test.ts",
-      "product-truth/product-code/app/api/admin/org/route.ts",
-      "product-truth/product-code/app/api/admin/org/route.test.ts",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/prelogin-role-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/prelogin-role-verifier.test.js"
+      "product-truth/product-code/tsconfig.tsbuildinfo"
     ],
-    "feature_id": "F003",
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "code_green",
       "allowed_states": [
         "executing",
-        "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -296,15 +276,23 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "prelogin_role_eligibility"
+        "sales_intake",
+        "shipping_access"
       ],
-      "note": "在指定迁移确认后发布67a3ff41网站产品树，使用既有Chrome只读核验刘楠楠是否可预分配角色；不为其分配或激活角色，不操作其他员工，不发单。",
-      "production_database_mode": "read_only",
-      "runtime_profile": "application",
-      "runtime_contract_version": "f003-prelogin-role-v1",
       "required_production_runtime_evidence": [
-        "prelogin_role_eligibility"
+        "sales_intake",
+        "shipping_access"
       ],
+      "required_production_evidence": [
+        "exact_production_commit",
+        "vercel_deployment_ready_and_promoted",
+        "sales.cyanlog.icu_alias",
+        "controlled_production_security_and_runtime_verifier",
+        "trusted_existing_chrome_operator_attestation"
+      ],
+      "note": "本人退回原因独立候选，发布另行审批。",
+      "production_database_mode": "read_only",
+      "runtime_profile": "shipping_workspace",
       "final_acceptance": {
         "origin": "https://sales.cyanlog.icu",
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
@@ -315,46 +303,45 @@
         "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
         "production_database_mode": "read_only"
       },
-      "required_production_evidence": [
-        "exact_production_commit",
-        "vercel_deployment_ready_and_promoted",
-        "sales.cyanlog.icu_alias",
-        "controlled_production_security_and_runtime_verifier",
-        "trusted_existing_chrome_operator_attestation"
-      ],
       "production_release_authorization": {
-        "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261118-048",
-        "final_scope": "在指定迁移确认后发布67a3ff41网站产品树，使用既有Chrome只读核验刘楠楠是否可预分配角色；不为其分配或激活角色，不操作其他员工，不发单。",
+        "status": "not_authorized_for_current_candidate",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
-        "carrier_calls_authorized": false,
-        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
-        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
-        "micro_fix_approval_id": "IN-20261118-046",
-        "clarification_id": "IN-20261118-047",
-        "micro_fix_scope": "在指定迁移确认后发布67a3ff41网站产品树，使用既有Chrome只读核验刘楠楠是否可预分配角色；不为其分配或激活角色，不操作其他员工，不发单。"
+        "carrier_calls_authorized": false
       },
-      "preview_order_exception_approval_id": "IN-20261118-048"
+      "blocking_acceptance_defects": [],
+      "runtime_contract_version": "f054-auth-intake-v1"
     },
-    "started_at": "2026-11-18T09:23:37.814859+00:00",
+    "feature_id": "F054",
     "integration_decision": {
-      "strategy": "isolated_role_assignment_candidate",
-      "authority": "IN-20261118-048",
-      "requested_target": "production_released"
-    }
+      "strategy": "isolated_owner_return_reason_candidate",
+      "authority": "IN-20261118-055",
+      "requested_target": "code_green"
+    },
+    "micro_fixes": [
+      {
+        "id": "IN-20261118-011",
+        "scope": "多单直接粘贴地址，识别后每票独立填写客户公司。",
+        "evidence": "见同编号正式页复现记录"
+      },
+      {
+        "id": "IN-20261118-012",
+        "scope": "员工页宽屏标题与寄件内容从主区域左边对齐。",
+        "evidence": "见同编号正式页复现记录"
+      }
+    ],
+    "paused_reason": "员工认证生产故障阻断寄件验收，正式站延用已发布版本。"
   },
   "execution_queue": {
     "active": {
-      "id": "WP44",
-      "slug": "organization-custom-roles",
-      "name": "组织自定义角色创建、复制与分配"
-    },
-    "next": {
       "id": "WP35",
       "slug": "sales-intake-experience",
-      "name": "销售寄件提报体验",
-      "entry_gate": "认证恢复后继续既有寄件页面验收。"
+      "name": "销售寄件提报体验"
+    },
+    "next": {
+      "id": "WP77",
+      "slug": "navigation-performance",
+      "name": "受保护页面切换耗时"
     },
     "ready": [
       {
@@ -1197,11 +1184,6 @@
           "status": "awaiting_integration",
           "reason": "配置UI合同及精确只读工具分类已有本地修复和目标验证；恢复产品候选验收"
         }
-      },
-      {
-        "id": "WP77",
-        "slug": "navigation-performance",
-        "name": "受保护页面切换耗时"
       }
     ],
     "parked": [
@@ -2872,9 +2854,9 @@
     "inbox_path": "governance/runtime-state/demand-inbox.jsonl",
     "source_dirty_workspace": "/Users/nsss/Price-v3",
     "role": "canonical_execution_candidate",
-    "branch": "codex/member-role-before-first-login",
-    "execution_workspace": "/private/tmp/price-v3-first-login-assignment",
-    "workspace_strategy": "reuse-primary-worktree"
+    "branch": "codex/wp35-own-return-reason",
+    "execution_workspace": "/private/tmp/price-v3-own-return-reason",
+    "workspace_strategy": "isolated-followup"
   },
   "entry": {
     "continue_work": "继续工作",
@@ -4658,112 +4640,6 @@
         "即时退出联动仍缺当前应用协议证据"
       ]
     },
-    "WP35_employee_intake_acceptance": {
-      "id": "WP35",
-      "slug": "sales-intake-experience",
-      "name": "销售寄件提报体验",
-      "kind": "product",
-      "status": "active",
-      "objective": "员工在左对齐的寄件表单可直接粘贴多地址，逐票独立填写公司并预览；继承已验证的跨标签换号候选。",
-      "started_at": "2026-11-18T06:31:08.765211+00:00",
-      "activation_basis": "IN-20261118-011/012；用户要求开始开发这三项并在完成后验收。",
-      "execution_workspace": "/private/tmp/price-v3-sales-intake-repair",
-      "allowed_paths": [
-        "governance/runtime-state/active-task.json",
-        "governance/runtime-state/demand-inbox.jsonl",
-        "product-truth/product-code/app/sales-portal",
-        "product-truth/product-code/node_modules",
-        "product-truth/product-code/.next",
-        "product-truth/product-code/tsconfig.tsbuildinfo"
-      ],
-      "delivery_contract": {
-        "target_state": "production_released",
-        "allowed_states": [
-          "executing",
-          "code_green",
-          "clean_preview_green",
-          "integration_ready",
-          "main_integrated",
-          "production_released"
-        ],
-        "integration_branch": "main",
-        "production_branch": "production",
-        "production_release_separate": true,
-        "same_release_commit_required": true,
-        "attestation_ref": "refs/notes/price-v3-delivery",
-        "required_code_checks": [
-          "target_tests",
-          "full_tests",
-          "lint",
-          "typecheck",
-          "build"
-        ],
-        "required_runtime_evidence": [
-          "sales_intake",
-          "shipping_access"
-        ],
-        "required_production_runtime_evidence": [
-          "sales_intake",
-          "shipping_access"
-        ],
-        "required_production_evidence": [
-          "exact_production_commit",
-          "vercel_deployment_ready_and_promoted",
-          "sales.cyanlog.icu_alias",
-          "controlled_production_security_and_runtime_verifier",
-          "trusted_existing_chrome_operator_attestation"
-        ],
-        "note": "按本次明确批准发布同一产品树。用户在现有Chrome验收。",
-        "production_database_mode": "read_only",
-        "runtime_profile": "shipping_workspace",
-        "final_acceptance": {
-          "origin": "https://sales.cyanlog.icu",
-          "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
-          "new_local_browser_or_context_prohibited": true,
-          "new_tab_prohibited": true,
-          "local_and_preview_role": "diagnostic_only_not_completion",
-          "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
-          "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
-          "production_database_mode": "read_only"
-        },
-        "production_release_authorization": {
-          "status": "approved_code_only",
-          "final_release_approval_id": "IN-20261118-013",
-          "micro_fix_approval_id": "IN-20261118-011",
-          "clarification_id": "IN-20261118-012",
-          "micro_fix_scope": "员工提报界面与既有跨标签候选",
-          "final_scope": "发布07a21fa0产品树的员工多单逐票公司入口、宽屏左对齐及跨标签换账号修复，用户在正式站验收。不迁移数据、不发单。",
-          "database_write_authorized": false,
-          "production_database_write_authorized": false,
-          "carrier_calls_authorized": false,
-          "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
-          "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
-        },
-        "blocking_acceptance_defects": [],
-        "runtime_contract_version": "f054-auth-intake-v1",
-        "preview_order_exception_approval_id": "IN-20261118-013"
-      },
-      "feature_id": "F054",
-      "integration_decision": {
-        "strategy": "combine_verified_session_change_with_employee_intake_feedback",
-        "authority": "IN-20261118-013",
-        "requested_target": "production_released",
-        "constraint": "限定已批准产品树，正式站由用户验收。"
-      },
-      "micro_fixes": [
-        {
-          "id": "IN-20261118-011",
-          "scope": "多单直接粘贴地址，识别后每票独立填写客户公司。",
-          "evidence": "见同编号正式页复现记录"
-        },
-        {
-          "id": "IN-20261118-012",
-          "scope": "员工页宽屏标题与寄件内容从主区域左边对齐。",
-          "evidence": "见同编号正式页复现记录"
-        }
-      ],
-      "paused_reason": "员工认证生产故障阻断寄件验收，正式站延用已发布版本。"
-    },
     "WP77_navigation_latency": {
       "id": "WP77",
       "slug": "navigation-performance",
@@ -4859,6 +4735,116 @@
       "integration_decision": {
         "strategy": "release_approved_navigation_product_tree",
         "authority": "IN-20261118-028",
+        "requested_target": "production_released"
+      }
+    },
+    "WP44_role_preassignment": {
+      "id": "WP44",
+      "slug": "organization-custom-roles",
+      "name": "组织自定义角色创建、复制与分配",
+      "kind": "product",
+      "status": "active",
+      "objective": "组织管理员可以给已核对纷享身份的有效在职成员在首次登录前预分配角色；首次登录后角色生效。",
+      "execution_workspace": "/private/tmp/price-v3-first-login-assignment",
+      "activation_basis": "IN-20261118-046 用户报告的真实拒绝；按组织角色缺陷独立开发。",
+      "allowed_paths": [
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "product-truth/product-code/app/configs/tabs/OrgStructureTab.tsx",
+        "product-truth/product-code/app/configs/tabs/OrgStructureTab.test.tsx",
+        "product-truth/product-code/app/configs/tabs/RoleDetailPanel.tsx",
+        "product-truth/product-code/app/configs/tabs/RoleDetailPanel.test.tsx",
+        "product-truth/product-code/app/configs/tabs/role-assignment-policy.ts",
+        "product-truth/product-code/app/configs/tabs/role-assignment-policy.test.ts",
+        "product-truth/product-code/lib/organization-connections/fxiaoke-sso-no-invite-migration.test.ts",
+        "product-truth/product-code/supabase/migrations/20261118095000_fxiaoke_prelogin_role_assignment.sql",
+        "product-truth/product-code/node_modules",
+        "product-truth/product-code/.next",
+        "product-truth/product-code/tsconfig.tsbuildinfo",
+        "product-truth/product-code/lib/organization-connections/fxiaoke-prelogin-role.test.ts",
+        "product-truth/product-code/lib/organization-connections/fxiaoke-prelogin-role.test.sql",
+        "product-truth/product-code/app/configs/tabs/components/RoleAssignmentDialog.tsx",
+        "product-truth/product-code/app/configs/types.ts",
+        "product-truth/product-code/app/configs/tabs/RoleAccessTab.tsx",
+        "product-truth/product-code/app/configs/tabs/RoleAccessTab.test.tsx",
+        "product-truth/product-code/app/configs/tabs/components/RoleAssignmentDialog.test.tsx",
+        "product-truth/product-code/app/api/admin/users/[id]/roles/route.ts",
+        "product-truth/product-code/app/api/admin/users/[id]/roles/route.test.ts",
+        "product-truth/product-code/app/api/admin/org/route.ts",
+        "product-truth/product-code/app/api/admin/org/route.test.ts",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/prelogin-role-verifier.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/prelogin-role-verifier.test.js"
+      ],
+      "feature_id": "F003",
+      "delivery_contract": {
+        "target_state": "production_released",
+        "allowed_states": [
+          "executing",
+          "code_green",
+          "clean_preview_green",
+          "integration_ready",
+          "main_integrated",
+          "production_released"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "prelogin_role_eligibility"
+        ],
+        "note": "在指定迁移确认后发布67a3ff41网站产品树，使用既有Chrome只读核验刘楠楠是否可预分配角色；不为其分配或激活角色，不操作其他员工，不发单。",
+        "production_database_mode": "read_only",
+        "runtime_profile": "application",
+        "runtime_contract_version": "f003-prelogin-role-v1",
+        "required_production_runtime_evidence": [
+          "prelogin_role_eligibility"
+        ],
+        "final_acceptance": {
+          "origin": "https://sales.cyanlog.icu",
+          "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+          "new_local_browser_or_context_prohibited": true,
+          "new_tab_prohibited": true,
+          "local_and_preview_role": "diagnostic_only_not_completion",
+          "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
+          "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
+          "production_database_mode": "read_only"
+        },
+        "required_production_evidence": [
+          "exact_production_commit",
+          "vercel_deployment_ready_and_promoted",
+          "sales.cyanlog.icu_alias",
+          "controlled_production_security_and_runtime_verifier",
+          "trusted_existing_chrome_operator_attestation"
+        ],
+        "production_release_authorization": {
+          "status": "approved_code_only",
+          "final_release_approval_id": "IN-20261118-048",
+          "final_scope": "在指定迁移确认后发布67a3ff41网站产品树，使用既有Chrome只读核验刘楠楠是否可预分配角色；不为其分配或激活角色，不操作其他员工，不发单。",
+          "database_write_authorized": false,
+          "production_database_write_authorized": false,
+          "carrier_calls_authorized": false,
+          "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "micro_fix_approval_id": "IN-20261118-046",
+          "clarification_id": "IN-20261118-047",
+          "micro_fix_scope": "在指定迁移确认后发布67a3ff41网站产品树，使用既有Chrome只读核验刘楠楠是否可预分配角色；不为其分配或激活角色，不操作其他员工，不发单。"
+        },
+        "preview_order_exception_approval_id": "IN-20261118-048"
+      },
+      "started_at": "2026-11-18T09:23:37.814859+00:00",
+      "integration_decision": {
+        "strategy": "isolated_role_assignment_candidate",
+        "authority": "IN-20261118-048",
         "requested_target": "production_released"
       }
     }
