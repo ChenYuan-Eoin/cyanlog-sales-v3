@@ -262,10 +262,14 @@
     ],
     "feature_id": "F054",
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -282,7 +286,7 @@
       "required_runtime_evidence": [
         "navigation_performance"
       ],
-      "note": "标书约1秒生成列表，下一帧曾延至15秒。停止工作台跨模块自动请求，在用户选择侧栏目标时预取。此候选尚未获准发布。",
+      "note": "发布 ff23d86c 页面性能候选，在正式站现有 Chrome 只读复测标书、知识库、日程；无数据库迁移、无业务数据修改、无承运商调用。",
       "production_database_mode": "read_only",
       "runtime_profile": "navigation",
       "runtime_contract_version": "navigation-performance-v1",
@@ -307,11 +311,19 @@
         "trusted_existing_chrome_operator_attestation"
       ],
       "production_release_authorization": {
-        "status": "not_authorized_for_current_candidate",
+        "status": "approved_code_only",
+        "final_release_approval_id": "IN-20261118-038",
+        "final_scope": "发布 ff23d86c 页面性能候选，在正式站现有 Chrome 只读复测标书、知识库、日程；无数据库迁移、无业务数据修改、无承运商调用。",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
-        "carrier_calls_authorized": false
-      }
+        "carrier_calls_authorized": false,
+        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "micro_fix_approval_id": "IN-20261118-037",
+        "clarification_id": "IN-20261118-019",
+        "micro_fix_scope": "发布 ff23d86c 页面性能候选，在正式站现有 Chrome 只读复测标书、知识库、日程；无数据库迁移、无业务数据修改、无承运商调用。"
+      },
+      "preview_order_exception_approval_id": "IN-20261118-038"
     },
     "started_at": "2026-11-18T07:55:28.910972+00:00",
     "integration_decision": {
