@@ -583,6 +583,8 @@ export interface OrgSummaryUser {
   primary_dept_name: string
   primary_dept_id?: string | null
   role_names: string
+  can_preassign_org_roles?: boolean
+  pending_org_roles?: { id: string; code: string; name: string }[]
   role_ids?: string[]
   role_codes?: string[]
   scoped_roles?: ScopedRoleAssignment[]

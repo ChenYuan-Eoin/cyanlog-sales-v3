@@ -15,8 +15,10 @@ import {
   validateOrgRoleAssignment,
 } from '@/lib/admin/org-role-authority'
 
+const orgRoleIds = z.array(z.string().regex(/^[0-9a-f-]{36}$/i, '角色 ID 格式不正确'))
 const assignOrgRolesSchema = z.object({
-  role_ids: z.array(z.string().regex(/^[0-9a-f-]{36}$/i, '角色 ID 格式不正确')),
+  role_ids: orgRoleIds,
+  expected_role_ids: orgRoleIds.optional(),
   scope_type: z.literal('org').optional().default('org'),
   scope_id: z.string().regex(/^[0-9a-f-]{36}$/i, '作用域 ID 格式不正确').nullable().optional(),
 })
@@ -54,7 +56,7 @@ export async function POST(
       )
     }
 
-    const { role_ids } = parseResult.data
+    const { role_ids, expected_role_ids } = parseResult.data
 
     // 检查用户是否存在
     const { data: userExists, error: userCheckError } = await supabaseAdmin
@@ -86,28 +88,51 @@ export async function POST(
       )
     }
 
-    const { data: replaced, error: replaceError } = await supabaseAdmin.rpc(
-      'admin_replace_org_roles_v1',
-      {
-        p_actor_id: currentUser.id,
-        p_org_id: orgId,
-        p_user_id: userId,
-        p_role_ids: roleValidation.roleIds,
-        p_reason: 'tenant role assignment',
-        p_request_id: req.headers.get('x-request-id'),
-      },
-    )
+    const args = {
+      p_actor_id: currentUser.id,
+      p_org_id: orgId,
+      p_user_id: userId,
+      p_role_ids: roleValidation.roleIds,
+      p_reason: 'tenant role assignment',
+      p_request_id: req.headers.get('x-request-id'),
+    }
+    const { data: replaced, error: replaceError } = expected_role_ids === undefined
+      ? await supabaseAdmin.rpc('admin_replace_org_roles_v1', args)
+      : await supabaseAdmin.rpc('admin_replace_org_roles_if_current_v1', {
+        ...args,
+        p_expected_role_ids: [...new Set(expected_role_ids)],
+      })
     if (replaceError) {
+      if (expected_role_ids !== undefined && replaceError.code === 'PGRST202') {
+        return NextResponse.json({
+          error: '角色分配服务正在更新，请稍后刷新页面重试。',
+          code: 'ROLE_ASSIGNMENT_UPDATING',
+        }, { status: 503 })
+      }
       console.error('Assign roles error:', replaceError)
       return NextResponse.json({ error: '分配角色失败' }, { status: 500 })
     }
-    if (replaced !== true) {
+    if (replaced === 'conflict') {
+      return NextResponse.json({
+        error: '该成员的角色已变更，请核对最新角色后重新选择。',
+        code: 'ROLE_ASSIGNMENT_CHANGED',
+      }, { status: 409 })
+    }
+    if (replaced === false || replaced === 'ineligible') {
       return NextResponse.json({
         error: '该成员尚不能分配角色；请核对纷享身份、在职状态和组织归属。',
         code: 'MEMBER_NOT_ELIGIBLE',
       }, { status: 409 })
     }
+    if (replaced !== true && replaced !== 'saved') {
+      return NextResponse.json({ error: '未能确认角色保存结果' }, { status: 500 })
+    }
 
+    // Promotion moves pending rows into user_roles in one transaction. Read
+    // pending first so promotion between these reads yields the effective role.
+    const pending = await supabaseAdmin.from('fxiaoke_pending_org_roles')
+      .select('role_id').eq('org_id', orgId).eq('user_id', userId)
+    const tableMissing = ['42P01', 'PGRST205'].includes(pending.error?.code || '')
     const { data, error } = await supabaseAdmin
       .from('user_roles')
       .select(`
@@ -120,15 +145,18 @@ export async function POST(
       .eq('org_id', orgId)
       .eq('scope_type', 'org')
       .eq('scope_id', orgId)
-    if (error) {
-      console.error('Load assigned roles error:', error)
+    if (error || (pending.error && !tableMissing)) {
+      console.error('Load assigned roles error:', error || pending.error)
       return NextResponse.json({ error: '角色已保存，但读取最新授权失败' }, { status: 500 })
     }
 
+    const effectiveIds = new Set((data ?? []).map(role => role.role_id))
+    const pendingRoleIds = (pending.data ?? []).map(row => row.role_id).filter(id => !effectiveIds.has(id))
     return NextResponse.json({
       success: true,
       data,
-      message: '角色分配成功',
+      pending_role_ids: pendingRoleIds,
+      message: pendingRoleIds.length ? '组织角色已预分配，首次登录后生效' : '组织角色已保存',
     })
   } catch (err) {
     console.error('POST user roles error:', err)

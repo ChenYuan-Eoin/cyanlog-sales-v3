@@ -28,7 +28,7 @@ import { DepartmentFormDialog } from './components/DepartmentFormDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
 import { IdentityBindingDialog } from './components/IdentityBindingDialog'
-import { getRoleMutationRestriction } from './role-assignment-policy'
+import { editableOrgRoleIds, getRoleMutationRestriction } from './role-assignment-policy'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -432,7 +432,8 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
             <Badge key={i} variant="secondary" className="text-xs">
               {role.trim()}
             </Badge>
-          )) : <span className="text-slate-400">-</span>}
+          )) : !row.original.pending_org_roles?.length && <span className="text-slate-400">-</span>}
+          {row.original.pending_org_roles?.map(role => <Badge key={role.id} variant="outline" className="text-xs">{role.name} · 待首次登录生效</Badge>)}
         </div>
       ),
     },
@@ -478,11 +479,11 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
 
               {/* P0: 分配角色 */}
               <DropdownMenuItem
-                disabled={Boolean(roleMutationRestriction) || isInvited || directoryUnavailable}
+                disabled={Boolean(roleMutationRestriction) || directoryUnavailable}
                 onSelect={() => {
-                  if (!roleMutationRestriction && !isInvited && !directoryUnavailable) onAssignRole(user)
+                  if (!roleMutationRestriction && !directoryUnavailable) onAssignRole(user)
                 }}
-                title={roleMutationRestriction?.reason || (directoryUnavailable ? '非在职目录成员不可分配角色' : undefined) || (isDirectoryPending ? '请员工首次通过纷享登录后再分配业务角色' : undefined)}
+                title={roleMutationRestriction?.reason || (directoryUnavailable ? '非在职目录成员不可分配角色' : undefined) || (user.can_preassign_org_roles ? '预分配的组织角色将在员工首次登录后生效' : undefined)}
               >
                 {roleMutationRestriction ? (
                   <LockIcon className="h-4 w-4 mr-2" />
@@ -864,6 +865,7 @@ export default function OrgStructureTab({
   // 编辑用户状态
   const [editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)
   const [assigningUser, setAssigningUser] = useState<OrgSummaryUser | null>(null)
+  const assigningRoleIds = useMemo(() => assigningUser ? editableOrgRoleIds(assigningUser) : [], [assigningUser])
   const [bindingUser, setBindingUser] = useState<OrgSummaryUser | null>(null)
 
   const isEmptyState = departments.length === 0 && users.length === 0
@@ -1123,7 +1125,9 @@ export default function OrgStructureTab({
         <RoleAssignmentDialog
           userId={assigningUser.id}
           userName={assigningUser.display_name}
-          currentRoles={assigningUser.role_ids || []}
+          currentRoles={assigningRoleIds}
+          pendingRoles={assigningUser.pending_org_roles}
+          organizationOnly={assigningUser.membership_status === 'invited'}
           departments={departments}
           spaces={orgSummary?.spaces ?? []}
           scopedRoles={assigningUser.scoped_roles}
@@ -1133,14 +1137,19 @@ export default function OrgStructureTab({
             const res = await fetch(`/api/admin/users/${assigningUser.id}/roles`, {
               method: 'POST',
               headers: buildAuthHeaders(true),
-              body: JSON.stringify({ role_ids: roleIds, scope_type: 'org' }),
+              body: JSON.stringify({ role_ids: roleIds, expected_role_ids: assigningRoleIds, scope_type: 'org' }),
             })
             const result = await res.json()
             if (!res.ok) {
               error(result.error || '分配角色失败')
+              if (result.code === 'ROLE_ASSIGNMENT_CHANGED') {
+                setAssigningUser(null)
+                await onRefresh?.()
+                return
+              }
               throw new Error(result.error)
             }
-            success('角色分配成功')
+            success(result.pending_role_ids?.length ? '组织角色已预分配，首次登录后生效' : '角色已保存')
             await onRefresh?.()
           }}
           onSubmitScoped={async (roleId, scopeType, scopeId) => {

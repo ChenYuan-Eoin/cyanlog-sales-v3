@@ -1,6 +1,7 @@
 import type { OrgSummaryUser } from '../types'
 
 export type RoleMutationRestrictionCode =
+  | 'MEMBER_NOT_ELIGIBLE'
   | 'IDENTITY_UNRESOLVED'
   | 'SELF_ROLE_MUTATION_FORBIDDEN'
   | 'PROTECTED_ROLE_MUTATION_FORBIDDEN'
@@ -29,6 +30,14 @@ const PROTECTED_ROLE_MUTATION_RESTRICTION: RoleMutationRestriction = {
   reason: 'SUPER_ADMIN 是平台根角色，不能通过组织管理界面变更。',
 }
 
+export function editableOrgRoleIds(user: OrgSummaryUser): string[] {
+  return [...new Set([...(user.role_ids ?? []), ...(user.pending_org_roles ?? []).map(role => role.id)])]
+}
+
+export function userHasPendingOrgRole(user: OrgSummaryUser, roleId: string): boolean {
+  return user.pending_org_roles?.some(role => role.id === roleId) ?? false
+}
+
 export function userHasProtectedPlatformRole(user: OrgSummaryUser): boolean {
   return Boolean(
     user.role_codes?.includes('SUPER_ADMIN')
@@ -52,6 +61,10 @@ export function getRoleMutationRestriction(
 
   if (user.id === currentUserId) {
     return SELF_ROLE_MUTATION_RESTRICTION
+  }
+
+  if (user.membership_status === 'invited' && !user.can_preassign_org_roles) {
+    return { code: 'MEMBER_NOT_ELIGIBLE', label: '暂不可分配', reason: '仅已核实且在职的纷享目录成员可在首次登录前预分配组织角色。' }
   }
 
   return null

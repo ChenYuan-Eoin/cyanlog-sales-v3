@@ -79,7 +79,7 @@ describe('GET /api/admin/org', () => {
     expect(res.headers.get('X-Org-Timing')).toContain('auth;dur=')
     expect(res.headers.get('X-Org-Timing')).toContain('rpc_payload;dur=')
     expect(res.headers.get('X-Org-Timing')).toContain('total;dur=')
-    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('get_org_admin_directory_payload_v1', {
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('get_org_admin_directory_payload_v2', {
       p_org_id: 'org-1',
     })
     expect(getDefaultOrgId).not.toHaveBeenCalled()
@@ -92,6 +92,18 @@ describe('GET /api/admin/org', () => {
     const res = await GET(makeRequest())
     expect(res.status).toBe(500)
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('only falls back to v1 when v2 is missing', async () => {
+    const payload = { users: [], roles: [], departments: [], spaces: [] }
+    vi.mocked(supabaseAdmin.rpc)
+      .mockResolvedValueOnce({ data: null, error: { code: 'PGRST202' } } as never)
+      .mockResolvedValueOnce({ data: payload, error: null } as never)
+    const res = await GET(makeRequest())
+    expect(await res.json()).toEqual(payload)
+    expect(vi.mocked(supabaseAdmin.rpc).mock.calls.map(call => call[0])).toEqual([
+      'get_org_admin_directory_payload_v2', 'get_org_admin_directory_payload_v1',
+    ])
   })
 
   it('RPC 失败时回退到查询 fan-out 并标记来源', async () => {

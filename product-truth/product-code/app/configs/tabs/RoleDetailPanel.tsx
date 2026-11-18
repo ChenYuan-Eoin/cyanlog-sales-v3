@@ -52,6 +52,8 @@ import type {
 } from '../types'
 import {
   getRoleMutationRestriction,
+  editableOrgRoleIds,
+  userHasPendingOrgRole,
   partitionRoleMutationTargets,
 } from './role-assignment-policy'
 
@@ -193,14 +195,14 @@ export function RoleDetailPanel({
 
   // 计算统计数据
   const stats = useMemo(() => {
-    const assignedUsers = users.filter(u => u.role_codes?.includes(role.code))
+    const assignedUsers = users.filter(u => u.role_codes?.includes(role.code) || userHasPendingOrgRole(u, role.id))
     const scopedAssignments = users.flatMap(u =>
       (u.scoped_roles || [])
         .filter(a => a.roleCode === role.code)
         .map(a => ({ userId: u.id, userName: u.display_name, scopeType: a.scopeType, scopeName: a.scopeName }))
     )
     return { assignedUsers, scopedAssignments }
-  }, [users, role.code])
+  }, [users, role.code, role.id])
 
   // 权限变更时同步
   useEffect(() => {
@@ -341,7 +343,7 @@ function MemberAssignmentTab({
   const [assigning, setAssigning] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogSearch, setDialogSearch] = useState('')
-  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
+  const [selection, setSelection] = useState<OrgSummaryUser | null>(null)
 
   // 已分配用户的 ID 集合
   const assignedUserIds = useMemo(
@@ -374,23 +376,20 @@ function MemberAssignmentTab({
   useEffect(() => {
     if (dialogOpen) {
       setDialogSearch('')
-      setSelectedUserIds(new Set())
+      setSelection(null)
     }
   }, [dialogOpen])
 
-  const toggleSelectUser = useCallback((userId: string) => {
-    setSelectedUserIds((current) => {
-      return current.has(userId) ? new Set() : new Set([userId])
-    })
+  const toggleSelectUser = useCallback((user: OrgSummaryUser) => {
+    setSelection(current => current?.id === user.id ? null : user)
   }, [])
 
   // 当前后端只提供单用户替换接口。为避免 N 个独立请求形成部分成功，
   // 在有原子批量端点前，每次只允许添加一名成员。
   const handleAddMember = async () => {
-    if (!assignmentEditable || selectedUserIds.size === 0) return
+    if (!assignmentEditable || !selection) return
 
-    const selectedUserId = Array.from(selectedUserIds)[0]
-    const selectedUser = users.find((user) => user.id === selectedUserId)
+    const selectedUser = users.find((user) => user.id === selection.id)
     if (!selectedUser) {
       error('成员数据已变更，请刷新后重试。')
       return
@@ -402,7 +401,7 @@ function MemberAssignmentTab({
       return
     }
 
-    const currentRoleIds = selectedUser.role_ids || []
+    const currentRoleIds = editableOrgRoleIds(selection)
     if (currentRoleIds.includes(roleId)) {
       setDialogOpen(false)
       success('成员已是当前角色')
@@ -420,17 +419,21 @@ function MemberAssignmentTab({
       const response = await fetch(`/api/admin/users/${selectedUser.id}/roles`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ role_ids: [...currentRoleIds, roleId] }),
+        body: JSON.stringify({ role_ids: [...currentRoleIds, roleId], expected_role_ids: currentRoleIds }),
       })
 
+      const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
+        if (data.code === 'ROLE_ASSIGNMENT_CHANGED') {
+          setDialogOpen(false)
+          await onRefresh?.()
+        }
         throw new Error(typeof data.error === 'string' ? data.error : '添加成员失败')
       }
 
       setDialogOpen(false)
       await onRefresh?.()
-      success(`已添加「${selectedUser.display_name}」`)
+      success(data.pending_role_ids?.includes(roleId) ? `已为「${selectedUser.display_name}」预分配角色，首次登录后生效` : `已添加「${selectedUser.display_name}」`)
     } catch (err) {
       error(err instanceof Error ? err.message : '添加失败，请重试')
     } finally {
@@ -452,7 +455,7 @@ function MemberAssignmentTab({
 
     if (!await confirmAction(`确定要从角色中移除「${user.display_name}」？`, { confirmText: '移除', danger: true })) return
 
-    const currentRoleIds = user.role_ids || []
+    const currentRoleIds = editableOrgRoleIds(user)
     const newRoleIds = currentRoleIds.filter(id => id !== roleId)
 
     setAssigning(true)
@@ -464,7 +467,7 @@ function MemberAssignmentTab({
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ role_ids: newRoleIds }),
+        body: JSON.stringify({ role_ids: newRoleIds, expected_role_ids: currentRoleIds }),
       })
 
       if (res.ok) {
@@ -473,6 +476,7 @@ function MemberAssignmentTab({
       } else {
         const data = await res.json().catch(() => ({}))
         error(data.error || '移除失败')
+        if (data.code === 'ROLE_ASSIGNMENT_CHANGED') await onRefresh?.()
       }
     } catch {
       error('网络错误')
@@ -526,6 +530,7 @@ function MemberAssignmentTab({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="font-medium leading-5 text-slate-900">{user.display_name}</div>
+                      {userHasPendingOrgRole(user, roleId) && <Badge variant="outline">待首次登录生效</Badge>}
                       <div className="break-all text-xs leading-5 text-slate-500">{user.email}</div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <Badge variant="outline" className="max-w-full break-all">
@@ -590,6 +595,7 @@ function MemberAssignmentTab({
                           </div>
                           <div className="min-w-0">
                             <div className="font-medium text-slate-900">{user.display_name}</div>
+                            {userHasPendingOrgRole(user, roleId) && <Badge variant="outline">待首次登录生效</Badge>}
                             <div className="max-w-[260px] break-all text-xs text-slate-500">{user.email}</div>
                           </div>
                         </div>
@@ -661,18 +667,18 @@ function MemberAssignmentTab({
 
             {/* 统计提示 */}
             <div className="text-xs text-slate-500 shrink-0">
-              {selectedUserIds.size > 0 && (
+              {selection && (
                 <span className="text-blue-600 font-medium">
                   已选择 1 人
                 </span>
               )}
               {dialogSearch.trim() ? (
-                <span className={selectedUserIds.size > 0 ? 'ml-2' : ''}>
+                <span className={selection ? 'ml-2' : ''}>
                   搜索到 {dialogFilteredUsers.length} 人
                   {availableUsers.length !== dialogFilteredUsers.length && `（共 ${availableUsers.length} 人可添加）`}
                 </span>
               ) : (
-                <span className={selectedUserIds.size > 0 ? 'ml-2' : ''}>
+                <span className={selection ? 'ml-2' : ''}>
                   共 {availableUsers.length} 人可添加
                 </span>
               )}
@@ -694,7 +700,7 @@ function MemberAssignmentTab({
               {dialogFilteredUsers.length > 0 ? (
                 <div className="divide-y">
                   {dialogFilteredUsers.map(user => {
-                    const isSelected = selectedUserIds.has(user.id)
+                    const isSelected = selection?.id === user.id
                     return (
                       <label
                         key={user.id}
@@ -704,7 +710,7 @@ function MemberAssignmentTab({
                       >
                         <Checkbox
                           checked={isSelected}
-                          onCheckedChange={() => toggleSelectUser(user.id)}
+                          onCheckedChange={() => toggleSelectUser(user)}
                         />
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
                           {user.display_name?.charAt(0) || '?'}
@@ -749,7 +755,7 @@ function MemberAssignmentTab({
             </Button>
             <Button
               onClick={handleAddMember}
-              disabled={selectedUserIds.size === 0 || assigning}
+              disabled={!selection || assigning}
             >
               {assigning ? '添加中...' : '添加成员到角色'}
             </Button>

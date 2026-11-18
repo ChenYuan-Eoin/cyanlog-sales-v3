@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { RoleDetailPanel } from './RoleDetailPanel'
+import { confirmAction, error } from '@/lib/toast'
 import { hasPermission } from '@/lib/permissions'
 
 vi.mock('@/lib/toast', () => ({ success: vi.fn(), error: vi.fn(), confirmAction: vi.fn() }))
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 const role = { id: 'root', code: 'SUPER_ADMIN', name: '超级管理员', description: null, permissions: ['*'] }
 const defaults = { role, currentUserId: 'actor', saving: false, users: [], departments: [], _spaces: [] }
@@ -106,4 +107,47 @@ describe('RoleDetailPanel explicit permission editing', () => {
     expect(screen.getByRole('checkbox', { name: /财务报表访问/ })).not.toBeChecked()
     expect(screen.getByRole('button', { name: '保存更改' })).toBeEnabled()
   })
+})
+
+it('lists a pending member and revokes only this role before first login', async () => {
+  const shipping = { id: 'ship', code: 'SHIPPING', name: '寄件', description: null, permissions: [] }
+  const user = {
+    id: 'employee', display_name: '待登录成员', email: '', title: '', primary_dept_name: '行政组',
+    role_names: '', role_ids: [], role_codes: [], status: 'inactive', membership_status: 'invited' as const,
+    can_preassign_org_roles: true, pending_org_roles: [shipping, { id: 'another', code: 'OTHER', name: '其他' }],
+  }
+  const send = vi.fn().mockResolvedValue({ ok: true })
+  vi.stubGlobal('fetch', send)
+  vi.mocked(confirmAction).mockResolvedValue(true)
+  const onRefresh = vi.fn()
+  render(<RoleDetailPanel {...defaults} role={shipping} users={[user]} onSave={vi.fn()} onRefresh={onRefresh} />)
+  expect(screen.getByRole('tab', { name: '员工分配 (1)' })).toBeInTheDocument()
+  expect(screen.getAllByText('待首次登录生效').length).toBeGreaterThan(0)
+  fireEvent.click(screen.getAllByRole('button', { name: '从角色中移除 待登录成员' })[0])
+  await waitFor(() => expect(onRefresh).toHaveBeenCalled())
+  expect(JSON.parse(send.mock.calls[0][1].body)).toEqual({ role_ids: ['another'], expected_role_ids: ['ship', 'another'] })
+})
+
+it('retains the selected member snapshot across a directory refresh and clears selection on conflict', async () => {
+  const shipping = { id: 'ship', code: 'SHIP', name: '寄件', description: null, permissions: [] }
+  const member = {
+    id: 'member', display_name: '员工甲', email: '', title: '', primary_dept_name: '行政组',
+    role_names: '', status: 'inactive', membership_status: 'invited' as const, can_preassign_org_roles: true,
+    pending_org_roles: [{ id: 'other', name: '其他', code: 'OTHER' }],
+  }
+  const changed = { ...member, pending_org_roles: [] }
+  const message = '该成员的角色已变更，请核对最新角色后重新选择。'
+  const send = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ code: 'ROLE_ASSIGNMENT_CHANGED', error: message }) })
+  vi.stubGlobal('fetch', send)
+  const props = { ...defaults, role: shipping, onSave: vi.fn(), onRefresh: vi.fn() }
+  const view = render(<RoleDetailPanel {...props} users={[member]} />)
+  fireEvent.click(screen.getByRole('button', { name: '添加成员' }))
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('checkbox'))
+  view.rerender(<RoleDetailPanel {...props} users={[changed]} />)
+  fireEvent.click(screen.getByRole('button', { name: '添加成员到角色' }))
+  await waitFor(() => expect(error).toHaveBeenCalledWith(message))
+  expect(JSON.parse(send.mock.calls[0][1].body)).toEqual({ role_ids: ['other', 'ship'], expected_role_ids: ['other'] })
+  expect(props.onRefresh).toHaveBeenCalledTimes(1)
+  expect(send).toHaveBeenCalledTimes(1)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })

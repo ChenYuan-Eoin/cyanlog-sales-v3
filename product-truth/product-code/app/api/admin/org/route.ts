@@ -101,7 +101,11 @@ function isOrgAdminPayload(value: unknown): value is OrgAdminPayload {
 }
 
 async function listOrgPayloadFromRpc(orgId: string): Promise<OrgAdminPayload> {
-  let { data, error } = await supabaseAdmin.rpc('get_org_admin_directory_payload_v1', { p_org_id: orgId })
+  let result = await supabaseAdmin.rpc('get_org_admin_directory_payload_v2', { p_org_id: orgId })
+  if (result.error && ['PGRST202', '42883'].includes(result.error.code || '')) {
+    result = await supabaseAdmin.rpc('get_org_admin_directory_payload_v1', { p_org_id: orgId })
+  }
+  let { data, error } = result
   if (error && ['PGRST202', '42883'].includes(error.code || '')) {
     const legacy = await supabaseAdmin.rpc('get_org_admin_payload_v1', { p_org_id: orgId })
     data = legacy.data

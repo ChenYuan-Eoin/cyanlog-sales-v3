@@ -24,6 +24,8 @@ interface Role {
 interface RoleAssignmentDialogProps {
   userId: string
   userName: string
+  pendingRoles?: { id: string }[]
+  organizationOnly?: boolean
   currentRoles: string[]
   departments: OrgSummaryDepartment[]
   spaces?: OrgSummarySpace[]
@@ -40,6 +42,8 @@ export function RoleAssignmentDialog({
   userId: _userId,
   userName,
   currentRoles,
+  pendingRoles,
+  organizationOnly = false,
   departments,
   spaces = [],
   scopedRoles = [],
@@ -160,6 +164,7 @@ export function RoleAssignmentDialog({
                     className="flex items-center gap-2 cursor-pointer"
                   >
                     <span className="font-medium">{role.name}</span>
+                    {pendingRoles?.some(pending => pending.id === role.id) && <Badge variant="outline">待首次登录生效</Badge>}
                     <Badge variant="outline" className="text-xs">
                       {role.code}
                     </Badge>
@@ -231,6 +236,7 @@ export function RoleAssignmentDialog({
               </div>
               <select
                 aria-label="角色作用域类型"
+                disabled={organizationOnly}
                 className="mt-2 h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
                 value={scopeType}
                 onChange={(event) => {
@@ -243,6 +249,7 @@ export function RoleAssignmentDialog({
                 <option value="department">指定部门</option>
                 <option value="space">指定销售空间</option>
               </select>
+              {organizationOnly && <p className="mt-2 text-xs text-slate-500">预分配的组织角色将在首次登录后生效。</p>}
               {scopeType === 'department' && (
                 <select
                   aria-label="选择部门角色作用域"

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { SearchIcon, UsersIcon, ShieldIcon, ChevronRightIcon } from 'lucide-react'
+import { userHasPendingOrgRole } from './role-assignment-policy'
 import { RoleDetailPanel } from './RoleDetailPanel'
 import { PermissionRegistryPanel } from './PermissionRegistryPanel'
 import type { OrgSummaryPayload } from '../types'
@@ -58,6 +59,7 @@ export default function RoleAccessTab({
     const users = orgSummary?.users ?? []
     return roles.map(role => {
       const memberCount = users.filter(u => {
+        if (userHasPendingOrgRole(u, role.id)) return true
         // Try role_ids first (UUID matching)
         if (u.role_ids?.includes(role.id)) return true
         // Then try role_codes (code matching)

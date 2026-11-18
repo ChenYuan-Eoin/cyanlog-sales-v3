@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { OrgSummaryUser } from '../types'
 import {
+  editableOrgRoleIds,
   getRoleMutationRestriction,
   partitionRoleMutationTargets,
   userHasProtectedPlatformRole,
@@ -81,4 +82,16 @@ describe('role assignment UI policy', () => {
     expect(result.eligible.map((user) => user.id)).toEqual(['ordinary-1'])
     expect(result.restricted.map((user) => user.id)).toEqual(['actor-1', 'root-1'])
   })
+})
+
+it('allows only server-verified invitees to edit pre-login roles and keeps prior assignments in replacements', () => {
+  const employee = makeUser({
+    status: 'inactive', membership_status: 'invited', login_enabled: false,
+    can_preassign_org_roles: true,
+    pending_org_roles: [{ id: 'role-shipping', code: 'SHIPPING', name: '寄件' }],
+  })
+  expect(getRoleMutationRestriction(employee, 'actor')).toBeNull()
+  expect(editableOrgRoleIds(employee)).toEqual(['role-sales', 'role-shipping'])
+  expect(getRoleMutationRestriction({ ...employee, can_preassign_org_roles: undefined }, 'actor')?.code).toBe('MEMBER_NOT_ELIGIBLE')
+  expect(getRoleMutationRestriction(employee, employee.id)?.code).toBe('SELF_ROLE_MUTATION_FORBIDDEN')
 })

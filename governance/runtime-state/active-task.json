@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-18T09:06:44.881998+00:00",
+  "updated_at": "2026-11-18T09:23:37.814859+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -235,41 +235,46 @@
     }
   },
   "active_task": {
-    "id": "WP77",
-    "slug": "navigation-performance",
-    "name": "受保护页面切换耗时",
+    "id": "WP44",
+    "slug": "organization-custom-roles",
+    "name": "组织自定义角色创建、复制与分配",
     "kind": "product",
     "status": "active",
-    "objective": "已有登录会话打开页面到内容可用不超过3秒。先处理已复现超时的标书、知识库、日程的共享鉴权路径。",
-    "execution_workspace": "/private/tmp/price-v3-navigation-latency",
-    "activation_basis": "IN-20261118-019 用户要求解决整站超时；真实Chrome中标书6.060秒、知识库4.571秒、日程3.693秒。",
+    "objective": "组织管理员可以给已核对纷享身份的有效在职成员在首次登录前预分配角色；首次登录后角色生效。",
+    "execution_workspace": "/private/tmp/price-v3-first-login-assignment",
+    "activation_basis": "IN-20261118-046 用户报告的真实拒绝；按组织角色缺陷独立开发。",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/middleware.test.ts",
-      "product-truth/product-code/app/knowledge/page.tsx",
+      "product-truth/product-code/app/configs/tabs/OrgStructureTab.tsx",
+      "product-truth/product-code/app/configs/tabs/OrgStructureTab.test.tsx",
+      "product-truth/product-code/app/configs/tabs/RoleDetailPanel.tsx",
+      "product-truth/product-code/app/configs/tabs/RoleDetailPanel.test.tsx",
+      "product-truth/product-code/app/configs/tabs/role-assignment-policy.ts",
+      "product-truth/product-code/app/configs/tabs/role-assignment-policy.test.ts",
+      "product-truth/product-code/lib/organization-connections/fxiaoke-sso-no-invite-migration.test.ts",
+      "product-truth/product-code/supabase/migrations/20261118095000_fxiaoke_prelogin_role_assignment.sql",
       "product-truth/product-code/node_modules",
       "product-truth/product-code/.next",
       "product-truth/product-code/tsconfig.tsbuildinfo",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/navigation-performance-verifier.js",
-      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/navigation-performance-verifier.test.js",
-      "product-truth/product-code/app/page.tsx",
-      "product-truth/product-code/lib/core-page-warmup.ts",
-      "product-truth/product-code/components/layout/Sidebar.tsx",
-      "product-truth/product-code/components/layout/Sidebar.test.tsx"
+      "product-truth/product-code/lib/organization-connections/fxiaoke-prelogin-role.test.ts",
+      "product-truth/product-code/lib/organization-connections/fxiaoke-prelogin-role.test.sql",
+      "product-truth/product-code/app/configs/tabs/components/RoleAssignmentDialog.tsx",
+      "product-truth/product-code/app/configs/types.ts",
+      "product-truth/product-code/app/configs/tabs/RoleAccessTab.tsx",
+      "product-truth/product-code/app/configs/tabs/RoleAccessTab.test.tsx",
+      "product-truth/product-code/app/configs/tabs/components/RoleAssignmentDialog.test.tsx",
+      "product-truth/product-code/app/api/admin/users/[id]/roles/route.ts",
+      "product-truth/product-code/app/api/admin/users/[id]/roles/route.test.ts",
+      "product-truth/product-code/app/api/admin/org/route.ts",
+      "product-truth/product-code/app/api/admin/org/route.test.ts"
     ],
-    "feature_id": "F054",
+    "feature_id": "F003",
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "code_green",
       "allowed_states": [
         "executing",
-        "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -284,14 +289,16 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "navigation_performance"
+        "role_edit_save",
+        "role_access_enforcement"
       ],
-      "note": "发布 ff23d86c 页面性能候选，在正式站现有 Chrome 只读复测标书、知识库、日程；无数据库迁移、无业务数据修改、无承运商调用。",
+      "note": "首登前组织角色分配独立候选，生产发布和数据库迁移须分别获准。",
       "production_database_mode": "read_only",
-      "runtime_profile": "navigation",
-      "runtime_contract_version": "navigation-performance-v1",
+      "runtime_profile": "application",
+      "runtime_contract_version": "f003-role-permissions-v1",
       "required_production_runtime_evidence": [
-        "navigation_performance"
+        "role_edit_save",
+        "role_access_enforcement"
       ],
       "final_acceptance": {
         "origin": "https://sales.cyanlog.icu",
@@ -311,32 +318,24 @@
         "trusted_existing_chrome_operator_attestation"
       ],
       "production_release_authorization": {
-        "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261118-038",
-        "final_scope": "发布 ff23d86c 页面性能候选，在正式站现有 Chrome 只读复测标书、知识库、日程；无数据库迁移、无业务数据修改、无承运商调用。",
+        "status": "not_authorized_for_current_candidate",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
-        "carrier_calls_authorized": false,
-        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
-        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
-        "micro_fix_approval_id": "IN-20261118-037",
-        "clarification_id": "IN-20261118-019",
-        "micro_fix_scope": "发布 ff23d86c 页面性能候选，在正式站现有 Chrome 只读复测标书、知识库、日程；无数据库迁移、无业务数据修改、无承运商调用。"
-      },
-      "preview_order_exception_approval_id": "IN-20261118-038"
+        "carrier_calls_authorized": false
+      }
     },
-    "started_at": "2026-11-18T07:55:28.910972+00:00",
+    "started_at": "2026-11-18T09:23:37.814859+00:00",
     "integration_decision": {
-      "strategy": "release_approved_navigation_product_tree",
-      "authority": "IN-20261118-028",
-      "requested_target": "production_released"
+      "strategy": "isolated_role_assignment_candidate",
+      "authority": "IN-20261118-046",
+      "requested_target": "code_green"
     }
   },
   "execution_queue": {
     "active": {
-      "id": "WP77",
-      "slug": "navigation-performance",
-      "name": "受保护页面切换耗时"
+      "id": "WP44",
+      "slug": "organization-custom-roles",
+      "name": "组织自定义角色创建、复制与分配"
     },
     "next": {
       "id": "WP35",
@@ -668,27 +667,6 @@
           "name": "WP74",
           "source_input": "IN-20261023-070"
         }
-      },
-      {
-        "id": "WP44",
-        "slug": "organization-custom-roles",
-        "name": "组织自定义角色创建、复制与分配",
-        "scheduling_group": "角色管理",
-        "acceptance_state": "待开发",
-        "remaining_acceptance": "组织内创建/复制角色、授权并分配；跨组织及越级授权拒绝",
-        "acceptance_owner": "WP44",
-        "source_records": [
-          "IN-20261020-002"
-        ],
-        "reconciliation_source": "IN-20261028-010",
-        "historical_record": {
-          "id": "WP44",
-          "slug": "organization-custom-roles",
-          "name": "组织自定义角色创建、复制与分配"
-        },
-        "depends_on": [
-          "WP83"
-        ]
       },
       {
         "id": "WP84",
@@ -1206,6 +1184,11 @@
           "status": "awaiting_integration",
           "reason": "配置UI合同及精确只读工具分类已有本地修复和目标验证；恢复产品候选验收"
         }
+      },
+      {
+        "id": "WP77",
+        "slug": "navigation-performance",
+        "name": "受保护页面切换耗时"
       }
     ],
     "parked": [
@@ -2876,8 +2859,8 @@
     "inbox_path": "governance/runtime-state/demand-inbox.jsonl",
     "source_dirty_workspace": "/Users/nsss/Price-v3",
     "role": "canonical_execution_candidate",
-    "branch": "codex/wp77-navigation-intent",
-    "execution_workspace": "/private/tmp/price-v3-navigation-latency",
+    "branch": "codex/member-role-before-first-login",
+    "execution_workspace": "/private/tmp/price-v3-first-login-assignment",
     "workspace_strategy": "reuse-primary-worktree"
   },
   "entry": {
@@ -4767,6 +4750,104 @@
         }
       ],
       "paused_reason": "员工认证生产故障阻断寄件验收，正式站延用已发布版本。"
+    },
+    "WP77_navigation_latency": {
+      "id": "WP77",
+      "slug": "navigation-performance",
+      "name": "受保护页面切换耗时",
+      "kind": "product",
+      "status": "active",
+      "objective": "已有登录会话打开页面到内容可用不超过3秒。先处理已复现超时的标书、知识库、日程的共享鉴权路径。",
+      "execution_workspace": "/private/tmp/price-v3-navigation-latency",
+      "activation_basis": "IN-20261118-019 用户要求解决整站超时；真实Chrome中标书6.060秒、知识库4.571秒、日程3.693秒。",
+      "allowed_paths": [
+        "governance/runtime-state/active-task.json",
+        "governance/runtime-state/demand-inbox.jsonl",
+        "product-truth/product-code/middleware.ts",
+        "product-truth/product-code/middleware.test.ts",
+        "product-truth/product-code/app/knowledge/page.tsx",
+        "product-truth/product-code/node_modules",
+        "product-truth/product-code/.next",
+        "product-truth/product-code/tsconfig.tsbuildinfo",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/navigation-performance-verifier.js",
+        "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/navigation-performance-verifier.test.js",
+        "product-truth/product-code/app/page.tsx",
+        "product-truth/product-code/lib/core-page-warmup.ts",
+        "product-truth/product-code/components/layout/Sidebar.tsx",
+        "product-truth/product-code/components/layout/Sidebar.test.tsx"
+      ],
+      "feature_id": "F054",
+      "delivery_contract": {
+        "target_state": "production_released",
+        "allowed_states": [
+          "executing",
+          "code_green",
+          "clean_preview_green",
+          "integration_ready",
+          "main_integrated",
+          "production_released"
+        ],
+        "integration_branch": "main",
+        "production_branch": "production",
+        "production_release_separate": true,
+        "same_release_commit_required": true,
+        "attestation_ref": "refs/notes/price-v3-delivery",
+        "required_code_checks": [
+          "target_tests",
+          "full_tests",
+          "lint",
+          "typecheck",
+          "build"
+        ],
+        "required_runtime_evidence": [
+          "navigation_performance"
+        ],
+        "note": "发布 ff23d86c 页面性能候选，在正式站现有 Chrome 只读复测标书、知识库、日程；无数据库迁移、无业务数据修改、无承运商调用。",
+        "production_database_mode": "read_only",
+        "runtime_profile": "navigation",
+        "runtime_contract_version": "navigation-performance-v1",
+        "required_production_runtime_evidence": [
+          "navigation_performance"
+        ],
+        "final_acceptance": {
+          "origin": "https://sales.cyanlog.icu",
+          "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+          "new_local_browser_or_context_prohibited": true,
+          "new_tab_prohibited": true,
+          "local_and_preview_role": "diagnostic_only_not_completion",
+          "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
+          "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
+          "production_database_mode": "read_only"
+        },
+        "required_production_evidence": [
+          "exact_production_commit",
+          "vercel_deployment_ready_and_promoted",
+          "sales.cyanlog.icu_alias",
+          "controlled_production_security_and_runtime_verifier",
+          "trusted_existing_chrome_operator_attestation"
+        ],
+        "production_release_authorization": {
+          "status": "approved_code_only",
+          "final_release_approval_id": "IN-20261118-038",
+          "final_scope": "发布 ff23d86c 页面性能候选，在正式站现有 Chrome 只读复测标书、知识库、日程；无数据库迁移、无业务数据修改、无承运商调用。",
+          "database_write_authorized": false,
+          "production_database_write_authorized": false,
+          "carrier_calls_authorized": false,
+          "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+          "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+          "micro_fix_approval_id": "IN-20261118-037",
+          "clarification_id": "IN-20261118-019",
+          "micro_fix_scope": "发布 ff23d86c 页面性能候选，在正式站现有 Chrome 只读复测标书、知识库、日程；无数据库迁移、无业务数据修改、无承运商调用。"
+        },
+        "preview_order_exception_approval_id": "IN-20261118-038"
+      },
+      "started_at": "2026-11-18T07:55:28.910972+00:00",
+      "integration_decision": {
+        "strategy": "release_approved_navigation_product_tree",
+        "authority": "IN-20261118-028",
+        "requested_target": "production_released"
+      }
     }
   },
   "parked_tasks": {

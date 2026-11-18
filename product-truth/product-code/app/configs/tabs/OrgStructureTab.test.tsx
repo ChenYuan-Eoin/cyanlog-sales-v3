@@ -1,15 +1,18 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import type { OrgSummaryPayload } from '../types'
 
 vi.mock('./components/DepartmentFormDialog', () => ({ DepartmentFormDialog: () => null }))
 vi.mock('./components/UserFormDialog', () => ({ UserFormDialog: () => null }))
-vi.mock('./components/RoleAssignmentDialog', () => ({ RoleAssignmentDialog: () => null }))
+vi.mock('./components/RoleAssignmentDialog', () => ({
+  RoleAssignmentDialog: ({ onSubmit }: { onSubmit: (ids: string[]) => Promise<void> }) =>
+    <button onClick={() => onSubmit([])}>保存组织角色</button>,
+}))
 vi.mock('./components/IdentityBindingDialog', () => ({ IdentityBindingDialog: () => null }))
 import OrgStructureTab from './OrgStructureTab'
 
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 it('cascades department selection through primary and secondary memberships and keeps unlinked employees visible', () => {
   const payload: OrgSummaryPayload = {
@@ -108,4 +111,28 @@ it('does not call a previously active directory account a first-login account af
   expect(within(row).getByText('登录已禁用')).toBeInTheDocument()
   expect(within(row).queryByText('待首次登录')).not.toBeInTheDocument()
   expect(within(row).getByText('在职')).toBeInTheDocument()
+})
+
+it('renders pending role separately on the organization member row', () => {
+  const user = { ...statusPayload.users[0], can_preassign_org_roles: true, pending_org_roles: [{ id: 'ship', code: 'SHIP', name: '寄件' }] }
+  render(<OrgStructureTab orgSummary={{ ...statusPayload, users: [user] }} currentUserId="actor" />)
+  const row = screen.getByText(user.display_name).closest('tr')!
+  expect(within(row).getByText('寄件 · 待首次登录生效')).toBeInTheDocument()
+})
+
+it('checks the original roles when the directory refreshes while a member is being edited', async () => {
+  const user = { ...statusPayload.users[0], can_preassign_org_roles: true, pending_org_roles: [{ id: 'ship', code: 'SHIP', name: '寄件' }] }
+  const latest = { ...user, pending_org_roles: [] }
+  const send = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ code: 'ROLE_ASSIGNMENT_CHANGED', error: '请重新选择' }) })
+  vi.stubGlobal('fetch', send)
+  const props = { currentUserId: 'actor', onRefresh: vi.fn() }
+  const view = render(<OrgStructureTab {...props} orgSummary={{ ...statusPayload, users: [user] }} />)
+  fireEvent.keyDown(screen.getByRole('button', { name: `管理${user.display_name}` }), { key: 'ArrowDown' })
+  fireEvent.click(await screen.findByRole('menuitem', { name: /分配角色/ }))
+  view.rerender(<OrgStructureTab {...props} orgSummary={{ ...statusPayload, users: [latest] }} />)
+  fireEvent.click(screen.getByRole('button', { name: '保存组织角色' }))
+  await waitFor(() => expect(props.onRefresh).toHaveBeenCalledTimes(1))
+  expect(JSON.parse(send.mock.calls[0][1].body)).toEqual({ role_ids: [], expected_role_ids: ['ship'], scope_type: 'org' })
+  expect(screen.queryByRole('button', { name: '保存组织角色' })).not.toBeInTheDocument()
+  expect(send).toHaveBeenCalledTimes(1)
 })

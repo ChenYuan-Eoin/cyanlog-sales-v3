@@ -148,6 +148,7 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     })
     ;(supabaseAdmin.from as any)
       .mockReturnValueOnce(userQuery)
+      .mockReturnValueOnce(makeRoleListQuery({ data: null, error: { code: 'PGRST205' } }))
       .mockReturnValueOnce(roleQuery)
 
     const res = await POST(jsonRequest({ role_ids: [roleId, roleId] }), routeContext)
@@ -164,6 +165,39 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
         p_user_id: '00000000-0000-0000-0000-000000000001',
         p_role_ids: [roleId],
       }),
+    )
+  })
+
+  it('returns pending role ids separately from effective scopes after preassignment', async () => {
+    const lookup = makeUserLookupQuery({ data: { id: 'member' }, error: null })
+    const pending = makeRoleListQuery({ data: [{ role_id: roleId }], error: null })
+    ;(supabaseAdmin.from as any).mockReturnValueOnce(lookup)
+      .mockReturnValueOnce(pending)
+      .mockReturnValueOnce(makeRoleListQuery({ data: [], error: null }))
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: 'saved', error: null })
+    const res = await POST(jsonRequest({ role_ids: [roleId], expected_role_ids: [] }), routeContext)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      'admin_replace_org_roles_if_current_v1', expect.objectContaining({ p_expected_role_ids: [] }),
+    )
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ data: [], pending_role_ids: [roleId] })
+    expect(pending.eq).toHaveBeenCalledWith('org_id', 'org-1')
+    expect(pending.eq).toHaveBeenCalledWith('user_id', '00000000-0000-0000-0000-000000000001')
+  })
+
+  it.each([
+    ['conflict', null, 409, 'ROLE_ASSIGNMENT_CHANGED'],
+    ['ineligible', null, 409, 'MEMBER_NOT_ELIGIBLE'],
+    [null, { code: 'PGRST202' }, 503, 'ROLE_ASSIGNMENT_UPDATING'],
+  ])('does not retry a conditional save after %j / %j', async (data, error, status, code) => {
+    ;(supabaseAdmin.from as any).mockReturnValueOnce(makeUserLookupQuery({ data: { id: 'member' }, error: null }))
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data, error })
+    const res = await POST(jsonRequest({ role_ids: [], expected_role_ids: [roleId] }), routeContext)
+    expect(res.status).toBe(status)
+    expect((await res.json()).code).toBe(code)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledTimes(1)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      'admin_replace_org_roles_if_current_v1', expect.objectContaining({ p_expected_role_ids: [roleId] }),
     )
   })
 

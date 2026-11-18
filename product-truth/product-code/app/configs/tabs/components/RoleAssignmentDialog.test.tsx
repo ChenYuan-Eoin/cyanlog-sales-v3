@@ -73,3 +73,17 @@ describe('RoleAssignmentDialog scoped assignment', () => {
     await waitFor(() => expect(onRevokeScoped).toHaveBeenCalledWith('role-1', 'department', 'dept-1'))
   })
 })
+
+it('keeps a preassigned role selected and allows its removal at organization scope before login', async () => {
+  const onSubmit = vi.fn(async () => undefined)
+  render(<RoleAssignmentDialog userId="employee" userName="待登录员工" currentRoles={['role-1']}
+    pendingRoles={[{ id: 'role-1' }]} organizationOnly open onOpenChange={vi.fn()}
+    departments={[]} spaces={[]} onSubmit={onSubmit} />)
+  const role = await screen.findByRole('checkbox')
+  expect(role).toBeChecked()
+  expect(screen.getByText('待首次登录生效')).toBeInTheDocument()
+  expect(screen.getByRole('combobox', { name: '角色作用域类型' })).toBeDisabled()
+  fireEvent.click(role)
+  fireEvent.click(screen.getByRole('button', { name: '保存' }))
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledWith([]))
+})
