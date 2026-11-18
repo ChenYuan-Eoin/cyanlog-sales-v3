@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { parseShippingText, prepareBatchRecipient } from '@/lib/shipping/batch-text'
 import { intakeFieldSchema, type IntakeRules } from '@/lib/shipping/intake-rules'
 import { contactSchema, ownerOrderSchema } from '@/lib/shipping/validation'
@@ -31,6 +31,7 @@ export default function SalesBatchProposal({ sender, team, departmentId, departm
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const running = useRef(false)
+  const submissionHintId = useId()
   const senderReady = contactSchema.safeParse(sender).success
   const senderKey = JSON.stringify([sender, team, departmentId, defaults])
   const previewCurrent = preview && previewSenderKey === senderKey
@@ -137,8 +138,8 @@ export default function SalesBatchProposal({ sender, team, departmentId, departm
           <p className={styles.hint}>识别结果：{recipient.province}{recipient.city}{recipient.county}{recipient.address}</p>
           {errors.length > 0 && <p className={styles.error} role="alert">{errors.join('；')}</p>}{row.error && <p className={styles.error} role="alert">{row.error}</p>}
         </fieldset>{row.result === 'unknown' && <button type="button" disabled={busy} onClick={() => void retry(row.id)}>重取第 {row.id} 票工单回执</button>}</div>)}</div>
-        {previewCurrent && ready.length > 0 && <section tabIndex={0} aria-label="寄件提报预览" className={styles.batchPreview}><h3>本次将提报 {ready.length} 票</h3><p>寄件人：{sender.name} · {sender.phone} · {sender.province}{sender.city}{sender.county}{sender.address}</p><ul>{ready.map(({ row, recipient }) => <li key={row.id}>第 {row.id} 票：{recipient.name} · {recipient.phone} · {recipient.province}{recipient.city}{recipient.county}{recipient.address} · {row.customerName || '未填客户'} · {row.cargo} · {row.weight} kg · {services?.find(service => String(service.id) === row.serviceId)?.name || (row.preference === 'urgent' ? '加急偏好' : '标准偏好')}{row.specialRequirements && ` · ${row.specialRequirements}`}</li>)}</ul><small>只创建待确认工单；服务由操作员最终核对后才可能向顺丰下单。</small></section>}
-        <footer className={styles.reviewActionBar} aria-label="多票提报操作"><div><strong>{ready.length} 票可提报</strong><span role="status">{!senderReady ? '请先补齐揽收资料' : !accessReady ? accessHint || '寄件资料暂不可用' : previewCurrent ? '已预览，确认后交给前台审核' : invalid ? `${invalid} 票待补充，可先预览完整的票` : '先预览核对，再确认提报'}</span></div><button type="button" disabled={!ready.length || !accessReady || !senderReady || busy} onClick={event => { if (event.detail > 1) return; if (previewCurrent) { void submit() } else { setPreviewSenderKey(senderKey); setPreview(true) } }}>{busy ? '提报中…' : `${previewCurrent ? '确认提交' : '预览'} ${ready.length} 票`}</button></footer>
+        {previewCurrent && ready.length > 0 && <section tabIndex={0} aria-label="寄件提报预览" className={styles.batchPreview}><h3>本次将提报 {ready.length} 票</h3><p>寄件人：{sender.name} · {sender.phone} · {sender.province}{sender.city}{sender.county}{sender.address}</p><ul>{ready.map(({ row, recipient }) => <li key={row.id}>第 {row.id} 票：{recipient.name} · {recipient.phone} · {recipient.province}{recipient.city}{recipient.county}{recipient.address} · {row.customerName || '未填客户'} · {row.cargo} · {row.weight} kg · {services?.find(service => String(service.id) === row.serviceId)?.name || (row.preference === 'urgent' ? '加急偏好' : '标准偏好')}{row.specialRequirements && ` · ${row.specialRequirements}`}</li>)}</ul><small>这是预览，本次工单尚未提交。核对后请再次点击“确认提交 {ready.length} 票”；服务由操作员最终核对后才可能向顺丰下单。</small></section>}
+        <footer className={styles.reviewActionBar} aria-label="多票提报操作"><div><strong>{busy ? '正在提交' : previewCurrent ? '第 2 步：确认提交' : '第 1 步：预览工单'} · {ready.length} 票可提报</strong><span id={submissionHintId} role="status" aria-live="polite" aria-atomic="true">{busy ? '正在提交，请勿重复操作。' : !senderReady ? '请先补齐揽收资料' : !accessReady ? accessHint || '寄件资料暂不可用' : previewCurrent ? '本次 ' + ready.length + ' 票尚未提交。请核对预览，再次点击“确认提交 ' + ready.length + ' 票”。' : '共 2 步：先预览，再次点击同一按钮确认提交。'}</span><small>{invalid > 0 && (invalid + ' 票待补充，可先提报完整的票。')}修改资料后需重新预览；提交后交给前台审核，不会直接下单。</small></div><button type="button" aria-describedby={submissionHintId} disabled={!ready.length || !accessReady || !senderReady || busy} onClick={event => { if (event.detail > 1) return; if (previewCurrent) { void submit() } else { setPreviewSenderKey(senderKey); setPreview(true) } }}>{busy ? '提报中…' : `${previewCurrent ? '确认提交' : '预览'} ${ready.length} 票`}</button></footer>
       </section>}
     </>
   if (embedded) return <>{content}{!unresolved && <button type="button" disabled={busy} onClick={onClear}>{conflicted ? '已核对原工单，结束本批' : '结束本批，继续填写'}</button>}</>

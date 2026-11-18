@@ -637,7 +637,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
           <div className={styles.segmented}><button className={type === 'all' ? styles.active : ''} onClick={() => setType('all')}>全部</button><button className={type === 'outbound' ? styles.active : ''} onClick={() => setType('outbound')}>寄出件</button><button className={type === 'inbound' ? styles.active : ''} onClick={() => setType('inbound')}>收到件</button></div>
           <div className={styles.quickDates}>{([{ value: 'all', label: '全部日期' }, { value: 'today', label: '今天' }, { value: 'three-days', label: '近3天' }, { value: 'week', label: '本周' }] as const).map(item => <button key={item.value} aria-pressed={dateRange === item.value} onClick={() => setDateRange(item.value)}>{item.label}</button>)}</div>
           <select aria-label="状态筛选" value={status} onChange={event => setStatus(event.target.value as typeof status)}><option value="all">全部状态</option><option value="awaiting_confirmation">待审核工单</option><option value="returned">已退回工单</option><option value="order_unknown">下单结果待确认</option><option value="ordering">下单中</option><option value="waybill_created">已出单/待揽收</option><option value="in_transit">运输中</option><option value="delivered">已签收</option><option value="order_failed">异常件</option></select>
-          <label className={styles.search}><Search size={14}/><input aria-label="搜索台账" value={search} onChange={event => setSearch(event.target.value)} placeholder="销售、客户、收件人、工单号、运单号"/></label>
+          <label className={styles.search}><Search size={14}/><input aria-label="搜索台账" value={search} onChange={event => setSearch(event.target.value)} placeholder="提报人、客户、收件人、工单号、运单号"/></label>
         </div>
         <div className={styles.orderList}>
           {reviewedOrders.length > 0 && <section className={styles.bulkSettings} aria-label="逐票下单产品核对">
@@ -690,7 +690,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                 }
               }}
             >
-            <div className={styles.cardHead}><span className={`${styles.tag} ${styles[statusTone[order.status]]}`}>{statusLabel[order.status]}</span><span>{order.input.submittedBy ? `销售-${order.input.submittedBy.name}` : order.intakeSource === 'owner_web' ? '操作员提报' : order.relation.salesRef || '待分配'}</span><b>{cityOf(order)}</b></div>
+            <div className={styles.cardHead}><span className={`${styles.tag} ${styles[statusTone[order.status]]}`}>{statusLabel[order.status]}</span><span>{order.input.submittedBy ? `提报人：${order.input.submittedBy.name}` : order.intakeSource === 'owner_web' ? '登录用户提报' : order.relation.salesRef || '待分配'}</span><b>{cityOf(order)}</b></div>
             <div className={styles.cardCore}>
               <div><small>客户</small><strong>{customerOf(order)}</strong></div>
               <div>
@@ -727,7 +727,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                 <small>已按当前缺项预填，可修改。确认后将退回给提报人补充。</small>
                 {returnDraft.reason.trim().length < 2 && <p role="alert">请填写至少2个字符的退回原因。</p>}
                 {returnDraft.error && <p role="alert">{returnDraft.error}</p>}
-                <div><button type="submit" className={styles.reject} disabled={!!busy || returnDraft.reason.trim().length < 2 || returnDraft.reason.trim().length > 300}>{busy === order.id ? '退回中…' : '确认退回'}</button><button type="button" className={styles.secondaryButton} disabled={!!busy} onClick={() => setReturnDraft(null)}>取消</button></div>
+                <div className={styles.formActions}><button type="submit" className={styles.reject} disabled={!!busy || returnDraft.reason.trim().length < 2 || returnDraft.reason.trim().length > 300}>{busy === order.id ? '退回中…' : '确认退回'}</button><button type="button" className={styles.secondaryButton} disabled={!!busy} onClick={() => setReturnDraft(null)}>取消</button></div>
               </form>}
               {expandedOrderId === order.id && !orderHasDispatch(order) && <section ref={expandedReviewSection} className={styles.workorderReview} aria-label={`工单 ${order.orderNo} 收寄预览`}>
                 <div className={styles.reviewHeading}><h3>服务与时效核对</h3><span>确认前可修改</span></div>
@@ -751,7 +751,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                 </div>}
                 {!senderReview.contact && <p className={styles.bad} role="alert">{senderReview.source === '公司寄件资料待补齐' ? <>此工单缺少寄件人、联系电话或揽收地址。请在<a href="/configs?tab=shipping">配置中心</a>补齐后重新核对工单。</> : '工单寄件资料不完整。请退回工单，由提报人补齐实际寄件资料后重新提报。'}</p>}
                 <details className={styles.reviewDetails}><summary>收寄地址与寄件人</summary>{senderReview.contact ? <p><b>实际寄件人（{senderReview.source}）</b><br/>{senderReview.contact.name} · {senderReview.contact.phone}<br/>{senderReview.contact.province}{senderReview.contact.city}{senderReview.contact.county}{senderReview.contact.address}</p> : null}<p><b>收件地址</b><br/>{order.input.recipient.province}{order.input.recipient.city}{order.input.recipient.county}{order.input.recipient.address}</p></details>
-                <details className={styles.reviewDetails}><summary>身份与备注</summary><p>提报身份：{order.intakeSource === 'anonymous_web' ? order.identityVerified ? '身份已验证' : '匿名自报，待核对' : '操作员录入'}{order.input.remark && <><br/>备注：{order.input.remark}</>}</p>{order.input.submittedBy && <p>提报销售：{order.input.submittedBy.name} · {order.input.submittedBy.phone} · {order.input.submittedBy.team || '未填写团队'}</p>}</details>
+                <details className={styles.reviewDetails}><summary>身份与备注</summary><p>提报身份：{order.intakeSource === 'anonymous_web' ? order.identityVerified ? '身份已验证' : '匿名自报，待核对' : order.intakeSource === 'owner_web' ? '登录用户提报' : order.intakeSource === 'crm' ? 'CRM 提报' : '企微机器人提报'}{order.input.remark && <><br/>备注：{order.input.remark}</>}</p>{order.input.submittedBy && <p>提报人：{order.input.submittedBy.name} · {order.input.submittedBy.phone} · {order.input.submittedBy.team || '未填写团队'}</p>}</details>
               </section>}
             </>}
             {expandedOrderId === order.id && orderHasDispatch(order) && (
@@ -792,7 +792,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                 <label>修改原因<textarea aria-label="修改原因" value={amendmentDraft.reason} minLength={2} maxLength={300} required onChange={event => setAmendmentDraft(current => current && { ...current, reason: event.target.value, error: '' })}/></label>
                 <small>保存后版本加一、保留原提交人和身份快照，并重新进入待核对；不会自动通知顺丰。</small>
                 {amendmentDraft.error && <p role="alert">{amendmentDraft.error}</p>}
-                <div>
+                <div className={styles.formActions}>
                   <button type="submit" className={styles.primary} disabled={!!busy}>{busy === order.id ? '保存中…' : '保存为新版本'}</button>
                   <button type="button" className={styles.secondaryButton} disabled={!!busy} onClick={() => setAmendmentDraft(null)}>取消</button>
                 </div>
@@ -830,7 +830,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
               </section>}
               <div className={styles.factGrid}>
                 <div><small>客户</small><b>{customerOf(selected)}</b></div>
-                <div><small>提单销售</small><b>{selected.input.submittedBy?.name || selected.relation.salesRef || '待分配'}</b></div>
+                <div><small>提报人</small><b>{selected.input.submittedBy?.name || selected.relation.salesRef || '待分配'}</b></div>
                 <div><small>所属团队</small><b>{selected.input.submittedBy?.team || '—'}</b></div>
                 <div><small>提交时间</small><b>{new Date(selected.createdAt).toLocaleString('zh-CN')}</b></div>
               </div>
