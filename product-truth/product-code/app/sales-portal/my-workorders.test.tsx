@@ -39,7 +39,9 @@ it('shows a returned order’s actual reason in the owner record and labels hist
   expect(within(current).getByText('前台已退回')).toBeTruthy()
   expect(within(current).getByText('退回原因：收件地址缺少楼层')).toBeTruthy()
   const old = screen.getByText('客户乙').closest('li')!
-  expect(within(old).getByText('退回原因：此记录未保存退回原因')).toBeTruthy()
+  expect(within(old).queryByText(/退回原因/)).toBeNull()
+  fireEvent.click(within(old).getByRole('button'))
+  expect(within(old).getByText('未记录退回原因')).toBeTruthy()
   expect(screen.queryByText(/旧原因/)).toBeNull()
 })
 it('opens one owner receipt at a time and shows identifiers and the full reason inside its details', async () => {
@@ -52,10 +54,9 @@ it('opens one owner receipt at a time and shows identifiers and the full reason 
   const first = await screen.findByRole('button', { name: /修改客户/ })
   expect(first.getAttribute('aria-expanded')).toBe('false')
   expect(first.textContent).toContain('第 2 次更改')
-  expect(first.textContent).toMatch(/退回原因：收件地址.+…/)
+  expect(first.textContent).toContain('退回原因：' + longReason)
   expect(screen.queryByText('FIRST')).toBeNull()
   expect(screen.queryByText('SF-SECOND')).toBeNull()
-  expect(screen.queryByText('退回原因：' + longReason)).toBeNull()
   expect(screen.queryByRole('button', { name: '修改' })).toBeNull()
   expect(screen.queryByRole('button', { name: '取消' })).toBeNull()
   fireEvent.click(first)

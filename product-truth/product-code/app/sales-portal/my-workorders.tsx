@@ -25,9 +25,7 @@ function OwnerReceipt({ order, expanded, toggleRef, onToggle, onResubmit, onCanc
   const detailId = useId()
   const customer = order.customerName || '未填客户'
   const status = order.status === 'returned' ? '前台已退回' : labels[order.status] || '处理中'
-  const reason = order.status === 'returned' ? order.returnedReason?.trim() || '此记录未保存退回原因' : ''
-  const characters = Array.from(reason.replace(/\s+/g, ' '))
-  const shortReason = characters.length > 22 ? characters.slice(0, 22).join('') + '…' : characters.join('')
+  const reason = order.status === 'returned' ? order.returnedReason?.trim() : undefined
   const changes = Math.max(0, (order.revision ?? 1) - 1)
 
   return <li className={styles.ownerReceipt}>
@@ -40,12 +38,13 @@ function OwnerReceipt({ order, expanded, toggleRef, onToggle, onResubmit, onCanc
         <ChevronDown size={14} aria-hidden="true" className={expanded ? styles.chevronOpen : undefined} />
       </span>
       {changes > 0 && <span className={styles.changeCount}>第 {changes} 次更改</span>}
-      {reason && !expanded && <span className={styles.reasonPreview}>退回原因：{shortReason}</span>}
+      {reason && !expanded && <span className={styles.reasonPreview}>退回原因：{reason}</span>}
     </button>
     {expanded && <div id={detailId} className={styles.receiptDetails}>
       <div>提报单号：<strong>{order.orderNo}</strong></div>
       {order.waybill && <div>顺丰运单号：<strong className={styles.waybillNumber}>{order.waybill}</strong></div>}
       {reason && <p className={styles.returnReason}>退回原因：{reason}</p>}
+      {order.status === 'returned' && !reason && <p className={styles.hint}>未记录退回原因</p>}
       {order.status === 'returned' && !order.waybill && (!order.cancellationState || order.cancellationState === 'not_sent') && onResubmit && (
         <button type="button" title="修改原单后重新提报" disabled={locked} onClick={onResubmit}>{opening ? '正在读取原单…' : '修改'}</button>
       )}

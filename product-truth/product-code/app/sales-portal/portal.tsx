@@ -222,7 +222,9 @@ export function SalesRequestForm(props: SalesFormProps) {
         <div className={styles.recordToolbar}><strong>{editing.order.orderNo}</strong>
           <button type="button" disabled={busy || uncertain} onClick={editing.close}>返回提报记录</button>
         </div>
-        <p className={styles.returnReason}>退回原因：{editing.order.returnedReason || '此记录未保存退回原因'}</p>
+        {editing.order.returnedReason
+          ? <p className={styles.returnReason}>退回原因：{editing.order.returnedReason}</p>
+          : <p className={styles.hint}>未记录退回原因</p>}
         <details><summary>原单寄件人 · {sender.name} · {senderAddress}</summary>
           <div className={styles.grid2}>{Object.entries({ name: '寄件人姓名', phone: '寄件联系电话', province: '寄件省份', city: '寄件城市', county: '寄件区县', address: '寄件详细地址' }).map(([field, label]) => (
             <label key={field}>{label}<input value={senderContact[field as keyof Contact]} onChange={event => setReturnedSender(current => ({ ...current, [field]: event.target.value }))}/></label>
