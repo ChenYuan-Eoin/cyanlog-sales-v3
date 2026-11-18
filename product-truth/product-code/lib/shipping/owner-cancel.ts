@@ -1,18 +1,30 @@
 import { randomUUID } from 'node:crypto'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
 import { getCarrierAdapter } from './carrier-adapter'
 import { recordShippingCapability } from './connections'
 
-export async function cancelOriginalShipment(reference: string, actor: string, org: string, owner: boolean) {
+const observedState = z.object({
+  revision: z.number().int().min(1),
+  status: z.enum(['accepted','awaiting_confirmation','confirmed','returned','order_failed','waybill_created']),
+  waybill: z.string().min(1).nullable(),
+}).strict()
+const staleMessage = '这张寄件单已变化或页面版本过旧，请刷新提报记录后重新确认。'
+
+export async function cancelOriginalShipment(reference: string, actor: string, org: string, owner: boolean, expected?: unknown) {
   if (!org || !actor) throw new ShippingError(403, '当前账号没有组织寄件权限。')
+  const snapshot = owner ? observedState.safeParse(expected) : null
+  if (snapshot && !snapshot.success) throw new ShippingError(409, staleMessage)
   const attempt = randomUUID()
   const { data: claim, error } = await supabaseAdmin.rpc('claim_shipping_cancellation_v1', {
     p_org: org, p_actor: actor, p_reference: reference, p_owner: owner, p_attempt: attempt,
+    ...(snapshot?.success ? { p_expected: snapshot.data } : {}),
   })
   if (error || !claim) throw new ShippingError(503, '取消状态暂时无法读取，请刷新后核对。')
   const id = claim.id as string
   if (claim.result === 'missing') throw new ShippingError(404, '寄件单不存在。')
+  if (claim.result === 'stale') throw new ShippingError(409, staleMessage)
   if (claim.result === 'cancelled') return { id, status: 'cancelled' as const }
   if (claim.result === 'pending') throw new ShippingError(409, '已请求取消，结果待核实。请勿再次撤单。')
   if (claim.result === 'uncertain') throw new ShippingError(409, '下单结果未确定，请先核实原单。')

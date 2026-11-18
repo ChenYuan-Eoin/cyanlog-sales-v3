@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import MyWorkorders from './my-workorders'
 const fetcher=vi.fn()
-const order=(orderNo:string)=>({orderNo,status:'waybill_created',waybill:`SF-${orderNo}`,createdAt:'2026-11-09T08:00:00Z'})
+const order=(orderNo:string)=>({orderNo,revision:1,status:'waybill_created',waybill:`SF-${orderNo}`,createdAt:'2026-11-09T08:00:00Z'})
 const response=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status})
 beforeEach(()=>{vi.stubGlobal('React',React);vi.stubGlobal('fetch',fetcher);fetcher.mockReset()})
 afterEach(()=>{cleanup();vi.unstubAllGlobals()})

@@ -167,7 +167,7 @@ it('includes only the submitted customer name alongside public receipt fields',a
 
 it('shows only the current account and organization owner-web receipts, never another person waybill or an unattributed old order', async()=>{
  tables.shipping_orders = [
-  {...row('mine','org-A'),created_by:'owner-A',intake_source:'owner_web',shipping_waybills:[{waybill_no:'SF1234567890123'}]},
+  {...row('mine','org-A'),created_by:'owner-A',intake_source:'owner_web',revision:4,shipping_waybills:[{waybill_no:'SF1234567890123'}]},
   {...row('coworker','org-A'),created_by:'owner-B',intake_source:'owner_web',shipping_waybills:[{waybill_no:'SF9999999999999'}]},
   {...row('old-anonymous','org-A'),created_by:null,intake_source:'anonymous_web',shipping_waybills:[{waybill_no:'SF8888888888888'}]},
   {...row('crm','org-A'),created_by:'owner-A',intake_source:'crm',shipping_waybills:[{waybill_no:'SF7777777777777'}]},
@@ -175,7 +175,7 @@ it('shows only the current account and organization owner-web receipts, never an
  ]
  const own=await listOwnerShipmentReceipts('org-A','owner-A')
  expect(own.orders.map(item=>item.orderNo)).toEqual(['mine'])
- expect(own.orders[0].waybill).toBe('SF1234567890123')
+ expect(own.orders[0]).toMatchObject({revision:4,status:'awaiting_confirmation',waybill:'SF1234567890123'})
  expect((await listOwnerShipmentReceipts('org-A','no-orders')).orders).toEqual([])
  await expect(listOwnerShipmentReceipts('org-A','',0)).rejects.toMatchObject({status:401})
  await expect(listOwnerShipmentReceipts('org-A','owner-A',1001)).rejects.toMatchObject({status:400})

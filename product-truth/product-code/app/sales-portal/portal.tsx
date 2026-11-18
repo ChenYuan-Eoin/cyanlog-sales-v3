@@ -9,7 +9,7 @@ import { makeAnonymousShipmentSchema, ownerOrderSchema } from '@/lib/shipping/va
 import { normalizeDomesticShippingPhone } from '@/lib/shipping/phone'
 import { emptyContact, type Contact, type ShipmentReceipt, type ShipmentOrderStatus } from '@/lib/shipping/types'
 import styles from './sales-portal.module.css'
-import MyWorkorders, { type ReturnedShipment } from './my-workorders'
+import MyWorkorders, { type ReturnedShipment, type RestoreOwnerRecord } from './my-workorders'
 import EmployeeAccess, { type EmployeeProfile } from './employee-access'
 import SalesBatchProposal, { type BatchReviewSummary } from './sales-batch'
 
@@ -51,7 +51,7 @@ export function FxiaokeShippingProposal({ profile, rules, services, connectionSt
 
 type ReturnEdit = {
   order: ReturnedShipment
-  finish: () => void
+  finish: RestoreOwnerRecord
   close: () => void
 }
 type SalesFormProps = { departmentId?: string; departments?: Array<{ id: string; name: string; path: string }>; employee: EmployeeProfile | null; accessControls?: ReactNode; identityControls?: ReactNode; accessReady?: boolean; accessHint?: string; rules?: IntakeRules; draftSender?: Contact; draftTeam?: string; services?: ShippingServiceOption[]; mode?: 'public' | 'fxiaoke'; connectionStatus?: string; editing?: ReturnEdit }
@@ -59,7 +59,7 @@ type SalesFormProps = { departmentId?: string; departments?: Array<{ id: string;
 export function SalesRequestForm(props: SalesFormProps) {
   const { employee, accessControls, accessReady = Boolean(employee?.sender), draftSender, draftTeam, services, accessHint, rules = DEFAULT_INTAKE_RULES, mode = 'public', departments, editing } = props
   const original = editing?.order.input
-  const [selectedReturn, setSelectedReturn] = useState<ReturnedShipment | null>(null)
+  const [selectedReturn, setSelectedReturn] = useState<{ order: ReturnedShipment; restore: RestoreOwnerRecord } | null>(null)
   const [returnedSender, setReturnedSender] = useState<Contact>(() => original?.sender || draftSender || employee?.sender || emptyContact())
   const [returnDepartment, setReturnDepartment] = useState(() => {
     const previous = original?.submittedBy?.departmentId
@@ -172,7 +172,10 @@ export function SalesRequestForm(props: SalesFormProps) {
       if (!response.ok || typeof data.orderNo !== 'string' || !data.orderNo || data.orderNo.length > 80 || typeof data.status !== 'string' || !Object.hasOwn(receiptLabels, data.status) || (data.waybill != null && (typeof data.waybill !== 'string' || data.waybill.length > 80))) throw new Error('暂未确认工单提交结果，请使用原请求重取回执。')
       if (editing) {
         if (data.orderNo !== editing.order.orderNo || !(Number.isInteger(data.revision) && data.revision > editing.order.revision)) throw new Error('请重取原工单回执')
-        editing.finish()
+        editing.finish({
+          orderNo: data.orderNo, status: data.status, revision: data.revision,
+          ...(data.revision === editing.order.revision + 1 ? { customerName } : {}),
+        })
         return
       }
       setReceipt(data); setRecordRefresh(value => value + 1)
@@ -180,12 +183,10 @@ export function SalesRequestForm(props: SalesFormProps) {
     } catch { setUncertain(true); setError('暂未确认工单提交结果，原请求已保留。请重取工单回执，避免重复提报。') } finally { submissionRunning.current = false; setBusy(false) }
   }
 
-  if (selectedReturn) {
-    return <SalesRequestForm key={selectedReturn.orderNo} {...props} accessReady={Boolean(employee)} accessControls={undefined} editing={{
-      order: selectedReturn,
-      close: () => { setSelectedReturn(null); setRecordRefresh(value => value + 1) },
-      finish: () => { setSelectedReturn(null); setMobilePane('records'); setRecordRefresh(value => value + 1) },
-    }}/>
+  function returnToRecords(receipt?: Parameters<RestoreOwnerRecord>[0]) {
+    setSelectedReturn(null)
+    setMobilePane('records')
+    selectedReturn?.restore(receipt)
   }
 
   if (receipt) return <main className={styles.page}><section className={styles.successCard}><div className={styles.successIcon}><CheckCircle2 size={34}/></div><p>工单已受理</p><h1>{receiptLabels[receipt.status]}</h1><span>工单编号</span><strong>{receipt.orderNo}</strong>{receipt.waybill && <><span>承运商运单号</span><strong className={styles.waybillNumber}>{receipt.waybill}</strong></>}<small>操作员确认后才会向顺丰下单并请求揽收。如需补充资料，请提供此工单编号。</small>{receipt.receiptToken && <><button type="button" onClick={async () => { try { const response = await fetch(`/api/shipping/public/orders/${receipt.receiptToken}`, { cache: 'no-store' }); const data = await response.json(); if (!response.ok) throw new Error(data.error); setReceipt(current => current ? { ...current, ...data } : current); setReceiptStatus('已刷新工单状态') } catch { setReceiptStatus('状态暂不可用，请稍后重试') } }}>刷新工单状态</button><button type="button" onClick={() => { void navigator.clipboard.writeText(`${window.location.origin}/sales-portal#receipt=${receipt.receiptToken}`).then(() => setReceiptStatus('查询链接已复制，请妥善保存，仅供本人使用')).catch(() => setReceiptStatus('复制失败，请重试')) }}>复制查询链接</button><p><a href={`/sales-portal#receipt=${receipt.receiptToken}`}>打开工单查询页（可收藏）</a></p><p role="status">{receiptStatus}</p></>}<button onClick={() => { setReceipt(null); setRecipient(emptyContact()); setRawAddress(''); setCustomerName(''); setSpecialRequirements(''); setPreview(false); setAttempted(false); setCustomerTouched(false) }}>继续提报一票</button></section></main>
@@ -206,11 +207,14 @@ export function SalesRequestForm(props: SalesFormProps) {
     </label>
   )
 
-  return <main className={mode === 'fxiaoke' ? `${styles.page} ${styles.employeePage}` : styles.page}>
+  return <>
+    {selectedReturn && <SalesRequestForm key={selectedReturn.order.orderNo} {...props} accessReady={Boolean(employee)} accessControls={undefined}
+      editing={{ order: selectedReturn.order, close: () => returnToRecords(), finish: returnToRecords }} />}
+    <main hidden={Boolean(selectedReturn)} className={mode === 'fxiaoke' ? `${styles.page} ${styles.employeePage}` : styles.page}>
     <header className={styles.hero}><div><h1>{editing ? '重提寄件' : '发起寄件'}</h1><p>{editing ? `原工单 ${editing.order.orderNo}` : '填好寄件资料，交给前台确认。'}</p></div><ol className={styles.steps} aria-label="寄件流程"><li className={styles.current}>1 填写信息</li><li>2 前台确认</li><li>3 快递揽收</li></ol></header>
     {!editing && <nav className={styles.mobileNav} aria-label="提报与记录"><button type="button" aria-pressed={mobilePane === 'form'} onClick={() => setMobilePane('form')}>提报快递</button><button type="button" aria-pressed={mobilePane === 'records'} onClick={() => setMobilePane('records')}>提报记录</button></nav>}
     <div className={styles.workspace}>
-    <div className={mobilePane === 'records' ? styles.mobileHidden : undefined}>
+    {!selectedReturn && <div className={mobilePane === 'records' ? styles.mobileHidden : undefined}>
     {accessControls && <div className={`${styles.form} ${styles.accessControls}`}>{accessControls}</div>}
     <form ref={formRef} noValidate className={styles.form} onSubmit={submit} onChange={() => setPreview(false)}>
       <fieldset className={styles.fields} disabled={busy || uncertain}>
@@ -253,10 +257,10 @@ export function SalesRequestForm(props: SalesFormProps) {
     </form>
     {batchText && <SalesBatchProposal key={batchText} embedded initialText={batchText} sender={sender} team={draftTeam || employee?.team || ''} departmentId={departmentId} departments={departments} rules={rules} services={services} accessReady={accessReady} accessHint={accessHint}
       onSuccess={()=>setRecordRefresh(value=>value+1)} onLockedChange={setBatchLocked} onReviewChange={setBatchReview} onClear={()=>{setBatchText('');setBatchLocked(false);setRawAddress('');setPreview(false);setBatchReview(null)}}/>}
+    </div>}
+    <aside aria-label="提报记录" className={`${styles.records} ${mobilePane === 'form' ? styles.mobileHidden : ''}`}><section className={styles.summaryCard} aria-label="本次寄件摘要"><h2>本次寄件</h2><dl><div><dt>寄件人</dt><dd>{sender.name || '待填写'} · {sender.phone}</dd><dd>{senderAddress || '地址待填写'}</dd></div><div><dt>收件人</dt><dd>{batchText ? String(batchCount) + ' 位收件人（逐票核对）' : recipient.name || '待填写'}{!batchText && recipient.phone && ` · ${recipient.phone}`}</dd><dd>{batchText ? String(batchReview?.complete || 0) + ' 票资料完整 · ' + String(batchReview?.invalid || 0) + ' 票待补充' : `${recipient.province}${recipient.city === recipient.province ? '' : recipient.city}${recipient.county}${recipient.address}` || '收件地址待填写'}</dd></div><div><dt>物品与服务</dt><dd>{batchText ? '物品与服务按票核对' : <>{cargo} · {weight || '—'} kg · {services?.find(item => item.id === Number(serviceId || services[0]?.id))?.name || (servicePreference === 'urgent' ? '加急' : '标准')}</>}</dd></div></dl></section>{!editing && <section className={styles.summaryCard}><h2>提报记录</h2><MyWorkorders onResubmit={(order, restore) => setSelectedReturn({ order, restore })} actionsLocked={busy || uncertain || batchLocked} scope={mode === 'fxiaoke' ? 'owner' : 'public'} refreshKey={recordRefresh}/></section>}</aside>
     </div>
-    <aside aria-label="提报记录" className={`${styles.records} ${mobilePane === 'form' ? styles.mobileHidden : ''}`}><section className={styles.summaryCard} aria-label="本次寄件摘要"><h2>本次寄件</h2><dl><div><dt>寄件人</dt><dd>{sender.name || '待填写'} · {sender.phone}</dd><dd>{senderAddress || '地址待填写'}</dd></div><div><dt>收件人</dt><dd>{batchText ? String(batchCount) + ' 位收件人（逐票核对）' : recipient.name || '待填写'}{!batchText && recipient.phone && ` · ${recipient.phone}`}</dd><dd>{batchText ? String(batchReview?.complete || 0) + ' 票资料完整 · ' + String(batchReview?.invalid || 0) + ' 票待补充' : `${recipient.province}${recipient.city === recipient.province ? '' : recipient.city}${recipient.county}${recipient.address}` || '收件地址待填写'}</dd></div><div><dt>物品与服务</dt><dd>{batchText ? '物品与服务按票核对' : <>{cargo} · {weight || '—'} kg · {services?.find(item => item.id === Number(serviceId || services[0]?.id))?.name || (servicePreference === 'urgent' ? '加急' : '标准')}</>}</dd></div></dl></section>{!editing && <section className={styles.summaryCard}><h2>提报记录</h2><MyWorkorders onResubmit={setSelectedReturn} actionsLocked={busy || uncertain || batchLocked} scope={mode === 'fxiaoke' ? 'owner' : 'public'} refreshKey={recordRefresh}/></section>}</aside>
-    </div>
-  </main>
+  </main></>
 }
 
 function ReceiptLookup({ token }: { token: string }) {

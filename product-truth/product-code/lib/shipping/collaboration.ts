@@ -260,12 +260,13 @@ export async function listOwnerShipmentReceipts(orgId: string, userId: string, p
   const orders: ShipmentReceipt[] = rows.slice(0, limit).map(row => {
     const waybills = Array.isArray(row.shipping_waybills) ? row.shipping_waybills : row.shipping_waybills ? [row.shipping_waybills] : []
     const wb = waybills[0]
-    const canCancel = (!row.cancel_phase || row.cancel_phase === 'not_sent') && (row.status === 'waybill_created'
+    const revision = Number.isInteger(row.revision) && row.revision > 0 ? row.revision : undefined
+    const canCancel = revision !== undefined && (!row.cancel_phase || row.cancel_phase === 'not_sent') && (row.status === 'waybill_created'
       ? Boolean(row.provider_order_id && row.carrier_connection_id && row.connection_environment && wb?.waybill_no && wb.latest_status === 'waybill_created' &&
         wb.provider_order_id === row.provider_order_id && wb.carrier_key === row.provider_key)
       : !wb && ['accepted','awaiting_confirmation','confirmed','returned','order_failed'].includes(row.status) &&
         (!row.provider_order_id || (row.status === 'order_failed' && row.failure_stage === 'provider_not_sent')))
-    return { canCancel, revision: row.revision ?? 1, orderNo: row.order_no, status: row.status, ...(row.cancel_phase ? { cancellationState:row.cancel_phase } : {}), waybill: waybills[0]?.waybill_no || null,
+    return { canCancel, revision, orderNo: row.order_no, status: row.status, ...(row.cancel_phase ? { cancellationState:row.cancel_phase } : {}), waybill: wb?.waybill_no || null,
       nextReviewAt: row.next_review_at, createdAt: row.created_at,
       ...(row.status === 'returned' ? { returnedReason: row.returned_reason?.trim() || null } : {}),
       customerName: typeof row.customer_name === 'string' && row.customer_name.trim() ? row.customer_name.trim() : null }

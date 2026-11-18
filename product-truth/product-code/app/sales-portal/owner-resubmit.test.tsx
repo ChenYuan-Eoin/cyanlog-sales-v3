@@ -89,9 +89,46 @@ it('fills the returned ticket, previews the edits and submits one revision to th
   })
   const records = screen.getByRole('region', { name: '按日期分组的提报记录' })
   expect(within(records).getAllByRole('listitem')).toHaveLength(2)
-  fireEvent.click(within(records).getByRole('button', { name: /原单客户公司/ }))
+  expect(within(records).getByRole('button', { name: /原单客户公司/ })).toHaveAttribute('aria-expanded', 'true')
   expect(within(records).getAllByText(orderNo)).toHaveLength(1)
   expect(within(records).queryByRole('button', { name: '修改' })).not.toBeInTheDocument()
+})
+
+it('returns to the edited order on a later page and retains normal collapse and refresh behavior', async () => {
+  const fallback = send.getMockImplementation()!
+  const recent = Array.from({ length: 6 }, (_, i) => ({
+    orderNo: 'RECENT-' + i, status: 'confirmed', customerName: '近期客户' + i, waybill: null, revision: 1,
+    createdAt: '2026-11-18T10:03:00Z',
+  }))
+  send.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('orders?page=0')) return json({ orders: recent, nextPage: 1 })
+    if (url.endsWith('orders?page=1')) return json({ orders: [{
+      orderNo, status: saved ? 'awaiting_confirmation' : 'returned', waybill: null, revision: saved ? 2 : 1,
+      customerName: saved ? '重提后公司' : input.customerName, createdAt: '2026-11-17T10:03:00Z',
+    }], nextPage: null })
+    return fallback(url, init)
+  })
+  renderForm()
+  fireEvent.click(await screen.findByRole('button', { name: '查看更早记录' }))
+  fireEvent.click(screen.getByRole('button', { name: '加载更多快递' }))
+  await openReturnedOrder()
+  fireEvent.change(screen.getByLabelText('单票客户公司名称'), { target: { value: '重提后公司' } })
+  fireEvent.click(screen.getByRole('button', { name: '预览工单' }))
+  fireEvent.click(screen.getByRole('button', { name: '确认重提' }))
+  const summary = await screen.findByRole('button', { name: /重提后公司.*待审核.*第 1 次更改/ })
+  expect(summary).toHaveAttribute('aria-expanded', 'true')
+  expect(within(summary.closest('li')!).getByText(orderNo)).toBeInTheDocument()
+  expect(screen.getAllByText(orderNo)).toHaveLength(1)
+  const records = screen.getByRole('region', { name: '按日期分组的提报记录' })
+  expect(within(records).getAllByRole('listitem')).toHaveLength(7)
+  expect(send.mock.calls.filter(([url]) => url.endsWith('orders?page=1'))).toHaveLength(2)
+  expect(send.mock.calls.filter(([url]) => url.endsWith('orders?page=0'))).toHaveLength(1)
+  await waitFor(() => expect(summary).toHaveFocus())
+  fireEvent.click(screen.getByRole('button', { name: '收起 · 最近5条' }))
+  expect(screen.queryByRole('button', { name: /重提后公司/ })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '刷新提报记录' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeEnabled())
+  expect(screen.getByRole('button', { name: '查看更早记录' })).toHaveAttribute('aria-expanded', 'false')
 })
 
 it('keeps returned-order edits single-ticket when the pasted text contains multiple recipients', async () => {

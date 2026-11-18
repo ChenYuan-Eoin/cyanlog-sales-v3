@@ -27,7 +27,8 @@ const contact = { name: '公司前台', phone: '13800000000', province: '广东�
 const form = { sender: contact, recipient: contact, cargo: '文件', customerName: '客户公司', serviceId: 8,
   submittedBy: { name: '旧姓名', phone: '13800000000', team: '旧部门', departmentId } }
 const submission = { expectedRevision: 1, key: '8b69242d-16cb-425e-b647-6dcba8c1aa1d', input: form }
-const options = { headers: { authorization: 'Bearer local-test' } }
+const sessionFixture = 'local-test'
+const options = { headers: { authorization: 'Bearer ' + sessionFixture } }
 const read = () => GET(new NextRequest(path, options), ctx)
 const post = (body: unknown = submission) => POST(new NextRequest(path, { ...options, method: 'POST', body: JSON.stringify(body) }), ctx)
 const result = { orderNo: number, revision: 2, status: 'awaiting_confirmation', replayed: false }
@@ -45,7 +46,7 @@ beforeEach(() => {
   mock.dept.mockResolvedValue([{ id: departmentId, name: '销售部', path: '总部 / 销售部' }])
   mock.rules.mockResolvedValue({ companyName: { enabled: true, required: true, minLength: 2 }, team: { enabled: true, required: true, minLength: 1 } })
   mock.from.mockImplementation((table: string) => {
-    const record = table === 'auth_tokens' ? { token: 'local-test', user_id: 'user-A', auth_method: 'fxiaoke' } : order
+    const record = table === 'auth_tokens' ? { token: sessionFixture, user_id: 'user-A', auth_method: 'fxiaoke' } : order
     const filters = new Map<string, unknown>()
     const q = {
       select: () => q,
