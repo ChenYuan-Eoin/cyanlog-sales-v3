@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-18T06:31:08.765211+00:00",
+  "updated_at": "2026-11-18T06:43:59.307763+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -253,10 +253,14 @@
       "product-truth/product-code/tsconfig.tsbuildinfo"
     ],
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -285,7 +289,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "本轮实现、验证和构建，待精确组合候选发布与现有 Chrome 验收。",
+      "note": "按本次明确批准发布同一产品树。用户在现有Chrome验收。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -299,20 +303,28 @@
         "production_database_mode": "read_only"
       },
       "production_release_authorization": {
-        "status": "not_authorized_for_current_candidate",
-        "final_scope": "本次仅本地修改、验证与构建",
+        "status": "approved_code_only",
+        "final_release_approval_id": "IN-20261118-013",
+        "micro_fix_approval_id": "IN-20261118-011",
+        "clarification_id": "IN-20261118-012",
+        "micro_fix_scope": "员工提报界面与既有跨标签候选",
+        "final_scope": "发布07a21fa0产品树的员工多单逐票公司入口、宽屏左对齐及跨标签换账号修复，用户在正式站验收。不迁移数据、不发单。",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
-        "carrier_calls_authorized": false
+        "carrier_calls_authorized": false,
+        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF"
       },
       "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f054-auth-intake-v1"
+      "runtime_contract_version": "f054-auth-intake-v1",
+      "preview_order_exception_approval_id": "IN-20261118-013"
     },
     "feature_id": "F054",
     "integration_decision": {
       "strategy": "combine_verified_session_change_with_employee_intake_feedback",
-      "authority": "IN-20261118-011",
-      "requested_target": "code_green"
+      "authority": "IN-20261118-013",
+      "requested_target": "production_released",
+      "constraint": "限定已批准产品树，正式站由用户验收。"
     },
     "micro_fixes": [
       {
