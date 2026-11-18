@@ -251,14 +251,21 @@
       "product-truth/product-code/app/knowledge/page.tsx",
       "product-truth/product-code/node_modules",
       "product-truth/product-code/.next",
-      "product-truth/product-code/tsconfig.tsbuildinfo"
+      "product-truth/product-code/tsconfig.tsbuildinfo",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/project-registry.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/navigation-performance-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/navigation-performance-verifier.test.js"
     ],
     "feature_id": "F054",
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -273,16 +280,53 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "shipping_workspace",
-        "shipping_tracking",
-        "shipping_access"
+        "navigation_performance"
       ],
-      "note": "候选验证与构建，发布另按本次候选批准。",
+      "note": "发布 254f31e5 页面性能候选，在正式站现有 Chrome 只读复测标书、知识库、日程；无数据库迁移、无业务数据修改、无承运商调用。",
       "production_database_mode": "read_only",
-      "runtime_profile": "shipping_workspace",
-      "runtime_contract_version": "f054-recovery-v1"
+      "runtime_profile": "navigation",
+      "runtime_contract_version": "navigation-performance-v1",
+      "required_production_runtime_evidence": [
+        "navigation_performance"
+      ],
+      "final_acceptance": {
+        "origin": "https://sales.cyanlog.icu",
+        "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
+        "new_local_browser_or_context_prohibited": true,
+        "new_tab_prohibited": true,
+        "local_and_preview_role": "diagnostic_only_not_completion",
+        "release_truth_rule": "Git提交/推送、Production数据库迁移、Vercel部署、域名指向与用户现有Chrome目标路径验收彼此独立；缺一不得宣称Production完成。",
+        "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
+        "production_database_mode": "read_only"
+      },
+      "required_production_evidence": [
+        "exact_production_commit",
+        "vercel_deployment_ready_and_promoted",
+        "sales.cyanlog.icu_alias",
+        "controlled_production_security_and_runtime_verifier",
+        "trusted_existing_chrome_operator_attestation"
+      ],
+      "production_release_authorization": {
+        "status": "approved_code_only",
+        "final_release_approval_id": "IN-20261118-028",
+        "final_scope": "发布 254f31e5 页面性能候选，在正式站现有 Chrome 只读复测标书、知识库、日程；无数据库迁移、无业务数据修改、无承运商调用。",
+        "database_write_authorized": false,
+        "production_database_write_authorized": false,
+        "carrier_calls_authorized": false,
+        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "micro_fix_approval_id": "IN-20261118-024",
+        "clarification_id": "IN-20261118-019",
+        "micro_fix_scope": "发布 254f31e5 页面性能候选，在正式站现有 Chrome 只读复测标书、知识库、日程；无数据库迁移、无业务数据修改、无承运商调用。"
+      },
+      "preview_order_exception_approval_id": "IN-20261118-032"
     },
-    "started_at": "2026-11-18T07:55:28.910972+00:00"
+    "started_at": "2026-11-18T07:55:28.910972+00:00",
+    "integration_decision": {
+      "strategy": "release_approved_navigation_product_tree",
+      "authority": "IN-20261118-028",
+      "requested_target": "production_released"
+    }
   },
   "execution_queue": {
     "active": {
