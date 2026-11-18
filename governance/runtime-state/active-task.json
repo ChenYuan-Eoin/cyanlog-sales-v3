@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-18T04:14:15.443389+00:00",
+  "updated_at": "2026-11-18T04:23:11.075546+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -309,18 +309,28 @@
         "production_database_mode": "read_only"
       },
       "production_release_authorization": {
-        "status": "not_authorized_for_current_candidate",
-        "final_scope": "仅实现并验证已批准会话策略；无生产迁移或数据修改"
+        "status": "approved_code_only",
+        "final_release_approval_id": "IN-20261118-004",
+        "final_scope": "发布13ca7280产品树：WP35员工布局、两步提报指引、操作员核对布局及提报人标签，WP40部门范围与统一角色入口，WP94纷享会话空闲30分钟和最长8小时。代码发布及正式站验收；不含数据库迁移、授权名单调整、真实工单修改或顺丰调用，即时退出联动仍未完成。",
+        "database_write_authorized": false,
+        "production_database_write_authorized": false,
+        "carrier_calls_authorized": false,
+        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "micro_fix_approval_id": "IN-20261118-003",
+        "clarification_id": "IN-20261118-004",
+        "micro_fix_scope": "发布13ca7280产品树：WP35员工布局、两步提报指引、操作员核对布局及提报人标签，WP40部门范围与统一角色入口，WP94纷享会话空闲30分钟和最长8小时。代码发布及正式站验收；不含数据库迁移、授权名单调整、真实工单修改或顺丰调用，即时退出联动仍未完成。"
       },
       "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f003-fxiaoke-sso-v1"
+      "runtime_contract_version": "f003-fxiaoke-sso-v1",
+      "preview_order_exception_approval_id": "IN-20261118-004"
     },
     "feature_id": "F003",
     "integration_decision": {
       "strategy": "preserve_combined_candidate_and_correct_sales_guidance",
       "authority": "IN-20261117-023",
       "requested_target": "code_green",
-      "constraint": "不发布、不写生产业务数据、不调用顺丰。"
+      "constraint": "User approved current product tree code release; no schema or business data write; user performs Production acceptance."
     },
     "paused_reason": "原候选已发布，本工作区继续WP94验收反馈",
     "micro_fixes": [
@@ -329,6 +339,9 @@
         "scope": "操作员核对展开与修改工单布局：隔离字段网格和操作按钮样式，约束卡片内字段尺寸及列表列宽，不改接口或流程。",
         "evidence": "用户正式站截图584dd0b6-df3d-4bac-af70-98cd5f028c47.png；现有Safari管理员页读取及源码CSS级联核对"
       }
+    ],
+    "blocking_items": [
+      "旧f003-fxiaoke-sso-v1 Production门禁将SSO发布固定绑定为迁移批次；当前代码发布不授予迁移权限，正式状态不宣称production_released，生产验收由用户执行。"
     ]
   },
   "execution_queue": {
