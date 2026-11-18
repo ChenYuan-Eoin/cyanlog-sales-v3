@@ -32,6 +32,7 @@ export type ShipmentOrder = {
 }
 export type ShipmentReceipt = Pick<ShipmentOrder, 'orderNo' | 'status' | 'waybill' | 'nextReviewAt' | 'createdAt'> & {
   customerName?: string | null
+  revision?: number
   returnedReason?: string | null
 }
 export const emptyContact = (): Contact => ({ name: '', phone: '', province: '', city: '', county: '', address: '' })

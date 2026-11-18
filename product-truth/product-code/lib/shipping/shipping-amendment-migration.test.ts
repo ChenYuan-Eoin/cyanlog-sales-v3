@@ -35,6 +35,8 @@ describe('shipping order amendment migration', () => {
         id uuid primary key,
         org_id uuid not null references public.organizations(id),
         created_by uuid references public.users(id),
+        order_no text not null default 'SO-20261118-CFA92314',
+        intake_source text not null default 'owner_web',
         employee_profile_id uuid,
         identity_snapshot jsonb default '{}'::jsonb,
         status text not null,
@@ -66,6 +68,55 @@ describe('shipping order amendment migration', () => {
 
   afterEach(async () => {
     await db.close()
+  })
+
+  async function installOwnerResubmission() {
+    await db.exec(readFileSync(join(process.cwd(), 'supabase/migrations/20261118111500_resubmit_returned_owner_shipment.sql'), 'utf8'))
+  }
+
+  const orderNo = 'SO-20261118-CFA92314'
+  const key = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  const otherId = '99999999-9999-4999-8999-999999999999'
+  async function resubmit(overrides: { actor?: string; org?: string; number?: string; expected?: number; key?: string; requestHash?: string; cargo?: string } = {}) {
+    return (await db.query<{ receipt: { orderNo: string; revision: number; status: string; replayed: boolean } | null }>(
+      'select public.resubmit_returned_owner_shipment_v1($1,$2,$3,$4,$5,$6,$7,$8) as receipt',
+      [overrides.actor ?? userId, overrides.org ?? orgId, overrides.number ?? orderNo, overrides.expected ?? 1,
+        overrides.key ?? key, overrides.requestHash ?? 'f'.repeat(64), JSON.stringify({ ...payload, cargo: overrides.cargo ?? '合同' }), 'b'.repeat(64)],
+    )).rows[0].receipt
+  }
+
+  it('resubmits on the original number and replays the same request once, even after review advances', async () => {
+    await installOwnerResubmission()
+    await db.exec("update public.shipping_orders set returned_reason = '请更正收件人'")
+    expect(await resubmit()).toEqual({ orderNo, revision: 2, status: 'awaiting_confirmation', replayed: false })
+    expect(await resubmit()).toEqual({ orderNo, revision: 2, status: 'awaiting_confirmation', replayed: true })
+    await expect(resubmit({ requestHash: 'e'.repeat(64) })).rejects.toMatchObject({ code: '40001' })
+    await expect(resubmit({ expected: 2 })).rejects.toMatchObject({ code: '40001' })
+    await expect(resubmit({ key: otherId })).rejects.toMatchObject({ code: '40001' })
+    await db.exec("update public.shipping_orders set status = 'confirmed'")
+    expect(await resubmit({ cargo: '变更后的派生默认值' })).toEqual({ orderNo, revision: 2, status: 'confirmed', replayed: true })
+    const orders = await db.query("select order_no,created_by,revision,returned_reason,shipment_payload->>'cargo' as cargo from public.shipping_orders")
+    expect(orders.rows).toEqual([{ order_no: orderNo, created_by: userId, revision: 2, returned_reason: null, cargo: '合同' }])
+    expect((await db.query('select revision,owner_resubmit_key from public.shipping_order_revisions')).rows).toEqual([{ revision: 2, owner_resubmit_key: key }])
+  })
+
+  it('checks owner, organization, intake source, state, waybill and role before changing a returned order', async () => {
+    await installOwnerResubmission()
+    expect(await resubmit({ actor: otherId })).toBeNull()
+    expect(await resubmit({ org: otherId })).toBeNull()
+    expect(await resubmit({ number: 'missing' })).toBeNull()
+    await db.exec("update public.shipping_orders set intake_source = 'anonymous_web'")
+    expect(await resubmit()).toBeNull()
+    await db.exec("update public.shipping_orders set intake_source = 'owner_web', status = 'awaiting_confirmation'")
+    await expect(resubmit()).rejects.toMatchObject({ code: '23514' })
+    await db.exec(`update public.shipping_orders set status = 'returned'; insert into public.shipping_waybills(shipping_order_id) values ('${orderId}');`)
+    await expect(resubmit()).rejects.toMatchObject({ code: '23514' })
+    expect((await db.query('select revision,status from public.shipping_orders')).rows).toEqual([{ revision: 1, status: 'returned' }])
+    expect((await db.query('select * from public.shipping_order_revisions')).rows).toEqual([])
+    for (const role of ['anon', 'authenticated', 'service_role']) {
+      const privilege = await db.query<{ allowed: boolean }>("select has_function_privilege($1, 'public.resubmit_returned_owner_shipment_v1(uuid,uuid,text,integer,uuid,text,jsonb,text)', 'EXECUTE') as allowed", [role])
+      expect(privilege.rows[0].allowed).toBe(role === 'service_role')
+    }
   })
 
   it('increments revision, clears return state, preserves identity and records before/after payloads', async () => {

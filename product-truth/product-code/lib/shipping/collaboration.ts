@@ -107,8 +107,17 @@ export async function createOwnerShipment(args: { orgId: string; userId: string;
     if (!result.data) throw new ShippingError(409, '寄件请求编号已被使用，请从当前组织的原寄件单核对。')
   }
   if (result.error || !result.data) throw new ShippingError(503, '本人寄件单暂未保存，请稍后重试。')
-  if ((result.data as ShipmentRow).payload_hash !== payloadHash) throw new ShippingError(409, '同一寄件请求的内容发生变化，请打开原寄件单确认。')
-  return map(result.data as ShipmentRow)
+  const saved = result.data as ShipmentRow
+  let creationHash = saved.payload_hash
+  if ((saved.revision ?? 1) > 1) {
+    // The creation key stays bound to the input before the first amendment.
+    const first = await supabaseAdmin.from('shipping_order_revisions').select('before_payload_hash')
+      .eq('order_id', saved.id).eq('org_id', args.orgId).eq('revision', 2).maybeSingle()
+    if (first.error || !first.data) throw new ShippingError(503, '原始提报内容暂时无法核对，请稍后重试。')
+    creationHash = first.data.before_payload_hash
+  }
+  if (creationHash !== payloadHash) throw new ShippingError(409, '同一寄件请求的内容发生变化，请打开原寄件单确认。')
+  return map(saved)
 }
 
 export async function amendShipmentOrder(args: {
@@ -239,7 +248,7 @@ export async function listOwnerShipmentReceipts(orgId: string, userId: string, p
   if (!Number.isSafeInteger(page) || page < 0 || page > 1000) throw new ShippingError(400, '记录页码无效。')
   const limit = 50
   const { data, error } = await supabaseAdmin.from('shipping_orders')
-    .select('order_no,status,returned_reason,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no)')
+    .select('order_no,status,revision,returned_reason,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no)')
     .eq('org_id', orgId)
     .eq('created_by', userId)
     .eq('intake_source', 'owner_web')
@@ -250,7 +259,7 @@ export async function listOwnerShipmentReceipts(orgId: string, userId: string, p
   const rows = data || []
   const orders: ShipmentReceipt[] = rows.slice(0, limit).map(row => {
     const waybills = Array.isArray(row.shipping_waybills) ? row.shipping_waybills : row.shipping_waybills ? [row.shipping_waybills] : []
-    return { orderNo: row.order_no, status: row.status, waybill: waybills[0]?.waybill_no || null,
+    return { orderNo: row.order_no, status: row.status, revision: row.revision ?? 1, waybill: waybills[0]?.waybill_no || null,
       nextReviewAt: row.next_review_at, createdAt: row.created_at,
       ...(row.status === 'returned' ? { returnedReason: row.returned_reason?.trim() || null } : {}),
       customerName: typeof row.customer_name === 'string' && row.customer_name.trim() ? row.customer_name.trim() : null }

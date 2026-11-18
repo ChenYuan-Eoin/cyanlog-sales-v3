@@ -115,6 +115,17 @@ describe('shipping collaboration organization boundary', () => {
     expect(tables.shipping_orders.filter(item => item.idempotency_key === 'stable-intake-key')).toHaveLength(1)
     await expect(createOwnerShipment({ orgId: 'org-A', userId: 'owner-A', key: 'stable-intake-key', input: { ...input, recipient: { ...input.recipient, name: '另一位示例收件人' } }, usesDefaultSender: true })).rejects.toMatchObject({ status: 409 })
   })
+  it('binds the original creation key to its original input after an owner revision', async () => {
+    const args = { orgId: 'org-A', userId: 'owner-A', key: 'old-create-key', input }
+    const first = await createOwnerShipment(args)
+    const stored = tables.shipping_orders.find(item => item.id === first.id)!
+    tables.shipping_order_revisions = [{ order_id: first.id, org_id: 'org-A', revision: 2, before_payload_hash: stored.payload_hash }]
+    const amended = { ...input, cargo: '合同' }
+    Object.assign(stored, { revision: 2, shipment_payload: amended, payload_hash: createHash('sha256').update(JSON.stringify(amended)).digest('hex') })
+    await expect(createOwnerShipment(args)).resolves.toMatchObject({ id: first.id, revision: 2, input: amended })
+    await expect(createOwnerShipment({ ...args, input: amended })).rejects.toMatchObject({ status: 409 })
+    expect(tables.shipping_orders.filter(order => order.idempotency_key === args.key)).toHaveLength(1)
+  })
   it('returns the current state of a previously submitted work order without resetting or recreating it', async () => {
     const first = await createOwnerShipment({ orgId: 'org-A', userId: 'owner-A', key: 'finished-intake-key', input })
     const stored = tables.shipping_orders.find(item => item.id === first.id)!

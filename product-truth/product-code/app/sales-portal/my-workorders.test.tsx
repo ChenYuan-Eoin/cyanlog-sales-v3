@@ -30,17 +30,42 @@ it('reads only the authenticated owner endpoint in employee mode', async()=>{
 })
 it('shows a returned order’s actual reason in the owner record and labels historical missing reasons', async () => {
   fetcher.mockResolvedValue(response({ orders: [
-    { ...order('RETURNED'), status: 'returned', returnedReason: '收件地址缺少楼层' },
-    { ...order('HISTORICAL'), status: 'returned' },
+    { ...order('RETURNED'), status: 'returned', customerName: '客户甲', returnedReason: '收件地址缺少楼层' },
+    { ...order('HISTORICAL'), status: 'returned', customerName: '客户乙' },
     { ...order('SHIPPED'), returnedReason: '旧原因' },
   ], nextPage: null }))
   render(<MyWorkorders scope="owner" />)
-  const current = (await screen.findByText('RETURNED')).closest('li')!
-  expect(within(current).getByText('已退回')).toBeTruthy()
+  const current = (await screen.findByText('客户甲')).closest('li')!
+  expect(within(current).getByText('前台已退回')).toBeTruthy()
   expect(within(current).getByText('退回原因：收件地址缺少楼层')).toBeTruthy()
-  const old = screen.getByText('HISTORICAL').closest('li')!
+  const old = screen.getByText('客户乙').closest('li')!
   expect(within(old).getByText('退回原因：此记录未保存退回原因')).toBeTruthy()
   expect(screen.queryByText(/旧原因/)).toBeNull()
+})
+it('opens one owner receipt at a time and shows identifiers and the full reason inside its details', async () => {
+  const longReason = '收件地址需要补全大楼名称、楼层和房间号，请与收件人确认以后修改原单重新提交。'
+  fetcher.mockResolvedValue(response({ orders: [
+    { ...order('FIRST'), status: 'returned', customerName: '修改客户', revision: 3, waybill: null, returnedReason: longReason },
+    { ...order('SECOND'), customerName: '发运客户' },
+  ], nextPage: null }))
+  render(<MyWorkorders scope="owner" onResubmit={vi.fn()} />)
+  const first = await screen.findByRole('button', { name: /修改客户/ })
+  expect(first.getAttribute('aria-expanded')).toBe('false')
+  expect(first.textContent).toContain('第 2 次更改')
+  expect(first.textContent).toMatch(/退回原因：收件地址.+…/)
+  expect(screen.queryByText('FIRST')).toBeNull()
+  expect(screen.queryByText('SF-SECOND')).toBeNull()
+  expect(screen.queryByText('退回原因：' + longReason)).toBeNull()
+  expect(screen.queryByRole('button', { name: '修改' })).toBeNull()
+  fireEvent.click(first)
+  expect(first.getAttribute('aria-expanded')).toBe('true')
+  expect(screen.getByText('FIRST')).toBeTruthy()
+  expect(screen.getByText('退回原因：' + longReason)).toBeTruthy()
+  expect(screen.getByRole('button', { name: '修改' })).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: /发运客户/ }))
+  expect(screen.queryByText('FIRST')).toBeNull()
+  expect(screen.queryByRole('button', { name: '修改' })).toBeNull()
+  expect(screen.getByText('SF-SECOND')).toBeTruthy()
 })
 it('does not display a return reason in a shared receipt, even if supplied', async () => {
   fetcher.mockResolvedValue(response({ orders: [{ ...order('SHARED'), status: 'returned', returnedReason: '私有备注' }], nextPage: null }))

@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-18T10:12:14.328332+00:00",
+  "updated_at": "2026-11-18T10:15:08.293113+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -240,22 +240,22 @@
     "name": "销售寄件提报体验",
     "kind": "product",
     "status": "active",
-    "objective": "本人查看被退回的寄件提报时，看到操作员填写的原因及红色提示。",
-    "started_at": "2026-11-18T10:12:14.328332+00:00",
-    "activation_basis": "IN-20261118-055 正式站本人提报记录重现。",
-    "execution_workspace": "/private/tmp/price-v3-own-return-reason",
+    "objective": "本人从退回提报点重提，原表单回填一票，编辑后在同一工单重新提交并显示更改次数。",
+    "started_at": "2026-11-18T10:15:08.293113+00:00",
+    "activation_basis": "IN-20261118-058 用户明确要求退回重提原单、维持原记录。",
+    "execution_workspace": "/private/tmp/price-v3-owner-resubmit",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/product-code/app/sales-portal/my-workorders.tsx",
-      "product-truth/product-code/app/sales-portal/my-workorders.test.tsx",
-      "product-truth/product-code/app/sales-portal/sales-portal.module.css",
-      "product-truth/product-code/lib/shipping/types.ts",
-      "product-truth/product-code/lib/shipping/collaboration.ts",
-      "product-truth/product-code/lib/shipping/collaboration.org.test.ts",
+      "product-truth/product-code/app/api/shipping/owner/orders",
+      "product-truth/product-code/app/sales-portal",
+      "product-truth/product-code/lib/shipping",
+      "product-truth/product-code/supabase/migrations/20261118111500_resubmit_returned_owner_shipment.sql",
       "product-truth/product-code/node_modules",
       "product-truth/product-code/.next",
-      "product-truth/product-code/tsconfig.tsbuildinfo"
+      "product-truth/product-code/tsconfig.tsbuildinfo",
+      "product-truth/product-code/middleware.ts",
+      "product-truth/product-code/middleware.test.ts"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -290,7 +290,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "本人退回原因独立候选，发布另行审批。",
+      "note": "本人重提本地候选，当前不含生产授权。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -315,22 +315,10 @@
     "feature_id": "F054",
     "integration_decision": {
       "strategy": "isolated_owner_return_reason_candidate",
-      "authority": "IN-20261118-055",
+      "authority": "IN-20261118-058",
       "requested_target": "code_green"
     },
-    "micro_fixes": [
-      {
-        "id": "IN-20261118-011",
-        "scope": "多单直接粘贴地址，识别后每票独立填写客户公司。",
-        "evidence": "见同编号正式页复现记录"
-      },
-      {
-        "id": "IN-20261118-012",
-        "scope": "员工页宽屏标题与寄件内容从主区域左边对齐。",
-        "evidence": "见同编号正式页复现记录"
-      }
-    ],
-    "paused_reason": "员工认证生产故障阻断寄件验收，正式站延用已发布版本。"
+    "micro_fixes": []
   },
   "execution_queue": {
     "active": {
@@ -2854,8 +2842,8 @@
     "inbox_path": "governance/runtime-state/demand-inbox.jsonl",
     "source_dirty_workspace": "/Users/nsss/Price-v3",
     "role": "canonical_execution_candidate",
-    "branch": "codex/wp35-own-return-reason",
-    "execution_workspace": "/private/tmp/price-v3-own-return-reason",
+    "branch": "codex/wp35-owner-resubmit",
+    "execution_workspace": "/private/tmp/price-v3-owner-resubmit",
     "workspace_strategy": "isolated-followup"
   },
   "entry": {
