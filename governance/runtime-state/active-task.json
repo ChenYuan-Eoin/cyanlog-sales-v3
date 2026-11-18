@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-18T04:23:11.075546+00:00",
+  "updated_at": "2026-11-18T05:50:43.830312+00:00",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -266,14 +266,10 @@
       "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-sso-verifier.test.js"
     ],
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "code_green",
       "allowed_states": [
         "executing",
-        "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -315,21 +311,14 @@
         "production_database_mode": "read_only"
       },
       "production_release_authorization": {
-        "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261118-004",
-        "final_scope": "发布13ca7280产品树：WP35员工布局、两步提报指引、操作员核对布局及提报人标签，WP40部门范围与统一角色入口，WP94纷享会话空闲30分钟和最长8小时。代码发布及正式站验收；不含数据库迁移、授权名单调整、真实工单修改或顺丰调用，即时退出联动仍未完成。",
+        "status": "not_authorized_for_current_candidate",
+        "final_scope": "新发现的跨标签账号切换状态残留仅本地修复验证，已发布61791a01及其批准保留，不继承本次候选发布权限",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
-        "carrier_calls_authorized": false,
-        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
-        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
-        "micro_fix_approval_id": "IN-20261118-003",
-        "clarification_id": "IN-20261118-004",
-        "micro_fix_scope": "发布13ca7280产品树：WP35员工布局、两步提报指引、操作员核对布局及提报人标签，WP40部门范围与统一角色入口，WP94纷享会话空闲30分钟和最长8小时。代码发布及正式站验收；不含数据库迁移、授权名单调整、真实工单修改或顺丰调用，即时退出联动仍未完成。"
+        "carrier_calls_authorized": false
       },
       "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f003-fxiaoke-sso-v1",
-      "preview_order_exception_approval_id": "IN-20261118-004"
+      "runtime_contract_version": "f003-fxiaoke-sso-v1"
     },
     "feature_id": "F003",
     "integration_decision": {
@@ -347,7 +336,8 @@
       }
     ],
     "blocking_items": [
-      "旧f003-fxiaoke-sso-v1 Production门禁将SSO发布固定绑定为迁移批次；当前代码发布不授予迁移权限，正式状态不宣称production_released，生产验收由用户执行。"
+      "跨标签换账号时旧页身份、记录和表单状态残留；本轮复现待修复",
+      "即时纷享退出联动仍缺当前应用协议证据"
     ]
   },
   "execution_queue": {

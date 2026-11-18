@@ -4,11 +4,15 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SessionActivity } from './SessionActivity'
 
 const fetcher = vi.fn()
+const clearSession = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/session-client', () => ({ clearClientSession: clearSession }))
 beforeEach(() => {
   vi.useFakeTimers()
   vi.stubGlobal('React', React)
   vi.stubGlobal('fetch', fetcher)
   fetcher.mockReset().mockImplementation(async () => Response.json({ managed: true, expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() }))
+  clearSession.mockReset()
+  localStorage.clear()
 })
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); vi.unstubAllGlobals() })
 
@@ -33,4 +37,30 @@ it('renews real foreground input and throttles repeated activity', async () => {
   await act(async () => { pointer({ isTrusted: true } as Event) })
   await act(async () => { pointer({ isTrusted: true } as Event) })
   expect(fetcher.mock.calls.map(([, init]) => init.method)).toEqual(['GET', 'POST'])
+})
+
+it('does not clear a new account when an old request returns unauthorized', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {}) // jsdom does not implement full navigation.
+  let finish!: (response: Response) => void
+  fetcher.mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve }))
+  localStorage.setItem('token', 'old-session')
+  await act(async () => { render(<SessionActivity />) })
+  localStorage.setItem('token', 'new-session')
+  await act(async () => { finish(new Response(null, { status: 401 })) })
+  expect(clearSession).not.toHaveBeenCalled()
+  expect(localStorage.getItem('token')).toBe('new-session')
+})
+
+it('stops using the old session after a cross-tab account change', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  localStorage.setItem('token', 'old-session')
+  await act(async () => { render(<SessionActivity />) })
+  await act(async () => {
+    localStorage.setItem('token', 'new-session')
+    window.dispatchEvent(new StorageEvent('storage', { key: 'token' }))
+    await vi.advanceTimersByTimeAsync(31 * 60_000)
+  })
+  expect(fetcher).toHaveBeenCalledTimes(1)
+  expect(clearSession).not.toHaveBeenCalled()
+  expect(localStorage.getItem('token')).toBe('new-session')
 })
