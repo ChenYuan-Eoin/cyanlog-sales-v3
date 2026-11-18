@@ -174,6 +174,8 @@ describe('role-free federated session boundary', () => {
     expect((await middleware(request('/api/cases'))).status).toBe(403)
     expect((await middleware(request('/api/tech-documents'))).status).toBe(403)
     expect((await middleware(request('/api/shipping/owner/orders', 'POST'))).status).toBe(200)
+    expect((await middleware(request('/api/shipping/owner/orders/SO-20261118-1234ABCD/cancel', 'POST'))).status).toBe(200)
+    expect((await middleware(request('/api/shipping/owner/orders/SO-20261118-1234ABCD/confirm', 'POST'))).status).toBe(403)
     expect((await middleware(request('/api/shipping/owner/orders'))).status).toBe(200)
     expect((await middleware(request('/api/shipping/owner/profile'))).status).toBe(200)
     expect((await middleware(request('/api/shipping/owner/profile', 'POST'))).status).toBe(200)

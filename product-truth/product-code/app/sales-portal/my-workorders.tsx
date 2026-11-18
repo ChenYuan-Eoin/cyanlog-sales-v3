@@ -1,6 +1,7 @@
 'use client'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { ShipmentReceipt } from '@/lib/shipping/types'
+import { OwnerCancelOrder } from './owner-cancel-order'
 import styles from './sales-portal.module.css'
 const labels: Record<string, string> = { awaiting_confirmation: '待审核', returned: '已退回，请联系操作员补充资料', confirmed: '已确认', ordering: '下单中', order_unknown: '下单结果待确认', waybill_created: '运单已生成', in_transit: '运输中', delivered: '已签收', cancelled: '已取消', order_failed: '下单未成功', accepted: '已受理' }
 const dateFormat = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'long', day: 'numeric' })
@@ -49,6 +50,7 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0 }: { sco
         <span className={styles.recordCustomer} title={order.customerName || '未填客户'}>{order.customerName || '未填客户'}</span>
         <strong>{order.orderNo}</strong>
         {order.waybill && <span>顺丰运单号：<strong className={styles.waybillNumber}>{order.waybill}</strong></span>}
+        {scope === 'owner' && <OwnerCancelOrder order={order} onCancelled={() => setOrders(current => current?.map(item => item.orderNo === order.orderNo ? { ...item, status: 'cancelled' } : item) || null)} />}
       </li>)}</ul></section>)}
       </div>
       {expanded && nextPage !== null && <button type="button" disabled={busy} onClick={() => void load(nextPage)}>加载更多快递</button>}

@@ -1,3 +1,4 @@
+import { cancelOriginalShipment } from './owner-cancel'
 import { randomUUID } from 'node:crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
@@ -153,28 +154,6 @@ export async function reconcileShipmentOrder(id: string, orgId: string) {
   return { id, status: 'waybill_created' as const, waybill }
 }
 
-export async function cancelShipmentOrder(id: string, userId: string, orgId: string) {
-  const row = await loadForAction(id, orgId)
-  if (row.status === 'cancelled') return { id, status: 'cancelled' as const }
-  getCarrierAdapter(row.provider_key)
-  if (row.status !== 'waybill_created' || !row.provider_order_id) throw new ShippingError(409, '只有未揽收且已生成运单的订单可以取消。')
-  if (!row.org_id || !row.carrier_connection_id) throw new ShippingError(409, '历史订单缺少快递连接快照，无法安全取消。')
-  const carrier = await getCarrierAdapter(row.provider_key).connect({ expectedEnvironment: row.connection_environment, orgId: row.org_id, billingAccountId: row.billing_account_id, connectionId: row.carrier_connection_id, allowHistorical: true, requireOrderCapability: false })
-  const connection = carrier.context
-  await carrier.cancel(row.provider_order_id)
-  const now = new Date().toISOString()
-  // The carrier has accepted this request. Tracking may have advanced during that call;
-  // persist the confirmed cancellation without overwriting a delivered order.
-  const { data, error } = await supabaseAdmin.from('shipping_orders').update({ status: 'cancelled', confirmed_by: userId, updated_at: now }).eq('id', id).eq('org_id', orgId).in('status', ['waybill_created', 'in_transit']).select('id').maybeSingle()
-  if (error) throw new ShippingError(503, '承运商已受理取消，但本地状态保存失败，请勿重复操作。')
-  if (!data) {
-    const current = await loadForAction(id, orgId)
-    if (current.status === 'cancelled') return { id, status: 'cancelled' as const }
-    throw new ShippingError(409, '承运商已受理取消，但寄件单状态已变化，请刷新后核对。')
-  }
-  const { error: waybillError } = await supabaseAdmin.from('shipping_waybills').update({ latest_status: 'cancelled', updated_at: now }).eq('shipping_order_id', id)
-  if (waybillError) throw new ShippingError(503, '承运商已取消运单，但物流状态保存失败，请刷新核对。')
-  try { await recordShippingCapability(row.org_id, connection.connectionId, 'cancel') }
-  catch { console.error('shipping.capability.record_failed', { capability: 'cancel' }) }
-  return { id, status: 'cancelled' as const }
+export function cancelShipmentOrder(id: string, userId: string, orgId: string) {
+  return cancelOriginalShipment(id, userId, orgId, false)
 }

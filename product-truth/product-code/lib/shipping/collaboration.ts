@@ -239,7 +239,7 @@ export async function listOwnerShipmentReceipts(orgId: string, userId: string, p
   if (!Number.isSafeInteger(page) || page < 0 || page > 1000) throw new ShippingError(400, '记录页码无效。')
   const limit = 50
   const { data, error } = await supabaseAdmin.from('shipping_orders')
-    .select('order_no,status,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no)')
+    .select('order_no,status,cancel_phase:cancellation->>phase,provider_key,provider_order_id,carrier_connection_id,connection_environment,failure_stage:shipping_config_snapshot->orderFailure->>stage,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no,latest_status,provider_order_id,carrier_key)')
     .eq('org_id', orgId)
     .eq('created_by', userId)
     .eq('intake_source', 'owner_web')
@@ -250,7 +250,13 @@ export async function listOwnerShipmentReceipts(orgId: string, userId: string, p
   const rows = data || []
   const orders: ShipmentReceipt[] = rows.slice(0, limit).map(row => {
     const waybills = Array.isArray(row.shipping_waybills) ? row.shipping_waybills : row.shipping_waybills ? [row.shipping_waybills] : []
-    return { orderNo: row.order_no, status: row.status, waybill: waybills[0]?.waybill_no || null,
+    const wb = waybills[0]
+    const canCancel = (!row.cancel_phase || row.cancel_phase === 'not_sent') && (row.status === 'waybill_created'
+      ? Boolean(row.provider_order_id && row.carrier_connection_id && row.connection_environment && wb?.waybill_no && wb.latest_status === 'waybill_created' &&
+        wb.provider_order_id === row.provider_order_id && wb.carrier_key === row.provider_key)
+      : !wb && ['accepted','awaiting_confirmation','confirmed','returned','order_failed'].includes(row.status) &&
+        (!row.provider_order_id || (row.status === 'order_failed' && row.failure_stage === 'provider_not_sent')))
+    return { canCancel, orderNo: row.order_no, status: row.status, ...(row.cancel_phase ? { cancellationState:row.cancel_phase } : {}), waybill: waybills[0]?.waybill_no || null,
       nextReviewAt: row.next_review_at, createdAt: row.created_at,
       customerName: typeof row.customer_name === 'string' && row.customer_name.trim() ? row.customer_name.trim() : null }
   })

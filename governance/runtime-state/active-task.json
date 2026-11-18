@@ -235,27 +235,38 @@
     }
   },
   "active_task": {
-    "id": "WP35",
-    "slug": "sales-intake-experience",
-    "name": "销售寄件提报体验",
+    "id": "WP99",
+    "slug": "sf-fulfillment-e2e",
+    "name": "顺丰真实履约端到端闭环",
     "kind": "product",
     "status": "active",
-    "objective": "本人查看被退回的寄件提报时，看到操作员填写的原因及红色提示。",
+    "objective": "提报人在本人记录直接取消未出单或顺丰已确认可取消的本人订单，保持原单、真实回执与重复请求可核验。",
     "started_at": "2026-11-18T10:12:14.328332+00:00",
-    "activation_basis": "IN-20261118-055 正式站本人提报记录重现。",
-    "execution_workspace": "/private/tmp/price-v3-own-return-reason",
+    "activation_basis": "IN-20261118-056 独立工作区，旧WP29已合并到WP99，仅本人取消。",
+    "execution_workspace": "/private/tmp/price-v3-owner-cancellation",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
+      "product-truth/product-code/middleware.ts",
+      "product-truth/product-code/middleware.test.ts",
       "product-truth/product-code/app/sales-portal/my-workorders.tsx",
-      "product-truth/product-code/app/sales-portal/my-workorders.test.tsx",
-      "product-truth/product-code/app/sales-portal/sales-portal.module.css",
-      "product-truth/product-code/lib/shipping/types.ts",
-      "product-truth/product-code/lib/shipping/collaboration.ts",
-      "product-truth/product-code/lib/shipping/collaboration.org.test.ts",
+      "product-truth/product-code/app/sales-portal/owner-cancel-order.tsx",
+      "product-truth/product-code/app/sales-portal/owner-cancel-order.test.tsx",
+      "product-truth/product-code/app/api/shipping/owner/orders/[orderNo]/cancel/route.ts",
+      "product-truth/product-code/lib/shipping/sf-client.ts",
+      "product-truth/product-code/lib/shipping/shipping.test.ts",
+      "product-truth/product-code/lib/shipping/owner-cancel.ts",
+      "product-truth/product-code/lib/shipping/owner-cancel.test.ts",
+      "product-truth/product-code/lib/shipping/workflow.ts",
+      "product-truth/product-code/lib/shipping/workflow.test.ts",
+      "product-truth/product-code/lib/shipping/owner-cancel-migration.test.ts",
+      "product-truth/product-code/supabase/migrations/20261118101500_shipping_order_cancellation.sql",
       "product-truth/product-code/node_modules",
       "product-truth/product-code/.next",
-      "product-truth/product-code/tsconfig.tsbuildinfo"
+      "product-truth/product-code/tsconfig.tsbuildinfo",
+      "product-truth/product-code/lib/shipping/collaboration.ts",
+      "product-truth/product-code/lib/shipping/types.ts",
+      "product-truth/product-code/lib/shipping/collaboration.org.test.ts"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -276,11 +287,13 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "sales_intake",
+        "shipping_workspace",
+        "shipping_tracking",
         "shipping_access"
       ],
       "required_production_runtime_evidence": [
-        "sales_intake",
+        "shipping_workspace",
+        "shipping_tracking",
         "shipping_access"
       ],
       "required_production_evidence": [
@@ -290,7 +303,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "本人退回原因独立候选，发布另行审批。",
+      "note": "本人取消独立代码与隔离数据库验证，未经精确批准不发布或取消真实订单。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -310,33 +323,20 @@
         "carrier_calls_authorized": false
       },
       "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f054-auth-intake-v1"
+      "runtime_contract_version": "f054-v2"
     },
     "feature_id": "F054",
     "integration_decision": {
-      "strategy": "isolated_owner_return_reason_candidate",
-      "authority": "IN-20261118-055",
-      "requested_target": "code_green"
+      "requested_target": "code_green",
+      "authority": "IN-20261118-056"
     },
-    "micro_fixes": [
-      {
-        "id": "IN-20261118-011",
-        "scope": "多单直接粘贴地址，识别后每票独立填写客户公司。",
-        "evidence": "见同编号正式页复现记录"
-      },
-      {
-        "id": "IN-20261118-012",
-        "scope": "员工页宽屏标题与寄件内容从主区域左边对齐。",
-        "evidence": "见同编号正式页复现记录"
-      }
-    ],
-    "paused_reason": "员工认证生产故障阻断寄件验收，正式站延用已发布版本。"
+    "micro_fixes": []
   },
   "execution_queue": {
     "active": {
-      "id": "WP35",
-      "slug": "sales-intake-experience",
-      "name": "销售寄件提报体验"
+      "id": "WP99",
+      "slug": "sf-fulfillment-e2e",
+      "name": "顺丰真实履约端到端闭环"
     },
     "next": {
       "id": "WP77",
@@ -344,19 +344,6 @@
       "name": "受保护页面切换耗时"
     },
     "ready": [
-      {
-        "id": "WP99",
-        "slug": "sf-fulfillment-e2e",
-        "name": "顺丰真实履约端到端闭环",
-        "depends_on": [],
-        "entry_gate": "复用现有顺丰真实出号和轨迹能力；先核实当前应用在途变更接口及权限，不依赖APL受理",
-        "entry_gate_status": "scheduled_after_identity_review",
-        "prioritized_user_task": "原运单揽收后拦截与修改收件地址，共用一个在途变更闭环",
-        "acceptance_state": "已有出号与单号返回；揽收后拦截/改址未实现完整闭环",
-        "remaining_acceptance": "同一运单两个动作，共用原单关联、权限、承运商调用、幂等、受理回执及结果跟踪；分别校验动作参数。保留真实拒绝、超时待查、失败重试及刷新回读，不把申请受理当作拦截或改址成功。",
-        "historical_scope_preserved": "旧WP99中的未完成取消/推送/未知结果恢复责任仍按原归并记录保留；本次优先一个在途变更用户任务，不重做已可出号部分。",
-        "source_input": "IN-20261117-021"
-      },
       {
         "id": "WP34",
         "slug": "shipping-auth-recovery",

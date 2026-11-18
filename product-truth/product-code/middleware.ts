@@ -341,11 +341,12 @@ export async function middleware(request: NextRequest) {
       && !baselineReadAllowed(pathname)) {
       return NextResponse.json({ error: '此数据尚未开放基础查看范围', code: 'READ_SCOPE_REQUIRED' }, { status: 403 })
     }
+    const ownerCancel = request.method === 'POST' && /^\/api\/shipping\/owner\/orders\/SO-\d{8}-[A-Z0-9]{8}\/cancel$/.test(pathname)
     const separatelyAuthorizedShipping = federatedViewer && pathname.startsWith('/api/shipping/')
-      && pathname !== '/api/shipping/owner/orders'
+      && pathname !== '/api/shipping/owner/orders' && !ownerCancel
       && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
       && await hasDirectShippingOperateGrant(authContext.userId, authContext.orgId)
-    const baselineSelfSubmission = (pathname === '/api/shipping/owner/orders'
+    const baselineSelfSubmission = (ownerCancel || pathname === '/api/shipping/owner/orders'
       || pathname === '/api/shipping/owner/profile')
       && authContext.roleCodes.includes('FXIAOKE_BASELINE')
     if (federatedViewer
