@@ -136,9 +136,10 @@ const BASELINE_READ_PATHS = new Set([
 // explicit knowledge-page scope. Other legacy GET handlers may return every
 // row through the service client and need a separate scope review first.
 const returnedOwnerOrderPath = /^\/api\/shipping\/owner\/orders\/SO-\d{8}-[A-Z0-9]{8}\/resubmit$/
+const ownerCarrierChanges = /^\/api\/shipping\/owner\/orders\/SO-\d{8}-[A-Z0-9]{8}\/carrier-changes$/
 
 function baselineReadAllowed(pathname: string): boolean {
-  if (BASELINE_READ_PATHS.has(pathname) || returnedOwnerOrderPath.test(pathname)) return true
+  if (BASELINE_READ_PATHS.has(pathname) || returnedOwnerOrderPath.test(pathname) || ownerCarrierChanges.test(pathname)) return true
   return /^\/api\/quotes\/[^/]+$/.test(pathname)
     || /^\/api\/contracts\/[^/]+$/.test(pathname)
     || /^\/api\/knowledge\/pages\/[^/]+$/.test(pathname)
@@ -344,9 +345,10 @@ export async function middleware(request: NextRequest) {
       return NextResponse.json({ error: '此数据尚未开放基础查看范围', code: 'READ_SCOPE_REQUIRED' }, { status: 403 })
     }
     const ownerAction = request.method === 'POST' && (returnedOwnerOrderPath.test(pathname)
+      || ownerCarrierChanges.test(pathname)
       || /^\/api\/shipping\/owner\/orders\/SO-\d{8}-[A-Z0-9]{8}\/cancel$/.test(pathname))
     const separatelyAuthorizedShipping = federatedViewer && pathname.startsWith('/api/shipping/')
-      && pathname !== '/api/shipping/owner/orders' && !ownerAction
+      && pathname !== '/api/shipping/owner/orders' && !ownerAction && !ownerCarrierChanges.test(pathname)
       && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
       && await hasDirectShippingOperateGrant(authContext.userId, authContext.orgId)
     const baselineSelfSubmission = (ownerAction || pathname === '/api/shipping/owner/orders'

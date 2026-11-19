@@ -9,6 +9,7 @@ import { shippingWorkbenchRequest, ShippingWorkbenchRequestError, isDefinitiveSh
 import { contactSchema } from '@/lib/shipping/validation'
 import { parseAddress } from '@/lib/shipping/address'
 import { DEFAULT_INTAKE_RULES, intakeFieldSchema } from '@/lib/shipping/intake-rules'
+import { OperatorCarrierChangeHistory } from './carrier-change-history'
 import styles from './workbench.module.css'
 
 const statusLabel: Record<ShipmentOrderStatus, string> = { accepted: '已受理', awaiting_confirmation: '待审核', returned: '工单已退回', confirmed: '已确认', ordering: '下单中', order_unknown: '结果待确认', waybill_created: '待揽收', in_transit: '运输中', delivered: '已签收', cancelled: '已取消', order_failed: '异常件' }
@@ -762,6 +763,8 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                   <div><small>收件人</small><strong>{order.input.recipient.name}</strong><span>{cityOf(order)}</span></div>
                   <div><small>最近查询</small><strong>{tracking?.waybill === order.waybill ? new Date(tracking.queriedAt).toLocaleString('zh-CN') : '尚未读取'}</strong><span>{tracking?.waybill === order.waybill ? `${trackingEvents.length} 个节点` : '点击刷新获取最新轨迹'}</span></div>
                 </div>
+                {!isSimulation && !settings.guest && order.intakeSource === 'owner_web' && order.waybill &&
+                  <OperatorCarrierChangeHistory key={order.id} orderId={order.id} />}
                 {tracking?.waybill === order.waybill && trackingEvents.length > 0 ? <ol className={styles.compactTimeline}>{trackingEvents.slice(0, 3).map((event, index) => <li key={`${event.time}-${index}`}><time>{event.time}</time><span>{event.description}</span><small>{event.location}</small></li>)}</ol> : <p className={styles.intakeHint}>{order.waybill ? (trackingBusy && trackingTarget === order.waybill ? '正在查询这票运单…' : '点击刷新递送信息查询最新轨迹；查询前保留台账状态。') : '尚未生成运单，不能展示递送轨迹。'}</p>}
                 {order.waybill && <button type="button" className={styles.secondaryButton} disabled={trackingBusy} onClick={() => void refreshTracking(order.waybill || '')}>{trackingBusy ? '刷新中…' : '刷新递送信息'}</button>}
               </section>

@@ -600,6 +600,31 @@ describe('self-service shipping workbench', () => {
     expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
   })
 
+  it('shows the stored SF instruction only in the expanded owner delivery details', async () => {
+    const order = { ...fixtureOrders[2], intakeSource: 'owner_web' as const }
+    const endpoint = '/api/shipping/ledger/' + order.id + '/carrier-changes'
+    const latest = {
+      action: 'modify_recipient', status: 'accepted', requestedAt: '2026-11-18T09:00:00Z',
+      originalRecipient: order.input.recipient, destination: { ...order.input.recipient, address: '新街45号二楼' },
+      amount: null, instructionId: null,
+    }
+    fetcher.mockImplementation(async (url: string) =>
+      Response.json(url === endpoint ? { latest } : { records: [order] }))
+    render(<ShippingWorkbench settings={settings}/>)
+    const expand = await screen.findByRole('button', { name: `展开递送信息 ${order.waybill}` })
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/shipping/ledger?limit=50'])
+    fireEvent.click(expand)
+    const receipt = await screen.findByRole('region', { name: '顺丰指令记录' })
+    expect(receipt.textContent).toContain('顺丰已受理指令，实际处理结果待确认')
+    expect(receipt.textContent).toContain(order.input.recipient.address)
+    expect(receipt.textContent).toContain('新街45号二楼')
+    expect(within(receipt).queryByRole('button')).toBeNull()
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/shipping/ledger?limit=50', endpoint])
+    fireEvent.click(screen.getByRole('button', { name: `收起递送信息 ${order.waybill}` }))
+    expect(screen.queryByRole('region', { name: '顺丰指令记录' })).toBeNull()
+    expect(fetcher.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+  })
+
   it.each(['waybill_created', 'in_transit'] as const)('keeps loading, selecting and expanding %s orders free of carrier calls', async status => {
     vi.useFakeTimers()
     try {

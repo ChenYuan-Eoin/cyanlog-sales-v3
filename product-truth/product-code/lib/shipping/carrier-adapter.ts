@@ -1,7 +1,7 @@
 import { ShippingError } from './config'
 import type { Contact, ShippingInput, ShippingPayment, TrackingResult } from './types'
 import { getShippingRuntimeConfig, selectAuthorizedShippingService } from './runtime-config'
-import { cancelSfOrder, createSfOrder, lookupSfOrder, querySfTracking } from './sf-client'
+import { cancelSfOrder, checkSfBeforeDispatch, createSfOrder, lookupSfOrder, querySfTracking, sendSfRecipientInstruction, type SfRecipientAction } from './sf-client'
 
 // Business metadata may cross into the workflow/store; provider secrets may not.
 export type CarrierOrderContext = {
@@ -35,6 +35,8 @@ export type ConnectedCarrier = {
   create(requestId: string, input: ShippingInput): Promise<string | null>
   lookup(requestId: string): Promise<string | null>
   cancel(requestId: string): Promise<void>
+  beforeDispatch(providerOrderId: string, waybill: string): Promise<boolean>
+  changeRecipient(waybill: string, action: SfRecipientAction, destination: Contact): Promise<{ instructionId: string | null; amount: string | null }>
   track(waybill: string, phoneSuffix?: string): Promise<TrackingResult & { source: 'carrier' | 'sandbox_mock' }>
 }
 
@@ -61,6 +63,8 @@ const sfAdapter: CarrierAdapter = {
       selectService: (preference, serviceId) => selectAuthorizedShippingService(config.services, preference, serviceId),
       create: (requestId, input) => createSfOrder(requestId, input, config),
       lookup: requestId => lookupSfOrder(requestId, config),
+      beforeDispatch: (orderId, waybill) => checkSfBeforeDispatch(orderId, waybill, config),
+      changeRecipient: (waybill, action, destination) => sendSfRecipientInstruction(waybill, action, destination, config),
       cancel: async requestId => { await cancelSfOrder(requestId, config) },
       track: async (waybill, phoneSuffix) => ({
         ...await querySfTracking(waybill, phoneSuffix, config),

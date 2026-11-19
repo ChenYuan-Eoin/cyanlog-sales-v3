@@ -3,6 +3,7 @@ import { useCallback, useEffect, useId, useRef, useState, type Ref } from 'react
 import { ChevronDown } from 'lucide-react'
 import type { ShipmentReceipt, ShippingInput } from '@/lib/shipping/types'
 import { OwnerCancelOrder } from './owner-cancel-order'
+import { OwnerCarrierChanges } from './owner-carrier-changes'
 import styles from './sales-portal.module.css'
 const labels: Record<string, string> = { awaiting_confirmation: '待审核', returned: '已退回，请联系操作员补充资料', confirmed: '已确认', ordering: '下单中', order_unknown: '下单结果待确认', waybill_created: '运单已生成', in_transit: '运输中', delivered: '已签收', cancelled: '已取消', order_failed: '下单未成功', accepted: '已受理' }
 const dateFormat = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'long', day: 'numeric' })
@@ -10,14 +11,15 @@ const timeFormat = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai',
 export type ReturnedShipment = { orderNo: string; revision: number; input: ShippingInput; returnedReason?: string | null }
 export type RestoreOwnerRecord = (receipt?: Pick<ShipmentReceipt, 'orderNo' | 'revision' | 'status' | 'customerName'>) => void
 
-function OwnerReceipt({ order, expanded, toggleRef, onToggle, onResubmit, onCancelled, onPendingChange, locked, listLocked, opening }: {
+function OwnerReceipt({ order, expanded, toggleRef, onToggle, onResubmit, onCancelled, onCancelPending, onCarrierPending, locked, listLocked, opening }: {
   order: ShipmentReceipt
   expanded: boolean
   toggleRef?: Ref<HTMLButtonElement>
   onToggle: () => void
   onResubmit?: () => void
   onCancelled: () => void
-  onPendingChange: (pending: boolean) => void
+  onCancelPending: (pending: boolean) => void
+  onCarrierPending: (pending: boolean) => void
   locked: boolean
   listLocked: boolean
   opening: boolean
@@ -48,7 +50,10 @@ function OwnerReceipt({ order, expanded, toggleRef, onToggle, onResubmit, onCanc
       {order.status === 'returned' && !order.waybill && (!order.cancellationState || order.cancellationState === 'not_sent') && onResubmit && (
         <button type="button" title="修改原单后重新提报" disabled={locked} onClick={onResubmit}>{opening ? '正在读取原单…' : '修改'}</button>
       )}
-      <OwnerCancelOrder order={order} disabled={locked} onPendingChange={onPendingChange} onCancelled={onCancelled} />
+      {order.waybill && ['waybill_created', 'in_transit', 'delivered'].includes(order.status) && (
+        <OwnerCarrierChanges orderNo={order.orderNo} disabled={locked} onPendingChange={onCarrierPending} />
+      )}
+      <OwnerCancelOrder order={order} disabled={locked} onPendingChange={onCancelPending} onCancelled={onCancelled} />
     </div>}
   </li>
 }
@@ -58,11 +63,12 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
   const opening = useRef<AbortController | null>(null)
   const [openingOrder, setOpeningOrder] = useState('')
   const [cancelling, setCancelling] = useState(false)
+  const [changingCarrier, setChangingCarrier] = useState(false)
   const activeToggle = useRef<HTMLButtonElement>(null)
   const pages = useRef(new Map<string, number>())
   useEffect(() => () => { opening.current?.abort() }, [scope])
   async function openReturnedOrder(order: ShipmentReceipt) {
-    if (scope !== 'owner' || !onResubmit || actionsLocked || opening.current || cancelling) return
+    if (scope !== 'owner' || !onResubmit || actionsLocked || opening.current || cancelling || changingCarrier) return
     const controller = new AbortController()
     opening.current = controller
     setOpeningOrder(order.orderNo)
@@ -126,7 +132,7 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
     groups.set(date, [...(groups.get(date) || []), order])
   }
   const canExpand = (orders?.length || 0) > 5 || nextPage !== null
-  const actionPending = Boolean(openingOrder) || cancelling
+  const actionPending = Boolean(openingOrder) || cancelling || changingCarrier
   return <div>
     <p className={styles.hint}>{scope === 'owner' ? '仅显示本人的提报记录' : '全部快递 · 按提报日期分组'}</p>
     {scope === 'owner' && <p className={styles.hint}>审核下单后显示运单号。</p>}
@@ -145,7 +151,8 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
           expanded={openRecord === order.orderNo} onToggle={() => setOpenRecord(current => current === order.orderNo ? null : order.orderNo)}
           onResubmit={onResubmit ? () => void openReturnedOrder(order) : undefined}
           onCancelled={() => setOrders(current => current?.map(item => item.orderNo === order.orderNo ? { ...item, status: 'cancelled' } : item) ?? null)}
-          onPendingChange={setCancelling} locked={actionsLocked || busy || actionPending} listLocked={actionPending} opening={openingOrder === order.orderNo}
+          onCancelPending={setCancelling} onCarrierPending={setChangingCarrier}
+          locked={actionsLocked || busy || actionPending} listLocked={actionPending} opening={openingOrder === order.orderNo}
         /> : <li key={order.orderNo}>
         <div className={styles.recordMeta}>{order.createdAt && <time dateTime={order.createdAt}>{timeFormat.format(new Date(order.createdAt))}</time>}<span>{labels[order.status] || '处理中'}</span></div>
         <span className={styles.recordCustomer} title={order.customerName || '未填客户'}>{order.customerName || '未填客户'}</span>

@@ -301,3 +301,52 @@ export function extractTracking(raw: unknown, waybill: string): TrackingResult {
 export async function querySfTracking(waybill: string, phoneSuffix: string | undefined, config: ShippingRuntimeConfig) {
   return extractTracking(await sfCall('EXP_RECE_SEARCH_ROUTES', { language: 'zh-CN', trackingType: '1', trackingNumber: [waybill], methodType: '1', ...(phoneSuffix ? { checkPhoneNo: phoneSuffix } : {}) }, config), waybill)
 }
+
+// Order-level "in_transit" includes last-mile delivery. Use the structured
+// latest events of the original waybill and fail closed on ambiguous traces.
+export async function checkSfBeforeDispatch(providerOrderId: string, waybill: string, config: ShippingRuntimeConfig) {
+  const raw = await sfCall('EXP_RECE_SEARCH_ROUTES', { language: 'zh-CN', trackingType: '2',
+    trackingNumber: [providerOrderId], methodType: '1' }, config)
+  const data = routeData.parse(raw)
+  const matches = data.routeResps.filter(row => row.mailNo === waybill)
+  if (matches.length !== 1 || !matches[0].routes.length) return false
+  const events = matches[0].routes.map(route => ({
+    at: normalizeTrackingTime(route.acceptTime), status: normalizeTrackingStatus({ ...route, description: route.remark }),
+    explicit: route.opCode === '54' || [route.firstStatusName, route.secondaryStatusName].some(name => ['已揽收','已收取','运输中','转运中'].includes(name || '')),
+    leftDepot: [route.firstStatusName,route.secondaryStatusName,route.remark].some(text => /派[送件].*出仓|出仓派[送件]|派送中|派件中|正在派[件送]|已签收|已转寄|已退回/.test(text || '')),
+  }))
+  if (events.some(event => !event.at || event.leftDepot || event.status === 'out_for_delivery' || event.status === 'delivered')) return false
+  const last = events.map(event => event.at!).sort().at(-1)
+  return events.filter(event => event.at === last).every(event => event.explicit && event.status === 'in_transit')
+}
+
+export type SfRecipientAction = 'modify_recipient' | 'return_to_sender'
+export async function sendSfRecipientInstruction(
+  waybill: string, action: SfRecipientAction, destination: ShippingInput['recipient'], config: ShippingRuntimeConfig,
+) {
+  if (!config.billingAccount) throw new ShippingError(409, '无法核实原单月结账号。', 'provider_not_sent')
+  const { name,phone,province,city,county,address } = destination
+  const message = { waybillNo: waybill, serviceCode: action === 'modify_recipient' ? '1' : '2',
+    role: '1', payMode: '4', monthlyCardNo: config.billingAccount, cancel: false,
+    newDestAddress: { contact: name, phone, province, city, county, address } }
+  let session: SfSession
+  try { session = await getSfAccessToken(config) }
+  catch { throw new ShippingError(502, '顺丰连接未就绪，指令尚未下发。', 'provider_not_sent') }
+  const raw = await postSfService('EXP_RECE_WANTED_INTERCEPT', message, config, session)
+  const outer = envelope.parse(raw)
+  if (outer.apiResultCode === 'A1004') throw new ShippingError(409, '原连接没有顺丰截单服务权限。', 'provider_rejected')
+  if (outer.apiResultCode !== 'A1000') throw new ShippingError(502, '顺丰指令结果待核实。', 'provider_invalid_response')
+  const response = business.parse(typeof outer.apiResultData === 'string' ? JSON.parse(outer.apiResultData) : outer.apiResultData)
+  if (response.success === false || response.success === 'false') {
+    if (['8199','8198','8237','8251','20088','50018','S0001'].includes(response.errorCode || '')) {
+      throw new ShippingError(409, `顺丰未受理指令（${response.errorCode}）。`, 'provider_rejected')
+    }
+    throw new ShippingError(502, '顺丰未返回可核实的指令结果。', 'provider_invalid_response')
+  }
+  if (response.errorCode !== 'S0000') throw new ShippingError(502, '顺丰未返回明确的受理回执。', 'provider_invalid_response')
+  const receipt = z.object({
+    cusId: z.string().trim().min(1).max(80).nullish(),
+    amount: z.union([z.number(), z.string()]).transform(String).pipe(z.string().regex(/^\d{1,10}(\.\d{1,2})?$/)).nullish(),
+  }).parse(response.msgData)
+  return { instructionId: receipt.cusId ?? null, amount: receipt.amount ?? null }
+}

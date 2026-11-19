@@ -240,7 +240,7 @@
     "name": "销售寄件提报体验",
     "kind": "product",
     "status": "active",
-    "objective": "本人从退回提报点重提，原表单回填一票，编辑后在同一工单重新提交并显示更改次数。",
+    "objective": "在同一本人提报记录路径中展示真实退回原因；允许本人安全取消未揽收原单、对退回原单修改后重提并显示更改次数；顺丰在途截单 API 上线后，允许本人在揽收且派件出仓前改址或退回，并在记录详情回看原地址、目标地址与受理/待确认结果。",
     "started_at": "2026-11-18T10:15:08.293113+00:00",
     "activation_basis": "IN-20261118-058 用户明确要求退回重提原单、维持原记录。",
     "execution_workspace": "/private/tmp/price-v3-owner-resubmit",
@@ -257,7 +257,22 @@
       "product-truth/product-code/middleware.ts",
       "product-truth/product-code/middleware.test.ts",
       "product-truth/product-code/app/api/shipping/ledger",
-      "product-truth/product-code/supabase/migrations/20261118101500_shipping_order_cancellation.sql"
+      "product-truth/product-code/supabase/migrations/20261118101500_shipping_order_cancellation.sql",
+      "product-truth/product-code/app/api/shipping/owner/orders/[orderNo]/carrier-changes",
+      "product-truth/product-code/app/api/shipping/ledger/[id]/carrier-changes",
+      "product-truth/product-code/app/shipping/carrier-change-history.tsx",
+      "product-truth/product-code/app/shipping/contact-fields.tsx",
+      "product-truth/product-code/app/shipping/workbench.tsx",
+      "product-truth/product-code/app/shipping/workbench.test.tsx",
+      "product-truth/product-code/lib/shipping/carrier-adapter.ts",
+      "product-truth/product-code/lib/shipping/sf-client.ts",
+      "product-truth/product-code/lib/shipping/owner-carrier-change.ts",
+      "product-truth/product-code/lib/shipping/owner-carrier-change.test.ts",
+      "product-truth/product-code/lib/shipping/owner-carrier-change-migration.test.ts",
+      "product-truth/product-code/lib/shipping/owner-carrier-protocol.test.ts",
+      "product-truth/product-code/middleware.ts",
+      "product-truth/product-code/middleware.test.ts",
+      "product-truth/product-code/supabase/migrations/20261118123000_owner_carrier_changes.sql"
     ],
     "delivery_contract": {
       "target_state": "code_green",
@@ -292,7 +307,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "本人重提本地候选，当前不含生产授权。",
+      "note": "本人提报记录联合代码候选；顺丰 EXP_RECE_WANTED_INTERCEPT 已由用户在官方控制台完成上线并由现有 Chrome 回核。此工作包只允许隔离代码与测试；无生产数据库迁移、生产订单操作、顺丰生产调用、push 或部署授权。已受理只表示顺丰受理指令，不表示改址/退回完成。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -319,10 +334,11 @@
       "strategy": "isolated_owner_return_reason_candidate",
       "authority": "IN-20261118-058",
       "requested_target": "code_green",
-      "scope": "整合已单独验证的本人取消与原单修改到同一提报记录的展开区",
+      "scope": "整合本人退回原因、本人取消、同一工单修改重提，以及顺丰在途改址/退回和可回看的顺丰受理记录到同一本人提报记录详情；复用 WP99 已授权实现，不扩大为生产调用或生产迁移。",
       "related": [
         "IN-20261118-055",
         "IN-20261118-056",
+        "IN-20261118-057",
         "IN-20261118-058"
       ]
     },

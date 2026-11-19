@@ -70,6 +70,29 @@ it('opens one owner receipt at a time and shows identifiers and the full reason 
   expect(screen.queryByRole('button', { name: '修改' })).toBeNull()
   expect(screen.getByText('SF-SECOND')).toBeTruthy()
 })
+it('loads sortation instructions only after the owner expands an in-transit receipt', async () => {
+  const shipped = { ...order('SHIPPED'), status: 'in_transit', customerName: '在途客户' }
+  const endpoint = '/api/shipping/owner/orders/SHIPPED/carrier-changes'
+  fetcher.mockImplementation(async (url: string) => url === endpoint
+    ? response({
+        orderNo: 'SHIPPED',
+        actions: ['modify_recipient', 'return_to_sender'],
+        currentRecipient: { name: '客户', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '旧街1号' },
+        returnDestination: { name: '提报人', phone: '13900000000', province: '广东省', city: '深圳市', county: '南山区', address: '寄件路2号' },
+        latest: null,
+      })
+    : response({ orders: [shipped], nextPage: null }))
+  render(<MyWorkorders scope="owner" />)
+  const toggle = await screen.findByRole('button', { name: /在途客户/ })
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/shipping/owner/orders?page=0'])
+  fireEvent.click(toggle)
+  expect(await screen.findByRole('button', { name: '修改' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: '退回' })).toBeTruthy()
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/shipping/owner/orders?page=0', endpoint])
+  fireEvent.click(screen.getByRole('button', { name: /在途客户/ }))
+  expect(screen.queryByRole('button', { name: '修改' })).toBeNull()
+  expect(screen.queryByRole('button', { name: '退回' })).toBeNull()
+})
 it('prevents editing or closing the record during cancellation and updates only the cancelled order', async () => {
   let finish!: (value: Response) => void
   fetcher.mockResolvedValueOnce(response({ orders: [
