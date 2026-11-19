@@ -275,10 +275,14 @@
       "product-truth/product-code/supabase/migrations/20261118123000_owner_carrier_changes.sql"
     ],
     "delivery_contract": {
-      "target_state": "code_green",
+      "target_state": "production_released",
       "allowed_states": [
         "executing",
-        "code_green"
+        "code_green",
+        "clean_preview_green",
+        "integration_ready",
+        "main_integrated",
+        "production_released"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -307,7 +311,8 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "本人提报记录联合代码候选；顺丰 EXP_RECE_WANTED_INTERCEPT 已由用户在官方控制台完成上线并由现有 Chrome 回核。此工作包只允许隔离代码与测试；无生产数据库迁移、生产订单操作、顺丰生产调用、push 或部署授权。已受理只表示顺丰受理指令，不表示改址/退回完成。",
+      "note": "IN-20261119-061批准a7c9f137产品树正式发布，IN-20261119-060独立批准三条精确哈希迁移。代码发布验收保持只读，不自动执行真实运单变更。Preview未通过，按用户明确要求直接生产部署后复验；顺丰已受理不代表处理完成。",
+      "preview_order_exception_approval_id": "IN-20261119-061",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -321,7 +326,15 @@
         "production_database_mode": "read_only"
       },
       "production_release_authorization": {
-        "status": "not_authorized_for_current_candidate",
+        "status": "approved_code_only",
+        "final_release_approval_id": "IN-20261119-061",
+        "micro_fix_approval_id": "IN-20261118-055",
+        "clarification_id": "IN-20261119-061",
+        "micro_fix_scope": "本人提报记录退回原因、取消、原单重提及在途改址退回记录",
+        "final_scope": "发布a7c9f137产品树及必要发布治理记录；三条数据库迁移按IN-20261119-060独立执行；正式站只读复验，不执行真实顺丰运单操作。",
+        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
+        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "migration_authority_id": "IN-20261119-060",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
         "carrier_calls_authorized": false
@@ -333,7 +346,7 @@
     "integration_decision": {
       "strategy": "isolated_owner_return_reason_candidate",
       "authority": "IN-20261118-058",
-      "requested_target": "code_green",
+      "requested_target": "production_released",
       "scope": "整合本人退回原因、本人取消、同一工单修改重提，以及顺丰在途改址/退回和可回看的顺丰受理记录到同一本人提报记录详情；复用 WP99 已授权实现，不扩大为生产调用或生产迁移。",
       "related": [
         "IN-20261118-055",
