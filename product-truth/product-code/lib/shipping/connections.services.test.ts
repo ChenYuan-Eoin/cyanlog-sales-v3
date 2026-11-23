@@ -61,7 +61,7 @@ describe('authorized service configuration updates', () => {
 
   it('migrates only missing authorized services from the legacy environment value', async () => {
     vi.stubEnv('SF_SERVICES_JSON', '[{"id":2,"name":"顺丰标快"}]')
-    const before = { connections: [{ id: connection.id, carrier: 'sf' as const, environment: 'sandbox' as const, partnerIdTail: connection.partner_id_tail, status: 'connected', services: [], capabilities: { order: 'not_tested', query: 'verified', tracking: 'not_tested', cancel: 'not_tested' }, lastTestedAt: null }], billingAccounts: [], sender: null }
+    const before = { connections: [{ id: connection.id, carrier: 'sf' as const, environment: 'sandbox' as const, partnerIdTail: connection.partner_id_tail, status: 'connected', services: [], capabilities: { order: 'not_tested', query: 'verified', tracking: 'not_tested', cancel: 'not_tested' }, interceptAccess: 'disabled' as const, lastTestedAt: null }], billingAccounts: [], sender: null }
     expect(hasLegacyShippingConfiguration('sandbox', before)).toBe(true)
     const result = await importLegacyShippingConfiguration('org-1', 'manager-1', 'sandbox')
     expect(result.imported).toEqual(['已授权服务产品'])

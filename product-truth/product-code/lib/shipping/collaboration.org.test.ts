@@ -160,7 +160,7 @@ it('includes only the submitted customer name alongside public receipt fields',a
  tables.shipping_orders=[{...row('customer-order','org-A'),customer_name:'  星河科技  ',customer_ref:'CRM-CUSTOMER-ID'}]
  const {orders}=await listPublicShipmentReceipts('org-A')
  expect(orders[0]).toEqual({orderNo:'customer-order',status:'awaiting_confirmation',waybill:null,createdAt:'2026-09-27T00:00:00Z',nextReviewAt:'2026-09-27T01:00:00Z',customerName:'星河科技'})
- expect(mocks.from.mock.results.at(-1)?.value.select).toHaveBeenCalledWith('order_no,status,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no)')
+ expect(mocks.from.mock.results.at(-1)?.value.select).toHaveBeenCalledWith('order_no,status,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no,latest_status,latest_event_at)')
  tables.shipping_orders[0].customer_name=''
  expect((await listPublicShipmentReceipts('org-A')).orders[0].customerName).toBeNull()
 })

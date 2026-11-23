@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react'
 import type { ShipmentReceipt } from '@/lib/shipping/types'
 
-export function OwnerCancelOrder({ order, onCancelled, onPendingChange, disabled = false }: { order: ShipmentReceipt; onCancelled: () => void; onPendingChange?: (pending: boolean) => void; disabled?: boolean }) {
+export function OwnerCancelOrder({ order, onCancelled, onPendingChange, disabled = false, label = '取消' }: { order: ShipmentReceipt; onCancelled: () => void; onPendingChange?: (pending: boolean) => void; disabled?: boolean; label?: string }) {
   const [confirmation,setConfirmation] = useState<Pick<ShipmentReceipt,'orderNo'|'status'|'waybill'> & { revision:number } | null>(null)
   const [busy,setBusy] = useState(false), [message,setMessage] = useState('')
   const inFlight = useRef(false)
@@ -34,5 +34,5 @@ export function OwnerCancelOrder({ order, onCancelled, onPendingChange, disabled
     <button type="button" disabled={busy || disabled} onClick={() => setConfirmation(null)}>保留寄件</button>
   </div> : <button type="button" disabled={disabled} onClick={() => {
     if (order.revision) setConfirmation({ orderNo:order.orderNo, status:order.status, waybill:order.waybill, revision:order.revision })
-  }}>取消</button>}</div>
+  }}>{label}</button>}</div>
 }

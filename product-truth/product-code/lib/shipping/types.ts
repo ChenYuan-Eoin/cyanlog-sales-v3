@@ -1,5 +1,6 @@
 import type { IntakeRules } from './intake-rules'
 // REQ: F054 — shared UI contract; no provider secrets.
+export const SF_INTERCEPT_CONFIRMATION = 'EXP_RECE_WANTED_INTERCEPT'
 export type Contact = { name: string; phone: string; province: string; city: string; county: string; address: string }
 export type ShippingPayment = 'sender_cash' | 'recipient' | 'sender_monthly'
 export type ShippingSubmitter = { name: string; phone: string; team: string; departmentId?: string }
@@ -36,5 +37,7 @@ export type ShipmentReceipt = Pick<ShipmentOrder, 'orderNo' | 'status' | 'waybil
   canCancel?: boolean
   cancellationState?: string | null
   returnedReason?: string | null
+  trackingStatus?: TrackingEventStatus | null
+  deliveredAt?: string | null
 }
 export const emptyContact = (): Contact => ({ name: '', phone: '', province: '', city: '', county: '', address: '' })

@@ -52,11 +52,9 @@ function renderForm(owner = true) {
 }
 
 async function openReturnedOrder() {
-  const summary = await screen.findByRole('button', { name: /原单客户公司/ })
-  const row = summary.closest('li')!
-  fireEvent.click(summary)
+  const row = await screen.findByRole('listitem', { name: `提报 ${orderNo}` })
   expect(within(row).getByText(orderNo)).toBeInTheDocument()
-  fireEvent.click(within(row).getByRole('button', { name: '修改' }))
+  fireEvent.click(within(row).getByRole('button', { name: '修改并重提' }))
   await waitFor(() => expect(screen.getByLabelText('收件人')).toHaveValue(recipient.name))
 }
 
@@ -73,7 +71,8 @@ it('fills the returned ticket, previews the edits and submits one revision to th
   expect(screen.getByRole('region', { name: '寄出预览' })).toHaveTextContent('客户路8号2楼')
   expect(send.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
   fireEvent.click(screen.getByRole('button', { name: /确认重提/ }))
-  await waitFor(() => expect(screen.getByRole('button', { name: /原单客户公司/ })).toHaveTextContent(/第\s*1\s*次更改/))
+  const updated = await screen.findByRole('listitem', { name: `提报 ${orderNo}` })
+  await waitFor(() => expect(updated).toHaveTextContent(/第\s*1\s*次更改/))
   const writes = send.mock.calls.filter(([, init]) => init?.method === 'POST')
   expect(writes).toHaveLength(1)
   expect(writes[0][0]).toBe(detailPath)
@@ -89,12 +88,12 @@ it('fills the returned ticket, previews the edits and submits one revision to th
   })
   const records = screen.getByRole('region', { name: '按日期分组的提报记录' })
   expect(within(records).getAllByRole('listitem')).toHaveLength(2)
-  expect(within(records).getByRole('button', { name: /原单客户公司/ })).toHaveAttribute('aria-expanded', 'true')
-  expect(within(records).getAllByText(orderNo)).toHaveLength(1)
-  expect(within(records).queryByRole('button', { name: '修改' })).not.toBeInTheDocument()
+  await waitFor(() => expect(updated).toHaveTextContent('待审核'))
+  expect(updated).toHaveTextContent('待审核')
+  expect(within(updated).queryByRole('button', { name: '修改并重提' })).not.toBeInTheDocument()
 })
 
-it('returns to the edited order on a later page and retains normal collapse and refresh behavior', async () => {
+it('loads later pages, refreshes page zero and can reopen the updated older record', async () => {
   const fallback = send.getMockImplementation()!
   const recent = Array.from({ length: 6 }, (_, i) => ({
     orderNo: 'RECENT-' + i, status: 'confirmed', customerName: '近期客户' + i, waybill: null, revision: 1,
@@ -109,26 +108,34 @@ it('returns to the edited order on a later page and retains normal collapse and 
     return fallback(url, init)
   })
   renderForm()
-  fireEvent.click(await screen.findByRole('button', { name: '查看更早记录' }))
-  fireEvent.click(screen.getByRole('button', { name: '加载更多快递' }))
+  const records = await screen.findByRole('region', { name: '按日期分组的提报记录' })
+  expect(within(records).getAllByRole('listitem')).toHaveLength(5)
+  fireEvent.click(screen.getByRole('button', { name: '显示更多记录' }))
+  expect(within(records).getAllByRole('listitem')).toHaveLength(6)
+  fireEvent.click(screen.getByRole('button', { name: '显示更多记录' }))
+  await screen.findByRole('listitem', { name: `提报 ${orderNo}` })
   await openReturnedOrder()
   fireEvent.change(screen.getByLabelText('单票客户公司名称'), { target: { value: '重提后公司' } })
   fireEvent.click(screen.getByRole('button', { name: '预览工单' }))
   fireEvent.click(screen.getByRole('button', { name: '确认重提' }))
-  const summary = await screen.findByRole('button', { name: /重提后公司.*待审核.*第 1 次更改/ })
-  expect(summary).toHaveAttribute('aria-expanded', 'true')
-  expect(within(summary.closest('li')!).getByText(orderNo)).toBeInTheDocument()
+  const updated = await screen.findByRole('listitem', { name: `提报 ${orderNo}` })
+  await waitFor(() => expect(updated).toHaveTextContent('重提后公司'))
+  expect(updated).toHaveTextContent('待审核')
+  expect(updated).toHaveTextContent('第 1 次更改')
+  expect(within(updated).getByText(orderNo)).toBeInTheDocument()
   expect(screen.getAllByText(orderNo)).toHaveLength(1)
-  const records = screen.getByRole('region', { name: '按日期分组的提报记录' })
-  expect(within(records).getAllByRole('listitem')).toHaveLength(7)
-  expect(send.mock.calls.filter(([url]) => url.endsWith('orders?page=1'))).toHaveLength(2)
-  expect(send.mock.calls.filter(([url]) => url.endsWith('orders?page=0'))).toHaveLength(1)
-  await waitFor(() => expect(summary).toHaveFocus())
-  fireEvent.click(screen.getByRole('button', { name: '收起 · 最近5条' }))
-  expect(screen.queryByRole('button', { name: /重提后公司/ })).not.toBeInTheDocument()
+  const afterEdit = screen.getByRole('region', { name: '按日期分组的提报记录' })
+  expect(within(afterEdit).getAllByRole('listitem')).toHaveLength(7)
+  expect(send.mock.calls.filter(([url]) => url.endsWith('orders?page=1'))).toHaveLength(1)
+  expect(send.mock.calls.filter(([url]) => url.endsWith('orders?page=0')).length).toBeGreaterThanOrEqual(2)
   fireEvent.click(screen.getByRole('button', { name: '刷新提报记录' }))
   await waitFor(() => expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeEnabled())
-  expect(screen.getByRole('button', { name: '查看更早记录' })).toHaveAttribute('aria-expanded', 'false')
+  expect(screen.queryByRole('listitem', { name: `提报 ${orderNo}` })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '显示更多记录' }))
+  fireEvent.click(screen.getByRole('button', { name: '显示更多记录' }))
+  const reloaded = await screen.findByRole('listitem', { name: `提报 ${orderNo}` })
+  expect(reloaded).toHaveTextContent('重提后公司')
+  expect(reloaded).toHaveTextContent('待审核')
 })
 
 it('keeps returned-order edits single-ticket when the pasted text contains multiple recipients', async () => {
@@ -147,14 +154,13 @@ it('keeps returned-order edits single-ticket when the pasted text contains multi
 
 it('offers no resubmission or separate address change for issued waybills or anonymous records', async () => {
   const owner = renderForm()
-  const issuedSummary = await screen.findByRole('button', { name: /已出号客户/ })
-  fireEvent.click(issuedSummary)
-  const issuedRow = issuedSummary.closest('li')!
+  const issuedRow = await screen.findByRole('listitem', { name: `提报 ${issuedOrderNo}` })
   expect(within(issuedRow).getByText(issuedOrderNo)).toBeInTheDocument()
-  expect(within(issuedRow).queryByRole('button', { name: /^(重提|改址|修改地址|修改)$/ })).not.toBeInTheDocument()
+  expect(within(issuedRow).queryByRole('button', { name: /^(重提|改址|修改地址|修改并重提)$/ })).not.toBeInTheDocument()
   owner.unmount()
   renderForm(false)
-  await screen.findByText(orderNo, { selector: 'li strong' })
-  expect(screen.queryByRole('button', { name: /^(重提|改址|修改地址|修改)$/ })).not.toBeInTheDocument()
+  const anonymousRow = await screen.findByRole('listitem', { name: `提报 ${orderNo}` })
+  expect(anonymousRow).not.toHaveTextContent('缺少楼层')
+  expect(screen.queryByRole('button', { name: /^(重提|改址|修改地址|修改并重提)$/ })).not.toBeInTheDocument()
   expect(send.mock.calls.some(([url]) => url === detailPath)).toBe(false)
 })

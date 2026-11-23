@@ -233,6 +233,39 @@ describe('shipping configuration drawer', () => {
     expect(screen.getByText('接收状态未提供')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /开启推送|自动同步|提交上线/ })).toBeNull()
   })
+
+  it('requires an explicit SF-console attestation before enabling in-transit forwarding and return', async () => {
+    const connection = {
+      id: 'production-1', carrier: 'sf', environment: 'production', partnerIdTail: '0001', status: 'connected',
+      services: [{ id: 2, name: '顺丰标快', preference: 'standard' }], interceptAccess: 'disabled', lastTestedAt: null,
+      capabilities: { order: 'verified', query: 'verified', tracking: 'verified', cancel: 'verified' },
+    }
+    fetcher.mockImplementation(async (_url, init) => init?.method === 'POST'
+      ? Response.json({ configuration: { connections: [{ ...connection, interceptAccess: 'live' }], billingAccounts: [], sender: null } })
+      : Response.json({ configuration: { connections: [connection], billingAccounts: [], sender: null } }))
+    render(<ShippingConfigDrawer embedded />)
+    await waitForConfiguration()
+    fireEvent.click(screen.getByText('接口验证记录'))
+    expect(screen.getByText('在途转寄与退回')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '启用在途转寄与退回' }))
+    const confirmation = screen.getByRole('group', { name: '启用在途转寄与退回确认' })
+    expect(within(confirmation).getByText(/EXP_RECE_WANTED_INTERCEPT/)).toBeTruthy()
+    const submit = within(confirmation).getByRole('button', { name: '确认启用' })
+    expect(submit).toHaveProperty('disabled', true)
+    fireEvent.click(within(confirmation).getByRole('checkbox', { name: /已确认顺丰开放平台已为当前应用关联/ }))
+    expect(submit).toHaveProperty('disabled', false)
+    fireEvent.click(submit)
+    await waitFor(() => expect(fetcher.mock.calls.some(([, init]) => {
+      if (init?.method !== 'POST') return false
+      return String(init.body) === JSON.stringify({
+        action: 'enable_sf_intercept_access',
+        environment: 'production',
+        confirmation: 'EXP_RECE_WANTED_INTERCEPT',
+      })
+    })).toBe(true))
+    expect(await screen.findByText('在途转寄与退回已启用。')).toBeTruthy()
+    expect(screen.getByText('生产已启用')).toBeTruthy()
+  })
   it('shows a clear permission message instead of an editable blank form to operators', async () => {
     fetcher.mockResolvedValue(new Response(JSON.stringify({ navigationAvailable: true }), { status: 200 }))
     render(<ShippingConfigDrawer embedded />)

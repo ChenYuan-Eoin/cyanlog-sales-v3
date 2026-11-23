@@ -3,19 +3,20 @@ import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
 import { canImportLegacyShippingConfiguration } from './legacy-configuration-scope'
-import type { Contact } from './types'
+import { SF_INTERCEPT_CONFIRMATION, type Contact } from './types'
 
 const credentialSchema = z.object({ partnerId: z.string().trim().min(1).max(64), checkWord: z.string().trim().min(1).max(256), environment: z.enum(['sandbox', 'production']) }).strict()
 const serviceItemsSchema = z.array(z.object({ id: z.number().int().positive(), name: z.string().trim().min(1).max(40), preference: z.enum(['standard', 'urgent']).default('standard') }).strict()).max(200)
 const serviceSchema = serviceItemsSchema.default([])
 const connectionSchema = z.object({ partnerId: z.string().trim().min(1).max(64), checkWord: z.string().trim().min(1).max(256), environment: z.enum(['sandbox', 'production']), services: serviceSchema }).strict()
 const servicesUpdateSchema = z.object({ environment: z.enum(['sandbox', 'production']), services: serviceItemsSchema.min(1) }).strict()
+const interceptAccessSchema = z.object({ environment: z.enum(['sandbox', 'production']), confirmation: z.string() }).strict()
 const accountSchema = z.object({ accountNumber: z.string().trim().regex(/^[0-9]{4,32}$/), displayName: z.string().trim().max(80).default(''), environment: z.enum(['sandbox', 'production']).default('production'), isDefault: z.boolean().optional() }).strict()
 const senderSchema = z.object({ displayName: z.string().trim().min(1).max(80), contact: z.object({ name: z.string().trim().min(1).max(80), phone: z.string().trim().min(6).max(32), province: z.string().trim().min(1).max(80), city: z.string().trim().min(1).max(80), county: z.string().trim().min(1).max(80), address: z.string().trim().min(1).max(240) }).strict() }).strict()
 
 export type CarrierEnvironment = 'sandbox' | 'production'
 export type ShippingConfiguration = {
-  connections: Array<{ id: string; carrier: 'sf'; environment: CarrierEnvironment; partnerIdTail: string; status: string; services: Array<{ id: number; name: string; preference: 'standard' | 'urgent' }>; capabilities: { order: string; query: string; tracking: string; cancel: string }; lastTestedAt: string | null }>
+  connections: Array<{ id: string; carrier: 'sf'; environment: CarrierEnvironment; partnerIdTail: string; status: string; services: Array<{ id: number; name: string; preference: 'standard' | 'urgent' }>; capabilities: { order: string; query: string; tracking: string; cancel: string }; interceptAccess: 'disabled' | 'testing' | 'live'; lastTestedAt: string | null }>
   billingAccounts: Array<{ id: string; connectionId: string; environment: CarrierEnvironment; displayName: string; tail: string; status: 'active' | 'inactive'; isDefault: boolean }>
   sender: (Contact & { displayName: string }) | null
 }
@@ -57,13 +58,13 @@ function databaseError() { return new ShippingError(503, '寄件配置保存失�
 
 export async function loadShippingConfiguration(orgId: string): Promise<ShippingConfiguration> {
   const [connections, accounts, sender] = await Promise.all([
-    supabaseAdmin.from('shipping_carrier_connections').select('id,carrier_key,environment,partner_id_tail,connection_status,authorized_services,order_capability,query_capability,tracking_capability,cancel_capability,last_tested_at').eq('org_id', orgId).order('created_at', { ascending: true }),
+    supabaseAdmin.from('shipping_carrier_connections').select('id,carrier_key,environment,partner_id_tail,connection_status,authorized_services,order_capability,query_capability,tracking_capability,cancel_capability,sf_intercept_access,last_tested_at').eq('org_id', orgId).order('created_at', { ascending: true }),
     supabaseAdmin.from('shipping_billing_accounts').select('id,connection_id,environment,display_name,account_tail,status,is_default').eq('org_id', orgId).order('created_at', { ascending: true }),
     supabaseAdmin.from('shipping_sender_profiles').select('display_name,name,phone,province,city,county,address').eq('org_id', orgId).eq('is_default', true).maybeSingle()
   ])
   if (connections.error || accounts.error || sender.error) throw databaseError()
   return {
-    connections: (connections.data || []).map((row) => ({ id: row.id, carrier: 'sf', environment: row.environment, partnerIdTail: row.partner_id_tail, status: row.connection_status, services: serviceSchema.parse(row.authorized_services || []), capabilities: { order: row.order_capability, query: row.query_capability, tracking: row.tracking_capability, cancel: row.cancel_capability }, lastTestedAt: row.last_tested_at })),
+    connections: (connections.data || []).map((row) => ({ id: row.id, carrier: 'sf', environment: row.environment, partnerIdTail: row.partner_id_tail, status: row.connection_status, services: serviceSchema.parse(row.authorized_services || []), capabilities: { order: row.order_capability, query: row.query_capability, tracking: row.tracking_capability, cancel: row.cancel_capability }, interceptAccess: row.sf_intercept_access === 'live' || row.sf_intercept_access === 'testing' ? row.sf_intercept_access : 'disabled', lastTestedAt: row.last_tested_at })),
     billingAccounts: (accounts.data || []).map((row) => ({ id: row.id, connectionId: row.connection_id || '', environment: row.environment || ((connections.data || []).find(connection => connection.id === row.connection_id)?.environment === 'production' ? 'production' : 'sandbox'), displayName: row.display_name, tail: row.account_tail, status: row.status, isDefault: row.is_default })),
     sender: sender.data ? { displayName: sender.data.display_name, name: sender.data.name, phone: sender.data.phone, province: sender.data.province, city: sender.data.city, county: sender.data.county, address: sender.data.address } : null
   }
@@ -99,6 +100,28 @@ export async function saveAuthorizedServices(orgId: string, userId: string, inpu
   }).eq('org_id', orgId).eq('id', connection.id)
   if (error) throw databaseError()
   return loadShippingConfiguration(orgId)
+}
+
+
+export async function enableSfInterceptAccess(orgId: string, userId: string, input: unknown) {
+  const parsed = interceptAccessSchema.parse(input)
+  if (parsed.confirmation !== SF_INTERCEPT_CONFIRMATION) {
+    throw new ShippingError(422, '请先确认顺丰开放平台已为当前应用关联截单转寄退回接口。')
+  }
+  const { data: connection, error: lookupError } = await supabaseAdmin.from('shipping_carrier_connections')
+    .select('id,connection_status').eq('org_id', orgId).eq('carrier_key', 'sf').eq('environment', parsed.environment).maybeSingle()
+  if (lookupError) throw databaseError()
+  if (!connection) throw new ShippingError(409, `请先保存顺丰${parsed.environment === 'sandbox' ? '沙盒' : '生产'}连接资料。`)
+  if (connection.connection_status !== 'connected') {
+    throw new ShippingError(409, '请先完成当前顺丰连接的只读测试，再启用转寄与退回。')
+  }
+  const now = new Date().toISOString()
+  const { error } = await supabaseAdmin.from('shipping_carrier_connections').update({
+    sf_intercept_access: parsed.environment === 'production' ? 'live' : 'testing',
+    updated_by: userId,
+    updated_at: now,
+  }).eq('org_id', orgId).eq('id', connection.id)
+  if (error) throw databaseError()
 }
 
 export async function saveBillingAccount(orgId: string, userId: string, input: unknown) {

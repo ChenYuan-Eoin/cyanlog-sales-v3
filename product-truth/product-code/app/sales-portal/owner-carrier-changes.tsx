@@ -9,7 +9,7 @@ import { CarrierChangeHistory, ContactLine, hasReceipt } from '../shipping/carri
 type Action = CarrierChangeReceipt['action']
 type Instruction = { key: string; action: 'modify_recipient'; recipient: Contact } | { key: string; action: 'return_to_sender' }
 type Props = { orderNo: string; disabled?: boolean; onPendingChange?: (pending: boolean) => void }
-const labels = { modify_recipient: '修改', return_to_sender: '退回' } as const
+const labels = { modify_recipient: '转寄 / 改派', return_to_sender: '申请退回' } as const
 export function OwnerCarrierChanges(props: Props) {
   return <OrderChanges key={props.orderNo} {...props} />
 }
@@ -96,23 +96,25 @@ function OrderChanges({ orderNo, disabled = false, onPendingChange }: Props) {
     }
   }
 
-  const actions = detail?.actions.filter(item => item === 'modify_recipient' ? detail.currentRecipient : item === 'return_to_sender' && detail.returnDestination) ?? []
-  if (!error && !detail?.latest && !actions.length) return null
+  const actions = (detail?.actions.filter(item => item === 'modify_recipient' ? detail.currentRecipient : item === 'return_to_sender' && detail.returnDestination) ?? [])
+    .sort((left, right) => left === right ? 0 : left === 'return_to_sender' ? -1 : 1)
+  if (!error && !detail) return null
   return <div>
     {detail?.latest && <CarrierChangeHistory receipt={detail.latest} />}
     {error && <p role="alert">{error}</p>}
+    {detail && !detail.latest && !actions.length && !error && <p role="status">当前路由已不能在派件出仓前转寄或退回。</p>}
     {(error || detail?.latest) && <button type="button" disabled={reading || busy || disabled} onClick={() => setReload(value => value + 1)}>查询处理结果</button>}
-    {!action && actions.map(item => <button key={item} type="button" disabled={disabled || reading} onClick={() => {
+    {!action && actions.map(item => <button key={item} type="button" data-carrier-action={item} disabled={disabled || reading} onClick={() => {
       frozen.current = null
       setRecipient(detail!.currentRecipient || emptyContact())
       setError('')
       setAction(item)
     }}>{labels[item]}</button>)}
-    {action && actions.includes(action) && detail && <form aria-label={action === 'modify_recipient' ? '修改快件收件地址' : '退回快件至原寄件人'} onSubmit={submit}>
+    {action && actions.includes(action) && detail && <form aria-label={action === 'modify_recipient' ? '转寄或改派快件收件地址' : '申请退回至原寄件人'} onSubmit={submit}>
       {action === 'modify_recipient'
         ? <ContactFields title="新收件人" mark="收" value={recipient} onChange={setRecipient} disabled={disabled || busy || Boolean(frozen.current)} />
         : detail.returnDestination && <p>将这张快件退回原寄件人<br /><ContactLine contact={detail.returnDestination} /></p>}
-      <button type="submit" disabled={busy || reading || disabled || uncertain}>{busy ? '正在提交…' : '确认提交' + labels[action]}</button>
+      <button type="submit" disabled={busy || reading || disabled || uncertain}>{busy ? '正在提交…' : action === 'modify_recipient' ? '确认提交转寄 / 改派' : '确认申请退回'}</button>
       <button type="button" disabled={busy || uncertain} onClick={() => { frozen.current = null; setAction(null); setError('') }}>返回记录</button>
     </form>}
   </div>

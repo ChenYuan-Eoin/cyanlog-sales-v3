@@ -146,6 +146,16 @@ describe('middleware host routing', () => {
     expect(res.headers.get('location')).toBe('https://sales.cyanlog.icu/')
   })
 
+  it('redirects the exact production Git domain to the canonical sales origin and preserves the request target', async () => {
+    const res = await middleware(makeRequest(
+      'https://cyanlog-sales-v3-git-production-eoins-projects-94b17ece.vercel.app/api/auth/providers?from=git&next=%2Fsales-portal',
+      { host: 'cyanlog-sales-v3-git-production-eoins-projects-94b17ece.vercel.app' },
+    ))
+
+    expect(res.status).toBe(308)
+    expect(res.headers.get('location')).toBe('https://sales.cyanlog.icu/api/auth/providers?from=git&next=%2Fsales-portal')
+  })
+
   it('returns 503 for protected pages when service role key is missing', async () => {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY
 

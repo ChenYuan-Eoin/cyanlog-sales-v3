@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { CheckCircle2, LoaderCircle, Plus, Settings, ShieldCheck, X } from 'lucide-react'
 import type { ShippingConfiguration } from '@/lib/shipping/connections'
-import { emptyContact, type Contact } from '@/lib/shipping/types'
+import { SF_INTERCEPT_CONFIRMATION, emptyContact, type Contact } from '@/lib/shipping/types'
 import styles from './config-drawer.module.css'
 import { contactSchema } from '@/lib/shipping/validation'
 import { parseAddress } from '@/lib/shipping/address'
@@ -56,6 +56,8 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   const [message, setMessage] = useState('')
   const [probeMessage, setProbeMessage] = useState('')
   const [probePassed, setProbePassed] = useState(false)
+  const [interceptConfirmationOpen, setInterceptConfirmationOpen] = useState(false)
+  const [interceptConfirmed, setInterceptConfirmed] = useState(false)
   const [accessState, setAccessState] = useState<'checking' | 'ready' | 'unavailable'>('checking')
   const [legacyConfigurationAvailable, setLegacyConfigurationAvailable] = useState<Record<'sandbox' | 'production', boolean>>({ sandbox: false, production: false })
   const [legacyMigrationReport, setLegacyMigrationReport] = useState<{ imported: string[]; needsAttention: string[] } | null>(null)
@@ -89,6 +91,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
     // Credentials and account numbers must never silently carry into another environment.
     setPartnerId(''); setCheckWord(''); setAccountNumber(''); setAccountName('')
     setNewServiceId(''); setNewServiceName(''); setProbeMessage(''); setProbePassed(false)
+    setInterceptConfirmationOpen(false); setInterceptConfirmed(false)
     setMessage('已切换环境。未保存的应用凭据和月结卡号已清空；服务产品草稿按环境保留。')
   }
 
@@ -137,6 +140,19 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       const response = await request<{ configuration: ShippingConfiguration; probe: { connected: boolean; queryVerified: boolean; message: string } }>({ method: 'POST', body: JSON.stringify({ action: selectedEnvironment === 'sandbox' ? 'test_sandbox_connection' : 'test_production_connection' }) })
       setConfiguration(response.configuration); setProbeMessage(response.probe.message); setProbePassed(response.probe.connected)
     } catch (error) { setProbeMessage((error as Error).message) } finally { setBusy('') }
+  }
+
+  async function enableInterceptAccess() {
+    if (!connection || connection.status !== 'connected' || !interceptConfirmed) return
+    const saved = await mutate('intercept', 'enable_sf_intercept_access', {
+      environment,
+      confirmation: SF_INTERCEPT_CONFIRMATION,
+    })
+    if (saved) {
+      setInterceptConfirmationOpen(false)
+      setInterceptConfirmed(false)
+      setMessage('在途转寄与退回已启用。')
+    }
   }
 
   async function importLegacyConfiguration() {
@@ -250,7 +266,23 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
 
           <details>
             <summary>接口验证记录</summary>
-            <div className={styles.capabilities} aria-label="顺丰能力验证记录">{([['order', '下单'], ['query', '订单查询'], ['tracking', '物流轨迹'], ['cancel', '取消']] as const).map(([key, label]) => <div key={key}><span>{label}</span><b>{connection?.capabilities[key] === 'verified' ? '已有验证记录' : connection?.capabilities[key] === 'unavailable' ? '不可用' : '尚未验证'}</b></div>)}<div><span>订单与路由推送</span><b>接收状态未提供</b></div></div>
+            <div className={styles.capabilities} aria-label="顺丰能力验证记录">{([['order', '下单'], ['query', '订单查询'], ['tracking', '物流轨迹'], ['cancel', '取消']] as const).map(([key, label]) => <div key={key}><span>{label}</span><b>{connection?.capabilities[key] === 'verified' ? '已有验证记录' : connection?.capabilities[key] === 'unavailable' ? '不可用' : '尚未验证'}</b></div>)}<div><span>在途转寄与退回</span><b>{connection?.interceptAccess === 'live' ? '生产已启用' : connection?.interceptAccess === 'testing' ? '沙盒测试已启用' : '未启用'}</b></div><div><span>订单与路由推送</span><b>接收状态未提供</b></div></div>
+            <p className={styles.hint}>在途转寄与退回仅在快件已揽收、尚未派件出仓时开放；每次提交前都会重新查询原单轨迹。顺丰开放平台必须先为当前应用关联 EXP_RECE_WANTED_INTERCEPT。</p>
+            {connection?.interceptAccess === 'live' || connection?.interceptAccess === 'testing'
+              ? <p className={styles.success} role="status">当前环境的转寄与退回能力已启用。</p>
+              : <div aria-label="在途转寄与退回设置">
+                  {!interceptConfirmationOpen && <button type="button" className={styles.secondary} disabled={!!busy || !connection || connection.status !== 'connected'} onClick={() => setInterceptConfirmationOpen(true)}>启用在途转寄与退回</button>}
+                  {!connection && <p className={styles.actionHint}>请先保存当前环境的顺丰连接。</p>}
+                  {connection && connection.status !== 'connected' && <p className={styles.actionHint}>请先完成当前连接的生产只读测试。</p>}
+                  {interceptConfirmationOpen && connection?.status === 'connected' && <div role="group" aria-label="启用在途转寄与退回确认">
+                    <p>确认顺丰开放平台已为当前应用关联 EXP_RECE_WANTED_INTERCEPT，并允许按顺丰实际轨迹执行转寄或退回。</p>
+                    <label><input type="checkbox" checked={interceptConfirmed} onChange={event => setInterceptConfirmed(event.target.checked)} /> 已确认顺丰开放平台已为当前应用关联截单转寄退回接口</label>
+                    <div className={styles.actions}>
+                      <button type="button" className={styles.secondary} disabled={!!busy} onClick={() => { setInterceptConfirmationOpen(false); setInterceptConfirmed(false) }}>取消</button>
+                      <button type="button" disabled={!!busy || !interceptConfirmed} onClick={() => void enableInterceptAccess()}>{busy === 'intercept' ? '正在启用…' : '确认启用'}</button>
+                    </div>
+                  </div>}
+                </div>}
             <p className={styles.hint}>可用操作以当前运单状态和顺丰处理结果为准。</p>
           </details>
         </section>

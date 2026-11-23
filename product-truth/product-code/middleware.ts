@@ -47,6 +47,7 @@ const RETIRED_EXACT_PATHS = new Set([
 ])
 const PRIMARY_HOST = 'sales.cyanlog.icu'
 const HOST_REDIRECTS: Record<string, { rootPath: string; preservePath: boolean }> = {
+  'cyanlog-sales-v3-git-production-eoins-projects-94b17ece.vercel.app': { rootPath: '/', preservePath: true },
   'quote.cyanlog.icu': { rootPath: '/quotes', preservePath: true },
   'contract.cyanlog.icu': { rootPath: '/contracts', preservePath: true },
   'cyanlog.icu': { rootPath: '/', preservePath: true },

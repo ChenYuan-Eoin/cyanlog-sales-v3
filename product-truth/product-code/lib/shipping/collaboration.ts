@@ -248,7 +248,7 @@ export async function listOwnerShipmentReceipts(orgId: string, userId: string, p
   if (!Number.isSafeInteger(page) || page < 0 || page > 1000) throw new ShippingError(400, '记录页码无效。')
   const limit = 50
   const { data, error } = await supabaseAdmin.from('shipping_orders')
-    .select('order_no,status,revision,returned_reason,cancel_phase:cancellation->>phase,provider_key,provider_order_id,carrier_connection_id,connection_environment,failure_stage:shipping_config_snapshot->orderFailure->>stage,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no,latest_status,provider_order_id,carrier_key)')
+    .select('order_no,status,revision,returned_reason,cancel_phase:cancellation->>phase,provider_key,provider_order_id,carrier_connection_id,connection_environment,failure_stage:shipping_config_snapshot->orderFailure->>stage,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no,latest_status,latest_event_at,provider_order_id,carrier_key)')
     .eq('org_id', orgId)
     .eq('created_by', userId)
     .eq('intake_source', 'owner_web')
@@ -268,6 +268,8 @@ export async function listOwnerShipmentReceipts(orgId: string, userId: string, p
         (!row.provider_order_id || (row.status === 'order_failed' && row.failure_stage === 'provider_not_sent')))
     return { canCancel, revision, orderNo: row.order_no, status: row.status, ...(row.cancel_phase ? { cancellationState:row.cancel_phase } : {}), waybill: wb?.waybill_no || null,
       nextReviewAt: row.next_review_at, createdAt: row.created_at,
+      ...(wb?.latest_status ? { trackingStatus: wb.latest_status } : {}),
+      ...(row.status === 'delivered' && wb?.latest_event_at ? { deliveredAt: wb.latest_event_at } : {}),
       ...(row.status === 'returned' ? { returnedReason: row.returned_reason?.trim() || null } : {}),
       customerName: typeof row.customer_name === 'string' && row.customer_name.trim() ? row.customer_name.trim() : null }
   })
@@ -279,14 +281,18 @@ export async function listPublicShipmentReceipts(orgId: string, page = 0) {
   requireOrganization(orgId)
   if (!Number.isSafeInteger(page) || page < 0 || !Number.isSafeInteger((page + 1) * 50)) throw new ShippingError(400, '记录页码无效。')
   const { data, error } = await supabaseAdmin.from('shipping_orders')
-    .select('order_no,status,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no)')
+    .select('order_no,status,next_review_at,created_at,customer_name:shipment_payload->>customerName,shipping_waybills(waybill_no,latest_status,latest_event_at)')
     .eq('org_id', orgId).order('created_at', { ascending: false }).order('id', { ascending: false })
     .range(page * 50, page * 50 + 50)
   if (error) throw new ShippingError(503, '提报记录暂时无法读取，请稍后刷新。')
   const rows = data || []
   const orders: ShipmentReceipt[] = rows.slice(0, 50).map(row => {
     const waybills = Array.isArray(row.shipping_waybills) ? row.shipping_waybills : row.shipping_waybills ? [row.shipping_waybills] : []
-    return { orderNo: row.order_no, status: row.status, waybill: waybills[0]?.waybill_no || null, nextReviewAt: row.next_review_at, createdAt: row.created_at, customerName: typeof row.customer_name === 'string' && row.customer_name.trim() ? row.customer_name.trim() : null }
+    const waybill = waybills[0]
+    return { orderNo: row.order_no, status: row.status, waybill: waybill?.waybill_no || null, nextReviewAt: row.next_review_at, createdAt: row.created_at,
+      ...(waybill?.latest_status ? { trackingStatus: waybill.latest_status } : {}),
+      ...(row.status === 'delivered' && waybill?.latest_event_at ? { deliveredAt: waybill.latest_event_at } : {}),
+      customerName: typeof row.customer_name === 'string' && row.customer_name.trim() ? row.customer_name.trim() : null }
   })
   return { orders, nextPage: rows.length > 50 ? page + 1 : null }
 }
