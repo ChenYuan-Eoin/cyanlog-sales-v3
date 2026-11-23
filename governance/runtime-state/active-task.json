@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "schema": "https://schemas.price-v3.internal/development-scheduler",
   "description": "Price V3 唯一开发调度状态。新输入默认进入 Inbox，不得直接替换 Active。",
-  "updated_at": "2026-11-23T07:19:25Z",
+  "updated_at": "2026-11-23T07:55:56Z",
   "protected_snapshot": {
     "captured_at": "2026-07-16T12:27:40+08:00",
     "branch": "codex/contract-product-line-closure",
@@ -317,6 +317,7 @@
       ],
       "note": "IN-20261123-069批准bfeda998产品树正式发布，产品子树为1c20eb17；代码发布验收保持只读，不执行迁移、生产业务数据写入或真实顺丰运单变更。Preview未通过，按用户明确要求直接生产部署后复验；顺丰已受理不代表处理完成。",
       "preview_order_exception_approval_id": "IN-20261123-069",
+      "manual_delivery_gate_approval_id": "IN-20261123-070",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
