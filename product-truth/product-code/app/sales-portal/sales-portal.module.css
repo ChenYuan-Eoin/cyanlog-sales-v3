@@ -19,12 +19,14 @@
   .employeePage .workspace{max-width:1450px;grid-template-columns:minmax(0,1fr) 350px}
 }
 .recordPanel{container-type:inline-size;min-width:0;font-size:12px}
-.recordToolbar{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px}
-.recordFilters{display:flex;min-width:0;flex:1 1 220px;flex-wrap:wrap;gap:6px}
+.recordToolbar{display:grid;grid-template-columns:minmax(0,1fr) 36px;align-items:start;gap:8px;margin-bottom:12px}
+.recordFilters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));min-width:0;width:100%;gap:6px}
 .recordFilters button,.refreshRecords,.loadMore{min-height:32px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink);padding:5px 10px;font-size:12px;line-height:1.35;white-space:nowrap}
+.recordFilters button{width:100%;padding-inline:5px;font-size:11px}
 .recordFilters button:hover:not(:disabled),.refreshRecords:hover:not(:disabled),.loadMore:hover:not(:disabled){border-color:#aebbd0;background:#f8fafc}
 .recordFilters button[aria-pressed=true]{border-color:#6c9be6;background:#edf4ff;color:#174ea6;font-weight:650}
-.refreshRecords{display:inline-flex;flex:none;align-items:center;justify-content:center;gap:5px;border-radius:8px;padding-inline:9px}
+.refreshRecords{display:inline-flex;grid-column:2;grid-row:1;align-self:start;align-items:center;justify-content:center;gap:5px;width:36px;border-radius:8px;padding-inline:0}
+.refreshRecords span{display:none}
 .spinning{animation:recordSpin .85s linear infinite}
 @keyframes recordSpin{to{transform:rotate(360deg)}}
 .recordGroups{margin-top:0;min-width:0}
@@ -37,7 +39,7 @@
 .receiptTitleGroup{display:flex;flex:1 1 auto;align-items:center;flex-wrap:wrap;gap:5px 7px;min-width:0}
 .receiptTitleGroup time{flex:none;color:#34445d;font-variant-numeric:tabular-nums}
 .receiptTitleGroup strong{min-width:0;max-width:100%;color:var(--ink);font-size:13px;font-weight:700;line-height:1.4;overflow-wrap:anywhere}
-.receiptOrderGroup{display:inline-flex;align-items:center;min-width:0;max-width:100%;gap:1px}
+.receiptOrderGroup{display:grid;grid-template-columns:minmax(0,1fr) 24px;align-items:center;flex-basis:100%;min-width:0;width:100%;max-width:100%;gap:1px}
 .receiptOrderNo{min-width:0;max-width:100%;color:#66758c;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .changeCount{flex-basis:100%;color:var(--muted);font-size:10px}
 .copyControl{display:inline-grid;flex:none;place-items:center;width:24px;height:24px;margin-left:1px;padding:0;border:0;border-radius:5px;background:transparent;color:#6b7d96;vertical-align:middle}
@@ -78,13 +80,7 @@
 .recordMeta{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted);margin-bottom:5px}.records .recordCustomer{display:block;width:fit-content;max-width:100%;margin:0 0 5px;padding:0;background:transparent;color:var(--ink);font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 @container (max-width:340px){
-  .recordToolbar{display:grid;grid-template-columns:minmax(0,1fr) 36px;align-items:start;gap:8px}
-  .recordFilters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;flex:none}
-  .recordFilters button{width:100%;padding-inline:5px;font-size:11px}
-  .refreshRecords{grid-column:2;grid-row:1;align-self:start;width:36px;padding-inline:0}
-  .refreshRecords span{display:none}
   .recordGroup li.ownerReceipt{padding:11px}
-  .receiptOrderGroup{display:grid;grid-template-columns:minmax(0,1fr) 24px;flex-basis:100%;width:100%}
   .receiptActionBar{align-items:stretch}
   .receiptActionBar>div,.receiptActions,.carrierActions{width:100%;justify-content:stretch}
   .receiptActions button,.carrierActions>button,.receiptActionBar>button{flex:1 1 auto}
