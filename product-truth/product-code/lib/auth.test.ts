@@ -31,6 +31,18 @@ describe('Auth Module', () => {
   })
 
   describe('getAuthUser', () => {
+    it('does not reinterpret an auth storage outage as an expired session', async () => {
+      vi.mocked(supabaseAdmin.from).mockReturnValue({ select: () => ({ eq: () => ({ single: async () => ({ data: null, error: { code: '503', message: 'unavailable' } }) }) }) } as any)
+      await expect(getAuthUser(makeReq({ authorization: 'Bearer token' }))).rejects.toThrow('会话')
+    })
+    it.each(['local', 'fxiaoke'])('rejects a %s session past the absolute lifetime without querying the identity provider', async authMethod => {
+      vi.mocked(supabaseAdmin.from).mockReturnValue({ select: () => ({ eq: () => ({ single: async () => ({ data: {
+        user_id: 'user', auth_method: authMethod, created_at: new Date(Date.now() - 31 * 86400000).toISOString(), expires_at: new Date(Date.now() + 60000).toISOString(),
+        user: { id: 'user', status: 'active', login_enabled: true },
+      }, error: null }) }) }) } as any)
+      expect(await getAuthUser(makeReq({ authorization: 'Bearer token' }))).toBeNull()
+      expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+    })
     it.each([
       ['authoritative', true],
       ['evidence', false],
@@ -56,7 +68,7 @@ describe('Auth Module', () => {
         eq: () => query,
         limit: async () => ({ data: [{
           authority_scope: { identity: identityAuthority },
-          connection_state: 'verified', effective_revision: 'revision-1',
+          connection_state: 'failed', effective_revision: 'revision-1',
         }], error: null }),
       }
       const membership = {
@@ -189,7 +201,7 @@ describe('Auth Module', () => {
       ;(supabaseAdmin.from as any).mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
+        single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'not found' } }),
       })
 
       const user = await getAuthUser(makeReq({ authorization: 'Bearer invalid' }))
