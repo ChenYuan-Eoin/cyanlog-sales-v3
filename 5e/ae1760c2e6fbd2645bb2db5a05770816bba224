@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "workPackages": [
+    "WP35",
+    "WP94"
+  ],
+  "observedAt": "2026-11-24T13:52:00Z",
+  "authority": [
+    "IN-20261124-073",
+    "IN-20261124-074"
+  ],
+  "production": {
+    "commit": "5eae1760c2e6fbd2645bb2db5a05770816bba224",
+    "githubDeploymentId": 8029111934,
+    "deploymentId": "dpl_5jahtksgkT91mc5tdGQGv4qoYXoS",
+    "url": "https://cyanlog-sales-v3-mowe9ki0o-eoins-projects-94b17ece.vercel.app",
+    "dashboard": "https://vercel.com/eoins-projects-94b17ece/cyanlog-sales-v3/5jahtksgkT91mc5tdGQGv4qoYXoS",
+    "origin": "https://sales.cyanlog.icu",
+    "githubState": "success",
+    "vercelObserved": "READY / Production / Current / Latest; canonical domain listed",
+    "pr": "https://github.com/ChenYuan-Eoin/cyanlog-sales-v3/pull/11",
+    "mergedAt": "2026-11-24T13:42:08Z",
+    "main": "5c596f85c10aadd2b64860d57d9cdc117e7cefc7",
+    "mainContainsProduction": true
+  },
+  "checks": {
+    "authTargets": {
+      "passed": 75
+    },
+    "localFinalFull": {
+      "passed": 3622,
+      "skipped": 5,
+      "failed": 3,
+      "explanation": "Only quote route external FX fetch 5s timeouts; same file independently passed all11 with20s timeout; no quote code edits."
+    },
+    "githubProductionCI": {
+      "run": 45402218333,
+      "testsPassed": 3625,
+      "testsSkipped": 5,
+      "filesPassed": 471,
+      "filesSkipped": 1,
+      "lint": "success",
+      "test": "success",
+      "build": "success",
+      "securityReport": "success",
+      "isolatedE2E": "skipped"
+    },
+    "typecheck": "exit0",
+    "lint": "exit0",
+    "build": "exit0 /109pages",
+    "independentReview": "three auth findings and two shipping findings reproduced and fixed; focused auth rereview no remaining blocker"
+  },
+  "operatorEvidence": {
+    "kind": "assistant observation via user existing Chrome, not a controlled machine-verifier receipt",
+    "existingTab": "1110519289",
+    "origin": "https://sales.cyanlog.icu",
+    "newContext": false,
+    "newTab": false,
+    "flows": [
+      "Used existing Fxiaoke sign-in link in original production Chrome tab, entered ICU workbench",
+      "Navigated same tab to /api/auth/activity, got managed:true/authMethod:fxiaoke/expiresAt:2026-12-01T13:32:37.076Z",
+      "Opened /shipping: both old waybills delivered with signed times and no cancel/forward controls; unknown new waybill cancellation disabled; returned record resubmit enabled",
+      "Explicitly signed out of Fxiaoke in existing CRM tab; observed CRM login page",
+      "Refreshed ICU /shipping: still authenticated and owner records visible",
+      "Read ICU /api/auth/activity after CRM signout: managed:true/authMethod:fxiaoke/expiresAt:2026-12-01T13:45:12.245Z, showing local renewal independent of CRM",
+      "Returned existing ICU tab to /shipping; final state retained"
+    ],
+    "shipments": [
+      {
+        "waybill": "SF5169741550975",
+        "status": "delivered",
+        "deliveredAtShanghai": "2026-11-20 18:41:16",
+        "actionsClosed": true
+      },
+      {
+        "waybill": "SF5169741231939",
+        "status": "delivered",
+        "deliveredAtShanghai": "2026-11-20 10:30:12",
+        "actionsClosed": true
+      },
+      {
+        "waybill": "SF5162262103864",
+        "status": "cached waiting pickup; latest unverified",
+        "cancelDisabled": true
+      }
+    ]
+  },
+  "boundaries": {
+    "realShipmentMutations": false,
+    "schemaMigrations": false,
+    "manualStatusEdits": false,
+    "unrelatedAplEdits": false,
+    "sourceCandidatePreserved": true,
+    "sevenDaysWallClockElapsed": false,
+    "policyEvidence": "production issuance deadline and foreground sliding renewal verified; seven-day elapsed duration is not claimed",
+    "tracking": "page load/manual/visibility and visible-page2minute polling; no provider push or closed-browser background sync",
+    "pendingCarrierObservation": "new shipment did not return verifiable latest trace; related action remains paused rather than assuming uncollected"
+  },
+  "repository": {
+    "clean": true,
+    "head": "5eae1760c2e6fbd2645bb2db5a05770816bba224",
+    "fetchIssue": "Shared commit graph referenced missing object; temporary core.commitGraph=false fetch succeeded, main ancestry exit0; no object deletion/reset"
+  },
+  "formalDeliveryLedger": "Legacy WP94 contract still says code_green/old authorization. No fabricated controlled production verifier or Preview pass. This artifact records actual deployment and trusted operator observations separately."
+}
