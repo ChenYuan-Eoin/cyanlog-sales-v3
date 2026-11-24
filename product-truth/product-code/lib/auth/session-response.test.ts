@@ -75,8 +75,17 @@ describe('system session issuance', () => {
     const session = await issueSystemSession(userId, orgId, 'fxiaoke')
     expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({ user_id: userId, auth_method: 'fxiaoke' }))
     const row = mocks.insert.mock.calls[0][0]
-    expect(Date.parse(row.expires_at) - Date.parse(row.created_at)).toBe(30 * 60_000)
-    expect(session.expiresAt.getTime() - Date.parse(row.created_at)).toBe(8 * 60 * 60_000)
+    expect(Date.parse(row.expires_at) - Date.parse(row.created_at)).toBe(7 * 24 * 60 * 60_000)
+    expect(session.expiresAt.getTime() - Date.parse(row.created_at)).toBe(7 * 24 * 60 * 60_000)
+    expect(session.maxAgeSeconds).toBe(30 * 24 * 60 * 60)
+
+    const response = NextResponse.json({ ok: true })
+    applySystemSessionCookies(response, session)
+    expect(response.cookies.get('token')?.maxAge).toBe(30 * 24 * 60 * 60)
+    const clientExpires = response.cookies.get('client_token')?.expires
+    const clientExpiresAt = clientExpires instanceof Date ? clientExpires.getTime() : clientExpires
+    expect(clientExpiresAt).toBeDefined()
+    expect(Math.abs(Number(clientExpiresAt) - session.cookieExpiresAt!.getTime())).toBeLessThanOrEqual(1000)
   })
 
   it('fails closed when the identity was disabled between mapping and session issue', async () => {
@@ -119,5 +128,15 @@ describe('system session issuance', () => {
     expect(response.headers.get('set-cookie')).toContain('token=session-token')
     expect(response.headers.get('set-cookie')).toContain('client_token=session-token')
     expect(response.headers.get('set-cookie')).toContain('auth_context=signed-context')
+  })
+
+  it('caps the cookie envelope at the absolute lifetime while server expiry remains seven days', async () => {
+    const session = await issueSystemSession(userId, orgId, 'local')
+    const response = NextResponse.json({ ok: true })
+    applySystemSessionCookies(response, session)
+    const row = mocks.insert.mock.calls[0][0]
+    expect(Date.parse(row.expires_at) - Date.parse(row.created_at)).toBe(7 * 86400000)
+    expect(session.cookieExpiresAt!.getTime() - Date.parse(row.created_at)).toBe(30 * 86400000)
+    expect(response.cookies.get('client_token')?.maxAge).toBe(30 * 86400)
   })
 })

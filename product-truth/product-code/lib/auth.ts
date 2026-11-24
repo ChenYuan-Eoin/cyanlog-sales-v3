@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { getRequestAuthToken } from './auth-token'
 import { supabaseAdmin } from './supabase'
-import { fxiaokeSessionDeadline } from './auth/fxiaoke-session'
+import { sessionDeadline } from './auth/fxiaoke-session'
 
 export interface AuthUser {
   id: string
@@ -29,24 +29,24 @@ async function hasActiveFxiaokeSessionSource(userId: string, orgId: string | nul
       .select('org_id,employment_status').eq('user_id', userId).eq('org_id', orgId)
       .eq('status', 'active').eq('is_default', true).maybeSingle(),
   ])
-  if (sourceResult.error || membershipResult.error
-    || membershipResult.data?.employment_status !== 'active') return false
+  if (sourceResult.error || membershipResult.error) throw new Error('会话成员状态暂时无法核实。')
+  if (membershipResult.data?.employment_status !== 'active') return false
   const sources = sourceResult.data || []
   return sources.length === 1
     && sources[0].authority_scope?.identity === 'authoritative'
-    && sources[0].connection_state === 'verified'
     && Boolean(sources[0].effective_revision)
 }
 
 export async function getAuthUserByToken(token: string): Promise<AuthUser | null> {
-  const { data: tokenRecord } = await supabaseAdmin
+  const { data: tokenRecord, error: tokenError } = await supabaseAdmin
     .from('auth_tokens')
     .select('user_id, created_at, expires_at, auth_method, user:users(id, email, phone, display_name, org_id, status, login_enabled)')
     .eq('token', token)
     .single()
 
+  if (tokenError && tokenError.code !== 'PGRST116') throw new Error('会话存储暂时无法读取。')
   if (!tokenRecord) return null
-  if (tokenRecord.auth_method === 'fxiaoke' && !fxiaokeSessionDeadline(tokenRecord)) return null
+  if (['local', 'fxiaoke'].includes(tokenRecord.auth_method) && !sessionDeadline(tokenRecord)) return null
   if (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date()) return null
 
   const joinedUser = Array.isArray(tokenRecord.user)

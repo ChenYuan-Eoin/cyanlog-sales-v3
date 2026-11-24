@@ -34,7 +34,7 @@ import { getRequestAuthToken } from '@/lib/auth-token'
 import { createMiddlewareRestClient } from '@/lib/middleware-rest-client'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
 import { resolveRolePermissions } from '@/lib/role-permission-resolution'
-import { fxiaokeSessionDeadline } from '@/lib/auth/fxiaoke-session'
+import { sessionDeadline } from '@/lib/auth/fxiaoke-session'
 
 const PUBLIC_PATHS = ['/login', '/accept-invitation']
 const RETIRED_EXACT_PATHS = new Set([
@@ -195,7 +195,7 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
   if (!tokenRecord || (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date())) return null
 
   const usesFxiaoke = tokenRecord.auth_method === 'fxiaoke'
-  if (usesFxiaoke && !fxiaokeSessionDeadline(tokenRecord)) return null
+  if (['local', 'fxiaoke'].includes(tokenRecord.auth_method || '') && !sessionDeadline(tokenRecord)) return null
 
   const userId = tokenRecord.user_id
   const user = tokenRecord.user
@@ -221,7 +221,7 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
     ) : [],
   ])
   if (usesFxiaoke && (sources.length !== 1 || sources[0].authority_scope?.identity !== 'authoritative'
-    || sources[0].connection_state !== 'verified' || !sources[0].effective_revision)) return null
+    || !sources[0].effective_revision)) return null
 
   const organization = organizationRows[0]
   if (!organization) throw new Error('auth middleware organization permissions unavailable')
@@ -347,6 +347,7 @@ export async function middleware(request: NextRequest) {
     }
     const ownerAction = request.method === 'POST' && (returnedOwnerOrderPath.test(pathname)
       || ownerCarrierChanges.test(pathname)
+      || /^\/api\/shipping\/owner\/orders\/SO-\d{8}-[A-Z0-9]{8}\/tracking$/.test(pathname)
       || /^\/api\/shipping\/owner\/orders\/SO-\d{8}-[A-Z0-9]{8}\/cancel$/.test(pathname))
     const separatelyAuthorizedShipping = federatedViewer && pathname.startsWith('/api/shipping/')
       && pathname !== '/api/shipping/owner/orders' && !ownerAction && !ownerCarrierChanges.test(pathname)

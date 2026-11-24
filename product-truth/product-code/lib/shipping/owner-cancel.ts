@@ -4,6 +4,8 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
 import { getCarrierAdapter } from './carrier-adapter'
 import { recordShippingCapability } from './connections'
+import { recordTrackingResult } from './tracking-store'
+import { latestVerifiedTrackingEvent } from './owner-tracking'
 
 const observedState = z.object({
   revision: z.number().int().min(1),
@@ -42,6 +44,30 @@ export async function cancelOriginalShipment(reference: string, actor: string, o
     const adapter = getCarrierAdapter(claim.provider)
     const carrier = await adapter.connect({allowHistorical:true, requireOrderCapability:false, expectedEnvironment:claim.environment,
       orgId:org, connectionId:claim.connectionId, billingAccountId:claim.billingAccountId})
+    if (claim.environment !== 'sandbox') {
+      if (claim.environment !== 'production') throw new ShippingError(409, '原单环境不完整；没有发送取消请求。')
+      const { data: row, error: readError } = await supabaseAdmin.from('shipping_orders')
+        .select('status,provider_key,provider_order_id,carrier_connection_id,billing_account_id,connection_environment,shipping_waybills(waybill_no,provider_order_id,carrier_key)')
+        .eq('org_id', org).eq('id', id).maybeSingle()
+      const waybills = Array.isArray(row?.shipping_waybills) ? row.shipping_waybills : row?.shipping_waybills ? [row.shipping_waybills] : []
+      const wb = waybills[0]
+      if (readError || !row || waybills.length !== 1 || !wb?.waybill_no) throw new ShippingError(503, '取消前无法核实原运单；没有发送取消请求。')
+      if (row.status !== 'waybill_created' || row.carrier_connection_id !== claim.connectionId
+        || row.billing_account_id !== claim.billingAccountId || row.connection_environment !== claim.environment
+        || row.provider_key !== claim.provider || row.provider_order_id !== claim.providerOrderId
+        || wb.provider_order_id !== claim.providerOrderId || wb.carrier_key !== claim.provider
+        || (snapshot?.success && wb.waybill_no !== snapshot.data.waybill)) throw new ShippingError(409, staleMessage)
+      const latest = await carrier.track(wb.waybill_no)
+      const latestEvent = latestVerifiedTrackingEvent(latest, wb.waybill_no)
+      if (!latestEvent) throw new ShippingError(503, '顺丰没有返回可信的最新状态；没有发送取消请求。')
+      const saved = await recordTrackingResult(org, latest, claim.provider)
+      if (!saved.recorded || !saved.shipmentStatus) throw new ShippingError(503, '顺丰状态未能可靠保存；没有发送取消请求。')
+      if (latestEvent.status !== 'waybill_created' || saved.shipmentStatus !== 'waybill_created') {
+        throw new ShippingError(409, saved.shipmentStatus === 'delivered'
+          ? '顺丰最新轨迹显示已签收，已阻止取消。请刷新提报记录。'
+          : '顺丰最新状态不允许取消；没有发送取消请求。请刷新提报记录。')
+      }
+    }
     sent = true
     await carrier.cancel(claim.providerOrderId)
   } catch (cause) {

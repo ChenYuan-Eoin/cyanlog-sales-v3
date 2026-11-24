@@ -235,58 +235,41 @@
     }
   },
   "active_task": {
-    "id": "WP35",
-    "slug": "sales-intake-experience",
-    "name": "销售寄件提报体验",
+    "id": "WP94",
+    "slug": "fxiaoke-sso-federated-identity",
+    "name": "独立七天登录会话",
     "kind": "product",
     "status": "active",
-    "objective": "在同一本人提报记录路径中展示真实退回原因；允许本人安全取消未揽收原单、对退回原单修改后重提并显示更改次数；顺丰在途截单 API 上线后，允许本人在揽收且派件出仓前改址或退回，并在记录详情回看原地址、目标地址与受理/待确认结果。",
-    "started_at": "2026-11-18T10:15:08.293113+00:00",
-    "activation_basis": "IN-20261118-058 用户明确要求退回重提原单、维持原记录。",
+    "objective": "普通及纷享登录建立独立7天闲置有效、活跃续期与30天绝对上限；不随纷享退出失效，保留ICU退出/撤销/停用/离职拒绝；与已提交WP35修复合版生产发布、现有Chrome验收及main收敛。",
+    "started_at": "2026-10-16T07:43:35.475527+00:00",
+    "activation_basis": "IN-20261124-074 用户明确批准两项未完成交付依次完成。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp35-owner-continuation/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
-      "product-truth/product-code/app/api/shipping/owner/orders",
-    "product-truth/product-code/app/api/shipping/settings",
-      "product-truth/product-code/app/sales-portal",
-    "product-truth/product-code/app/shipping/config-drawer.tsx",
-    "product-truth/product-code/app/shipping/config-drawer.test.tsx",
-      "product-truth/product-code/lib/shipping",
-      "product-truth/product-code/supabase/migrations/20261118111500_resubmit_returned_owner_shipment.sql",
+      "product-truth/product-code/lib/auth.ts",
+      "product-truth/product-code/lib/auth.test.ts",
+      "product-truth/product-code/lib/auth/session-response.ts",
+      "product-truth/product-code/lib/auth/session-response.test.ts",
+      "product-truth/product-code/lib/auth/fxiaoke-session.ts",
+      "product-truth/product-code/lib/auth/fxiaoke-session.test.ts",
+      "product-truth/product-code/app/api/auth/activity",
+      "product-truth/product-code/components/layout/AppShell.tsx",
+      "product-truth/product-code/components/layout/SessionActivity.tsx",
+      "product-truth/product-code/components/layout/SessionActivity.test.tsx",
       "product-truth/product-code/node_modules",
       "product-truth/product-code/.next",
       "product-truth/product-code/tsconfig.tsbuildinfo",
       "product-truth/product-code/middleware.ts",
       "product-truth/product-code/middleware.test.ts",
-      "product-truth/product-code/app/api/shipping/ledger",
-    "product-truth/product-code/app/api/shipping/shipping-routes.test.ts",
-      "product-truth/product-code/supabase/migrations/20261118101500_shipping_order_cancellation.sql",
-      "product-truth/product-code/app/api/shipping/owner/orders/[orderNo]/carrier-changes",
-      "product-truth/product-code/app/api/shipping/ledger/[id]/carrier-changes",
-      "product-truth/product-code/app/shipping/carrier-change-history.tsx",
-      "product-truth/product-code/app/shipping/contact-fields.tsx",
-      "product-truth/product-code/app/shipping/workbench.tsx",
-      "product-truth/product-code/app/shipping/workbench.test.tsx",
-      "product-truth/product-code/lib/shipping/carrier-adapter.ts",
-      "product-truth/product-code/lib/shipping/sf-client.ts",
-      "product-truth/product-code/lib/shipping/owner-carrier-change.ts",
-      "product-truth/product-code/lib/shipping/owner-carrier-change.test.ts",
-      "product-truth/product-code/lib/shipping/owner-carrier-change-migration.test.ts",
-      "product-truth/product-code/lib/shipping/owner-carrier-protocol.test.ts",
-      "product-truth/product-code/middleware.ts",
-      "product-truth/product-code/middleware.test.ts",
-      "product-truth/product-code/supabase/migrations/20261118123000_owner_carrier_changes.sql"
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-sso-verifier.js",
+      "governance/runtime-config-AI运行配置/runtime-code-运行代码/scripts-脚本/fxiaoke-sso-verifier.test.js"
     ],
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "code_green",
       "allowed_states": [
         "executing",
-        "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -301,12 +284,11 @@
         "build"
       ],
       "required_runtime_evidence": [
-        "sales_intake",
-        "shipping_access"
+        "fxiaoke_sso"
       ],
       "required_production_runtime_evidence": [
-        "sales_intake",
-        "shipping_access"
+        "fxiaoke_sso_login",
+        "fxiaoke_sso_denials"
       ],
       "required_production_evidence": [
         "exact_production_commit",
@@ -315,11 +297,9 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "IN-20261123-069批准bfeda998产品树正式发布，产品子树为1c20eb17；代码发布验收保持只读，不执行迁移、生产业务数据写入或真实顺丰运单变更。Preview未通过，按用户明确要求直接生产部署后复验；顺丰已受理不代表处理完成。",
-      "preview_order_exception_approval_id": "IN-20261123-069",
-      "manual_delivery_gate_approval_id": "IN-20261123-070",
+      "note": "本轮IN-20261124-073/074已批准范围内自动发布，无迁移或真实承运商变更。",
       "production_database_mode": "read_only",
-      "runtime_profile": "shipping_workspace",
+      "runtime_profile": "application",
       "final_acceptance": {
         "origin": "https://sales.cyanlog.icu",
         "browser": "trusted_operator_attestation_from_user_existing_chrome_only",
@@ -331,51 +311,38 @@
         "production_database_mode": "read_only"
       },
       "production_release_authorization": {
-        "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261123-069",
-        "micro_fix_approval_id": "IN-20261118-055",
-        "clarification_id": "IN-20261123-067",
-        "micro_fix_scope": "本人提报记录退回原因、取消、原单重提及在途改址退回记录",
-        "final_scope": "发布当前候选的发起寄件页提报记录右栏、顺丰在途转寄退回入口及精确 Git 生产域名跳转；正式站使用现有 Chrome 只读复验，不迁移、不写生产业务数据、不调用真实顺丰运单。",
-        "approved_candidate": "bfeda998d701fbeaf18f94a7084bc7272b09d672",
-        "approved_product_tree": "1c20eb170dd4ec1c102be24ad1e6d4c68cd561f2",
-        "rollback_commit": "ac7f605eccb8d3e077814dd070a2305366004ad5",
-        "authorized_commit_binding": "delivery_attestation_current_head",
-        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
-        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
+        "status": "not_authorized_for_current_candidate",
+        "final_scope": "新发现的跨标签账号切换状态残留仅本地修复验证，已发布61791a01及其批准保留，不继承本次候选发布权限",
         "database_write_authorized": false,
         "production_database_write_authorized": false,
-        "production_migrations_authorized": false,
         "carrier_calls_authorized": false
       },
       "blocking_acceptance_defects": [],
-      "runtime_contract_version": "f054-auth-intake-v1"
+      "runtime_contract_version": "f003-fxiaoke-sso-v1"
     },
-    "feature_id": "F054",
+    "feature_id": "F003",
     "integration_decision": {
-      "strategy": "isolated_owner_return_reason_candidate",
-      "authority": "IN-20261118-058",
-      "requested_target": "production_released",
-      "scope": "整合本人退回原因、本人取消、同一工单修改重提，以及顺丰在途改址/退回和可回看的顺丰受理记录到同一本人提报记录详情；复用 WP99 已授权实现，不扩大为生产调用或生产迁移。",
-      "related": [
-        "IN-20261118-055",
-        "IN-20261118-056",
-        "IN-20261118-057",
-        "IN-20261118-058"
-      ]
+      "strategy": "preserve_combined_candidate_and_correct_sales_guidance",
+      "authority": "IN-20261117-023",
+      "requested_target": "code_green",
+      "constraint": "User approved current product tree code release; no schema or business data write; user performs Production acceptance."
     },
-    "micro_fixes": []
+    "micro_fixes": [],
+    "blocking_items": [
+      "换账号后的正式站复验",
+      "即时退出联动仍缺当前应用协议证据"
+    ]
   },
   "execution_queue": {
     "active": {
-      "id": "WP35",
-      "slug": "sales-intake-experience",
-      "name": "销售寄件提报体验"
+      "id": "WP94",
+      "slug": "fxiaoke-sso-federated-identity",
+      "name": "独立七天登录会话"
     },
     "next": {
-      "id": "WP77",
-      "slug": "navigation-performance",
-      "name": "受保护页面切换耗时"
+      "id": "WP35",
+      "slug": "sales-intake-experience",
+      "name": "寄件修复生产验收"
     },
     "ready": [
       {

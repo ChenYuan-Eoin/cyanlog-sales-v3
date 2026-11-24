@@ -37,7 +37,7 @@ it('loads shared records, appends a page from the primary action and refreshes f
   render(<MyWorkorders />)
 
   await screen.findByRole('listitem', { name: '提报 ONE' })
-  expect(fetcher).toHaveBeenCalledWith('/api/shipping/public/orders?page=0', { cache: 'no-store', credentials: 'omit' })
+  expect(fetcher).toHaveBeenCalledWith('/api/shipping/public/orders?page=0', expect.objectContaining({ cache: 'no-store', credentials: 'omit' }))
   fireEvent.click(screen.getByRole('button', { name: '显示更多记录' }))
   expect(await screen.findByRole('listitem', { name: '提报 TWO' })).toBeInTheDocument()
   expect(screen.getAllByRole('listitem')).toHaveLength(2)
@@ -53,8 +53,95 @@ it('reads only the authenticated owner endpoint in employee mode', async () => {
   render(<MyWorkorders scope="owner" />)
 
   expect(await screen.findByText('尚无提报记录')).toBeInTheDocument()
-  expect(fetcher).toHaveBeenCalledWith('/api/shipping/owner/orders?page=0', { cache: 'no-store', credentials: 'same-origin' })
+  expect(fetcher).toHaveBeenCalledWith('/api/shipping/owner/orders?page=0', expect.objectContaining({ cache: 'no-store', credentials: 'same-origin' }))
   expect(fetcher.mock.calls.some(([url]) => String(url).includes('/public/orders'))).toBe(false)
+})
+
+it('refreshes current waybill status from SF and reloads the owner list before showing action availability', async () => {
+  const fresh = order('LIVE', { status: 'delivered', trackingStatus: 'delivered', waybill: 'SF1234567890123' })
+  fetcher.mockResolvedValueOnce(response({ orders: [order('LIVE', { waybill: 'SF1234567890123' })], nextPage: null }))
+    .mockResolvedValueOnce(response({ verified: true, waybill: 'SF1234567890123', source: 'carrier', shipmentStatus: 'delivered', events: [{time:'2026-11-20 18:41:00',location:'北京',description:'已签收',status:'delivered'}] }))
+    .mockResolvedValueOnce(response({ orders: [fresh], nextPage: null }))
+  render(<MyWorkorders scope="owner" />)
+  const card = await screen.findByRole('listitem', { name: '提报 LIVE' })
+  expect(await within(card).findByText('已签收')).toBeInTheDocument()
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+    '/api/shipping/owner/orders?page=0', '/api/shipping/owner/orders/LIVE/tracking', '/api/shipping/owner/orders?page=0',
+  ])
+  expect(within(card).queryByRole('button', { name: '取消寄件' })).toBeNull()
+})
+
+it('refreshes newly exposed owner records and keeps the expanded window on manual refresh', async () => {
+  const records = Array.from({ length: 8 }, (_, i) => order(`ORDER-${i}`, { status: i === 7 ? 'waybill_created' : 'delivered', waybill: `SF123456789012${i}` }))
+  fetcher.mockImplementation(async (url: string) => url.endsWith('/tracking')
+    ? response({ verified: true, source: 'carrier', waybill: 'SF1234567890127', shipmentStatus: 'waybill_created', events: [{ status: 'waybill_created' }] })
+    : response({ orders: records, nextPage: null }))
+  render(<MyWorkorders scope="owner" />)
+  await screen.findByRole('listitem', { name: '提报 ORDER-0' })
+  fireEvent.click(screen.getByRole('button', { name: '显示更多记录' }))
+  await waitFor(() => expect(fetcher.mock.calls.some(([url]) => url === '/api/shipping/owner/orders/ORDER-7/tracking')).toBe(true))
+  await waitFor(() => expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeEnabled())
+  expect(screen.getAllByRole('listitem')).toHaveLength(8)
+  fireEvent.click(screen.getByRole('button', { name: '刷新提报记录' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeEnabled())
+  expect(screen.getAllByRole('listitem')).toHaveLength(8)
+})
+
+it('does not lock returned-record resubmission when a different waybill refresh fails', async () => {
+  fetcher.mockImplementation(async (url: string) => url.endsWith('/tracking') ? response({ error: '顺丰不可用' }, 503) : response({ orders: [
+    order('FAILED', { waybill: 'SF1234567890123' }), order('RETURNED', { status: 'returned', waybill: null }),
+  ], nextPage: null }))
+  render(<MyWorkorders scope="owner" onResubmit={vi.fn()} />)
+  const returned = await screen.findByRole('listitem', { name: '提报 RETURNED' })
+  await waitFor(() => expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeEnabled())
+  expect(within(returned).getByRole('button', { name: '修改并重提' })).toBeEnabled()
+  expect(within(screen.getByRole('listitem', { name: '提报 FAILED' })).getByRole('button', { name: '取消寄件' })).toBeDisabled()
+})
+
+it('rereads earlier owner pages when appending records after a carrier refresh', async () => {
+  let signed = false
+  let refreshCount = 0
+  const first = () => order('PAGE-ZERO', { status: signed ? 'delivered' : 'waybill_created', waybill: 'SF1234567890123' })
+  fetcher.mockImplementation(async (url: string) => {
+    if (url.endsWith('/tracking')) {
+      refreshCount += 1
+      if (refreshCount > 1) signed = true
+      return response({ verified: true, waybill: 'SF1234567890123' })
+    }
+    return url.endsWith('page=0') ? response({ orders: [first()], nextPage: 1 })
+      : response({ orders: [order('PAGE-ONE', { status: 'delivered' })], nextPage: null })
+  })
+  render(<MyWorkorders scope="owner" />)
+  await screen.findByRole('listitem', { name: '提报 PAGE-ZERO' })
+  fireEvent.click(screen.getByRole('button', { name: '显示更多记录' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeEnabled())
+  const card = screen.getByRole('listitem', { name: '提报 PAGE-ZERO' })
+  expect(card).toHaveTextContent('已签收')
+  expect(within(card).queryByRole('button', { name: '取消寄件' })).toBeNull()
+})
+
+it('keeps a replacement filtered record locked until its carrier status has been checked', async () => {
+  let signed = false
+  const records = () => Array.from({ length: 6 }, (_, i) => order(`FILTER-${i}`, {
+    status: signed && i === 0 ? 'delivered' : 'waybill_created', waybill: `SF123456789012${i}`,
+  }))
+  fetcher.mockImplementation(async (url: string) => url.endsWith('/tracking')
+    ? response({ error: 'temporarily unavailable' }, 503) : response({ orders: records(), nextPage: null }))
+  render(<MyWorkorders scope="owner" />)
+  await screen.findByRole('listitem', { name: '提报 FILTER-0' })
+  await waitFor(() => expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeEnabled())
+  fetcher.mockImplementation(async (url: string) => {
+    if (url.endsWith('/tracking')) {
+      if (url.includes('FILTER-0/')) signed = true
+      const index = /FILTER-(\d)\/tracking$/.exec(url)![1]
+      return response({ verified: true, waybill: `SF123456789012${index}` })
+    }
+    return response({ orders: records(), nextPage: null })
+  })
+  fireEvent.click(screen.getByRole('button', { name: '待揽收' }))
+  const replacement = await screen.findByRole('listitem', { name: '提报 FILTER-5' })
+  await waitFor(() => expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeEnabled())
+  expect(within(replacement).getByRole('button', { name: '取消寄件' })).toBeDisabled()
 })
 
 it('shows the real returned reason and labels a missing reason without reusing stale data', async () => {

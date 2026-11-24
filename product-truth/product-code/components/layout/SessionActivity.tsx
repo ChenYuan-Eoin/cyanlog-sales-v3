@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { clearClientSession } from '@/lib/session-client'
 
 // Only real foreground input renews the session; polling and merely leaving
-// a tab open cannot keep a Fxiaoke login alive.
+// a tab open cannot keep a login alive.
 export function SessionActivity() {
   useEffect(() => {
     let stopped = false
@@ -12,6 +12,7 @@ export function SessionActivity() {
     let timer: ReturnType<typeof setTimeout>
     let lastRenewal = 0
     let renewing = false
+    let activityPending = false
     const controller = new AbortController()
     const initialToken = localStorage.getItem('token')
     function accountChanged() {
@@ -27,6 +28,7 @@ export function SessionActivity() {
     async function check(renew = false) {
       if (renewing || stopped) return
       if (accountChanged()) return
+      let renewAfterCheck = false
       renewing = true
       try {
         const token = localStorage.getItem('token')
@@ -48,26 +50,44 @@ export function SessionActivity() {
           const remaining = Date.parse(body.expiresAt) - Date.now()
           if (!Number.isFinite(remaining)) throw new Error('invalid session deadline')
           timer = setTimeout(() => { void check() }, Math.max(1000, remaining))
+          renewAfterCheck = !renew && activityPending && Date.now() - lastRenewal >= 60_000
         }
-        if (renew) lastRenewal = Date.now()
+        if (renew) {
+          lastRenewal = Date.now()
+          activityPending = false
+        }
       } catch {
         if (!stopped) timer = setTimeout(() => { void check() }, 15_000)
-      } finally { renewing = false }
+      } finally {
+        renewing = false
+        if (renewAfterCheck && !stopped && managed) void check(true)
+      }
     }
     const onActivity = (event: Event) => {
       if (!stopped && accountChanged()) {
         event.stopImmediatePropagation()
         return
       }
-      if (managed && event.isTrusted && document.visibilityState === 'visible'
-        && Date.now() - lastRenewal >= 60_000) void check(true)
+      if (event.isTrusted && document.visibilityState === 'visible') {
+        activityPending = true
+        if (managed && Date.now() - lastRenewal >= 60_000) void check(true)
+      }
     }
     const onStorage = (event: StorageEvent) => {
       if (!stopped && (event.key === 'token' || event.key === null)) accountChanged()
     }
-    const onFocus = () => { if (!stopped) accountChanged() }
+    const renewOnForeground = () => {
+      if (stopped || accountChanged()) return
+      if (document.visibilityState === 'visible') {
+        activityPending = true
+        if (managed && Date.now() - lastRenewal >= 60_000) void check(true)
+      }
+    }
+    const onFocus = () => renewOnForeground()
+    const onVisibilityChange = () => renewOnForeground()
     window.addEventListener('storage', onStorage)
     window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
     const events = ['pointerdown', 'keydown', 'wheel', 'touchmove'] as const
     for (const name of events) window.addEventListener(name, onActivity, { passive: true, capture: true })
     void check()
@@ -77,6 +97,7 @@ export function SessionActivity() {
       clearTimeout(timer)
       window.removeEventListener('storage', onStorage)
       window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       for (const name of events) window.removeEventListener(name, onActivity, true)
     }
   }, [])

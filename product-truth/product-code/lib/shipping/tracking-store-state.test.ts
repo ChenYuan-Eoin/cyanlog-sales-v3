@@ -92,6 +92,13 @@ describe('persisted shipment tracking progression', () => {
     expect(order.status).toBe('delivered')
   })
 
+  it('persists the SF completion phrase shown by the owner screenshot as delivered', async () => {
+    const result = await recordTrackingResult('org-A', eventResult('快件已派送成功（公司前台）'))
+    expect(result).toEqual({ recorded: 1, shipmentStatus: 'delivered' })
+    expect(order.status).toBe('delivered')
+    expect(waybill.latest_status).toBe('delivered')
+  })
+
   it.each<ShipmentOrderStatus>(['cancelled', 'delivered'])('keeps terminal state %s despite a newer transport event', async status => {
     order.status = status; waybill.latest_status = status; waybill.latest_event_at = '2026-09-27T09:00:00.000Z'
     expect(await recordTrackingResult('org-A', eventResult('运输中', undefined, 'in_transit'))).toMatchObject({ shipmentStatus: status })

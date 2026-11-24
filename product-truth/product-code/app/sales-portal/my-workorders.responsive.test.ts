@@ -15,10 +15,22 @@ describe('owner record panel rail layout', () => {
     expect(base).toContain('.refreshRecords{display:inline-flex;grid-column:2;grid-row:1')
   })
 
-  it('keeps long order numbers truncated beside their copy control', () => {
+  it('shows the full waybill on wrapped lines beside its fixed copy control', () => {
     expect(css).toContain('.receiptOrderNo{')
     expect(css).toMatch(/\.receiptOrderNo\{[^}]*white-space:nowrap;[^}]*overflow:hidden;[^}]*text-overflow:ellipsis/)
     expect(base).toContain('.receiptOrderGroup{display:grid;grid-template-columns:minmax(0,1fr) 24px')
+    expect(base).toContain('.trackingNumberGroup{display:grid;grid-template-columns:minmax(0,1fr) 24px')
+    expect(base).toMatch(/\.trackingBar \.trackingNumber\{[^}]*white-space:normal;[^}]*overflow-wrap:anywhere/)
+    expect(base).not.toMatch(/\.trackingBar \.trackingNumber\{[^}]*text-overflow:ellipsis/)
+    expect(base).not.toContain('.records button{')
+    expect(base).not.toContain('.records li strong,.records li span{display:block}')
+  })
+
+  it('keeps the rendered full waybill and copy action bound to the same value', () => {
+    const source = readFileSync(join(process.cwd(), 'app/sales-portal/my-workorders.tsx'), 'utf8')
+    expect(source).toContain('<strong className={styles.trackingNumber} title={order.waybill}>{order.waybill}</strong>')
+    expect(source).toContain('<CopyControl value={order.waybill} label="顺丰单号"')
+    expect(source).not.toMatch(/trackingNumber[^\n]*slice\(|trackingNumber[^\n]*substring\(|trackingNumber[^\n]*replace\(/)
   })
 
   it('keeps compact action buttons aligned to the content edge while expanded forms use the rail width', () => {

@@ -50,6 +50,7 @@ function mockExactOrgAuth(options: {
   authMethod?: 'local' | 'fxiaoke'
   employmentStatus?: string
   sourceIdentity?: 'authoritative' | 'evidence'
+  sourceConnectionState?: string
   shippingDirectGrant?: boolean
   sessionCreatedAt?: string
   sessionExpiresAt?: string
@@ -64,8 +65,7 @@ function mockExactOrgAuth(options: {
       return Response.json([{
         user_id: 'user-1',
         created_at: options.sessionCreatedAt ?? new Date().toISOString(),
-        expires_at: options.sessionExpiresAt ?? (options.authMethod === 'fxiaoke'
-          ? new Date(Date.now() + 30 * 60_000).toISOString() : '2099-01-01T00:00:00.000Z'),
+        expires_at: options.sessionExpiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60_000).toISOString(),
         auth_method: options.authMethod ?? 'local',
         user: {
           id: 'user-1',
@@ -87,7 +87,7 @@ function mockExactOrgAuth(options: {
     if (table === 'organization_sources') {
       return Response.json([{
         authority_scope: { identity: options.sourceIdentity ?? 'authoritative' },
-        connection_state: 'verified', effective_revision: 'revision-1',
+        connection_state: options.sourceConnectionState ?? 'verified', effective_revision: 'revision-1',
       }])
     }
     if (table === 'permission_points') return Response.json([{ id: 'shipping-point' }])
@@ -103,6 +103,10 @@ function mockExactOrgAuth(options: {
 }
 
 describe('middleware host routing', () => {
+  it('keeps an existing ICU session valid when the CRM connector is temporarily unavailable', async () => {
+    mockExactOrgAuth({ token: 'existing', orgId: 'org-a', roles: [], authMethod: 'fxiaoke', sourceConnectionState: 'failed' })
+    expect((await middleware(makeRequest('https://sales.cyanlog.icu/api/auth/activity', { authorization: 'Bearer existing' }))).status).toBe(200)
+  })
   it('allows session management for a role-free SSO member without allowing business writes', async () => {
     mockExactOrgAuth({ token: 'activity-token', orgId: 'org-a', roles: [], authMethod: 'fxiaoke' })
     for (const method of ['GET', 'POST']) {
@@ -111,12 +115,16 @@ describe('middleware host routing', () => {
     expect((await middleware(makeRequest('https://sales.cyanlog.icu/api/quotes', { authorization: 'Bearer activity-token' }, 'POST'))).status).toBe(403)
   })
 
-  it('rejects old seven-day Fxiaoke sessions on both page and API paths', async () => {
-    mockExactOrgAuth({ token: 'old-token', orgId: 'org-a', roles: [], authMethod: 'fxiaoke',
+  it.each(['local', 'fxiaoke'] as const)('keeps %s sessions valid for seven days and rejects the thirty-day absolute expiry', async authMethod => {
+    mockExactOrgAuth({ token: 'active-token', orgId: 'org-a', roles: [], authMethod,
       sessionExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60_000).toISOString() })
+    expect((await middleware(makeRequest('https://sales.cyanlog.icu/api/auth/activity', { authorization: 'Bearer active-token' }))).status).toBe(200)
+    const page = await middleware(makeRequest('https://sales.cyanlog.icu/shipping', { authorization: 'Bearer active-token' }))
+    expect(page.headers.get('location')).not.toBe('https://sales.cyanlog.icu/login')
+    mockExactOrgAuth({ token: 'old-token', orgId: 'org-a', roles: [], authMethod,
+      sessionCreatedAt: new Date(Date.now() - 31 * 24 * 60 * 60_000).toISOString(),
+      sessionExpiresAt: new Date(Date.now() + 60_000).toISOString() })
     expect((await middleware(makeRequest('https://sales.cyanlog.icu/api/auth/activity', { authorization: 'Bearer old-token' }))).status).toBe(401)
-    const page = await middleware(makeRequest('https://sales.cyanlog.icu/shipping', { authorization: 'Bearer old-token' }))
-    expect(page.headers.get('location')).toBe('https://sales.cyanlog.icu/login')
   })
 
   it('redirects quote subdomain to sales quotes entry', async () => {
@@ -195,6 +203,9 @@ describe('role-free federated session boundary', () => {
     expect((await middleware(request(returnedOrder + '/other', 'POST'))).status).toBe(403)
     expect((await middleware(request('/api/shipping/owner/orders', 'POST'))).status).toBe(200)
     expect((await middleware(request('/api/shipping/owner/orders/SO-20261118-1234ABCD/cancel', 'POST'))).status).toBe(200)
+    expect((await middleware(request('/api/shipping/owner/orders/SO-20261118-1234ABCD/tracking', 'POST'))).status).toBe(200)
+    expect((await middleware(request('/api/shipping/owner/orders/SO-20261118-1234ABCD/tracking/other', 'POST'))).status).toBe(403)
+    expect((await middleware(request('/api/shipping/tracking', 'POST'))).status).toBe(403)
     expect((await middleware(request('/api/shipping/owner/orders/SO-20261118-1234ABCD/confirm', 'POST'))).status).toBe(403)
     expect((await middleware(request('/api/shipping/owner/orders'))).status).toBe(200)
     expect((await middleware(request('/api/shipping/owner/profile'))).status).toBe(200)
