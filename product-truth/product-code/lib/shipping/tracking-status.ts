@@ -18,12 +18,12 @@ const namedStatuses: Record<string, TrackingEventStatus> = {
   已签收: 'delivered', 签收成功: 'delivered', 已妥投: 'delivered',
   签收失败: 'exception', 派送失败: 'exception', 拒收: 'exception', 异常: 'exception',
 }
-const negativeDelivery = /(?:尚未|未|没有|待|等待)(?:完成|成功)?签收|未妥投|尚未送达/
+const negativeDelivery = /(?:尚未|未|没有|待|等待)(?:完成|成功)?签收|未妥投|尚未送达|(?:尚未|未|没有|待|等待)(?:完成)?派送成功|(?:如|若|如果)(?:已)?派送成功/
 
 function descriptionStatus(description: string): TrackingEventStatus {
   if (/(?:签收|派送|配送|揽收)失败|拒收|拒签|已退回|退运中|快件异常|滞留|丢失|破损/.test(description)) return 'exception'
   if (/(?:尚未|未|没有|待)(?:被)?(?:成功)?(?:揽收|收取|取件)/.test(description)) return 'waybill_created'
-  if (!negativeDelivery.test(description) && /已签收|签收成功|已妥投|本人签收|收件人已收件/.test(description)) return 'delivered'
+  if (!negativeDelivery.test(description) && /已签收|签收成功|已妥投|本人签收|收件人已收件|已派送成功/.test(description)) return 'delivered'
   if (/正在派送|派送中|派件中|正在派件|正在为您派/.test(description)) return 'out_for_delivery'
   if (/已揽收|已收取|已取件|运输中|转运中|已发出|已到达|已装车|已发车/.test(description)) return 'in_transit'
   return 'unknown'

@@ -347,6 +347,7 @@ export async function middleware(request: NextRequest) {
     }
     const ownerAction = request.method === 'POST' && (returnedOwnerOrderPath.test(pathname)
       || ownerCarrierChanges.test(pathname)
+      || /^\/api\/shipping\/owner\/orders\/SO-\d{8}-[A-Z0-9]{8}\/tracking$/.test(pathname)
       || /^\/api\/shipping\/owner\/orders\/SO-\d{8}-[A-Z0-9]{8}\/cancel$/.test(pathname))
     const separatelyAuthorizedShipping = federatedViewer && pathname.startsWith('/api/shipping/')
       && pathname !== '/api/shipping/owner/orders' && !ownerAction && !ownerCarrierChanges.test(pathname)

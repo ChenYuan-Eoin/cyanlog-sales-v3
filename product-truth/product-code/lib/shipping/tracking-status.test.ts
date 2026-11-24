@@ -8,7 +8,7 @@ describe('conservative SF route status normalization', () => {
   it.each(['顺丰速运 已收取快件', '快件已揽收', '运输中', '快件已到达转运场'])('treats %s as transit, not delivery', (description) => {
     expect(status(description)).toBe('in_transit')
   })
-  it.each(['快件已签收', '本人签收', '签收成功'])('recognizes explicit successful delivery: %s', (description) => {
+  it.each(['快件已签收', '本人签收', '签收成功', '快件已派送成功（公司前台）'])('recognizes explicit successful delivery: %s', (description) => {
     expect(status(description)).toBe('delivered')
   })
   it.each([
@@ -19,6 +19,10 @@ describe('conservative SF route status normalization', () => {
     ['待揽收', 'waybill_created'],
     ['快件正在派送', 'out_for_delivery'],
     ['签收后请评价', 'unknown'],
+    ['快件未派送成功', 'unknown'],
+    ['快件尚未派送成功', 'unknown'],
+    ['待派送成功后通知', 'unknown'],
+    ['如已派送成功请忽略', 'unknown'],
   ] as const)('does not confuse %s with a completed delivery', (description, expected) => {
     expect(status(description)).toBe(expected)
   })
@@ -41,6 +45,7 @@ describe('conservative SF route status normalization', () => {
   it('does not promote conflicting structured and descriptive evidence to delivered', () => {
     expect(normalizeTrackingStatus({ firstStatusName: '已揽收', description: '已签收' })).toBe('in_transit')
     expect(normalizeTrackingStatus({ firstStatusName: '已签收', description: '未签收' })).toBe('unknown')
+    expect(normalizeTrackingStatus({ firstStatusName: '已签收', description: '快件未派送成功' })).toBe('unknown')
     expect(normalizeTrackingStatus({ firstStatusName: '已签收', description: '签收失败' })).toBe('exception')
     expect(normalizeTrackingStatus({ firstStatusName: '已签收', secondaryStatusName: '已揽收', description: '节点更新' })).toBe('unknown')
     expect(normalizeTrackingStatus({ firstStatusName: '待揽收', description: '快件已揽收' })).toBe('unknown')

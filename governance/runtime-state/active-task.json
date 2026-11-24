@@ -240,7 +240,7 @@
     "name": "销售寄件提报体验",
     "kind": "product",
     "status": "active",
-    "objective": "在同一本人提报记录路径中展示真实退回原因；允许本人安全取消未揽收原单、对退回原单修改后重提并显示更改次数；顺丰在途截单 API 上线后，允许本人在揽收且派件出仓前改址或退回，并在记录详情回看原地址、目标地址与受理/待确认结果。",
+    "objective": "修复本人提报记录卡片窄栏运单号溢出，按最新顺丰轨迹刷新状态，并确保实时签收状态使取消/转寄入口关闭；保留 ICU 员工直达取消和转寄。本轮只到 code_green，不发布。APL 负责 CRM 流程资料解析、ICU受理结果及错误回写。",
     "started_at": "2026-11-18T10:15:08.293113+00:00",
     "activation_basis": "IN-20261118-058 用户明确要求退回重提原单、维持原记录。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp35-owner-continuation/Price-v3",
@@ -276,17 +276,16 @@
       "product-truth/product-code/lib/shipping/owner-carrier-protocol.test.ts",
       "product-truth/product-code/middleware.ts",
       "product-truth/product-code/middleware.test.ts",
-      "product-truth/product-code/supabase/migrations/20261118123000_owner_carrier_changes.sql"
+      "product-truth/product-code/supabase/migrations/20261118123000_owner_carrier_changes.sql",
+      "product-truth/product-code/lib/shipping/tracking-status.ts",
+      "product-truth/product-code/lib/shipping/tracking-status.test.ts",
+      "product-truth/product-code/lib/shipping/tracking-store-state.test.ts"
     ],
     "delivery_contract": {
-      "target_state": "production_released",
+      "target_state": "code_green",
       "allowed_states": [
         "executing",
-        "code_green",
-        "clean_preview_green",
-        "integration_ready",
-        "main_integrated",
-        "production_released"
+        "code_green"
       ],
       "integration_branch": "main",
       "production_branch": "production",
@@ -315,9 +314,7 @@
         "controlled_production_security_and_runtime_verifier",
         "trusted_existing_chrome_operator_attestation"
       ],
-      "note": "IN-20261123-069批准bfeda998产品树正式发布，产品子树为1c20eb17；代码发布验收保持只读，不执行迁移、生产业务数据写入或真实顺丰运单变更。Preview未通过，按用户明确要求直接生产部署后复验；顺丰已受理不代表处理完成。",
-      "preview_order_exception_approval_id": "IN-20261123-069",
-      "manual_delivery_gate_approval_id": "IN-20261123-070",
+      "note": "IN-20261124-071 经用户批准，只修提报记录卡片窄栏布局并达到 code_green；IN-20261123-069/070 的 Production 授权只绑定当时精确候选，不继承到本轮新代码。",
       "production_database_mode": "read_only",
       "runtime_profile": "shipping_workspace",
       "final_acceptance": {
@@ -330,25 +327,7 @@
         "trust_boundary": "Git/Vercel/数据库API提供机器证据；用户现有Chrome提供受信操作员证明，Harness只校验声明绑定，不能伪称机器证明人类会话。",
         "production_database_mode": "read_only"
       },
-      "production_release_authorization": {
-        "status": "approved_code_only",
-        "final_release_approval_id": "IN-20261123-069",
-        "micro_fix_approval_id": "IN-20261118-055",
-        "clarification_id": "IN-20261123-067",
-        "micro_fix_scope": "本人提报记录退回原因、取消、原单重提及在途改址退回记录",
-        "final_scope": "发布当前候选的发起寄件页提报记录右栏、顺丰在途转寄退回入口及精确 Git 生产域名跳转；正式站使用现有 Chrome 只读复验，不迁移、不写生产业务数据、不调用真实顺丰运单。",
-        "approved_candidate": "bfeda998d701fbeaf18f94a7084bc7272b09d672",
-        "approved_product_tree": "1c20eb170dd4ec1c102be24ad1e6d4c68cd561f2",
-        "rollback_commit": "ac7f605eccb8d3e077814dd070a2305366004ad5",
-        "authorized_commit_binding": "delivery_attestation_current_head",
-        "vercel_team_id": "team_xayPRcgRTNOgdPdNf7bOV017",
-        "vercel_project_id": "prj_Vs1mumUYXLXrGGhzhPCNN8mfrVZF",
-        "database_write_authorized": false,
-        "production_database_write_authorized": false,
-        "production_migrations_authorized": false,
-        "carrier_calls_authorized": false
-      },
-      "blocking_acceptance_defects": [],
+      "blocking_acceptance_defects": ["IN-20261124-071", "IN-20261124-072"],
       "runtime_contract_version": "f054-auth-intake-v1"
     },
     "feature_id": "F054",

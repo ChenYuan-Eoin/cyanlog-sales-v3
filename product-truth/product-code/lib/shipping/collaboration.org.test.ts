@@ -198,3 +198,10 @@ it('returns the saved reason only for the owner’s currently returned orders', 
   expect(mocks.from.mock.results.at(-1)?.value.select).not.toHaveBeenCalledWith(expect.stringContaining('returned_reason'))
   expect(shared.orders.every(order => !('returnedReason' in order))).toBe(true)
 })
+
+it.each(['waybill_created', 'in_transit'])('shows a persisted delivered waybill even if the earlier %s order update did not finish', async status => {
+  tables.shipping_orders = [{ ...row('signed', 'org-A'), created_by: 'owner-A', intake_source: 'owner_web',
+    status, revision: 1, shipping_waybills: [{ waybill_no: 'SF5169741550975', latest_status: 'delivered', latest_event_at: '2026-11-20T10:41:00Z' }] }]
+  const { orders } = await listOwnerShipmentReceipts('org-A', 'owner-A')
+  expect(orders[0]).toMatchObject({ status: 'delivered', canCancel: false, deliveredAt: '2026-11-20T10:41:00Z' })
+})

@@ -112,7 +112,7 @@ function ReceiptCard({ order, scope, locked, opening, onResubmit, onCancelled, o
     <div className={styles.trackingBar}>
       <span>顺丰单号</span>
       {order.waybill
-        ? <strong>{order.waybill}<CopyControl value={order.waybill} label="顺丰单号" onCopy={(value, label) => void copy(value, label)} /></strong>
+        ? <span className={styles.trackingNumberGroup}><strong className={styles.trackingNumber} title={order.waybill}>{order.waybill}</strong><CopyControl value={order.waybill} label="顺丰单号" onCopy={(value, label) => void copy(value, label)} /></span>
         : <span className={styles.mutedText}>待审核下单后生成</span>}
     </div>
     {copyFeedback && <span className={styles.copyFeedback} role="status">{copyFeedback}</span>}
@@ -151,38 +151,106 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
   scope?: 'public' | 'owner'; refreshKey?: number; onResubmit?: (original: ReturnedShipment, restore: RestoreOwnerRecord) => void; actionsLocked?: boolean
 }) {
   const opening = useRef<AbortController | null>(null)
+  const reading = useRef<AbortController | null>(null)
+  const receipts = useRef<ShipmentReceipt[]>([])
+  const lastPage = useRef(0)
+  const view = useRef<{ filter: Filter; limit: number }>({ filter: 'all', limit: 5 })
   const [openingOrder, setOpeningOrder] = useState('')
   const [cancelling, setCancelling] = useState(false)
   const [changingCarrier, setChangingCarrier] = useState(false)
   const [orders, setOrders] = useState<ShipmentReceipt[] | null>(null)
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState('')
+  const [statusFailures, setStatusFailures] = useState<Set<string>>(new Set())
   const [nextPage, setNextPage] = useState<number | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [displayLimit, setDisplayLimit] = useState(5)
-  useEffect(() => () => { opening.current?.abort() }, [scope])
+  const actionPending = Boolean(openingOrder) || cancelling || changingCarrier
+  useEffect(() => () => { opening.current?.abort(); reading.current?.abort() }, [scope])
+
+  const refreshCarrierStatuses = useCallback(async (items: ShipmentReceipt[], signal: AbortSignal) => {
+    const failed = new Set<string>()
+    if (scope !== 'owner') return failed
+    const active = items.filter(order => (order.status === 'waybill_created' || order.status === 'in_transit')
+      && typeof order.waybill === 'string' && /^(?:SF)?\d{10,15}$/.test(order.waybill))
+    for (const order of active) {
+      if (signal.aborted) return failed
+      try {
+        const response = await fetch(`/api/shipping/owner/orders/${encodeURIComponent(order.orderNo)}/tracking`, {
+          method: 'POST', credentials: 'same-origin', cache: 'no-store', signal,
+        })
+        const result = await response.json()
+        if (!response.ok || result.verified !== true || result.waybill !== order.waybill) failed.add(order.orderNo)
+      } catch { failed.add(order.orderNo) }
+    }
+    return failed
+  }, [scope])
 
   const load = useCallback(async (page = 0, refreshOrder?: string) => {
+    reading.current?.abort()
+    const controller = new AbortController()
+    reading.current = controller
     setBusy(true); setError('')
     try {
-      const response = await fetch(`/api/shipping/${scope === 'owner' ? 'owner' : 'public'}/orders?page=${page}`, { cache: 'no-store', credentials: scope === 'owner' ? 'same-origin' : 'omit' })
-      const data = await response.json()
-      if (!response.ok || !Array.isArray(data.orders)) throw new Error(data.error || '读取失败')
+      async function readPage(index: number): Promise<{ orders: ShipmentReceipt[]; nextPage: number | null }> {
+        const response = await fetch(`/api/shipping/${scope === 'owner' ? 'owner' : 'public'}/orders?page=${index}`, {
+          cache: 'no-store', credentials: scope === 'owner' ? 'same-origin' : 'omit', signal: controller.signal,
+        })
+        const data = await response.json()
+        if (!response.ok || !Array.isArray(data.orders)) throw new Error(data.error || '读取失败')
+        return { orders: data.orders, nextPage: Number.isSafeInteger(data.nextPage) && data.nextPage > index ? data.nextPage : null }
+      }
+      const pages = new Map<number, Awaited<ReturnType<typeof readPage>>>()
+      const end = page === 0 && scope === 'owner' ? lastPage.current : page
+      for (let index = scope === 'owner' ? 0 : page; index <= end; index++) pages.set(index, await readPage(index))
+      const mergePages = () => [...new Map([...(scope !== 'owner' && page > 0 ? receipts.current : []), ...[...pages.values()].flatMap(data => data.orders)]
+        .map(order => [order.orderNo, order])).values()]
+      let merged = mergePages()
+      const candidates = merged.filter(order => view.current.filter === 'all' || stageOf(order) === view.current.filter).slice(0, view.current.limit)
+      const failed = await refreshCarrierStatuses(candidates, controller.signal)
+      if (scope === 'owner' && candidates.some(order => ['waybill_created', 'in_transit'].includes(order.status) && /^(?:SF)?\d{10,15}$/.test(order.waybill || ''))) {
+        for (const index of pages.keys()) {
+          try { pages.set(index, await readPage(index)) }
+          catch { candidates.forEach(order => { if (order.waybill && ['waybill_created', 'in_transit'].includes(order.status)) failed.add(order.orderNo) }) }
+        }
+        merged = mergePages()
+      }
+      if (controller.signal.aborted) return
+      const checked = new Set(candidates.map(order => order.orderNo))
+      for (const order of merged.filter(order => view.current.filter === 'all' || stageOf(order) === view.current.filter).slice(0, view.current.limit)) {
+        if (!checked.has(order.orderNo) && ['waybill_created', 'in_transit'].includes(order.status) && /^(?:SF)?\d{10,15}$/.test(order.waybill || '')) failed.add(order.orderNo)
+      }
+      setStatusFailures(failed)
       if (refreshOrder) {
-        const latest = data.orders.find((item: ShipmentReceipt) => item.orderNo === refreshOrder)
-        if (latest) setOrders(current => current?.map(item => item.orderNo === refreshOrder ? latest : item) ?? null)
+        const latest = merged.find(item => item.orderNo === refreshOrder)
+        if (latest) {
+          receipts.current = receipts.current.map(item => item.orderNo === refreshOrder ? latest : item)
+          setOrders(current => current?.map(item => item.orderNo === refreshOrder ? latest : item) ?? null)
+        }
         return
       }
-      setOrders(current => page === 0 ? data.orders : [...new Map([...(current || []), ...data.orders].map(order => [order.orderNo, order])).values()])
-      setNextPage(Number.isSafeInteger(data.nextPage) && data.nextPage > page ? data.nextPage : null)
-      if (page === 0) setDisplayLimit(5)
+      receipts.current = merged
+      setOrders(merged)
+      lastPage.current = end
+      setNextPage(pages.get(end)?.nextPage ?? null)
+      if (scope !== 'owner' && page === 0) setDisplayLimit(5)
     } catch (e) {
-      setError(e instanceof Error ? e.message : '读取失败')
+      if (!controller.signal.aborted) {
+        setError(e instanceof Error ? e.message : '读取失败')
+        setStatusFailures(new Set(receipts.current.filter(order => ['waybill_created', 'in_transit'].includes(order.status)).map(order => order.orderNo)))
+      }
     } finally {
-      setBusy(false)
+      if (reading.current === controller) { reading.current = null; setBusy(false) }
     }
-  }, [scope])
+  }, [refreshCarrierStatuses, scope])
   useEffect(() => { void load() }, [load, refreshKey])
+  useEffect(() => {
+    if (scope !== 'owner') return
+    const refreshWhenVisible = () => { if (document.visibilityState === 'visible' && !busy && !actionPending) void load() }
+    const interval = window.setInterval(refreshWhenVisible, 120_000)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => { window.clearInterval(interval); document.removeEventListener('visibilitychange', refreshWhenVisible) }
+  }, [actionPending, busy, load, scope])
 
   async function openReturnedOrder(order: ShipmentReceipt) {
     if (scope !== 'owner' || !onResubmit || actionsLocked || opening.current || cancelling || changingCarrier) return
@@ -225,11 +293,12 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
     const date = order.createdAt ? dateFormat.format(new Date(order.createdAt)) : '日期未知'
     groups.set(date, [...(groups.get(date) || []), order])
   }
-  const actionPending = Boolean(openingOrder) || cancelling || changingCarrier
   const canShowMore = visible.length < filtered.length || nextPage !== null
 
   async function showMore() {
-    if (visible.length < filtered.length) setDisplayLimit(value => value + 5)
+    view.current.limit = displayLimit + 5
+    setDisplayLimit(view.current.limit)
+    if (visible.length < filtered.length) { if (scope === 'owner') await load() }
     else if (nextPage !== null) await load(nextPage)
   }
 
@@ -239,7 +308,7 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
         {filters.map(item => {
           const count = item.key === 'all' ? loaded.length : loaded.filter(order => stageOf(order) === item.key).length
           return <button key={item.key} type="button" aria-pressed={filter === item.key} disabled={actionPending && filter !== item.key}
-            onClick={() => { setFilter(item.key); setDisplayLimit(5) }}>{item.label}{item.key === 'all' ? ` (${count})` : ''}</button>
+            onClick={() => { view.current = { filter: item.key, limit: 5 }; setFilter(item.key); setDisplayLimit(5); if (scope === 'owner') void load() }}>{item.label}{item.key === 'all' ? ` (${count})` : ''}</button>
         })}
       </div>
       <button type="button" className={styles.refreshRecords} aria-label="刷新提报记录" disabled={busy || actionPending} onClick={() => void load()}>
@@ -247,6 +316,7 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
       </button>
     </div>
     {error && <p role="alert">{error}</p>}
+    {statusFailures.size > 0 && <p role="status" className={styles.stateInfo}>部分运单最新状态尚未核实，相关物流操作已暂停，请刷新核对。</p>}
     {orders && <>
       {loaded.length === 0 && <p className={styles.emptyRecords}>尚无提报记录</p>}
       {loaded.length > 0 && filtered.length === 0 && <p className={styles.emptyRecords}>当前状态下没有提报记录</p>}
@@ -254,7 +324,7 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
         {[...groups].map(([date, dayOrders]) => <section className={styles.recordGroup} key={date} aria-label={date}>
           <h3>{date}</h3>
           <ul>{dayOrders.map(order => <ReceiptCard key={order.orderNo} order={order} scope={scope}
-            locked={actionsLocked || busy || actionPending} opening={openingOrder === order.orderNo}
+            locked={actionsLocked || busy || actionPending || statusFailures.has(order.orderNo)} opening={openingOrder === order.orderNo}
             onResubmit={onResubmit ? () => void openReturnedOrder(order) : undefined}
             onCancelled={() => setOrders(current => current?.map(item => item.orderNo === order.orderNo ? { ...item, status: 'cancelled' } : item) ?? null)}
             onCancelPending={setCancelling} onCarrierPending={setChangingCarrier} />)}</ul>
