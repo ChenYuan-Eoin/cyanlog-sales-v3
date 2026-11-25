@@ -18,6 +18,7 @@ vi.mock('@/lib/shipping/workspace-settings', () => ({ loadShippingWorkspaceSetti
 vi.mock('@/lib/shipping/intake-options', () => ({ loadIntakeOptionsForOrg: mocks.options }))
 vi.mock('@/lib/shipping/department-access', () => ({ loadFxiaokeShippingProfile: mocks.profile }))
 vi.mock('@/app/sales-portal/portal', () => ({ FxiaokeShippingProposal: function FxiaokeShippingProposal() { return null } }))
+vi.mock('@/app/sales-portal/my-workorders', () => ({ default: function MyWorkorders() { return null } }))
 vi.mock('./workbench', () => ({ default: function ShippingWorkbench() { return null } }))
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }))
 
@@ -25,7 +26,7 @@ import ShippingPage from './page'
 
 const user = { id: 'member' }
 const rules = { teamOptions: [] }
-const access = { orgId: 'active-org', canOperate: false, canSubmitOwn: false, canManageConnections: false }
+const access = { orgId: 'active-org', canOperate: false, canViewOwn: false, canSubmitOwn: false, canManageConnections: false }
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -53,7 +54,7 @@ describe('self-service shipping entry', () => {
   })
 
   it('opens employee intake under the organization selected by the live resolver', async () => {
-    mocks.access.mockResolvedValue({ ...access, canSubmitOwn: true })
+    mocks.access.mockResolvedValue({ ...access, canViewOwn: true, canSubmitOwn: true })
     const page = await ShippingPage()
     const [navigation, proposal] = page.props.children
     expect(navigation).toBe(false)
@@ -65,8 +66,22 @@ describe('self-service shipping entry', () => {
     expect(mocks.settings).not.toHaveBeenCalled()
   })
 
+  it('opens only the authenticated receipt list for a read-only employee', async () => {
+    mocks.access.mockResolvedValue({ ...access, canViewOwn: true })
+    const page = await ShippingPage()
+    const [navigation, content] = page.props.children
+    const [heading, , receipts] = content.props.children.props.children
+    expect(navigation).toBe(false)
+    expect(heading.props.children).toBe('我的提报记录')
+    expect(receipts.type.name).toBe('MyWorkorders')
+    expect(receipts.props).toEqual({ scope: 'owner', readOnly: true })
+    expect(mocks.options).not.toHaveBeenCalled()
+    expect(mocks.profile).not.toHaveBeenCalled()
+    expect(mocks.settings).not.toHaveBeenCalled()
+  })
+
   it('offers the dedicated settings link when an employee can also manage connections', async () => {
-    mocks.access.mockResolvedValue({ ...access, canSubmitOwn: true, canManageConnections: true })
+    mocks.access.mockResolvedValue({ ...access, canViewOwn: true, canSubmitOwn: true, canManageConnections: true })
     const page = await ShippingPage()
     const [navigation, proposal] = page.props.children
     expect(navigation.props.children.props.href).toBe('/shipping/settings')
@@ -81,7 +96,7 @@ describe('self-service shipping entry', () => {
   })
 
   it.each([false, true])('opens the operator workbench before employee intake with manager grant %s', async (canManageConnections) => {
-    mocks.access.mockResolvedValue({ ...access, canOperate: true, canSubmitOwn: true, canManageConnections })
+    mocks.access.mockResolvedValue({ ...access, canOperate: true, canViewOwn: true, canSubmitOwn: true, canManageConnections })
     const page = await ShippingPage()
     expect(page.type.name).toBe('ShippingWorkbench')
     expect(page.props.settings).toEqual({ environment: 'sandbox', ready: false, canOperate: true, canManageConnections })

@@ -1,10 +1,9 @@
 import { SHIPPING_OPERATE } from '@/lib/module-access'
-import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
 import { loadPublishedModulePermissionKeys } from '@/lib/permission-registry'
-import { hasPermission } from '@/lib/permissions'
 import { resolveRolePermissions } from '@/lib/role-permission-resolution'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
+import { loadPublishedShippingAccess } from './entry-access'
 
 const REMINDER_PAGE_SIZE = 500
 
@@ -27,17 +26,14 @@ type RecipientAssignment = {
   } | null
 }
 
-export async function loadShippingOperatorDecision(userId: string): Promise<{ orgId: string; canOperate: boolean } | null> {
+export async function loadShippingOperatorDecision(userId: string): Promise<{ orgId: string; canOperate: boolean; roleCodes: string[] } | null> {
   try {
-    const [context, publishedKeys] = await Promise.all([
-      loadOrgRolePermissionContext(userId),
-      loadPublishedModulePermissionKeys(),
-    ])
-    if (!context) return null
+    const access = await loadPublishedShippingAccess(userId)
+    if (!access) return null
     return {
-      orgId: context.orgId,
-      canOperate: publishedKeys.includes(SHIPPING_OPERATE)
-        && hasPermission(context.actorPermissions, SHIPPING_OPERATE),
+      orgId: access.orgId,
+      roleCodes: access.roleCodes,
+      canOperate: access.permissions.includes(SHIPPING_OPERATE),
     }
   } catch {
     throw new ShippingError(503, '寄件操作授权读取失败。')

@@ -1,3 +1,5 @@
+import { SHIPPING_OPERATOR_ROLE_CODE } from './role-permission-resolution'
+
 export const SHIPPING_OPERATE = 'shipping:operate'
 export const SHIPPING_MANAGE_CONNECTIONS = 'shipping:manage_connections'
 export const SHIPPING_BUNDLE = 'shipping:*'
@@ -6,6 +8,14 @@ export const MODULE_PERMISSION_ROW_FIELDS = 'code,status,kind,category,resource,
 
 export function hasPublishedShippingBundle(keys: ReadonlySet<string>): boolean {
   return REGISTERED_MODULE_PERMISSION_KEYS.every(key => keys.has(key))
+}
+
+export function hasRestrictedShippingRoleSet(roleCodes: readonly string[]): boolean {
+  return roleCodes.every(code => code === 'FXIAOKE_BASELINE' || code === 'READONLY' || code === SHIPPING_OPERATOR_ROLE_CODE)
+}
+
+export function canWriteFxiaokeOwnerShipping(roleCodes: readonly string[]): boolean {
+  return roleCodes.includes('FXIAOKE_BASELINE') || !hasRestrictedShippingRoleSet(roleCodes)
 }
 
 const shippingConsumers = {

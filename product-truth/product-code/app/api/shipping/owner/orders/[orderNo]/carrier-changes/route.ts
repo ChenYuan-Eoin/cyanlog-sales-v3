@@ -5,8 +5,10 @@ import { carrierChangeSchema, getCarrierChange, submitCarrierChange } from '@/li
 export const runtime = 'nodejs'
 type Context = { params: Promise<{ orderNo: string }> }
 export async function GET(req: NextRequest, { params }: Context) {
-  return shippingHandler(req, async (user, orgId) =>
-    getCarrierChange({ orgId, userId: user.id, orderNo: (await params).orderNo }), { allowFxiaokeSelfSubmit: true })
+  // Preparing an action can query carrier readiness, so passive record access is insufficient.
+  return shippingHandler(req, async (user, orgId) => {
+    return getCarrierChange({ orgId, userId: user.id, orderNo: (await params).orderNo })
+  }, { allowFxiaokeSelfSubmit: true, requiresOwnerWrite: true })
 }
 export async function POST(req: NextRequest, { params }: Context) {
   return shippingHandler(req, async (user, orgId) => {

@@ -14,5 +14,5 @@ export default async function ShippingSettingsPage() {
   const access = await resolveShippingEntry(user, token ?? null)
   if (!access?.canManageConnections) redirect('/?denied=shipping:manage_connections')
 
-  return <ShippingConfigDrawer embedded standaloneReturn={access.canOperate || access.canSubmitOwn ? '/shipping' : '/'} />
+  return <ShippingConfigDrawer embedded standaloneReturn={access.canOperate || access.canViewOwn ? '/shipping' : '/'} />
 }

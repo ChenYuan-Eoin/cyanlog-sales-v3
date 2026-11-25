@@ -89,10 +89,10 @@ afterEach(() => vi.unstubAllEnvs())
 
 describe('organization-scoped shipping operator access', () => {
   it('reads current role authorization and honors an organization override on the next request', async () => {
-    await expect(loadShippingOperatorDecision(userId)).resolves.toEqual({ orgId, canOperate: true })
+    await expect(loadShippingOperatorDecision(userId)).resolves.toEqual({ orgId, canOperate: true, roleCodes: ['SHIPPING_OPERATOR'] })
     await expect(requireShippingOperator(userId)).resolves.toBe(orgId)
     m.tables.organizations[0].settings = { role_permission_overrides: { [establishedRole.id]: [] } }
-    await expect(loadShippingOperatorDecision(userId)).resolves.toEqual({ orgId, canOperate: false })
+    await expect(loadShippingOperatorDecision(userId)).resolves.toEqual({ orgId, canOperate: false, roleCodes: ['SHIPPING_OPERATOR'] })
     await expect(requireShippingOperator(userId)).rejects.toMatchObject({ status: 403 })
     expect(m.from).not.toHaveBeenCalledWith('user_permission_assignments')
   })

@@ -17,7 +17,7 @@ vi.mock('next/navigation', () => ({ redirect: mocks.redirect }))
 import ShippingSettingsPage from './page'
 
 const user = { id: 'member' }
-const access = { orgId: 'active-org', canOperate: false, canSubmitOwn: false, canManageConnections: false }
+const access = { orgId: 'active-org', canOperate: false, canViewOwn: false, canSubmitOwn: false, canManageConnections: false }
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -33,14 +33,15 @@ describe('shipping connection settings entry', () => {
     expect(mocks.access).not.toHaveBeenCalled()
   })
 
-  it.each([null, { ...access, canOperate: true }, { ...access, canSubmitOwn: true }])('denies access without connection management', async (entry) => {
+  it.each([null, { ...access, canOperate: true }, { ...access, canViewOwn: true }])('denies access without connection management', async (entry) => {
     mocks.access.mockResolvedValue(entry)
     await expect(ShippingSettingsPage()).rejects.toThrow('redirect:/?denied=shipping:manage_connections')
   })
 
   it.each([
     { ...access, canManageConnections: true, returnTo: '/' },
-    { ...access, canManageConnections: true, canSubmitOwn: true, returnTo: '/shipping' },
+    { ...access, canManageConnections: true, canViewOwn: true, returnTo: '/shipping' },
+    { ...access, canManageConnections: true, canViewOwn: true, canSubmitOwn: true, returnTo: '/shipping' },
     { ...access, canManageConnections: true, canOperate: true, returnTo: '/shipping' },
   ])('opens settings and links to the accessible return path', async (entry) => {
     mocks.access.mockResolvedValue(entry)

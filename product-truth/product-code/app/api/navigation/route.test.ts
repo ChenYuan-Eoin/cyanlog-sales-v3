@@ -16,13 +16,15 @@ beforeEach(() => {
 })
 
 it.each([
-  [true, false, false, ['/shipping']],
-  [false, true, false, ['/shipping']],
-  [false, false, true, ['/shipping/settings']],
-  [true, false, true, ['/shipping', '/shipping/settings']],
-  [false, false, false, []],
-] as const)('projects only shipping links for operate=%s, owner=%s and manager=%s', async (canOperate, canSubmitOwn, canManageConnections, paths) => {
-  vi.mocked(resolveShippingEntry).mockResolvedValue({ orgId: 'org1', canOperate, canSubmitOwn, canManageConnections })
+  [true, false, false, false, ['/shipping']],
+  [false, true, false, false, ['/shipping']],
+  [false, true, true, false, ['/shipping']],
+  [false, false, false, true, ['/shipping/settings']],
+  [false, true, false, true, ['/shipping', '/shipping/settings']],
+  [true, false, false, true, ['/shipping', '/shipping/settings']],
+  [false, false, false, false, []],
+] as const)('projects only shipping links for operate=%s, read own=%s, submit own=%s and manager=%s', async (canOperate, canViewOwn, canSubmitOwn, canManageConnections, paths) => {
+  vi.mocked(resolveShippingEntry).mockResolvedValue({ orgId: 'org1', canOperate, canViewOwn, canSubmitOwn, canManageConnections })
   const response = await GET(request())
   expect(response.status).toBe(200)
   expect(response.headers.get('cache-control')).toBe('private, no-store')

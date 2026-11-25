@@ -6,12 +6,12 @@ const db = vi.hoisted(() => ({
   context: vi.fn(), published: vi.fn(),
 }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: db.from } }))
-vi.mock('@/lib/org-role-permissions', () => ({ loadOrgRolePermissionContext: db.context }))
+vi.mock('@/lib/org-role-permissions', () => ({ loadCurrentOrganizationRoleAssignments: db.context }))
 vi.mock('@/lib/permission-registry', () => ({ loadPublishedModulePermissionKeys: db.published }))
 
 const user = { id: 'staff', email: null, phone: null, display_name: null, org_id: 'org-a' }
 const token = 'session-token'
-const activeOrg = { orgId: 'org-a', actorPermissions: [] }
+const activeOrg = { orgId: 'org-a', assignments: [{ roleCode: 'FXIAOKE_BASELINE', permissions: [] }] }
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -26,19 +26,29 @@ beforeEach(() => {
 describe('shipping entry authorization', () => {
   it('allows a verified Fxiaoke employee only the owner entry in the current organization', async () => {
     expect(await resolveShippingEntry(user, token)).toEqual({
-      orgId: 'org-a', canOperate: false, canManageConnections: false, canSubmitOwn: true,
+      orgId: 'org-a', canOperate: false, canManageConnections: false, canViewOwn: true, canSubmitOwn: true,
     })
     expect(db.eq.mock.calls).toEqual([['token', token], ['user_id', user.id]])
-    expect(await resolveShippingEntry({ ...user, org_id: 'org-b' }, token)).toMatchObject({ canSubmitOwn: false })
+    expect(await resolveShippingEntry({ ...user, org_id: 'org-b' }, token)).toMatchObject({ canViewOwn: false, canSubmitOwn: false })
+  })
+
+  it.each([
+    [['READONLY'], true, false],
+    [['READONLY', 'FXIAOKE_BASELINE'], true, true],
+    [['READONLY', 'SALES'], true, true],
+    [[], false, false],
+  ] as const)('derives owner read and write access from the current organization roles %j', async (roles, canViewOwn, canSubmitOwn) => {
+    db.context.mockResolvedValue({ ...activeOrg, assignments: roles.map(roleCode => ({ roleCode, permissions: [] })) })
+    expect(await resolveShippingEntry(user, token)).toMatchObject({ canViewOwn, canSubmitOwn })
   })
 
   it('keeps connection settings separate and recomputes the operator after grant or lifecycle changes', async () => {
     db.maybeSingle.mockResolvedValue({ data: { user_id: user.id, auth_method: 'local' }, error: null })
-    db.context.mockResolvedValue({ ...activeOrg, actorPermissions: ['shipping:manage_connections'] })
+    db.context.mockResolvedValue({ ...activeOrg, assignments: [{ roleCode: 'ADMIN', permissions: ['shipping:manage_connections'] }] })
     expect(await resolveShippingEntry(user, token)).toMatchObject({
       canOperate: false, canManageConnections: true, canSubmitOwn: false,
     })
-    db.context.mockResolvedValue({ ...activeOrg, actorPermissions: ['shipping:operate'] })
+    db.context.mockResolvedValue({ ...activeOrg, assignments: [{ roleCode: 'SHIPPING_OPERATOR', permissions: ['shipping:operate'] }] })
     expect(await resolveShippingEntry(user, token)).toMatchObject({ canOperate: true, canManageConnections: false })
     db.published.mockResolvedValue(['shipping:manage_connections'])
     expect(await resolveShippingEntry(user, token)).toMatchObject({ canOperate: false, canManageConnections: false })

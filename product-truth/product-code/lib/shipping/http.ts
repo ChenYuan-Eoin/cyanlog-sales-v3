@@ -6,23 +6,31 @@ import { requireShippingConnectionManager } from './connection-authorization'
 import { loadShippingOperatorDecision, requireShippingOperator } from './operator-access'
 import { getRequestAuthToken } from '@/lib/auth-token'
 import { supabaseAdmin } from '@/lib/supabase'
+import { canWriteFxiaokeOwnerShipping } from '@/lib/module-access'
 import { ZodError } from 'zod'
-export async function shippingHandler(req: NextRequest, action: (user: AuthUser, orgId: string, selfSubmit: boolean) => Promise<unknown>, options: { allowFxiaokeSelfSubmit?: boolean } = {}) {
+
+type ShippingHandlerOptions = { allowFxiaokeSelfSubmit?: boolean; requiresOwnerWrite?: boolean }
+
+export async function shippingHandler(req: NextRequest, action: (user: AuthUser, orgId: string, selfSubmit: boolean) => Promise<unknown>, options: ShippingHandlerOptions = {}) {
   try {
     const user = await requireAuth(req)
     const decision = options.allowFxiaokeSelfSubmit
       ? await loadShippingOperatorDecision(user.id)
-      : { orgId: await requireShippingOperator(user.id), canOperate: true }
+      : { orgId: await requireShippingOperator(user.id), canOperate: true, roleCodes: [] }
     if (!decision?.orgId) throw new ShippingError(403, '当前账号没有可用的组织寄件授权。')
     const selfSubmit = !decision.canOperate
+    const read = req.method === 'GET' || req.method === 'HEAD'
     if (selfSubmit) {
       const operatorRequired = new ShippingError(403, '当前账号没有自助收寄操作权限。')
       const token = getRequestAuthToken(req)
-      if (!token || user.org_id !== decision.orgId) throw operatorRequired
+      if (!token || user.org_id !== decision.orgId || decision.roleCodes.length === 0) throw operatorRequired
       const { data: session, error } = await supabaseAdmin.from('auth_tokens')
         .select('user_id,auth_method').eq('token', token).maybeSingle()
       if (error) throw new ShippingError(503, '寄件会话暂时无法核实。')
       if (session?.user_id !== user.id || session.auth_method !== 'fxiaoke') throw operatorRequired
+      if ((!read || options.requiresOwnerWrite) && !canWriteFxiaokeOwnerShipping(decision.roleCodes)) {
+        throw new ShippingError(403, '当前账号仅可查看本人寄件记录。')
+      }
     }
     if (req.method !== 'GET') {
       const origin = req.headers.get('origin')

@@ -34,7 +34,14 @@ import { getRequestAuthToken } from '@/lib/auth-token'
 import { createMiddlewareRestClient } from '@/lib/middleware-rest-client'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
 import { ORG_SUPER_ADMIN_ROLE_CODE, resolveRolePermissions, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
-import { getPublishedModulePermissionKeys, MODULE_PERMISSION_ROW_FIELDS, SHIPPING_OPERATE, shippingPermissionRequirement } from '@/lib/module-access'
+import {
+  canWriteFxiaokeOwnerShipping,
+  getPublishedModulePermissionKeys,
+  hasRestrictedShippingRoleSet,
+  MODULE_PERMISSION_ROW_FIELDS,
+  SHIPPING_OPERATE,
+  shippingPermissionRequirement,
+} from '@/lib/module-access'
 import { sessionDeadline } from '@/lib/auth/fxiaoke-session'
 
 const PUBLIC_PATHS = ['/login', '/accept-invitation']
@@ -336,11 +343,11 @@ export async function middleware(request: NextRequest) {
 
     // An operational shipping role adds only the matching shipping actions.
     const restrictedMember = (authContext.authMethod === 'fxiaoke' || authContext.roleCodes.includes(SHIPPING_OPERATOR_ROLE_CODE))
-      && authContext.roleCodes.every(code => ['FXIAOKE_BASELINE', 'READONLY', SHIPPING_OPERATOR_ROLE_CODE].includes(code))
+      && hasRestrictedShippingRoleSet(authContext.roleCodes)
     const isOwnerOrderSubmission = request.method === 'POST' && pathname === '/api/shipping/owner/orders'
-    const canSubmitFxiaokeOrder = authContext.authMethod === 'fxiaoke'
-      && (!restrictedMember || authContext.roleCodes.includes('FXIAOKE_BASELINE'))
-    const shippingPermission = isOwnerOrderSubmission && !canSubmitFxiaokeOrder
+    const canWriteFxiaokeOwner = authContext.authMethod === 'fxiaoke'
+      && canWriteFxiaokeOwnerShipping(authContext.roleCodes)
+    const shippingPermission = isOwnerOrderSubmission && !canWriteFxiaokeOwner
       ? SHIPPING_OPERATE
       : shippingPermissionRequirement(pathname, request.method, request.nextUrl.searchParams.get('workspace') === '1')
     if (shippingPermission && (!hasPermission(authContext.shippingPermissions, shippingPermission)
@@ -363,14 +370,12 @@ export async function middleware(request: NextRequest) {
       || ownerCarrierChanges.test(pathname)
       || /^\/api\/shipping\/owner\/orders\/SO-\d{8}-[A-Z0-9]{8}\/tracking$/.test(pathname)
       || /^\/api\/shipping\/owner\/orders\/SO-\d{8}-[A-Z0-9]{8}\/cancel$/.test(pathname))
-    const baselineSelfSubmission = authContext.authMethod === 'fxiaoke'
-      && (ownerAction || pathname === '/api/shipping/owner/orders'
-      || pathname === '/api/shipping/owner/profile')
-      && authContext.roleCodes.includes('FXIAOKE_BASELINE')
+    const fxiaokeOwnerWrite = canWriteFxiaokeOwner
+      && (ownerAction || pathname === '/api/shipping/owner/orders' || pathname === '/api/shipping/owner/profile')
     if (restrictedMember
       && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
       && pathname !== '/api/auth/logout'
-      && !baselineSelfSubmission
+      && !fxiaokeOwnerWrite
       && !shippingPermission) {
       return NextResponse.json({ error: '基础查看账号不能执行此操作', code: 'READ_ONLY' }, { status: 403 })
     }

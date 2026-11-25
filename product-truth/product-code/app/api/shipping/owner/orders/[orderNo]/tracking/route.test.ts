@@ -12,7 +12,7 @@ const context = { params: Promise.resolve({ orderNo: 'SO-20261118-ABCD1618' }) }
 beforeEach(() => {
   vi.resetAllMocks()
   m.auth.mockResolvedValue({ id: 'user-A', org_id: 'org-A' })
-  m.operator.mockResolvedValue({ orgId: 'org-A', canOperate: false })
+  m.operator.mockResolvedValue({ orgId: 'org-A', canOperate: false, roleCodes: ['FXIAOKE_BASELINE'] })
   m.from.mockImplementation(() => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { user_id: 'user-A', auth_method: 'fxiaoke' }, error: null }) }) }) }))
   m.refresh.mockResolvedValue({ verified: true, source: 'carrier' })
 })

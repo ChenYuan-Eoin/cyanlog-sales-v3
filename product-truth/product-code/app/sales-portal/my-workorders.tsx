@@ -77,9 +77,10 @@ function CopyControl({ value, label, onCopy }: { value: string; label: string; o
   </button>
 }
 
-function ReceiptCard({ order, scope, locked, statusUnverified, opening, onResubmit, onCancelled, onCancelPending, onCarrierPending }: {
+function ReceiptCard({ order, scope, canManage, locked, statusUnverified, opening, onResubmit, onCancelled, onCancelPending, onCarrierPending }: {
   order: ShipmentReceipt
   scope: 'public' | 'owner'
+  canManage: boolean
   locked: boolean
   statusUnverified: boolean
   opening: boolean
@@ -120,7 +121,7 @@ function ReceiptCard({ order, scope, locked, statusUnverified, opening, onResubm
 
     {stage === 'waiting' && <p className={styles.stateInfo}>{statusUnverified
       ? '顺丰最新状态尚未核实，请刷新后再操作。'
-      : scope === 'owner' && order.canCancel !== false ? '如需在揽收前更改地址，可取消后重新提报。' : '待顺丰更新揽收状态。'}</p>}
+      : canManage && order.canCancel !== false ? '如需在揽收前更改地址，可取消后重新提报。' : '待顺丰更新揽收状态。'}</p>}
     {stage === 'out_for_delivery' && <p className={styles.stateInfo}>快件已派件出仓，取消 / 转寄 / 退回通道已关闭。</p>}
     {stage === 'delivered' && <div className={styles.signedBox}>
       <strong>{order.deliveredAt ? `签收时间：${dateTimeFormat.format(new Date(order.deliveredAt))}` : '订单已签收'}</strong>
@@ -131,15 +132,15 @@ function ReceiptCard({ order, scope, locked, statusUnverified, opening, onResubm
     </div>}
     {stage === 'cancelled' && <p className={styles.stateInfo}>{order.waybill ? '寄件已取消，原运单已作废。' : '提报已取消。'}</p>}
 
-    {scope === 'owner' && showCancellation && <div className={styles.receiptActionBar}>
+    {canManage && showCancellation && <div className={styles.receiptActionBar}>
       <span>{stage === 'waiting' ? '顺丰运单' : '提报操作'}</span>
       <div className={styles.receiptActions}><OwnerCancelOrder order={order} disabled={locked} onPendingChange={onCancelPending} onCancelled={onCancelled} /></div>
     </div>}
-    {scope === 'owner' && showCarrierChanges && <div className={styles.carrierActions}>
+    {canManage && showCarrierChanges && <div className={styles.carrierActions}>
       <OwnerCarrierChanges orderNo={order.orderNo} disabled={locked} allowActions={stage === 'in_transit'}
         refreshKey={stage} onPendingChange={onCarrierPending} />
     </div>}
-    {scope === 'owner' && stage === 'returned' && (
+    {canManage && stage === 'returned' && (
       <div className={styles.receiptActionBar}>
         <span>审核未通过</span>
         {!order.waybill && (!order.cancellationState || order.cancellationState === 'not_sent') && onResubmit && <button type="button" className={styles.primaryAction} title="修改原单后重新提报" disabled={locked} onClick={onResubmit}>{opening ? '正在读取原单…' : '修改并重提'}</button>}
@@ -148,8 +149,12 @@ function ReceiptCard({ order, scope, locked, statusUnverified, opening, onResubm
   </li>
 }
 
-export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResubmit, actionsLocked = false }: {
-  scope?: 'public' | 'owner'; refreshKey?: number; onResubmit?: (original: ReturnedShipment, restore: RestoreOwnerRecord) => void; actionsLocked?: boolean
+export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResubmit, actionsLocked = false, readOnly = false }: {
+  scope?: 'public' | 'owner'
+  refreshKey?: number
+  onResubmit?: (original: ReturnedShipment, restore: RestoreOwnerRecord) => void
+  actionsLocked?: boolean
+  readOnly?: boolean
 }) {
   const opening = useRef<AbortController | null>(null)
   const reading = useRef<AbortController | null>(null)
@@ -167,11 +172,11 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
   const [filter, setFilter] = useState<Filter>('all')
   const [displayLimit, setDisplayLimit] = useState(5)
   const actionPending = Boolean(openingOrder) || cancelling || changingCarrier
-  useEffect(() => () => { opening.current?.abort(); reading.current?.abort() }, [scope])
+  const canManage = scope === 'owner' && !readOnly
+  useEffect(() => () => { opening.current?.abort(); reading.current?.abort() }, [scope, readOnly])
 
   const refreshCarrierStatuses = useCallback(async (items: ShipmentReceipt[], signal: AbortSignal) => {
     const failed = new Set<string>()
-    if (scope !== 'owner') return failed
     const active = items.filter(order => (order.status === 'waybill_created' || order.status === 'in_transit')
       && typeof order.waybill === 'string' && /^(?:SF)?\d{10,15}$/.test(order.waybill))
     for (const order of active) {
@@ -185,7 +190,7 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
       } catch { failed.add(order.orderNo) }
     }
     return failed
-  }, [scope])
+  }, [])
 
   const load = useCallback(async (page = 0, refreshOrder?: string) => {
     reading.current?.abort()
@@ -207,21 +212,24 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
       const mergePages = () => [...new Map([...(scope !== 'owner' && page > 0 ? receipts.current : []), ...[...pages.values()].flatMap(data => data.orders)]
         .map(order => [order.orderNo, order])).values()]
       let merged = mergePages()
-      const candidates = merged.filter(order => view.current.filter === 'all' || stageOf(order) === view.current.filter).slice(0, view.current.limit)
-      const failed = await refreshCarrierStatuses(candidates, controller.signal)
-      if (scope === 'owner' && candidates.some(order => ['waybill_created', 'in_transit'].includes(order.status) && /^(?:SF)?\d{10,15}$/.test(order.waybill || ''))) {
-        for (const index of pages.keys()) {
-          try { pages.set(index, await readPage(index)) }
-          catch { candidates.forEach(order => { if (order.waybill && ['waybill_created', 'in_transit'].includes(order.status)) failed.add(order.orderNo) }) }
+      if (canManage) {
+        const candidates = merged.filter(order => view.current.filter === 'all' || stageOf(order) === view.current.filter).slice(0, view.current.limit)
+        const failed = await refreshCarrierStatuses(candidates, controller.signal)
+        if (candidates.some(order => ['waybill_created', 'in_transit'].includes(order.status) && /^(?:SF)?\d{10,15}$/.test(order.waybill || ''))) {
+          for (const index of pages.keys()) {
+            try { pages.set(index, await readPage(index)) }
+            catch { candidates.forEach(order => { if (order.waybill && ['waybill_created', 'in_transit'].includes(order.status)) failed.add(order.orderNo) }) }
+          }
+          merged = mergePages()
         }
-        merged = mergePages()
+        if (controller.signal.aborted) return
+        const checked = new Set(candidates.map(order => order.orderNo))
+        for (const order of merged.filter(order => view.current.filter === 'all' || stageOf(order) === view.current.filter).slice(0, view.current.limit)) {
+          if (!checked.has(order.orderNo) && ['waybill_created', 'in_transit'].includes(order.status) && /^(?:SF)?\d{10,15}$/.test(order.waybill || '')) failed.add(order.orderNo)
+        }
+        setStatusFailures(failed)
       }
       if (controller.signal.aborted) return
-      const checked = new Set(candidates.map(order => order.orderNo))
-      for (const order of merged.filter(order => view.current.filter === 'all' || stageOf(order) === view.current.filter).slice(0, view.current.limit)) {
-        if (!checked.has(order.orderNo) && ['waybill_created', 'in_transit'].includes(order.status) && /^(?:SF)?\d{10,15}$/.test(order.waybill || '')) failed.add(order.orderNo)
-      }
-      setStatusFailures(failed)
       if (refreshOrder) {
         const latest = merged.find(item => item.orderNo === refreshOrder)
         if (latest) {
@@ -238,12 +246,12 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
     } catch (e) {
       if (!controller.signal.aborted) {
         setError(e instanceof Error ? e.message : '读取失败')
-        setStatusFailures(new Set(receipts.current.filter(order => ['waybill_created', 'in_transit'].includes(order.status)).map(order => order.orderNo)))
+        if (canManage) setStatusFailures(new Set(receipts.current.filter(order => ['waybill_created', 'in_transit'].includes(order.status)).map(order => order.orderNo)))
       }
     } finally {
       if (reading.current === controller) { reading.current = null; setBusy(false) }
     }
-  }, [refreshCarrierStatuses, scope])
+  }, [canManage, refreshCarrierStatuses, scope])
   useEffect(() => { void load() }, [load, refreshKey])
   useEffect(() => {
     if (scope !== 'owner') return
@@ -254,7 +262,7 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
   }, [actionPending, busy, load, scope])
 
   async function openReturnedOrder(order: ShipmentReceipt) {
-    if (scope !== 'owner' || !onResubmit || actionsLocked || opening.current || cancelling || changingCarrier) return
+    if (!canManage || !onResubmit || actionsLocked || opening.current || cancelling || changingCarrier) return
     const controller = new AbortController()
     opening.current = controller
     setOpeningOrder(order.orderNo)
@@ -332,15 +340,15 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
       </button>
     </div>
     {error && <p role="alert">{error}</p>}
-    {statusFailures.size > 0 && <p role="status" className={styles.stateInfo}>部分运单最新状态尚未核实，相关物流操作已暂停，请刷新核对。</p>}
+    {canManage && statusFailures.size > 0 && <p role="status" className={styles.stateInfo}>部分运单最新状态尚未核实，相关物流操作已暂停，请刷新核对。</p>}
     {orders && <>
       {loaded.length === 0 && <p className={styles.emptyRecords}>尚无提报记录</p>}
       {loaded.length > 0 && filtered.length === 0 && <p className={styles.emptyRecords}>当前状态下没有提报记录</p>}
       <div role="region" aria-label="按日期分组的提报记录" className={styles.recordGroups}>
         {[...groups].map(([date, dayOrders]) => <section className={styles.recordGroup} key={date} aria-label={date}>
           <h3>{date}</h3>
-          <ul>{dayOrders.map(order => <ReceiptCard key={order.orderNo} order={order} scope={scope}
-            locked={actionsLocked || busy || actionPending || statusFailures.has(order.orderNo)} statusUnverified={statusFailures.has(order.orderNo)}
+          <ul>{dayOrders.map(order => <ReceiptCard key={order.orderNo} order={order} scope={scope} canManage={canManage}
+            locked={actionsLocked || busy || actionPending || statusFailures.has(order.orderNo)} statusUnverified={canManage && statusFailures.has(order.orderNo)}
             opening={openingOrder === order.orderNo}
             onResubmit={onResubmit ? () => void openReturnedOrder(order) : undefined}
             onCancelled={() => {

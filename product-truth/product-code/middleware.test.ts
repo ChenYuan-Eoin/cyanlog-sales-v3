@@ -320,29 +320,40 @@ describe('role-free federated session boundary', () => {
   })
 
   it.each([
-    [{ id: 'readonly', code: 'READONLY', permissions: ['quote:view', 'contract:view', 'customer:view'] }],
-    [
-      { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view', 'contract:view', 'customer:view'] },
-      { id: 'readonly', code: 'READONLY', permissions: ['quote:view', 'contract:view', 'customer:view'] },
-    ],
-  ])('keeps a federated viewer read-only with role set %j', async (...roleRecords) => {
+    { roleCodes: ['READONLY'], ownerWriteStatus: 403 },
+    { roleCodes: ['FXIAOKE_BASELINE'], ownerWriteStatus: 200 },
+    { roleCodes: ['FXIAOKE_BASELINE', 'READONLY'], ownerWriteStatus: 200 },
+  ])('applies the exact federated owner permission to $roleCodes', async ({ roleCodes, ownerWriteStatus }) => {
+    const token = 'viewer-token'
     mockExactOrgAuth({
-      token: 'viewer-token', orgId: 'org-a', authMethod: 'fxiaoke',
-      roles: roleRecords.map(role => ({ roles: role })),
+      token, orgId: 'org-a', authMethod: 'fxiaoke', shippingOperatorStatus: 'disabled',
+      roles: roleCodes.map(code => ({ roles: {
+        id: code, code, permissions: ['quote:view', 'contract:view', 'customer:view'],
+      } })),
     })
-    const request = (path: string, method = 'GET') => {
-      const req = makeRequest(`https://sales.cyanlog.icu${path}`, { host: 'sales.cyanlog.icu' }, method)
-      req.cookies.get = vi.fn().mockReturnValue({ value: 'viewer-token' })
-      return req
+    const request = (path: string, method = 'GET') => middleware(makeRequest(
+      `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
+    ))
+    const orders = '/api/shipping/owner/orders'
+    const order = `${orders}/SO-20261118-1234ABCD`
+    const profile = '/api/shipping/owner/profile'
+    const receipt = `/api/shipping/public/orders/${'a'.repeat(43)}`
+
+    for (const path of [orders, profile, `${order}/resubmit`, `${order}/carrier-changes`, receipt]) {
+      expect((await request(path)).status, path).toBe(200)
     }
-    expect((await middleware(request('/api/quotes'))).status).toBe(200)
-    expect((await middleware(request('/api/cases'))).status).toBe(403)
-    expect((await middleware(request('/api/shipping/owner/orders'))).status).toBe(200)
-    expect((await middleware(request('/api/quotes', 'POST'))).status).toBe(403)
-    expect((await middleware(request('/api/contracts/example', 'PATCH'))).status).toBe(403)
-    expect((await middleware(request('/api/shipping/orders', 'POST'))).status).toBe(403)
-    expect((await middleware(request('/api/shipping/owner/orders', 'POST'))).status)
-      .toBe(roleRecords.some(role => role.code === 'FXIAOKE_BASELINE') ? 200 : 403)
+    for (const path of [
+      orders, profile, `${order}/resubmit`, `${order}/cancel`, `${order}/carrier-changes`, `${order}/tracking`,
+    ]) {
+      expect((await request(path, 'POST')).status, path).toBe(ownerWriteStatus)
+    }
+
+    expect((await request('/api/quotes')).status).toBe(200)
+    expect((await request('/api/cases')).status).toBe(403)
+    expect((await request('/api/quotes', 'POST')).status).toBe(403)
+    expect((await request('/api/contracts/example', 'PATCH')).status).toBe(403)
+    expect((await request('/api/shipping/orders', 'POST')).status).toBe(403)
+    expect((await request(`${order}/tracking/unrelated`, 'POST')).status).toBe(403)
   })
 
   it('preserves separately assigned administrator access alongside the baseline role', async () => {

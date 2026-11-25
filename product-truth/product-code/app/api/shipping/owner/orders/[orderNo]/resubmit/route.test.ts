@@ -39,7 +39,7 @@ beforeEach(() => {
   }
   vi.resetAllMocks()
   mock.auth.mockResolvedValue(actor)
-  mock.operator.mockResolvedValue({ orgId: 'org-A', canOperate: false })
+  mock.operator.mockResolvedValue({ orgId: 'org-A', canOperate: false, roleCodes: ['FXIAOKE_BASELINE'] })
   mock.dept.mockResolvedValue([{ id: departmentId, name: '销售部', path: '总部 / 销售部' }])
   mock.rules.mockResolvedValue({ companyName: { enabled: true, required: true, minLength: 2 }, team: { enabled: true, required: true, minLength: 1 } })
   mock.from.mockImplementation((table: string) => {

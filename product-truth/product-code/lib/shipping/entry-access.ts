@@ -1,20 +1,22 @@
 import type { AuthUser } from '@/lib/auth'
-import { SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE } from '@/lib/module-access'
-import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
+import { canWriteFxiaokeOwnerShipping, SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE } from '@/lib/module-access'
+import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import { loadPublishedModulePermissionKeys } from '@/lib/permission-registry'
 import { hasPermission } from '@/lib/permissions'
 import { supabaseAdmin } from '@/lib/supabase'
 
-type PublishedShippingAccess = { orgId: string; permissions: string[] }
+type PublishedShippingAccess = { orgId: string; permissions: string[]; roleCodes: string[] }
 
-async function loadPublishedShippingAccess(userId: string): Promise<PublishedShippingAccess | null> {
+export async function loadPublishedShippingAccess(userId: string): Promise<PublishedShippingAccess | null> {
   const [context, published] = await Promise.all([
-    loadOrgRolePermissionContext(userId), loadPublishedModulePermissionKeys(),
+    loadCurrentOrganizationRoleAssignments(userId), loadPublishedModulePermissionKeys(),
   ])
   if (!context) return null
+  const permissions = context.assignments.flatMap(assignment => assignment.permissions)
   return {
     orgId: context.orgId,
-    permissions: published.filter(key => hasPermission(context.actorPermissions, key)),
+    permissions: published.filter(key => hasPermission(permissions, key)),
+    roleCodes: context.assignments.map(assignment => assignment.roleCode),
   }
 }
 
@@ -32,10 +34,13 @@ export async function resolveShippingEntry(
   ])
   if (session.error) throw session.error
   if (!access || session.data?.user_id !== user.id) return null
+  const canViewOwn = session.data.auth_method === 'fxiaoke'
+    && user.org_id === access.orgId && access.roleCodes.length > 0
   return {
     orgId: access.orgId,
     canOperate: access.permissions.includes(SHIPPING_OPERATE),
-    canSubmitOwn: session.data.auth_method === 'fxiaoke' && user.org_id === access.orgId,
+    canViewOwn,
+    canSubmitOwn: canViewOwn && canWriteFxiaokeOwnerShipping(access.roleCodes),
     canManageConnections: access.permissions.includes(SHIPPING_MANAGE_CONNECTIONS),
   }
 }

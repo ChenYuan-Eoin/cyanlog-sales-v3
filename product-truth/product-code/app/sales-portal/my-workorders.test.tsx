@@ -58,6 +58,45 @@ it('reads only the authenticated owner endpoint in employee mode', async () => {
   expect(fetcher.mock.calls.some(([url]) => String(url).includes('/public/orders'))).toBe(false)
 })
 
+it('keeps read-only owner status and pagination without requesting live tracking or rendering shipment actions', async () => {
+  const firstPage = [
+    order('WAITING', { waybill: 'SF1234567890123', canCancel: true }),
+    order('IN-TRANSIT', { status: 'in_transit', waybill: 'SF1234567890124', canCancel: true }),
+    order('RETURNED', { status: 'returned', waybill: null, returnedReason: '请核对收件地址', canCancel: true }),
+  ]
+  fetcher.mockImplementation(async (url: string) => url === '/api/shipping/owner/orders?page=1'
+    ? response({ orders: [order('OLDER', { status: 'delivered' })], nextPage: null })
+    : response({ orders: firstPage, nextPage: 1 }))
+  const onResubmit = vi.fn()
+  render(<MyWorkorders scope="owner" readOnly onResubmit={onResubmit} />)
+
+  const waiting = await screen.findByRole('listitem', { name: '提报 WAITING' })
+  expect(waiting).toHaveTextContent('SF1234567890123')
+  expect(within(waiting).getByRole('button', { name: '复制顺丰单号' })).toBeInTheDocument()
+  expect(screen.getByText('请核对收件地址')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /取消|转寄|修改并重提/ })).not.toBeInTheDocument()
+  expect(screen.queryByText(/请刷新后再操作|可取消后重新提报/)).not.toBeInTheDocument()
+  expect(fetcher).toHaveBeenCalledTimes(1)
+
+  fireEvent.click(screen.getByRole('button', { name: '运输中' }))
+  expect(screen.queryByRole('listitem', { name: '提报 WAITING' })).not.toBeInTheDocument()
+  await waitFor(() => expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeEnabled())
+  fireEvent.click(screen.getByRole('button', { name: '全部 (3)' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: '显示更多记录' })).toBeEnabled())
+  fireEvent.click(screen.getByRole('button', { name: '显示更多记录' }))
+  expect(await screen.findByRole('listitem', { name: '提报 OLDER' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '刷新提报记录' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeEnabled())
+  const requestsBeforeVisibilityChange = fetcher.mock.calls.length
+  fireEvent(document, new Event('visibilitychange'))
+  await waitFor(() => expect(fetcher.mock.calls.length).toBeGreaterThan(requestsBeforeVisibilityChange))
+  await waitFor(() => expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeEnabled())
+
+  expect(onResubmit).not.toHaveBeenCalled()
+  expect(fetcher.mock.calls.every(([url, init]) => /^\/api\/shipping\/owner\/orders\?page=[01]$/.test(String(url))
+    && (!init?.method || init.method === 'GET'))).toBe(true)
+})
+
 it('refreshes current waybill status from SF and reloads the owner list before showing action availability', async () => {
   const fresh = order('LIVE', { status: 'delivered', trackingStatus: 'delivered', waybill: 'SF1234567890123' })
   fetcher.mockResolvedValueOnce(response({ orders: [order('LIVE', { waybill: 'SF1234567890123' })], nextPage: null }))
