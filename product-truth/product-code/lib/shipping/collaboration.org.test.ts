@@ -59,6 +59,18 @@ describe('shipping collaboration organization boundary', () => {
     const records = await listShipmentLedger('org-A', { limit: 50 })
     expect(records.map(item => item.id)).toEqual(['A-order'])
   })
+  it('returns saved carrier status and events for the authorized ledger', async () => {
+    const at = '2026-11-20T10:41:16.000Z'
+    const waybill = {
+      waybill_no: 'SF5169741550975', latest_status: 'delivered', latest_event_at: at,
+      shipping_tracking_events: [{ event_at: at, status: 'delivered', description: '已签收', location: null }],
+    }
+    Object.assign(tables.shipping_orders[0], { status: 'in_transit', shipping_waybills: [waybill] })
+    const records = await listShipmentLedger('org-A', { limit: 50 })
+    expect(records).toHaveLength(1)
+    expect(records[0]).toMatchObject({ status: 'delivered', trackingStatus: 'delivered', trackingUpdatedAt: at,
+      trackingEvents: [{ time: at, status: 'delivered', description: '已签收', location: '' }] })
+  })
   it('does not assign a foreign or unassigned order to the caller', async () => {
     await expect(assignShipmentRelation('B-order', 'org-A', 'new-sales')).rejects.toThrow()
     await expect(assignShipmentRelation('legacy-order', 'org-A', 'new-sales')).rejects.toThrow()

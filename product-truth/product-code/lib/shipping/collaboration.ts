@@ -3,9 +3,19 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
 import { resolveBusinessContext, verifyShipmentContext } from './context'
 import { listShippingOperatorRecipients } from './operator-access'
-import type { Contact, ShipmentOrder, ShipmentOrderStatus, ShipmentReceipt, ShippingInput } from './types'
+import type { Contact, ShipmentOrder, ShipmentOrderStatus, ShipmentReceipt, ShippingInput, TrackingEventStatus } from './types'
 
-const select = 'id,employee_profile_id,order_no,intake_source,confirmation_policy,status,sales_ref,customer_ref,assignment_status,shipment_payload,payload_hash,revision,amended_at,next_review_at,created_at,org_id,carrier_connection_id,billing_account_id,sender_profile_id,connection_environment,billing_account_tail,shipping_config_snapshot,shipping_waybills(waybill_no)'
+const orderColumns = 'id,employee_profile_id,order_no,intake_source,confirmation_policy,status,sales_ref,customer_ref,assignment_status,shipment_payload,payload_hash,revision,amended_at,next_review_at,created_at,org_id,carrier_connection_id,billing_account_id,sender_profile_id,connection_environment,billing_account_tail,shipping_config_snapshot'
+const waybillColumns = 'waybill_no,latest_status,latest_event_at'
+const select = `${orderColumns},shipping_waybills(${waybillColumns})`
+const ledgerSelect = `${orderColumns},shipping_waybills(${waybillColumns},shipping_tracking_events(event_at,location,description,status))`
+const ledgerEvents = 'shipping_waybills.shipping_tracking_events'
+type ShipmentWaybill = {
+  waybill_no: string
+  latest_status?: TrackingEventStatus | null
+  latest_event_at?: string | null
+  shipping_tracking_events?: Array<{ event_at: string; location: string | null; description: string; status: TrackingEventStatus }>
+}
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 type ShipmentRow = {
   id: string
@@ -30,7 +40,7 @@ type ShipmentRow = {
   connection_environment?: 'sandbox' | 'production' | null
   billing_account_tail?: string | null
   shipping_config_snapshot?: Record<string, unknown> | null
-  shipping_waybills?: { waybill_no: string }[] | { waybill_no: string } | null
+  shipping_waybills?: ShipmentWaybill[] | ShipmentWaybill | null
 }
 export function createShipmentReceiptToken(key: string, env: Record<string, string | undefined> = process.env) {
   const secret = env.SHIPPING_RECEIPT_SECRET
@@ -53,8 +63,19 @@ export function newShippingOrderNo(now = new Date()) {
 
 function map(row: ShipmentRow): ShipmentOrder {
   const waybillRows = Array.isArray(row.shipping_waybills) ? row.shipping_waybills : row.shipping_waybills ? [row.shipping_waybills] : []
+  const waybill = waybillRows[0]
+  const trackingStatus = waybill?.latest_status
+  const status = ['waybill_created', 'in_transit'].includes(row.status) && ['in_transit', 'out_for_delivery', 'delivered'].includes(trackingStatus || '')
+    ? trackingStatus === 'delivered' ? 'delivered' : 'in_transit'
+    : row.status
   const failure = row.shipping_config_snapshot?.orderFailure as { message?: unknown; at?: unknown } | undefined
-  return { ...(failure && typeof failure.message === 'string' && typeof failure.at === 'string' ? { failure: { message: failure.message.slice(0, 500), at: failure.at } } : {}), id: row.id, identityVerified: Boolean(row.employee_profile_id), orderNo: row.order_no, intakeSource: row.intake_source, confirmationPolicy: row.confirmation_policy, status: row.status, relation: { salesRef: row.sales_ref, customerRef: row.customer_ref, assignmentStatus: row.assignment_status }, input: row.shipment_payload, waybill: waybillRows[0]?.waybill_no || null, revision: row.revision ?? 1, amendedAt: row.amended_at ?? null, nextReviewAt: row.next_review_at, createdAt: row.created_at }
+  return { ...(failure && typeof failure.message === 'string' && typeof failure.at === 'string' ? { failure: { message: failure.message.slice(0, 500), at: failure.at } } : {}), id: row.id, identityVerified: Boolean(row.employee_profile_id), orderNo: row.order_no, intakeSource: row.intake_source, confirmationPolicy: row.confirmation_policy, status, relation: { salesRef: row.sales_ref, customerRef: row.customer_ref, assignmentStatus: row.assignment_status }, input: row.shipment_payload, waybill: waybill?.waybill_no || null, ...(waybill?.shipping_tracking_events ? {
+    trackingUpdatedAt: waybill.latest_event_at || null,
+    trackingStatus: waybill.latest_status || null,
+    trackingEvents: waybill.shipping_tracking_events.map(event => ({
+      time: event.event_at, description: event.description, location: event.location || '', status: event.status,
+    })),
+  } : {}), revision: row.revision ?? 1, amendedAt: row.amended_at ?? null, nextReviewAt: row.next_review_at, createdAt: row.created_at }
 }
 
 export function publicShipmentReceipt(order: ShipmentOrder): ShipmentReceipt {
@@ -175,7 +196,9 @@ function requireOrganization(orgId: string) {
 
 export async function listShipmentLedger(orgId: string, filters: { salesRef?: string; customerRef?: string; contact?: string; status?: ShipmentOrderStatus; cursor?: string; limit: number }) {
   requireOrganization(orgId)
-  let query = supabaseAdmin.from('shipping_orders').select(select).eq('org_id', orgId).order('created_at', { ascending: false }).limit(filters.limit)
+  let query = supabaseAdmin.from('shipping_orders').select(ledgerSelect).eq('org_id', orgId)
+    .order('created_at', { ascending: false }).limit(filters.limit)
+    .order('event_at', { ascending: false, referencedTable: ledgerEvents }).limit(20, { referencedTable: ledgerEvents })
   if (filters.salesRef) query = query.eq('sales_ref', filters.salesRef)
   if (filters.customerRef) query = query.eq('customer_ref', filters.customerRef)
   if (filters.status) query = query.eq('status', filters.status)
@@ -183,7 +206,7 @@ export async function listShipmentLedger(orgId: string, filters: { salesRef?: st
   if (filters.contact) { const term = filters.contact.replace(/[%_,]/g, ''); query = query.or(`shipment_payload->sender->>name.ilike.%${term}%,shipment_payload->sender->>phone.ilike.%${term}%,shipment_payload->recipient->>name.ilike.%${term}%,shipment_payload->recipient->>phone.ilike.%${term}%`) }
   const { data, error } = await query
   if (error) throw new ShippingError(503, '收寄件台账暂不可用。')
-  return (data || []).map(row => map(row as ShipmentRow))
+  return (data || []).map(row => map(row as unknown as ShipmentRow))
 }
 
 export async function assignShipmentRelation(id: string, orgId: string, salesRef: string, customerRef?: string) {
