@@ -280,7 +280,11 @@ function preserveUnchangedRolePermissions(roles: ConfigRoleRecord[], currentRole
     const next = role.permissions
     if (!previous || !next || current?.permissions_edit_block_reason !== role.permissions_edit_block_reason
       || previous.length !== next.length || !next.every(key => previous.includes(key))) return role
-    return { ...role, permissions: previous }
+    const previousOwner = current?.owner_shipping_permissions
+    const nextOwner = role.owner_shipping_permissions
+    const sameOwner = previousOwner && nextOwner && previousOwner.length === nextOwner.length
+      && nextOwner.every(key => previousOwner.includes(key))
+    return { ...role, permissions: previous, ...(sameOwner ? { owner_shipping_permissions: previousOwner } : {}) }
   })
 }
 
@@ -1016,10 +1020,15 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
 
 
   // 角色权限：保存单个角色的 permissions
-  async function handleSaveRole(roleId: string, newPerms: string[]) {
+  async function handleSaveRole(roleId: string, newPerms: string[], newOwnerPermissions?: string[]) {
     if (roleSaveRef.current) return
     const role = roles.find(candidate => candidate.id === roleId)
-    if (!roleAuthority?.permissionsEditable || !role || role.permissions_edit_block_reason || !Array.isArray(role.permissions)) {
+    const ownerProjection = role?.owner_shipping_permissions
+    const ownerChange = newOwnerPermissions && ownerProjection
+      ? { expected: ownerProjection, permissions: newOwnerPermissions } : undefined
+    if (!roleAuthority?.permissionsEditable || !role || !Array.isArray(role.permissions)
+      || (newOwnerPermissions && !ownerChange)
+      || (role.permissions_edit_block_reason && !(role.code === 'FXIAOKE_BASELINE' && ownerChange))) {
       setError('无法确认当前组织的角色编辑权限，请刷新后重试。')
       return
     }
@@ -1041,7 +1050,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
     setError('')
     try {
       const { role: verifiedRole, snapshot } = await saveAndReadOrgRolePermissions(headers, {
-        orgId: roleAuthority.orgId, roleId, expectedPermissions: role.permissions, permissions: newPerms,
+        orgId: roleAuthority.orgId, roleId, expectedPermissions: role.permissions, permissions: newPerms, ownerChange,
       })
       if (!isCurrentSave()) return
       setRoles(current => current.map(candidate => candidate.id === roleId ? verifiedRole : candidate))

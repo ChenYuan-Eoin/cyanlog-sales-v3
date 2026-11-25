@@ -52,8 +52,12 @@ it('uses exactly the same effective, pending and scoped counts on the role list 
     spaces: [{ id: 'legacy', name: '历史销售区域', department_id: 'dept', department_name: '销售组' }],
     directory_roster: { status: 'ready', asOf: '2026-11-25T00:00:00Z', members: [{ id: member.id, departmentIds: ['dept'] }] },
     role_membership_stats: { effectiveAvailable: true, pendingAvailable: true, activeSpaceIds: [] },
+    member_actions: {
+      edit: false, assignRoles: true, invite: false, manageLogin: false, manageEmployment: false,
+      removeMembership: false, manageDepartments: false, bindExternalIdentity: false,
+    },
   }
-  render(<RoleAccessTab {...defaults} roles={[sales, manager]} orgSummary={orgSummary} />)
+  const view = render(<RoleAccessTab {...defaults} roles={[sales, manager]} orgSummary={orgSummary} />)
 
   const listButton = screen.getByRole('button', { name: '销售 SALES，已生效 2，待生效 1，生效作用域绑定 3' })
   expect(within(listButton).getByText('已生效 2')).toBeInTheDocument()
@@ -69,6 +73,13 @@ it('uses exactly the same effective, pending and scoped counts on the role list 
   expect(screen.getAllByRole('button', { name: '从角色中移除 组织级销售' }).length).toBeGreaterThan(0)
   fireEvent.click(screen.getByRole('button', { name: '添加成员' }))
   expect(within(screen.getByRole('dialog')).getByText('部门级销售')).toBeInTheDocument()
+
+  view.rerender(<RoleAccessTab {...defaults} roles={[sales, manager]} orgSummary={{
+    ...orgSummary, member_actions: { ...orgSummary.member_actions!, assignRoles: false },
+  }} />)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '添加成员' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '从角色中移除 组织级销售' })).not.toBeInTheDocument()
 })
 
 it('shows unavailable counts rather than zero while organization data is missing', () => {

@@ -6,9 +6,13 @@ import { getShipmentByReceipt, publicShipmentReceipt } from '@/lib/shipping/coll
 export const runtime = 'nodejs'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
-  return shippingHandler(req, async (_user, orgId) => {
-    const order = await getShipmentByReceipt((await params).token, { orgId })
+  return shippingHandler(req, async (user, orgId, receiptAccess) => {
+    const { token } = await params
+    let order = receiptAccess?.canReadOwnedReceipt ? await getShipmentByReceipt(token, { orgId, userId: user.id }) : null
+    if (!order && receiptAccess?.canReadLegacyReceipt) {
+      order = await getShipmentByReceipt(token, { orgId, legacyAnonymous: true })
+    }
     if (!order) throw new ShippingError(404, '寄件回执不存在或已失效。')
     return publicShipmentReceipt(order)
-  }, { allowFxiaokeSelfSubmit: true })
+  }, 'receipt')
 }

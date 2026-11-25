@@ -9,6 +9,7 @@ import { canEditRolePermissions, loadOrgRolePermissionSettings, saveOrgRolePermi
 import { SUPER_ADMIN_CORE_PERMISSIONS } from './role-permission-policy'
 import { BUILTIN_PERMISSION_DEFINITIONS, buildPermissionCatalog } from './permission-catalog'
 import { loadRoleModulePermissionCatalog } from './permission-registry'
+import { SHIPPING_OWNER_ACTION_KEYS, SHIPPING_OWNER_VIEW } from './shipping/owner-permission-keys'
 
 const salesPermissions = ['quote:create']
 
@@ -58,7 +59,7 @@ describe('organization role permission storage', () => {
     const template = structuredClone(state.roles)
     const otherOrg = structuredClone(state.organizations[1])
     expect(await saveOrgRolePermissions('org-1', 'role-1', ['quote:view'], salesPermissions))
-      .toEqual({ ok: true, role: { ...template[0], permissions: ['quote:view'] } })
+      .toEqual({ ok: true, role: { ...template[0], permissions: ['quote:view'], owner_shipping_permissions: SHIPPING_OWNER_ACTION_KEYS } })
     expect(state.organizations[0].settings).toEqual({
       locale: 'zh', role_permission_overrides: { 'role-other': ['config:read'], 'role-1': ['quote:view'] },
     })
@@ -114,6 +115,36 @@ describe('organization role permission storage', () => {
     const state = database({ code: 'FXIAOKE_BASELINE' })
     const result = await saveOrgRolePermissions('org-1', 'role-1', [], ['quote:view', 'contract:view', 'customer:view'])
     expect(result).toMatchObject({ ok: false, reason: 'fixed_role' })
+    expect(state.operations.some(entry => entry.patch)).toBe(false)
+  })
+
+  it('revokes owner actions on a fixed baseline without changing its protected permissions', async () => {
+    const core = ['quote:view', 'contract:view', 'customer:view']
+    const state = database({ code: 'FXIAOKE_BASELINE' })
+    const result = await saveOrgRolePermissions('org-1', 'role-1', core, core, undefined, {
+      permissions: [], expected: SHIPPING_OWNER_ACTION_KEYS,
+    })
+    expect(result).toMatchObject({ ok: true, role: { permissions: core, owner_shipping_permissions: [] } })
+    expect(state.organizations[0].settings).toEqual({
+      locale: 'zh',
+      role_permission_overrides: { 'role-other': ['config:read'] },
+      shipping_owner_permission_overrides: { 'role-1': [] },
+    })
+    expect(await saveOrgRolePermissions('org-1', 'role-1', core, core, undefined, {
+      permissions: [SHIPPING_OWNER_VIEW], expected: SHIPPING_OWNER_ACTION_KEYS,
+    })).toEqual({ ok: false, reason: 'conflict' })
+    expect(await saveOrgRolePermissions('org-1', 'role-1', [], core, undefined, {
+      permissions: [], expected: [],
+    })).toMatchObject({ ok: false, reason: 'fixed_role' })
+  })
+
+  it('rejects owner actions without their view or when sent as organization permissions', async () => {
+    const state = database()
+    expect(await saveOrgRolePermissions('org-1', 'role-1', salesPermissions, salesPermissions, undefined, {
+      permissions: ['shipping:owner_submit'], expected: SHIPPING_OWNER_ACTION_KEYS,
+    })).toEqual({ ok: false, reason: 'invalid' })
+    expect(await saveOrgRolePermissions('org-1', 'role-1', [SHIPPING_OWNER_VIEW], salesPermissions))
+      .toEqual({ ok: false, reason: 'invalid' })
     expect(state.operations.some(entry => entry.patch)).toBe(false)
   })
 

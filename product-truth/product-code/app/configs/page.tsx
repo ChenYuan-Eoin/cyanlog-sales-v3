@@ -1,7 +1,7 @@
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import {
-  canAccessOrgAdmin, hasConfigurationReadPermission, hasOrgDepartmentDirectoryPermission,
+  canAccessOrgAdmin, canReadRoleDirectory, hasConfigurationReadPermission, hasOrgDepartmentDirectoryPermission,
   hasOrganizationSourcePermission, hasPermission,
 } from '@/lib/permissions'
 import { ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
@@ -26,8 +26,7 @@ export default async function ConfigsPage({ searchParams }: ConfigsPageProps) {
   const tabAccess: ConfigsTabAccess = {
     general: hasConfigurationReadPermission(permissions),
     organization: canReadOrganization || hasOrgDepartmentDirectoryPermission(permissions),
-    roles: canReadOrganization && (canManageRoles || hasPermission(permissions, 'admin:access')
-      || canAccessOrgAdmin([], authorizationRoleCodes)),
+    roles: canReadRoleDirectory(permissions, authorizationRoleCodes),
     integrations: hasOrganizationSourcePermission(permissions) || authorizationRoleCodes.includes('ADMIN')
       || roleCodes.includes('SUPER_ADMIN') || (roleCodes.includes(ORG_SUPER_ADMIN_ROLE_CODE) && canManageRoles),
     shipping: requestHeaders.get('x-user-shipping-settings-view') === '1',

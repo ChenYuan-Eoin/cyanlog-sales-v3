@@ -81,6 +81,7 @@ export interface ScopedRoleAssignment {
   roleName: string
   permissions: string[]
   permissionsOverridden?: boolean
+  ownerShippingPermissions?: string[]
 }
 
 export type ContractBusinessAction = 'view' | 'create_or_upload' | 'review'

@@ -8,11 +8,11 @@ export async function GET(req: NextRequest, { params }: Context) {
   // Preparing an action can query carrier readiness, so passive record access is insufficient.
   return shippingHandler(req, async (user, orgId) => {
     return getCarrierChange({ orgId, userId: user.id, orderNo: (await params).orderNo })
-  }, { allowFxiaokeSelfSubmit: true, requiresOwnerWrite: true })
+  }, 'owner')
 }
 export async function POST(req: NextRequest, { params }: Context) {
   return shippingHandler(req, async (user, orgId) => {
     const body = carrierChangeSchema.parse(await shippingJson(req))
     return submitCarrierChange({ orgId, userId: user.id, orderNo: (await params).orderNo }, body)
-  }, { allowFxiaokeSelfSubmit: true })
+  }, 'owner')
 }

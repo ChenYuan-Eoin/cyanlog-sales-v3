@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   return shippingHandler(req, async (user, orgId) => {
     const rules = await loadIntakeSettings(orgId)
     return { employee: await loadFxiaokeShippingProfile(user, orgId, rules) }
-  }, { allowFxiaokeSelfSubmit: true })
+  }, 'owner')
 }
 
 export async function POST(req: NextRequest) {
@@ -33,5 +33,5 @@ export async function POST(req: NextRequest) {
     const selected = resolveEmployeeShippingDepartment(departments, input.profile.departmentId, input.profile.team)
     await saveFxiaokeCommonSender(user, orgId, input.profile.sender, input.profile.expectedUpdatedAt, selected.name, selected.id)
     return { employee: await loadFxiaokeShippingProfile(user, orgId, rules) }
-  }, { allowFxiaokeSelfSubmit: true })
+  }, 'owner')
 }

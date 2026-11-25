@@ -40,12 +40,13 @@ export default function SalesPortal({ initialEmployee = null, initialOptions = n
   if (lookupToken) return <ReceiptLookup token={lookupToken}/>
   return <EmployeeAccess companySender={options?.companySender} initialEmployee={initialEmployee} rules={options?.rules} requireVerification={options?.requireVerification ?? false} emailAvailable={options?.emailAvailable ?? false}>{({ employee, controls, identityControls, canSubmit, unavailableReason, sessionKey, sender, team }) => <SalesRequestForm rules={options?.rules} key={sessionKey} employee={employee} identityControls={identityControls} accessControls={<>{controls}{error && <p role="alert" className={styles.error}>{error}</p>}</>} accessReady={Boolean(options && canSubmit)} accessHint={error || (!options ? '正在读取提报设置…' : unavailableReason)} draftSender={sender} draftTeam={team} services={options?.services}/>}</EmployeeAccess>
 }
-export function FxiaokeShippingProposal({ profile, rules, services, connectionStatus }: { profile: EmployeeProfile; rules: IntakeRules; services: ShippingServiceOption[]; connectionStatus?: string }) {
-  return <EmployeeAccess key={profile.id} mode="fxiaoke" requireVerification initialEmployee={profile} companySender={profile.senderChoices?.company} rules={rules}>
+export function FxiaokeShippingProposal({ profile, rules, services, connectionStatus, ownerPermissions }: { profile: EmployeeProfile; rules: IntakeRules; services: ShippingServiceOption[]; connectionStatus?: string; ownerPermissions?: readonly string[] }) {
+  const canSaveCommonSender = ownerPermissions === undefined || ownerPermissions.includes('shipping:owner_address_write')
+  return <EmployeeAccess key={profile.id} mode="fxiaoke" requireVerification initialEmployee={profile} companySender={profile.senderChoices?.company} rules={rules} canSaveCommonSender={canSaveCommonSender}>
     {({ employee, controls, identityControls, canSubmit, unavailableReason, sessionKey, sender, team, departmentId, saveCommonSender }) =>
       <SalesRequestForm key={sessionKey} mode="fxiaoke" employee={employee} draftSender={sender} draftTeam={team} departmentId={departmentId} departments={employee?.departments || []} rules={rules} services={services}
         accessReady={canSubmit} accessHint={unavailableReason} identityControls={identityControls}
-        accessControls={controls} connectionStatus={connectionStatus} saveCommonSender={saveCommonSender}/>}
+        accessControls={controls} connectionStatus={connectionStatus} saveCommonSender={saveCommonSender} ownerPermissions={ownerPermissions}/>}
   </EmployeeAccess>
 }
 
@@ -54,10 +55,12 @@ type ReturnEdit = {
   finish: RestoreOwnerRecord
   close: () => void
 }
-type SalesFormProps = { departmentId?: string; departments?: Array<{ id: string; name: string; path: string }>; employee: EmployeeProfile | null; accessControls?: ReactNode; identityControls?: ReactNode; accessReady?: boolean; accessHint?: string; rules?: IntakeRules; draftSender?: Contact; draftTeam?: string; services?: ShippingServiceOption[]; mode?: 'public' | 'fxiaoke'; connectionStatus?: string; editing?: ReturnEdit; saveCommonSender?: SaveCommonSender }
+type SalesFormProps = { departmentId?: string; departments?: Array<{ id: string; name: string; path: string }>; employee: EmployeeProfile | null; accessControls?: ReactNode; identityControls?: ReactNode; accessReady?: boolean; accessHint?: string; rules?: IntakeRules; draftSender?: Contact; draftTeam?: string; services?: ShippingServiceOption[]; mode?: 'public' | 'fxiaoke'; connectionStatus?: string; editing?: ReturnEdit; saveCommonSender?: SaveCommonSender; ownerPermissions?: readonly string[] }
 
 export function SalesRequestForm(props: SalesFormProps) {
   const { employee, accessControls, accessReady = Boolean(employee?.sender), draftSender, draftTeam, services, accessHint, rules = DEFAULT_INTAKE_RULES, mode = 'public', departments, editing } = props
+  const canSubmitNew = mode !== 'fxiaoke' || props.ownerPermissions === undefined || props.ownerPermissions.includes('shipping:owner_submit')
+  const canResubmit = mode === 'fxiaoke' && (props.ownerPermissions === undefined || props.ownerPermissions.includes('shipping:owner_resubmit'))
   const original = editing?.order.input
   const [selectedReturn, setSelectedReturn] = useState<{ order: ReturnedShipment; restore: RestoreOwnerRecord } | null>(null)
   const [returnedSender, setReturnedSender] = useState<Contact>(() => original?.sender || draftSender || employee?.sender || emptyContact())
@@ -151,6 +154,7 @@ export function SalesRequestForm(props: SalesFormProps) {
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (submissionRunning.current || savingCommonSender || batchText) return
+    if (editing ? !canResubmit : !canSubmitNew) return
     setError('')
     setAttempted(true)
     if (!accessReady) { setError('请补齐寄件资料并核对提报要求，已填信息会保留。'); return }
@@ -236,14 +240,38 @@ export function SalesRequestForm(props: SalesFormProps) {
     </label>
   )
 
+  const isEditingReturn = Boolean(selectedReturn && canResubmit)
+  const returnedEditor = selectedReturn && canResubmit && <SalesRequestForm
+    key={selectedReturn.order.orderNo} {...props} accessReady={Boolean(employee)} accessControls={undefined}
+    editing={{ order: selectedReturn.order, close: () => returnToRecords(), finish: returnToRecords }}
+  />
+  const records = !editing && <section className={styles.summaryCard}>
+    <h2>提报记录</h2>
+    <MyWorkorders
+      onResubmit={canResubmit ? (order, restore) => setSelectedReturn({ order, restore }) : undefined}
+      actionsLocked={busy || uncertain || batchLocked} scope={mode === 'fxiaoke' ? 'owner' : 'public'}
+      refreshKey={recordRefresh} ownerPermissions={props.ownerPermissions}
+    />
+  </section>
+
+  if (!editing && !canSubmitNew) return <>
+    {returnedEditor}
+    <main hidden={isEditingReturn} className={`${styles.page} ${styles.employeePage}`}>
+      <header className={styles.hero}><h1>本人寄件</h1></header>
+      <div className={styles.identityContainer}>
+        {props.saveCommonSender && accessControls}
+        {records}
+      </div>
+    </main>
+  </>
+
   return <>
-    {selectedReturn && <SalesRequestForm key={selectedReturn.order.orderNo} {...props} accessReady={Boolean(employee)} accessControls={undefined}
-      editing={{ order: selectedReturn.order, close: () => returnToRecords(), finish: returnToRecords }} />}
-    <main hidden={Boolean(selectedReturn)} className={mode === 'fxiaoke' ? `${styles.page} ${styles.employeePage}` : styles.page}>
+    {returnedEditor}
+    <main hidden={isEditingReturn} className={mode === 'fxiaoke' ? `${styles.page} ${styles.employeePage}` : styles.page}>
     <header className={styles.hero}><div><h1>{editing ? '重提寄件' : '发起寄件'}</h1><p>{editing ? `原工单 ${editing.order.orderNo}` : '填好寄件资料，交给前台确认。'}</p></div><ol className={styles.steps} aria-label="寄件流程"><li className={styles.current}>1 填写信息</li><li>2 前台确认</li><li>3 快递揽收</li></ol></header>
     {!editing && <nav className={styles.mobileNav} aria-label="提报与记录"><button type="button" aria-pressed={mobilePane === 'form'} onClick={() => setMobilePane('form')}>提报快递</button><button type="button" aria-pressed={mobilePane === 'records'} onClick={() => setMobilePane('records')}>提报记录</button></nav>}
     <div className={styles.workspace}>
-    {!selectedReturn && <div className={mobilePane === 'records' ? styles.mobileHidden : undefined}>
+    {!isEditingReturn && <div className={mobilePane === 'records' ? styles.mobileHidden : undefined}>
     {accessControls && <div className={`${styles.form} ${styles.accessControls}`}>{accessControls}</div>}
     <form ref={formRef} noValidate className={styles.form} onSubmit={submit} onChange={() => setPreview(false)}>
       <fieldset className={styles.fields} disabled={busy || uncertain || savingCommonSender}>
@@ -300,7 +328,7 @@ export function SalesRequestForm(props: SalesFormProps) {
     {batchText && <SalesBatchProposal key={batchText} embedded initialText={batchText} sender={sender} team={draftTeam || employee?.team || ''} departmentId={departmentId} departments={departments} rules={rules} services={services} accessReady={accessReady} accessHint={accessHint}
       onSuccess={()=>setRecordRefresh(value=>value+1)} onLockedChange={setBatchLocked} onReviewChange={setBatchReview} onClear={()=>{setBatchText('');setBatchLocked(false);setRawAddress('');setPreview(false);setBatchReview(null)}}/>}
     </div>}
-    <aside aria-label="提报记录" className={`${styles.records} ${mobilePane === 'form' ? styles.mobileHidden : ''}`}><section className={styles.summaryCard} aria-label="本次寄件摘要"><h2>本次寄件</h2><dl><div><dt>寄件人</dt><dd>{sender.name || '待填写'} · {sender.phone}</dd><dd>{senderAddress || '地址待填写'}</dd></div><div><dt>收件人</dt><dd>{batchText ? String(batchCount) + ' 位收件人（逐票核对）' : recipient.name || '待填写'}{!batchText && recipient.phone && ` · ${recipient.phone}`}</dd><dd>{batchText ? String(batchReview?.complete || 0) + ' 票资料完整 · ' + String(batchReview?.invalid || 0) + ' 票待补充' : `${recipient.province}${recipient.city === recipient.province ? '' : recipient.city}${recipient.county}${recipient.address}` || '收件地址待填写'}</dd></div><div><dt>物品与服务</dt><dd>{batchText ? '物品与服务按票核对' : <>{cargo} · {weight || '—'} kg · {services?.find(item => item.id === Number(serviceId || services[0]?.id))?.name || (servicePreference === 'urgent' ? '加急' : '标准')}</>}</dd></div></dl></section>{!editing && <section className={styles.summaryCard}><h2>提报记录</h2><MyWorkorders onResubmit={(order, restore) => setSelectedReturn({ order, restore })} actionsLocked={busy || uncertain || batchLocked} scope={mode === 'fxiaoke' ? 'owner' : 'public'} refreshKey={recordRefresh}/></section>}</aside>
+    <aside aria-label="提报记录" className={`${styles.records} ${mobilePane === 'form' ? styles.mobileHidden : ''}`}><section className={styles.summaryCard} aria-label="本次寄件摘要"><h2>本次寄件</h2><dl><div><dt>寄件人</dt><dd>{sender.name || '待填写'} · {sender.phone}</dd><dd>{senderAddress || '地址待填写'}</dd></div><div><dt>收件人</dt><dd>{batchText ? String(batchCount) + ' 位收件人（逐票核对）' : recipient.name || '待填写'}{!batchText && recipient.phone && ` · ${recipient.phone}`}</dd><dd>{batchText ? String(batchReview?.complete || 0) + ' 票资料完整 · ' + String(batchReview?.invalid || 0) + ' 票待补充' : `${recipient.province}${recipient.city === recipient.province ? '' : recipient.city}${recipient.county}${recipient.address}` || '收件地址待填写'}</dd></div><div><dt>物品与服务</dt><dd>{batchText ? '物品与服务按票核对' : <>{cargo} · {weight || '—'} kg · {services?.find(item => item.id === Number(serviceId || services[0]?.id))?.name || (servicePreference === 'urgent' ? '加急' : '标准')}</>}</dd></div></dl></section>{records}</aside>
     </div>
   </main></>
 }

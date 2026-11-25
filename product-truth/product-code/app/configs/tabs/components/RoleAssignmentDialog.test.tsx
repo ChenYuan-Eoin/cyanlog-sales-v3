@@ -13,7 +13,7 @@ beforeEach(() => {
   vi.stubGlobal('localStorage', { getItem: vi.fn(() => 'test-session') })
   vi.stubGlobal('fetch', vi.fn(async () => Response.json({
     success: true,
-    data: { roles: [{ id: 'role-1', code: 'SALES', name: '销售', description: '销售角色' }] },
+    data: { roles: [{ id: 'role-1', code: 'SALES', name: '销售' }] },
   })))
 })
 
@@ -34,6 +34,10 @@ describe('RoleAssignmentDialog scoped assignment', () => {
       />,
     )
     await screen.findByText('销售')
+    expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/roles?view=assignable', expect.objectContaining({
+      cache: 'no-store',
+      headers: { Authorization: 'Bearer test-session' },
+    }))
     fireEvent.change(screen.getByLabelText('角色作用域类型'), { target: { value: 'department' } })
     fireEvent.change(screen.getByLabelText('选择部门角色作用域'), { target: { value: 'dept-1' } })
     fireEvent.click(screen.getByRole('checkbox', { name: /销售/ }))
@@ -159,6 +163,22 @@ describe('RoleAssignmentDialog scoped assignment', () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(['shipping-role']))
     expect(onSubmitScoped).not.toHaveBeenCalled()
   })
+})
+
+it('does not reuse a role list after the assignment projection is denied', async () => {
+  const props = {
+    userId: 'test-user', userName: '测试成员', currentRoles: [], departments: [],
+    onSubmit: vi.fn(async () => undefined), onOpenChange: vi.fn(),
+  }
+  const view = render(<RoleAssignmentDialog {...props} open />)
+  await screen.findByRole('checkbox', { name: /销售/ })
+  view.rerender(<RoleAssignmentDialog {...props} open={false} />)
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({}, { status: 403 }))
+  view.rerender(<RoleAssignmentDialog {...props} open />)
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('无法读取可分配角色')
+  expect(screen.queryByRole('checkbox', { name: /销售/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument()
 })
 
 it('keeps a preassigned role selected and allows its removal at organization scope before login', async () => {

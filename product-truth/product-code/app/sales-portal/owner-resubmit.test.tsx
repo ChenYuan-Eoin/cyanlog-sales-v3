@@ -182,6 +182,33 @@ it('saves the edited pickup address to the employee profile without resubmitting
   expect(screen.getByLabelText('寄件详细地址')).toHaveValue(newSender.address)
 })
 
+it('allows an employee to resubmit their returned record without new submission, address or tracking authority', async () => {
+  const fallback = send.getMockImplementation()!
+  const profile = {
+    id: 'staff', email: 'staff@example.test', fxiaoke: true, team: '销售部',
+    updatedAt: '2026-11-18T00:00:00Z', sender: currentSender, departmentId: deptId,
+    departments: [{ id: deptId, name: '销售部', path: '总部 / 销售部', isPrimary: true }],
+  }
+  send.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url === '/api/shipping/owner/profile' && init?.method !== 'POST') return json({ employee: profile })
+    return fallback(url, init)
+  })
+
+  render(<FxiaokeShippingProposal profile={profile} rules={DEFAULT_INTAKE_RULES} services={serviceOptions}
+    ownerPermissions={['shipping:owner_view', 'shipping:owner_resubmit']} />)
+  expect(screen.getByRole('heading', { name: '本人寄件' })).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: '发起寄件' })).not.toBeInTheDocument()
+  await openReturnedOrder()
+  expect(screen.getByRole('heading', { name: '重提寄件' })).toBeInTheDocument()
+  fireEvent.click(screen.getByText(/寄件人 · 原单寄方/))
+  expect(screen.queryByRole('button', { name: '保存为我的常用地址' })).not.toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('单票客户公司名称'), { target: { value: '重提后公司' } })
+  fireEvent.click(screen.getByRole('button', { name: '预览工单' }))
+  fireEvent.click(screen.getByRole('button', { name: '确认重提' }))
+  await waitFor(() => expect(screen.queryByRole('heading', { name: '重提寄件' })).not.toBeInTheDocument())
+  expect(send.mock.calls.filter(([, init]) => init?.method === 'POST').map(([url]) => url)).toEqual([detailPath])
+})
+
 it('loads later pages, refreshes page zero and can reopen the updated older record', async () => {
   const fallback = send.getMockImplementation()!
   const recent = Array.from({ length: 6 }, (_, i) => ({

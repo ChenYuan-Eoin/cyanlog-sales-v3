@@ -4,6 +4,7 @@ const ORG_DELEGATION_SENSITIVE_RESOURCES = new Set([
 
 export const ORG_MEMBER_EDIT = 'user:edit_profile'
 export const ORG_BUSINESS_ROLE_ASSIGN = 'user:assign_roles'
+export const ROLE_DIRECTORY_VIEW = 'role:view'
 export const ORG_DEPARTMENT_DIRECTORY_VIEW = 'dept:directory_view'
 export const ORG_DEPARTMENT_STRUCTURE_EDIT = 'dept:edit_structure'
 export const ORG_DEPARTMENT_STRUCTURE_DELETE = 'dept:delete_structure'
@@ -16,6 +17,17 @@ export const ORGANIZATION_SOURCE_PERMISSION_KEYS = [
 
 export function hasConfigurationReadPermission(permissions: string[]): boolean {
   return ['config:read', 'config:write', 'config:publish'].some(key => hasPermission(permissions, key))
+}
+
+export function canReadRoleDirectory(permissions: string[], authorizationRoleCodes: string[]): boolean {
+  return hasPermission(permissions, 'role:manage')
+    || (hasPermission(permissions, ROLE_DIRECTORY_VIEW) && hasPermission(permissions, 'user:view'))
+    || authorizationRoleCodes.some(code => code === 'ADMIN' || code === 'SALES_OPS' || code === 'SUPER_ADMIN')
+}
+
+export function canListAssignableRoles(permissions: string[], authorizationRoleCodes: string[]): boolean {
+  return hasLegacyOrgMemberWrite(permissions, authorizationRoleCodes)
+    || (hasPermission(permissions, ORG_BUSINESS_ROLE_ASSIGN) && hasPermission(permissions, 'user:view'))
 }
 
 export function hasOrganizationSourcePermission(permissions: string[]): boolean {
@@ -31,6 +43,7 @@ export function canEnterConfigurationCenter(permissions: string[], authorization
     || canAccessOrgAdmin(permissions, authorizationRoleCodes)
     || hasOrganizationSourcePermission(permissions)
     || hasOrgDepartmentDirectoryPermission(permissions)
+    || canReadRoleDirectory(permissions, authorizationRoleCodes)
 }
 
 export function hasLegacyOrgMemberWrite(permissions: string[], authorizationRoleCodes: string[]): boolean {

@@ -92,7 +92,9 @@ describe('legacy configuration actions', () => {
 
     const response = await list(request('GET'), domain)
     expect(response.status).toBe(200)
-    expect((await response.json()).data).toEqual([item])
+    const body = await response.json()
+    expect(body.data).toEqual([item])
+    expect(body.meta.access).toEqual({ canWrite: false, canPublish: false })
     expect(read.eq).toHaveBeenCalledWith('org_id', orgId)
   })
 

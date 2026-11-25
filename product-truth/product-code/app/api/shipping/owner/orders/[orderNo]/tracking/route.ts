@@ -11,5 +11,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ord
     const { orderNo } = await params
     if (!/^SO-\d{8}-[A-Z0-9]{8}$/.test(orderNo)) throw new ShippingError(404, '寄件单不存在。')
     return refreshOwnerTracking(orgId, user.id, orderNo)
-  }, { allowFxiaokeSelfSubmit: true })
+  }, 'owner')
 }

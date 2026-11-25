@@ -6,11 +6,15 @@ vi.mock('@/lib/shipping/intake-settings', () => ({ loadIntakeSettings: mocks.rul
 vi.mock('@/lib/auth', () => ({ requireAuth: mocks.auth, AuthError: class extends Error {} }))
 vi.mock('@/lib/shipping/runtime-config', () => ({ loadShippingSettings: mocks.settings, getShippingRuntimeConfig: mocks.runtime, selectAuthorizedShippingService: mocks.chooseService }))
 vi.mock('@/lib/shipping/sender-profile', () => ({ loadDefaultShippingSender: mocks.sender }))
-vi.mock('@/lib/shipping/operator-access', () => ({ loadShippingOperatorDecision: mocks.operator }))
+vi.mock('@/lib/shipping/entry-access', () => ({
+  resolveShippingOwnerAccess: async () => ({ orgId: 'org-1', ownerPermissions: ['shipping:owner_view'] }),
+}))
+vi.mock('@/lib/shipping/operator-access', () => ({ requireShippingOperator: mocks.operator }))
 vi.mock('@/lib/shipping/collaboration', () => ({ createOwnerShipment: mocks.create, listOwnerShipmentReceipts: mocks.list, publicShipmentReceipt: (order: { orderNo: string; status: string; waybill: string | null }) => ({ orderNo: order.orderNo, status: order.status, waybill: order.waybill }) }))
 vi.mock('@/lib/shipping/workflow', () => ({ confirmAndSubmitShipment: mocks.confirm }))
 vi.mock('@/lib/shipping/sf-client', () => ({ createSfOrder: mocks.carrier }))
-import { GET, POST } from './orders/route'
+import { GET } from './orders/route'
+import { POST } from '../ledger/route'
 import { AuthError } from '@/lib/auth'
 import { ShippingError } from '@/lib/shipping/config'
 
@@ -18,12 +22,12 @@ const companySender = { name: '示例前台', phone: '13800000000', province: '�
 const recipient = { name: '示例收件人', phone: '13900000000', province: '浙江省', city: '杭州市', county: '西湖区', address: '示例路1号' }
 const key = '43a0b4bb-cf88-4593-9fc9-85b3a9d0d1b0'
 const minimalBody = { key, input: { customerName: '示例公司', submittedBy: { name: companySender.name, phone: companySender.phone, team: '销售部' }, recipient, cargo: '文件', servicePreference: 'standard' } }
-const request = (body: unknown) => new NextRequest('http://localhost/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify(body) })
+const request = (body: unknown) => new NextRequest('http://localhost/api/shipping/ledger', { method: 'POST', body: JSON.stringify(body) })
 
 beforeEach(() => {
   mocks.rules.mockReset().mockResolvedValue({ companyName: { enabled: true, required: true, minLength: 4 }, team: { enabled: true, required: true, minLength: 1 }, teamOptions: [] })
   mocks.auth.mockReset().mockResolvedValue({ id: 'operator-1' })
-  mocks.operator.mockReset().mockResolvedValue({ orgId: 'org-1', canOperate: true })
+  mocks.operator.mockReset().mockResolvedValue('org-1')
   mocks.create.mockReset().mockResolvedValue({ id: 'order-1', orderNo: 'SO-20261008-ABC12345', status: 'awaiting_confirmation', waybill: null })
   mocks.list.mockReset().mockResolvedValue({ orders: [], nextPage: null })
   mocks.settings.mockReset().mockResolvedValue({ sender: companySender, defaultBillingAccountId: undefined, canSubmit: false })
@@ -137,7 +141,7 @@ describe('operator intake creates a work order without carrier submission', () =
     mocks.auth.mockRejectedValue(new AuthError())
     expect((await POST(request(minimalBody))).status).toBe(401)
     mocks.auth.mockResolvedValue({ id: 'sales-user' })
-    mocks.operator.mockResolvedValue({ orgId: 'org-1', canOperate: false })
+    mocks.operator.mockRejectedValue(new ShippingError(403, '缺少录入寄件工单权限。'))
     expect((await POST(request(minimalBody))).status).toBe(403)
     expect(mocks.create).not.toHaveBeenCalled()
   })

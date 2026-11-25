@@ -77,10 +77,11 @@ function CopyControl({ value, label, onCopy }: { value: string; label: string; o
   </button>
 }
 
-function ReceiptCard({ order, scope, canManage, locked, statusUnverified, opening, onResubmit, onCancelled, onCancelPending, onCarrierPending }: {
+function ReceiptCard({ order, scope, canCancel, canChangeCarrier, locked, statusUnverified, opening, onResubmit, onCancelled, onCancelPending, onCarrierPending }: {
   order: ShipmentReceipt
   scope: 'public' | 'owner'
-  canManage: boolean
+  canCancel: boolean
+  canChangeCarrier: boolean
   locked: boolean
   statusUnverified: boolean
   opening: boolean
@@ -121,7 +122,7 @@ function ReceiptCard({ order, scope, canManage, locked, statusUnverified, openin
 
     {stage === 'waiting' && <p className={styles.stateInfo}>{statusUnverified
       ? '顺丰最新状态尚未核实，请刷新后再操作。'
-      : canManage && order.canCancel !== false ? '如需在揽收前更改地址，可取消后重新提报。' : '待顺丰更新揽收状态。'}</p>}
+      : canCancel && order.canCancel !== false ? '如需在揽收前更改地址，可取消后重新提报。' : '待顺丰更新揽收状态。'}</p>}
     {stage === 'out_for_delivery' && <p className={styles.stateInfo}>快件已派件出仓，取消 / 转寄 / 退回通道已关闭。</p>}
     {stage === 'delivered' && <div className={styles.signedBox}>
       <strong>{order.deliveredAt ? `签收时间：${dateTimeFormat.format(new Date(order.deliveredAt))}` : '订单已签收'}</strong>
@@ -132,18 +133,18 @@ function ReceiptCard({ order, scope, canManage, locked, statusUnverified, openin
     </div>}
     {stage === 'cancelled' && <p className={styles.stateInfo}>{order.waybill ? '寄件已取消，原运单已作废。' : '提报已取消。'}</p>}
 
-    {canManage && showCancellation && <div className={styles.receiptActionBar}>
+    {canCancel && showCancellation && <div className={styles.receiptActionBar}>
       <span>{stage === 'waiting' ? '顺丰运单' : '提报操作'}</span>
       <div className={styles.receiptActions}><OwnerCancelOrder order={order} disabled={locked} onPendingChange={onCancelPending} onCancelled={onCancelled} /></div>
     </div>}
-    {canManage && showCarrierChanges && <div className={styles.carrierActions}>
+    {canChangeCarrier && showCarrierChanges && <div className={styles.carrierActions}>
       <OwnerCarrierChanges orderNo={order.orderNo} disabled={locked} allowActions={stage === 'in_transit'}
         refreshKey={stage} onPendingChange={onCarrierPending} />
     </div>}
-    {canManage && stage === 'returned' && (
+    {onResubmit && stage === 'returned' && (
       <div className={styles.receiptActionBar}>
         <span>审核未通过</span>
-        {!order.waybill && (!order.cancellationState || order.cancellationState === 'not_sent') && onResubmit && <button type="button" className={styles.primaryAction} title="修改原单后重新提报" disabled={locked} onClick={onResubmit}>{opening ? '正在读取原单…' : '修改并重提'}</button>}
+        {!order.waybill && (!order.cancellationState || order.cancellationState === 'not_sent') && <button type="button" className={styles.primaryAction} title="修改原单后重新提报" disabled={locked} onClick={onResubmit}>{opening ? '正在读取原单…' : '修改并重提'}</button>}
       </div>
     )}
   </li>
@@ -151,12 +152,13 @@ function ReceiptCard({ order, scope, canManage, locked, statusUnverified, openin
 
 class OwnerRecordsAccessError extends Error {}
 
-export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResubmit, actionsLocked = false, readOnly = false }: {
+export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResubmit, actionsLocked = false, readOnly = false, ownerPermissions }: {
   scope?: 'public' | 'owner'
   refreshKey?: number
   onResubmit?: (original: ReturnedShipment, restore: RestoreOwnerRecord) => void
   actionsLocked?: boolean
   readOnly?: boolean
+  ownerPermissions?: readonly string[]
 }) {
   const opening = useRef<AbortController | null>(null)
   const reading = useRef<AbortController | null>(null)
@@ -174,8 +176,14 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
   const [filter, setFilter] = useState<Filter>('all')
   const [displayLimit, setDisplayLimit] = useState(5)
   const actionPending = Boolean(openingOrder) || cancelling || changingCarrier
-  const canManage = scope === 'owner' && !readOnly
-  useEffect(() => () => { opening.current?.abort(); reading.current?.abort() }, [scope, readOnly])
+  const canView = scope === 'public' || ownerPermissions === undefined || ownerPermissions.includes('shipping:owner_view')
+  const canAct = (key: string) => scope === 'owner' && canView && !readOnly
+    && (ownerPermissions === undefined || ownerPermissions.includes(key))
+  const canRefreshTracking = canAct('shipping:owner_tracking_refresh')
+  const canCancel = canAct('shipping:owner_cancel')
+  const canChangeCarrier = canAct('shipping:owner_change')
+  const canResubmit = canAct('shipping:owner_resubmit')
+  useEffect(() => () => { opening.current?.abort(); reading.current?.abort() }, [scope, canView, canRefreshTracking, canResubmit])
 
   const refreshCarrierStatuses = useCallback(async (items: ShipmentReceipt[], signal: AbortSignal) => {
     const failed = new Set<string>()
@@ -195,6 +203,7 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
   }, [])
 
   const load = useCallback(async (page = 0, refreshOrder?: string) => {
+    if (!canView) return
     reading.current?.abort()
     const controller = new AbortController()
     reading.current = controller
@@ -217,7 +226,7 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
       const mergePages = () => [...new Map([...(scope !== 'owner' && page > 0 ? receipts.current : []), ...[...pages.values()].flatMap(data => data.orders)]
         .map(order => [order.orderNo, order])).values()]
       let merged = mergePages()
-      if (canManage) {
+      if (canRefreshTracking) {
         const candidates = merged.filter(order => view.current.filter === 'all' || stageOf(order) === view.current.filter).slice(0, view.current.limit)
         const failed = await refreshCarrierStatuses(candidates, controller.signal)
         if (candidates.some(order => ['waybill_created', 'in_transit'].includes(order.status) && /^(?:SF)?\d{10,15}$/.test(order.waybill || ''))) {
@@ -263,14 +272,14 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
           setOrders(null)
           setNextPage(null)
           setStatusFailures(new Set())
-        } else if (canManage) {
+        } else if (canRefreshTracking) {
           setStatusFailures(new Set(receipts.current.filter(order => ['waybill_created', 'in_transit'].includes(order.status)).map(order => order.orderNo)))
         }
       }
     } finally {
       if (reading.current === controller) { reading.current = null; setBusy(false) }
     }
-  }, [canManage, refreshCarrierStatuses, scope])
+  }, [canView, canRefreshTracking, refreshCarrierStatuses, scope])
   useEffect(() => { void load() }, [load, refreshKey])
   useEffect(() => {
     if (scope !== 'owner') return
@@ -281,7 +290,7 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
   }, [actionPending, busy, load, scope])
 
   async function openReturnedOrder(order: ShipmentReceipt) {
-    if (!canManage || !onResubmit || actionsLocked || opening.current || cancelling || changingCarrier) return
+    if (!canResubmit || !onResubmit || actionsLocked || opening.current || cancelling || changingCarrier) return
     const controller = new AbortController()
     opening.current = controller
     setOpeningOrder(order.orderNo)
@@ -347,6 +356,8 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
     else if (nextPage !== null) await load(nextPage)
   }
 
+  if (!canView) return <p role="status">当前账号无权查看本人寄件记录。</p>
+
   return <div className={styles.recordPanel}>
     <div className={styles.recordToolbar}>
       <div className={styles.recordFilters} role="group" aria-label="按状态筛选提报记录">
@@ -361,17 +372,17 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
       </button>
     </div>
     {error && <p role="alert">{error}</p>}
-    {canManage && statusFailures.size > 0 && <p role="status" className={styles.stateInfo}>部分运单最新状态尚未核实，相关物流操作已暂停，请刷新核对。</p>}
+    {canRefreshTracking && statusFailures.size > 0 && <p role="status" className={styles.stateInfo}>部分运单最新状态尚未核实，相关物流操作已暂停，请刷新核对。</p>}
     {orders && <>
       {loaded.length === 0 && <p className={styles.emptyRecords}>尚无提报记录</p>}
       {loaded.length > 0 && filtered.length === 0 && <p className={styles.emptyRecords}>当前状态下没有提报记录</p>}
       <div role="region" aria-label="按日期分组的提报记录" className={styles.recordGroups}>
         {[...groups].map(([date, dayOrders]) => <section className={styles.recordGroup} key={date} aria-label={date}>
           <h3>{date}</h3>
-          <ul>{dayOrders.map(order => <ReceiptCard key={order.orderNo} order={order} scope={scope} canManage={canManage}
-            locked={actionsLocked || busy || actionPending || statusFailures.has(order.orderNo)} statusUnverified={canManage && statusFailures.has(order.orderNo)}
+          <ul>{dayOrders.map(order => <ReceiptCard key={order.orderNo} order={order} scope={scope} canCancel={canCancel} canChangeCarrier={canChangeCarrier}
+            locked={actionsLocked || busy || actionPending || (canRefreshTracking && statusFailures.has(order.orderNo))} statusUnverified={canRefreshTracking && statusFailures.has(order.orderNo)}
             opening={openingOrder === order.orderNo}
-            onResubmit={onResubmit ? () => void openReturnedOrder(order) : undefined}
+            onResubmit={canResubmit && onResubmit ? () => void openReturnedOrder(order) : undefined}
             onCancelled={() => {
               receipts.current = receipts.current.map(item => item.orderNo === order.orderNo
                 ? { ...item, status: 'cancelled', canCancel: false } : item)

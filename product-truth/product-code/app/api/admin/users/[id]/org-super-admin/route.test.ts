@@ -18,6 +18,7 @@ const memberId = '10000000-0000-4000-8000-000000000003'
 const anotherOrgId = '10000000-0000-4000-8000-000000000004'
 const authority = {
   orgId, settings: {}, canEdit: true, canRead: true, canEditPlatformRoot: false, actorPermissions: ['role:manage'],
+  canAppointOrganizationSuperAdmin: true,
 }
 const routeContext = { params: Promise.resolve({ id: memberId }) }
 const rpcArgs = { p_org_id: orgId, p_actor_id: actorId, p_user_id: memberId }
@@ -59,10 +60,18 @@ describe('organization super administrator resource', () => {
   it('checks current authority again for every read or write', async () => {
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: true, error: null } as never)
     expect((await GET(request(), routeContext)).status).toBe(200)
-    vi.mocked(loadOrgRolePermissionContext).mockResolvedValue({ ...authority, canEdit: false })
+    vi.mocked(loadOrgRolePermissionContext).mockResolvedValue({ ...authority, canAppointOrganizationSuperAdmin: false })
     expect((await GET(request(), routeContext)).status).toBe(403)
     expect((await PATCH(request({ enabled: false, expected_enabled: true, expected_org_id: orgId }), routeContext)).status).toBe(403)
     expect(supabaseAdmin.rpc).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses protected appointment authority independently of role-definition writing', async () => {
+    vi.mocked(loadOrgRolePermissionContext).mockResolvedValue({ ...authority, canEdit: false })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: true, error: null } as never)
+    const result = await PATCH(request({ enabled: true, expected_enabled: false, expected_org_id: orgId }), routeContext)
+    expect(result.status).toBe(200)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledOnce()
   })
 
   it('rejects authentication, self-mutation, incomplete input and an organization switch before executing a transaction', async () => {

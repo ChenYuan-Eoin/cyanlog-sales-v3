@@ -105,7 +105,7 @@ export interface TabsContentProps {
   modulePermissionCatalog?: RoleModulePermissionCatalog
   permissionsEditBlockReason?: string | null
   orgSuperAdminAuthority?: { orgId: string }
-  onSaveRole: (roleId: string, newPerms: string[]) => void
+  onSaveRole: (roleId: string, newPerms: string[], ownerShippingPermissions?: string[]) => void
 }
 
 export default function TabsContent({

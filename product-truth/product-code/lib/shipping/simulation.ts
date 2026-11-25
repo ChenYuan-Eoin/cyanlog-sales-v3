@@ -74,7 +74,7 @@ export function createShippingSimulation(now = Date.now()): ShippingWorkbenchReq
     }
     if (method !== 'POST') throw new Error('模拟体验不支持此操作。')
     const body = JSON.parse(String(init?.body || '{}')) as { key?: string; input?: ShippingInput; waybill?: string; reason?: string; payment?: unknown; serviceId?: unknown }
-    if (url === '/api/shipping/owner/orders') {
+    if (url === '/api/shipping/ledger') {
       if (!body.key || !body.input?.recipient?.name) throw new Error('请先完成示例收件资料。')
       const previous = createdByKey.get(body.key)
       if (previous) {

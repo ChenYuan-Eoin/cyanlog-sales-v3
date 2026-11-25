@@ -22,6 +22,11 @@ beforeEach(() => { fetcher.mockReset(); useLedger([]); vi.stubGlobal('React', Re
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('self-service shipping workbench', () => {
+  it('links to the employee entry when the same authorized operator can read their own records', () => {
+    render(<ShippingWorkbench settings={{ ...settings, canViewOwn: true }}/>)
+    expect(screen.getByRole('link', { name: '本人寄件' }).getAttribute('href')).toBe('/sales-portal')
+  })
+
   it('lets a ledger viewer read stored logistics without exposing shipping writes or polling the carrier', async () => {
     const order: ShipmentOrder = { ...fixtureOrders[0], status: 'waybill_created', waybill: 'SF1234567890123' }
     useLedger([order])
@@ -191,7 +196,7 @@ describe('self-service shipping workbench', () => {
     fireEvent.click(screen.getByRole('button', { name: '解析本批寄方' }))
     expect(screen.getByLabelText('本批寄件人')).toHaveProperty('value', '李四')
     expect(screen.getByRole('button', { name: '提交工单（1票）' })).toHaveProperty('disabled', false)
-    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/owner/orders'))).toBe(false)
+    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/shipping/ledger'))).toBe(false)
   })
 
   it.each(['sender_cash', 'recipient'])('confirms %s without a monthly account after explicit review', async payment => {
@@ -219,7 +224,7 @@ describe('self-service shipping workbench', () => {
   })
   it('keeps intake usable during configuration outages while disabling formal confirmation', async () => {
     const warning = '寄件配置暂时无法读取，正式下单暂不可用。'
-    fetcher.mockImplementation(async (url: string) => url.endsWith('/owner/orders')
+    fetcher.mockImplementation(async (url: string) => url.endsWith('/shipping/ledger')
       ? Response.json({ orderId: 'intake-only', orderNo: 'SO-INTAKE-ONLY', status: 'awaiting_confirmation', waybill: null })
       : Response.json({ records: [] }))
     render(<ShippingWorkbench settings={{ ...settings, ready: false, canSubmit: false, services: [], carrierConnections: [], billingAccounts: [], configurationWarning: warning }}/>)
@@ -239,7 +244,7 @@ describe('self-service shipping workbench', () => {
     const generateKey = vi.spyOn(globalThis.crypto, 'randomUUID')
     let submitted: Record<string, unknown> | undefined
     fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url.endsWith('/owner/orders')) {
+      if (url.endsWith('/shipping/ledger')) {
         submitted = JSON.parse(String(init?.body))
         return Response.json({ orderId: 'corrected-order', orderNo: 'SO-CORRECTED', status: 'awaiting_confirmation', waybill: null })
       }
@@ -281,7 +286,7 @@ describe('self-service shipping workbench', () => {
   it('explains that only valid tickets are submitted while retaining incomplete recipients for correction', async () => {
     const sentNames: string[] = []
     fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url.endsWith('/owner/orders')) {
+      if (url.endsWith('/shipping/ledger')) {
         sentNames.push(JSON.parse(String(init?.body)).input.recipient.name)
         return Response.json({ orderId: 'valid-order', orderNo: 'SO-VALID', status: 'awaiting_confirmation', waybill: null })
       }
@@ -303,7 +308,7 @@ describe('self-service shipping workbench', () => {
   it('intakes work orders before carrier configuration is ready and never sends confirmation or service parameters', async () => {
     let payload: Record<string, unknown> | undefined
     fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url.endsWith('/owner/orders')) { payload = JSON.parse(String(init?.body)); return Response.json({ orderId: 'intake-only', orderNo: 'SO-INTAKE', status: 'awaiting_confirmation', waybill: null }) }
+      if (url.endsWith('/shipping/ledger')) { payload = JSON.parse(String(init?.body)); return Response.json({ orderId: 'intake-only', orderNo: 'SO-INTAKE', status: 'awaiting_confirmation', waybill: null }) }
       return Response.json({ records: [] })
     })
     render(<ShippingWorkbench settings={{ ...settings, canSubmit: false, ready: false }}/>)
@@ -323,7 +328,7 @@ describe('self-service shipping workbench', () => {
   it.each(['network', 'server', 'invalid-response'] as const)('reclaims a %s intake receipt with the exact original key and input without reconciling an SF order', async failure => {
     const payloads: unknown[] = []
     fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (!url.endsWith('/owner/orders')) return Response.json({ records: [] })
+      if (!url.endsWith('/shipping/ledger')) return Response.json({ records: [] })
       payloads.push(JSON.parse(String(init?.body)))
       if (payloads.length === 1) {
         if (failure === 'network') throw new TypeError('network disconnected')
@@ -350,7 +355,7 @@ describe('self-service shipping workbench', () => {
   it('keeps incomplete sender drafts local until corrected', async () => {
     let payload: { input?: Record<string, unknown> } | undefined
     fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url.endsWith('/owner/orders')) { payload = JSON.parse(String(init?.body)); return Response.json({ orderId: 'no-sender', orderNo: 'SO-NO-SENDER', status: 'awaiting_confirmation', waybill: null }) }
+      if (url.endsWith('/shipping/ledger')) { payload = JSON.parse(String(init?.body)); return Response.json({ orderId: 'no-sender', orderNo: 'SO-NO-SENDER', status: 'awaiting_confirmation', waybill: null }) }
       return Response.json({ records: [] })
     })
     render(<ShippingWorkbench settings={{ ...settings, sender: { name: '', phone: '', province: '', city: '', county: '', address: '' }, canSubmit: false }}/>)
@@ -363,7 +368,7 @@ describe('self-service shipping workbench', () => {
   })
 
   it('keeps incomplete work-order receipts unresolved rather than counting an HTTP 200 as intake success', async () => {
-    fetcher.mockImplementation(async (url: string) => Response.json(url.endsWith('/owner/orders') ? { orderId: 'missing-number', status: 'awaiting_confirmation' } : { records: [] }))
+    fetcher.mockImplementation(async (url: string) => Response.json(url.endsWith('/shipping/ledger') ? { orderId: 'missing-number', status: 'awaiting_confirmation' } : { records: [] }))
     render(<ShippingWorkbench settings={settings}/>)
     await screen.findByText('暂无收寄记录')
     fireEvent.change(screen.getByLabelText('多行地址文本'), { target: { value: '客户甲 13800138011 广东省深圳市南山区科苑路1号' } })

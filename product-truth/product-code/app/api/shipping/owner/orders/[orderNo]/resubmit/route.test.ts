@@ -8,7 +8,7 @@ const mock = vi.hoisted(() => ({
   auth: vi.fn(), operator: vi.fn(), from: vi.fn(), rpc: vi.fn(), dept: vi.fn(), rules: vi.fn(),
 }))
 vi.mock('@/lib/auth', () => ({ requireAuth: mock.auth, AuthError: class extends Error {} }))
-vi.mock('@/lib/shipping/operator-access', () => ({ loadShippingOperatorDecision: mock.operator }))
+vi.mock('@/lib/shipping/entry-access', () => ({ resolveShippingOwnerAccess: mock.operator }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mock.from, rpc: mock.rpc } }))
 vi.mock('@/lib/shipping/intake-settings', () => ({ loadIntakeSettings: mock.rules }))
 vi.mock('@/lib/shipping/department-access', async importOriginal => ({
@@ -39,7 +39,7 @@ beforeEach(() => {
   }
   vi.resetAllMocks()
   mock.auth.mockResolvedValue(actor)
-  mock.operator.mockResolvedValue({ orgId: 'org-A', canOperate: false, roleCodes: ['FXIAOKE_BASELINE'] })
+  mock.operator.mockResolvedValue({ orgId: 'org-A', ownerPermissions: ['shipping:owner_view', 'shipping:owner_resubmit'] })
   mock.dept.mockResolvedValue([{ id: departmentId, name: '销售部', path: '总部 / 销售部' }])
   mock.rules.mockResolvedValue({ companyName: { enabled: true, required: true, minLength: 2 }, team: { enabled: true, required: true, minLength: 1 } })
   mock.from.mockImplementation((table: string) => {
@@ -66,23 +66,22 @@ it('loads the editable fields and return reason through the employee route', asy
 })
 
 it('denies a read-only employee before reading returned order details', async () => {
-  mock.operator.mockResolvedValue({ orgId: 'org-A', canOperate: false, roleCodes: ['READONLY'] })
+  mock.operator.mockResolvedValue({ orgId: 'org-A', ownerPermissions: ['shipping:owner_view'] })
 
   const response = await read()
 
   expect(response.status).toBe(403)
-  expect(await response.json()).toEqual({ error: '当前账号仅可查看本人寄件记录。' })
+  expect(await response.json()).toEqual({ error: '当前账号没有执行此本人寄件操作的权限。' })
   expect(mock.from).not.toHaveBeenCalledWith('shipping_orders')
 })
 
-it('opens an owned returned order for an authorized operator', async () => {
-  mock.operator.mockResolvedValue({ orgId: 'org-A', canOperate: true, roleCodes: ['SHIPPING_OPERATOR'] })
+it('keeps operator workbench grants separate from owner resubmission', async () => {
+  mock.operator.mockResolvedValue({ orgId: 'org-A', ownerPermissions: [] })
 
   const response = await read()
 
-  expect(response.status).toBe(200)
-  expect(await response.json()).toMatchObject({ orderNo: number, input: { recipient: contact } })
-  expect(mock.from).not.toHaveBeenCalledWith('auth_tokens')
+  expect(response.status).toBe(403)
+  expect(mock.from).not.toHaveBeenCalledWith('shipping_orders')
 })
 
 it.each([{ org_id: 'org-B' }, { created_by: 'user-B' }, { intake_source: 'anonymous_web' }, { order_no: 'other' }])('conceals out-of-scope drafts %j', async patch => {

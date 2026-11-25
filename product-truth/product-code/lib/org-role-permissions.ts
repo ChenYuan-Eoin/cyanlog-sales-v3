@@ -4,13 +4,15 @@ import {
   SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE,
 } from '@/lib/module-access'
 import {
-  canAccessOrgAdmin, hasPermission, isOrgDelegationSensitivePermission, ORG_BUSINESS_ROLE_ASSIGN, ORG_MEMBER_EDIT,
+  canListAssignableRoles, canReadRoleDirectory, hasPermission, isOrgDelegationSensitivePermission, ORG_BUSINESS_ROLE_ASSIGN, ORG_MEMBER_EDIT,
   ORG_DEPARTMENT_DIRECTORY_VIEW, ORG_DEPARTMENT_STRUCTURE_DELETE, ORG_DEPARTMENT_STRUCTURE_EDIT,
+  ROLE_DIRECTORY_VIEW,
 } from '@/lib/permissions'
 import { PERMISSION_KEYS, SUPER_ADMIN_CORE_PERMISSIONS, resolveRolePermissions } from '@/lib/role-permission-policy'
-import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
+import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions } from '@/lib/role-permission-resolution'
 import type { ScopedRoleAssignment } from '@/lib/scoped-access'
 import { ORG_MEMBER_LIFECYCLE_ACTIONS } from '@/lib/admin/member-action-keys'
+import { isShippingOwnerPermission, SHIPPING_OWNER_VIEW } from '@/lib/shipping/owner-permission-keys'
 
 export async function loadOrgRolePermissionSettings(orgId: string): Promise<unknown> {
   const { data, error } = await supabaseAdmin
@@ -36,8 +38,10 @@ type RolePermissionContext = {
   orgId: string
   settings: unknown
   canRead: boolean
+  canListAssignableRoles?: boolean
   canEdit: boolean
   canEditPlatformRoot: boolean
+  canAppointOrganizationSuperAdmin?: boolean
   actorPermissions: string[]
 }
 
@@ -90,6 +94,7 @@ export async function loadCurrentOrganizationRoleAssignments(userId: string, inc
     return [{
       scopeType, scopeId: row.scope_id, grantedAt: row.granted_at, roleId: role.id, roleCode: role.code,
       roleName: role.name, permissions: effective.permissions, permissionsOverridden: effective.overridden,
+      ownerShippingPermissions: scopeType === 'org' ? resolveOwnerShippingPermissions(settings, role) : [],
     }]
   })
   return { orgId, settings, assignments }
@@ -108,10 +113,11 @@ export async function loadOrgRolePermissionContext(userId: string): Promise<Role
     orgId,
     settings,
     canEdit,
+    canAppointOrganizationSuperAdmin: hasOrgRoleManagement(assignments, orgId, ['SUPER_ADMIN', ORG_SUPER_ADMIN_ROLE_CODE]),
     canEditPlatformRoot: hasOrgRoleManagement(assignments, orgId, ['SUPER_ADMIN']),
     actorPermissions: permissions,
-    canRead: canEdit || canAccessOrgAdmin(permissions, legacyRoleCodes)
-      || ['config:read', 'config:write', 'config:publish'].some(permission => hasPermission(permissions, permission)),
+    canRead: canReadRoleDirectory(permissions, legacyRoleCodes),
+    canListAssignableRoles: canListAssignableRoles(permissions, legacyRoleCodes),
   }
 }
 
@@ -149,23 +155,39 @@ export async function saveOrgRolePermissions(
   permissions: unknown,
   expectedPermissions: unknown,
   authorizedSnapshot?: Pick<RolePermissionContext, 'settings' | 'canEditPlatformRoot' | 'actorPermissions'>,
+  ownerChange?: { expected: unknown; permissions: unknown },
 ): Promise<SaveResult> {
-  if (!permissionList(permissions) || !permissionList(expectedPermissions)) return { ok: false, reason: 'invalid' }
+  if (!permissionList(permissions) || !permissionList(expectedPermissions)
+    || permissions.some(isShippingOwnerPermission)) return { ok: false, reason: 'invalid' }
   const { data: role, error } = await supabaseAdmin.from('roles')
     .select('id, code, name, description, permissions, sort_order').eq('id', roleId).maybeSingle()
   if (error) throw error
   if (!role) return { ok: false, reason: 'not_found' }
   const fixedRoleReason = rolePermissionsEditBlockReason(role.code, authorizedSnapshot?.canEditPlatformRoot)
-  if (fixedRoleReason) return { ok: false, reason: 'fixed_role', message: fixedRoleReason }
   const settings = authorizedSnapshot ? authorizedSnapshot.settings : await loadOrgRolePermissionSettings(orgId)
   if (settings !== null && !record(settings)) throw new Error('Invalid organization settings')
   const current = resolveRolePermissions(settings, role)
+  const currentOwnerPermissions = resolveOwnerShippingPermissions(settings, role)
+  const updateOrganizationPermissions = !samePermissions(current.permissions, permissions)
+  if (fixedRoleReason && !(role.code === 'FXIAOKE_BASELINE' && ownerChange && !updateOrganizationPermissions)) {
+    return { ok: false, reason: 'fixed_role', message: fixedRoleReason }
+  }
   if (!samePermissions(current.permissions, expectedPermissions)) return { ok: false, reason: 'conflict' }
+  let ownerPermissions = currentOwnerPermissions
+  if (ownerChange) {
+    if (!permissionList(ownerChange.permissions) || !permissionList(ownerChange.expected)
+      || !ownerChange.permissions.every(isShippingOwnerPermission) || !ownerChange.expected.every(isShippingOwnerPermission)
+      || (ownerChange.permissions.length > 0 && !ownerChange.permissions.includes(SHIPPING_OWNER_VIEW))) {
+      return { ok: false, reason: 'invalid' }
+    }
+    if (!samePermissions(currentOwnerPermissions, ownerChange.expected)) return { ok: false, reason: 'conflict' }
+    ownerPermissions = ownerChange.permissions
+  }
   // Preserve already stored extensions; clients cannot invent new capability names.
   const known = new Set<string>([...PERMISSION_KEYS, ...current.permissions])
   if (permissions.some((key) => !known.has(key))) return { ok: false, reason: 'invalid' }
   const newGrants = permissions.filter(key => !current.permissions.includes(key))
-  if (permissions.some(key => key === ORG_MEMBER_EDIT || key === ORG_BUSINESS_ROLE_ASSIGN
+  if (permissions.some(key => key === ORG_MEMBER_EDIT || key === ORG_BUSINESS_ROLE_ASSIGN || key === ROLE_DIRECTORY_VIEW
     || ORG_MEMBER_LIFECYCLE_ACTIONS.some(action => action === key))
     && !hasPermission(permissions, 'user:view')) return { ok: false, reason: 'invalid' }
   if (permissions.some(key => key === ORG_DEPARTMENT_STRUCTURE_EDIT || key === ORG_DEPARTMENT_STRUCTURE_DELETE)
@@ -175,19 +197,23 @@ export async function saveOrgRolePermissions(
     return dependency !== null && !hasShippingPermission(permissions, dependency)
   })) return { ok: false, reason: 'invalid' }
   const tenantActor = authorizedSnapshot && !authorizedSnapshot.canEditPlatformRoot ? authorizedSnapshot : null
-  if (tenantActor && permissions.includes('*')) return { ok: false, reason: 'escalation_forbidden' }
+  if (tenantActor && permissions.includes('*') && updateOrganizationPermissions) return { ok: false, reason: 'escalation_forbidden' }
 
+  const newOwnerGrants = ownerPermissions.filter(key => !currentOwnerPermissions.includes(key))
   const grantsRequiringPublishedDefinition = newGrants.includes(SHIPPING_BUNDLE)
-    ? [SHIPPING_OPERATE, SHIPPING_MANAGE_CONNECTIONS, ...REGISTERED_MODULE_PERMISSION_KEYS.filter(key => newGrants.includes(key))]
-    : REGISTERED_MODULE_PERMISSION_KEYS.filter(key => newGrants.includes(key))
+    ? [SHIPPING_OPERATE, SHIPPING_MANAGE_CONNECTIONS, ...REGISTERED_MODULE_PERMISSION_KEYS.filter(key => newGrants.includes(key)), ...newOwnerGrants]
+    : [...REGISTERED_MODULE_PERMISSION_KEYS.filter(key => newGrants.includes(key)), ...newOwnerGrants]
   if (grantsRequiringPublishedDefinition.length > 0) {
     const { loadRoleModulePermissionCatalog } = await import('@/lib/permission-registry')
     const catalog = await loadRoleModulePermissionCatalog()
     const available = new Map(catalog.flatMap(group => group.items.map(item => [item.key, item.dependencies] as const)))
     for (const key of grantsRequiringPublishedDefinition) {
       const dependencies = available.get(key)
+      const hasDependency = isShippingOwnerPermission(key)
+        ? (dependency: string) => ownerPermissions.includes(dependency)
+        : (dependency: string) => hasShippingPermission(permissions, dependency)
       if (!dependencies || dependencies.some(dependency =>
-        !available.has(dependency) || !hasShippingPermission(permissions, dependency))) {
+        !available.has(dependency) || !hasDependency(dependency))) {
         return { ok: false, reason: 'invalid' }
       }
     }
@@ -201,13 +227,20 @@ export async function saveOrgRolePermissions(
     && SUPER_ADMIN_CORE_PERMISSIONS.some((key) => !hasPermission(permissions, key))) {
     return { ok: false, reason: 'core_required' }
   }
-  if (samePermissions(current.permissions, permissions)) return { ok: true, role: { ...role, permissions: current.permissions } }
+  const updateOwnerPermissions = !samePermissions(currentOwnerPermissions, ownerPermissions)
+  const roleResult = { ...role, permissions, owner_shipping_permissions: ownerPermissions }
+  if (!updateOrganizationPermissions && !updateOwnerPermissions) return { ok: true, role: roleResult }
   const previous = settings ?? {}
   const previousOverrides = (previous as Record<string, unknown>).role_permission_overrides
   if (previousOverrides !== undefined && !record(previousOverrides)) throw new Error('Invalid role permission overrides')
-  const nextSettings = {
-    ...previous,
-    role_permission_overrides: { ...((previousOverrides ?? {}) as Record<string, unknown>), [roleId]: permissions },
+  const previousOwnerOverrides = (previous as Record<string, unknown>).shipping_owner_permission_overrides
+  if (previousOwnerOverrides !== undefined && !record(previousOwnerOverrides)) throw new Error('Invalid owner shipping permission overrides')
+  const nextSettings = { ...previous }
+  if (updateOrganizationPermissions) {
+    Object.assign(nextSettings, { role_permission_overrides: { ...(previousOverrides ?? {}), [roleId]: permissions } })
+  }
+  if (updateOwnerPermissions) {
+    Object.assign(nextSettings, { shipping_owner_permission_overrides: { ...(previousOwnerOverrides ?? {}), [roleId]: ownerPermissions } })
   }
   let query = supabaseAdmin.from('organizations').update({ settings: nextSettings })
     .eq('id', orgId).eq('status', 'active')
@@ -216,5 +249,5 @@ export async function saveOrgRolePermissions(
   const result = await query.select('id').maybeSingle()
   if (result.error) throw result.error
   if (!result.data) return { ok: false, reason: 'conflict' }
-  return { ok: true, role: { ...role, permissions } }
+  return { ok: true, role: roleResult }
 }

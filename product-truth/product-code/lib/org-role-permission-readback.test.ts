@@ -47,6 +47,20 @@ describe('organization role permission save and independent readback', () => {
     expect(request).toHaveBeenCalledTimes(1)
   })
 
+  it('does not accept a stale owner grant even if the ordinary role still matches', async () => {
+    const ownerChange = { expected: ['shipping:owner_view'], permissions: [] }
+    const acknowledged = { ...role, owner_shipping_permissions: [] }
+    const request = vi.fn().mockResolvedValueOnce(Response.json({
+      success: true, data: { org_id: input.orgId, role: acknowledged },
+    })).mockResolvedValueOnce(readback({ roles: [{ ...role, owner_shipping_permissions: ownerChange.expected }] }))
+    vi.stubGlobal('fetch', request)
+    await expect(saveAndReadOrgRolePermissions({}, { ...input, ownerChange })).rejects.toMatchObject({ status: 409 })
+    expect(JSON.parse(request.mock.calls[0][1].body)).toMatchObject({
+      expected_owner_shipping_permissions: ownerChange.expected,
+      owner_shipping_permissions: [],
+    })
+  })
+
   it.each([
     ['stale permissions', { roles: [{ ...role, permissions: input.expectedPermissions }] }],
     ['another organization', { org_id: 'org-b' }],

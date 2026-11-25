@@ -19,7 +19,7 @@ const roles = [
 const currentMember = { org_id: 'org-1', status: 'active', employment_status: 'active', is_default: true, left_at: null }
 const assignment = {
   scope_type: 'org', scope_id: 'org-1', org_id: 'org-1', user_id: 'user-1', granted_at: null,
-  role: { id: 'reader', code: 'READ_ONLY', name: '配置只读', permissions: ['config:read'] },
+  role: { id: 'reader', code: 'READ_ONLY', name: '角色只读', permissions: ['role:view', 'user:view'] },
 }
 const root = { ...assignment, role: { id: 'root', code: 'SUPER_ADMIN', name: '超管', permissions: ['*'] } }
 
@@ -39,9 +39,15 @@ function database({
     select: vi.fn(() => assignmentsQuery), eq: vi.fn(() => assignmentsQuery),
     then(resolve: (data: object) => void) { return Promise.resolve({ data: assignments, error: null }).then(resolve) },
   }
+  let selectedRoles = globalRoles
   const roleQuery: any = {
     select: vi.fn(() => roleQuery), order: vi.fn(() => roleQuery), eq: vi.fn(() => roleQuery),
-    range: vi.fn(async () => ({ data: globalRoles, error: null, count: globalRoles.length })),
+    not: vi.fn((_field: string, _predicate: string, codes: string) => {
+      const excludedCodes = codes.slice(1, -1).split(',')
+      selectedRoles = globalRoles.filter(role => !excludedCodes.includes((role as { code: string }).code))
+      return roleQuery
+    }),
+    range: vi.fn(async () => ({ data: selectedRoles, error: null, count: selectedRoles.length })),
   }
   const permissionQuery = {
     select: vi.fn(() => permissionQuery),
@@ -61,7 +67,7 @@ function database({
 describe('GET /api/roles organization permissions', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('当前组织无配置读取或组织管理权限时返回 403', async () => {
+  it('当前组织无角色目录查看权限时返回 403', async () => {
     database({ assignments: [] })
     const res = await GET(makeRequest())
     expect(res.status).toBe(403)
@@ -69,9 +75,46 @@ describe('GET /api/roles organization permissions', () => {
     expect(supabaseAdmin.from).not.toHaveBeenCalledWith('roles')
   })
 
+  it.each([['config:read'], ['role:view'], ['user:view']])(
+    '配置或单项查看权限 %s 不能读取权限定义或分配选项', async (...permissions) => {
+      database({ assignments: [{ ...assignment, role: { ...assignment.role, permissions } }] })
+      expect((await GET(makeRequest())).status).toBe(403)
+      expect((await GET(makeRequest('https://example.test/api/roles?view=assignable'))).status).toBe(403)
+      expect(supabaseAdmin.from).not.toHaveBeenCalledWith('roles')
+      expect(supabaseAdmin.from).not.toHaveBeenCalledWith('permission_points')
+    },
+  )
+
+  it('业务角色分配者只读取精简选项，不读取角色权限或保护角色', async () => {
+    const { roleQuery } = database({
+      assignments: [{ ...assignment, role: { ...assignment.role, permissions: ['user:view', 'user:assign_roles'] } }],
+      globalRoles: [
+        roles[1],
+        { id: 'root', code: 'SUPER_ADMIN', name: '平台超管', permissions: ['*'] },
+        { id: 'delegated', code: 'ORG_SUPER_ADMIN', name: '组织超管', permissions: ['role:manage'] },
+      ],
+    })
+    expect((await GET(makeRequest())).status).toBe(403)
+    const res = await GET(makeRequest('https://example.test/api/roles?view=assignable'))
+    expect(res.status).toBe(200)
+    expect((await res.json()).data).toEqual({ roles: [{ id: 'role-2', code: 'SALES', name: '销售' }] })
+    expect(roleQuery.select).toHaveBeenCalledExactlyOnceWith('id, code, name', { count: 'exact' })
+    expect(roleQuery.not).toHaveBeenCalledWith('code', 'in', '(SUPER_ADMIN,ORG_SUPER_ADMIN)')
+    expect(supabaseAdmin.from).not.toHaveBeenCalledWith('permission_points')
+  })
+
+  it('角色目录只读权限不能用来请求分配选项', async () => {
+    database()
+    expect((await GET(makeRequest('https://example.test/api/roles?view=assignable'))).status).toBe(403)
+    expect(supabaseAdmin.from).not.toHaveBeenCalledWith('roles')
+  })
+
   it('返回当前组织覆盖后的有效权限、空撤销和真实只读状态', async () => {
     const { roleQuery, orgQuery, assignmentsQuery, membershipQuery } = database({
-      settings: { role_permission_overrides: { 'role-1': ['config:read'], 'role-2': [] } },
+      settings: {
+        role_permission_overrides: { 'role-1': ['config:read'], 'role-2': [] },
+        shipping_owner_permission_overrides: { 'role-1': ['shipping:owner_view'], 'role-2': [] },
+      },
     })
     const res = await GET(makeRequest('https://example.test/api/roles?limit=20&offset=0'))
     const body = await res.json()
@@ -81,11 +124,12 @@ describe('GET /api/roles organization permissions', () => {
       data: {
         org_id: 'org-1',
         roles: [
-          { ...roles[0], permissions: ['config:read'], permissions_edit_block_reason: null },
-          { ...roles[1], permissions: [], permissions_edit_block_reason: null },
+          { ...roles[0], permissions: ['config:read'], owner_shipping_permissions: ['shipping:owner_view'], permissions_edit_block_reason: null },
+          { ...roles[1], permissions: [], owner_shipping_permissions: [], permissions_edit_block_reason: null },
         ],
         permission_keys: expect.arrayContaining(['config:read', 'config:write', 'role:manage']),
         permissions_editable: false,
+        can_assign_org_super_admin: false,
         permissions_edit_block_reason: expect.stringContaining('仅当前组织的超级管理员'),
       },
       meta: { total: 2, limit: 20, offset: 0, hasMore: false },
@@ -110,6 +154,7 @@ describe('GET /api/roles organization permissions', () => {
     const body = await res.json()
     expect(res.status).toBe(200)
     expect(body.data.permissions_editable).toBe(editable)
+    expect(body.data.can_assign_org_super_admin).toBe(editable)
     expect(body.data.permissions_edit_block_reason).toEqual(editable ? null : expect.any(String))
   })
 

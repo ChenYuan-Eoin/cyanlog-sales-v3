@@ -17,6 +17,7 @@ import {
   SHIPPING_BUNDLE,
   SHIPPING_MANAGE_CONNECTIONS,
   SHIPPING_OPERATE,
+  SHIPPING_OWNER_ACTION_KEYS,
   SHIPPING_SETTINGS_ACTION_KEYS,
   SHIPPING_WORKBENCH_ACTION_KEYS,
   type ShippingActionKey,
@@ -83,7 +84,7 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
     const published = registered.get(key)
     const [label, description] = SHIPPING_ACTION_DEFINITIONS[key]
     return published
-      ? { ...published, available: true }
+      ? { ...published, available: published.dependencies.every(dependency => registered.has(dependency)) }
       : { key, label, description, available: false }
   })
 
@@ -99,7 +100,11 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
     {
       id: 'shipping', label: '自助收寄',
       children: [
-        { id: 'shipping-personal', label: '本人寄件', notes: [existing('提交、查看和处理本人提报', '按登录资格、记录归属和单据状态执行。')] },
+        {
+          id: 'shipping-personal', label: '本人寄件',
+          actions: shippingActions(SHIPPING_OWNER_ACTION_KEYS),
+          notes: [existing('本人数据范围', '只处理本人提报，并校验纷享登录资格和单据状态。')],
+        },
         { id: 'shipping-workbench', label: '收寄工作台', actions: shippingActions(SHIPPING_WORKBENCH_ACTION_KEYS) },
       ],
     },
@@ -128,8 +133,8 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
       id: 'config', label: '配置中心',
       actions: [
         availableAction('config:read', '配置中心查看', '查看当前组织的通用业务配置。'),
-        availableAction('config:write', '配置中心修改', '编辑当前组织的通用业务配置。'),
-        availableAction('config:publish', '配置发布', '发布配置，并在支持版本回滚的页面回滚。'),
+        availableAction('config:write', '配置中心修改', '新建、编辑和删除通用配置草稿。支持版本历史的通用配置可将历史版本恢复到草稿。'),
+        availableAction('config:publish', '配置发布', '发布通用配置。编辑或回滚已生效的通用配置时，还须具有修改权限。'),
       ],
       children: [
         { id: 'trading', label: '定价与审批', notes: [existing('使用本页支持的通用配置权限')] },
@@ -166,8 +171,8 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
             },
             {
               id: 'role-access', label: '角色权限',
+              actions: [availableAction('role:view', '查看角色及成员', '查看当前组织的角色、有效成员和权限配置。', ['user:view'])],
               notes: [
-                existing('查看角色'),
                 { label: '保存角色权限', description: '由当前组织具有角色管理资格的超级管理员操作。', status: '系统控制' },
                 { label: '任免超级管理员', description: '由后端依据操作人和目标成员的资格校验。', status: '系统控制' },
               ],

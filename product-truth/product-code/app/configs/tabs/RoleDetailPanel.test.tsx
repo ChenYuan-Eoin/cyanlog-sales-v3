@@ -10,7 +10,7 @@ vi.mock('@/lib/toast', () => ({ success: vi.fn(), error: vi.fn(), confirmAction:
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 const role = { id: 'root', code: 'SUPER_ADMIN', name: '超级管理员', description: null, permissions: ['*'] }
-const defaults = { role, currentUserId: 'actor', saving: false, users: [], departments: [] }
+const defaults = { role, currentUserId: 'actor', saving: false, users: [], departments: [], canAssignBusinessRoles: true }
 function openPermissions() {
   fireEvent.click(screen.getByRole('tab', { name: '权限设置' }))
 }
@@ -421,4 +421,47 @@ it('retains a legacy department grant when saving an unrelated action', () => {
   fireEvent.click(screen.getByRole('checkbox', { name: '配置发布' }))
   fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
   expect(onSave).toHaveBeenCalledWith(['dept:write', 'config:publish'])
+})
+
+it('configures owner shipping on the base role without changing its fixed business grants', () => {
+  const onSave = vi.fn()
+  const role = {
+    id: 'baseline', code: 'FXIAOKE_BASELINE', name: '纷享基础查看', description: null,
+    permissions: ['quote:view'], owner_shipping_permissions: [],
+    permissions_edit_block_reason: '纷享基础角色的普通权限由系统固定。',
+  }
+  const catalog = [{
+    id: 'shipping', label: '寄件', description: '',
+    items: [
+      { key: 'shipping:owner_view', label: '查看本人寄件记录', description: '', dependencies: [] },
+      { key: 'shipping:owner_resubmit', label: '修改并重提本人退回工单', description: '', dependencies: ['shipping:owner_view'] },
+    ],
+  }]
+  render(<RoleDetailPanel {...defaults} role={role} permissionsEditable modulePermissionCatalog={catalog} onSave={onSave} />)
+  openPermissions()
+  const owner = within(screen.getByRole('region', { name: '本人寄件' }))
+  expect(screen.getByRole('checkbox', { name: '配置发布' })).toBeDisabled()
+  expect(owner.queryByRole('checkbox', { name: '提交本人寄件' })).not.toBeInTheDocument()
+  const resubmit = owner.getByRole('checkbox', { name: '修改并重提本人退回工单' })
+  fireEvent.click(resubmit)
+  expect(resubmit).toBeChecked()
+  expect(owner.getByRole('checkbox', { name: '查看本人寄件记录' })).toBeChecked()
+  expect(owner.getByRole('checkbox', { name: '查看本人寄件记录' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  expect(onSave).toHaveBeenCalledWith(['quote:view'], ['shipping:owner_resubmit', 'shipping:owner_view'])
+})
+
+it('keeps organization and owner shipping permission drafts separate', () => {
+  const onSave = vi.fn()
+  const catalog = [{
+    id: 'shipping', label: '寄件', description: '',
+    items: [{ key: 'shipping:owner_view', label: '查看本人寄件记录', description: '', dependencies: [] }],
+  }]
+  render(<RoleDetailPanel {...defaults} role={{ ...role, owner_shipping_permissions: [] }}
+    permissionsEditable modulePermissionCatalog={catalog} onSave={onSave} />)
+  openPermissions()
+  expect(screen.getByRole('checkbox', { name: '查看本人寄件记录' })).not.toBeChecked()
+  fireEvent.click(screen.getByRole('checkbox', { name: '配置发布' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  expect(onSave).toHaveBeenCalledExactlyOnceWith(['*', 'config:publish'])
 })

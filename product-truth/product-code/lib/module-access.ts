@@ -1,10 +1,18 @@
-import { SHIPPING_OPERATOR_ROLE_CODE } from './role-permission-resolution'
+import { isShippingOwnerPermission, SHIPPING_OWNER_ACTION_KEYS, type ShippingOwnerPermissionKey } from './shipping/owner-permission-keys'
+export { SHIPPING_OWNER_ACTION_KEYS } from './shipping/owner-permission-keys'
 
 export const SHIPPING_OPERATE = 'shipping:operate'
 export const SHIPPING_MANAGE_CONNECTIONS = 'shipping:manage_connections'
 export const SHIPPING_BUNDLE = 'shipping:*'
 
 export const SHIPPING_ACTION_DEFINITIONS = {
+  'shipping:owner_view': ['查看本人寄件记录', '查看本人提报的工单、回执和系统已保存的物流。'],
+  'shipping:owner_submit': ['提交本人寄件', '在本人提报入口提交一票或批量寄件工单。'],
+  'shipping:owner_address_write': ['保存本人常用地址', '更新本人快捷使用的寄件地址。'],
+  'shipping:owner_resubmit': ['修改并重提本人退回工单', '修改已退回的本人提报后重新提交。'],
+  'shipping:owner_tracking_refresh': ['同步本人运单物流', '向承运商查询本人运单状态并回写已验证的状态。'],
+  'shipping:owner_cancel': ['取消本人工单或运单', '按本人单据的处理状态取消符合条件的工单或运单。'],
+  'shipping:owner_change': ['本人运单在途转寄与退回', '对符合条件的本人运单发起在途转寄或退回。'],
   'shipping:ledger_view': ['查看收寄台账', '查看当前组织的寄件工单和系统已保存的物流。'],
   'shipping:record_create': ['录入寄件工单', '在工作台录入或批量提报工单。'],
   'shipping:record_review': ['核对与处理工单', '分配归属、修改、退回或重新核对工单。'],
@@ -32,7 +40,7 @@ export const SHIPPING_SETTINGS_ACTION_KEYS = [
 export const SHIPPING_WORKBENCH_PERMISSION_KEYS = SHIPPING_WORKBENCH_ACTION_KEYS
 export const SHIPPING_SETTINGS_PERMISSION_KEYS = SHIPPING_SETTINGS_ACTION_KEYS
 export const REGISTERED_MODULE_PERMISSION_KEYS = [
-  SHIPPING_OPERATE, SHIPPING_MANAGE_CONNECTIONS, ...SHIPPING_WORKBENCH_ACTION_KEYS, ...SHIPPING_SETTINGS_ACTION_KEYS,
+  SHIPPING_OPERATE, SHIPPING_MANAGE_CONNECTIONS, ...SHIPPING_OWNER_ACTION_KEYS, ...SHIPPING_WORKBENCH_ACTION_KEYS, ...SHIPPING_SETTINGS_ACTION_KEYS,
 ] as const
 export type ShippingPermissionKey = typeof REGISTERED_MODULE_PERMISSION_KEYS[number]
 export const MODULE_PERMISSION_ROW_FIELDS = 'code,status,kind,category,resource,action,supported_scope_types,dependencies,enforcement_consumer'
@@ -42,11 +50,7 @@ export function hasPublishedShippingBundle(keys: ReadonlySet<string>): boolean {
 }
 
 export function hasRestrictedShippingRoleSet(roleCodes: readonly string[]): boolean {
-  return roleCodes.every(code => code === 'FXIAOKE_BASELINE' || code === 'READONLY' || code === SHIPPING_OPERATOR_ROLE_CODE)
-}
-
-export function canWriteFxiaokeOwnerShipping(roleCodes: readonly string[]): boolean {
-  return roleCodes.includes('FXIAOKE_BASELINE') || !hasRestrictedShippingRoleSet(roleCodes)
+  return roleCodes.every(code => code === 'FXIAOKE_BASELINE' || code === 'READONLY' || code === 'SHIPPING_OPERATOR')
 }
 
 const workbenchActions = new Set<string>(SHIPPING_WORKBENCH_ACTION_KEYS)
@@ -59,6 +63,7 @@ export function legacyShippingPermission(key: string) {
 }
 
 export function shippingActionViewDependency(key: string): ShippingActionKey | null {
+  if (key !== 'shipping:owner_view' && isShippingOwnerPermission(key)) return 'shipping:owner_view'
   if (key !== 'shipping:ledger_view' && workbenchActions.has(key)) return 'shipping:ledger_view'
   if (key !== 'shipping:settings_view' && settingsActions.has(key)) return 'shipping:settings_view'
   return null
@@ -75,6 +80,7 @@ function explicitlyAllows(grants: ShippingGrants, key: string) {
 }
 
 export function hasShippingPermission(grants: ShippingGrants, key: string): boolean {
+  if (isShippingOwnerPermission(key)) return contains(grants, key)
   if (explicitlyAllows(grants, key)) return true
   const legacy = legacyShippingPermission(key)
   return !!legacy && contains(grants, legacy)
@@ -101,7 +107,7 @@ export function getPublishedModulePermissionKeys(rows: readonly unknown[]): stri
       && row.category === 'shipping' && row.action === code.slice('shipping:'.length)
       && row.enforcement_consumer === consumer
       && Array.isArray(row.supported_scope_types) && row.supported_scope_types.length === 1
-      && row.supported_scope_types[0] === 'org'
+      && row.supported_scope_types[0] === (isShippingOwnerPermission(code) ? 'self' : 'org')
       && Array.isArray(row.dependencies)
       && (dependency ? row.dependencies.length === 1 && row.dependencies[0] === dependency : row.dependencies.length === 0)
   })
@@ -118,12 +124,20 @@ export function getEffectiveShippingPermissions(
   grants: readonly string[], { registered, published }: { registered: ReadonlySet<string>; published: ReadonlySet<string> },
 ): ShippingPermissionKey[] {
   return REGISTERED_MODULE_PERMISSION_KEYS.filter(key => {
+    if (isShippingOwnerPermission(key)) return false
     const available = published.has(key)
     if (available && explicitlyAllows(grants, key)) return true
     if (!available && registered.has(key)) return false
     const legacy = legacyShippingPermission(key)
     return !!legacy && published.has(legacy) && explicitlyAllows(grants, legacy)
   })
+}
+
+export function getEffectiveOwnerShippingPermissions(
+  grants: readonly string[], { published }: { published: ReadonlySet<string> },
+): ShippingOwnerPermissionKey[] {
+  if (!published.has('shipping:owner_view') || !grants.includes('shipping:owner_view')) return []
+  return SHIPPING_OWNER_ACTION_KEYS.filter(key => published.has(key) && grants.includes(key))
 }
 
 const SETTINGS_WRITES = {
@@ -149,19 +163,21 @@ export function shippingSettingsWritePermission(action: unknown): ShippingPermis
 
 const LEGACY_CONNECTION_ROUTES = new Set(['/api/shipping/wecom', '/api/shipping/wecom/bot'])
 const LEDGER_ITEM = /^\/api\/shipping\/ledger\/[^/]+\/([^/]+)$/
-const OWNER_ITEM = /^\/api\/shipping\/owner\/orders\/[^/]+\/([^/]+)$/
+const OWNER_ITEM = /^\/api\/shipping\/owner\/orders\/SO-\d{8}-[A-Z0-9]{8}\/([^/]+)$/
 const LEGACY_RECONCILE = /^\/api\/shipping\/orders\/[^/]+\/reconcile$/
 
-export function shippingOwnerPermissionRequirement(path: string, method: string): ShippingPermissionKey | null {
+export function shippingOwnerPermissionRequirement(path: string, method: string): ShippingOwnerPermissionKey | null {
   const read = method === 'GET' || method === 'HEAD'
+  const write = method === 'POST'
+  if (!read && !write) return null
+  if (read && /^\/api\/shipping\/public\/orders\/[^/]+$/.test(path)) return 'shipping:owner_view'
+  if (path === '/api/shipping/owner/orders') return read ? 'shipping:owner_view' : 'shipping:owner_submit'
+  if (path === '/api/shipping/owner/profile') return read ? 'shipping:owner_view' : 'shipping:owner_address_write'
   const ownerAction = OWNER_ITEM.exec(path)?.[1]
-  if (read && /^\/api\/shipping\/public\/orders\/[^/]+$/.test(path)) return 'shipping:ledger_view'
-  if (path === '/api/shipping/owner/orders' || path === '/api/shipping/owner/profile' || ownerAction === 'resubmit') {
-    return read ? 'shipping:ledger_view' : 'shipping:record_create'
-  }
-  if (ownerAction === 'tracking') return 'shipping:tracking_refresh'
-  if (ownerAction === 'cancel') return 'shipping:order_cancel'
-  if (ownerAction === 'carrier-changes') return read ? 'shipping:ledger_view' : 'shipping:order_change'
+  if (ownerAction === 'resubmit') return 'shipping:owner_resubmit'
+  if (ownerAction === 'carrier-changes') return 'shipping:owner_change'
+  if (write && ownerAction === 'tracking') return 'shipping:owner_tracking_refresh'
+  if (write && ownerAction === 'cancel') return 'shipping:owner_cancel'
   return null
 }
 
@@ -174,7 +190,8 @@ export function shippingPermissionRequirement(path: string, method: string, work
   if (path === '/api/shipping/intake-settings') return read ? 'shipping:settings_view' : 'shipping:intake_write'
   if (LEGACY_CONNECTION_ROUTES.has(path)) return SHIPPING_MANAGE_CONNECTIONS
   if (path === '/api/shipping/contacts') return read ? 'shipping:ledger_view' : 'shipping:record_create'
-  if (read && (path === '/api/shipping/ledger' || path === '/api/shipping/orders')) return 'shipping:ledger_view'
+  if (path === '/api/shipping/ledger') return read ? 'shipping:ledger_view' : 'shipping:record_create'
+  if (read && path === '/api/shipping/orders') return 'shipping:ledger_view'
   if (write && path === '/api/shipping/tracking') return 'shipping:tracking_refresh'
   if (write && LEGACY_RECONCILE.test(path)) return 'shipping:order_reconcile'
   const action = LEDGER_ITEM.exec(path)?.[1]

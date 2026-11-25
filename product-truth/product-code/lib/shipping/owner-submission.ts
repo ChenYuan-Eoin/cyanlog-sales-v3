@@ -6,8 +6,9 @@ import { DOMESTIC_SHIPPING_PHONE_PATTERN, normalizeDomesticShippingPhone } from 
 import { loadEmployeeShippingDepartments, resolveEmployeeShippingDepartment } from '@/lib/shipping/department-access'
 import type { AuthUser } from '@/lib/auth'
 import type { z } from 'zod'
+import { createOwnerShipment, publicShipmentReceipt } from './collaboration'
 import { ShippingError } from './config'
-import { contactSchema, type ownerOrderSchema } from './validation'
+import { contactSchema, ownerOrderSchema } from './validation'
 
 export async function prepareOwnerSubmission(
   user: AuthUser, orgId: string, selfSubmit: boolean, form: z.infer<typeof ownerOrderSchema>['input'],
@@ -27,4 +28,13 @@ export async function prepareOwnerSubmission(
       ...(department ? { departmentId: department.id } : {}) } }
   delete input.serviceId
   return input
+}
+
+export async function submitShippingWorkorder(user: AuthUser, orgId: string, selfSubmit: boolean, body: unknown) {
+  const submission = ownerOrderSchema.parse(body)
+  const input = await prepareOwnerSubmission(user, orgId, selfSubmit, submission.input)
+  const order = await createOwnerShipment({
+    orgId, userId: user.id, key: submission.key, input, usesDefaultSender: !submission.input.sender,
+  })
+  return { ...publicShipmentReceipt(order), orderId: order.id, requestNumber: order.orderNo }
 }

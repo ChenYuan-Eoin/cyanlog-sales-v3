@@ -1,7 +1,8 @@
-import type { NextRequest } from 'next/server'
-import { shippingHandler } from '@/lib/shipping/http'
+import { NextResponse, type NextRequest } from 'next/server'
+import { shippingHandler, shippingJson } from '@/lib/shipping/http'
 import { shipmentLedgerQuerySchema } from '@/lib/shipping/validation'
 import { listShipmentLedger } from '@/lib/shipping/collaboration'
+import { submitShippingWorkorder } from '@/lib/shipping/owner-submission'
 
 export const runtime = 'nodejs'
 
@@ -17,4 +18,10 @@ export async function GET(req: NextRequest) {
     }
     return { records, nextCursor: records.length === filters.limit ? records.at(-1)?.createdAt || null : null }
   })
+}
+
+export async function POST(req: NextRequest) {
+  const response = await shippingHandler(req, async (user, orgId) =>
+    submitShippingWorkorder(user, orgId, false, await shippingJson(req)))
+  return response.ok ? new NextResponse(response.body, { status: 202, headers: response.headers }) : response
 }

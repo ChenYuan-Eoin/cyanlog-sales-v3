@@ -1,13 +1,14 @@
 import {
   canAccessOrgAdmin, hasLegacyDepartmentStructureWrite, hasLegacyOrgMemberWrite, hasPermission,
   ORGANIZATION_SOURCE_PERMISSION_KEYS, ORG_BUSINESS_ROLE_ASSIGN, ORG_DEPARTMENT_DIRECTORY_VIEW,
-  ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ORG_MEMBER_EDIT,
+  ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ORG_MEMBER_EDIT, ROLE_DIRECTORY_VIEW,
 } from '@/lib/permissions'
 import {
   hasPublishedShippingBundle, legacyShippingPermission, REGISTERED_MODULE_PERMISSION_KEYS, SHIPPING_BUNDLE,
   SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE, SHIPPING_SETTINGS_ACTION_KEYS, SHIPPING_WORKBENCH_ACTION_KEYS,
 } from '@/lib/module-access'
 import { ORG_MEMBER_LIFECYCLE_ACTIONS } from '@/lib/admin/member-action-keys'
+import { isShippingOwnerPermission } from '@/lib/shipping/owner-permission-keys'
 
 const registeredModuleKeys = new Set<string>(REGISTERED_MODULE_PERMISSION_KEYS)
 
@@ -16,7 +17,7 @@ export { resolveRolePermissions } from '@/lib/role-permission-resolution'
 /** Explicitly supported capabilities. Wildcards are only expanded when editing. */
 export const PERMISSION_KEYS: string[] = [
   '*', 'admin:access', 'config:*', 'config:read', 'config:write', 'config:publish',
-  'role:manage', 'report:*', 'report:dept', 'report:finance',
+  'role:manage', ROLE_DIRECTORY_VIEW, 'report:*', 'report:dept', 'report:finance',
   'org:*', 'org:write', ...ORGANIZATION_SOURCE_PERMISSION_KEYS, 'dept:*', 'dept:view', 'dept:write',
   ...ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS,
   'user:*', 'user:view', 'user:write', ORG_MEMBER_EDIT, ORG_BUSINESS_ROLE_ASSIGN, ...ORG_MEMBER_LIFECYCLE_ACTIONS, 'feishu:sync',
@@ -24,7 +25,7 @@ export const PERMISSION_KEYS: string[] = [
   'quote:approve', 'quote:view', 'customer:*', 'customer:view', 'customer:create',
   'contract:*', 'contract:view', 'contract:upload', 'contract:create', 'contract:write',
   'contract:review', 'contract:approve', 'contract:read', 'template:view', 'payment:*',
-  SHIPPING_BUNDLE, ...REGISTERED_MODULE_PERMISSION_KEYS,
+  SHIPPING_BUNDLE, ...REGISTERED_MODULE_PERMISSION_KEYS.filter(key => !isShippingOwnerPermission(key)),
 ]
 
 export const SUPER_ADMIN_CORE_PERMISSIONS: string[] = [
@@ -41,6 +42,7 @@ const IMPLIED_PERMISSION_SOURCES: Record<string, string[]> = {
   'admin:access': ['org:write', 'user:view', 'user:write'],
   'user:write': ['org:write'],
   'dept:write': ['org:write'],
+  [ROLE_DIRECTORY_VIEW]: ['role:manage'],
   'org:source_view': ['org:source_connect', 'org:source_preview', 'org:source_apply'],
   'contract:view': ['contract:read', 'contract:upload', 'contract:review', 'contract:write'],
   'contract:upload': ['contract:create', 'contract:write'],

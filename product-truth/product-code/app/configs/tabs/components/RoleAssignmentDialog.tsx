@@ -12,16 +12,9 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { BuildingIcon, ShieldIcon, XIcon } from 'lucide-react'
-import type { OrgSummaryDepartment, ScopedRoleAssignment } from '../../types'
+import type { OrgSummaryDepartment, OrgSummaryRole, ScopedRoleAssignment } from '../../types'
 import { isRoleAssignableInScope } from '@/lib/role-permission-resolution'
 import { isGenericallyAssignableRole } from '../role-assignment-policy'
-
-interface Role {
-  id: string
-  code: string
-  name: string
-  description?: string
-}
 
 interface RoleAssignmentDialogProps {
   userId: string
@@ -58,10 +51,11 @@ export function RoleAssignmentDialog({
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen
   const onOpenChange = controlledOnOpenChange ?? setInternalOpen
   const [loading, setLoading] = useState(false)
-  const [roles, setRoles] = useState<Role[]>([])
+  const [roles, setRoles] = useState<OrgSummaryRole[]>([])
   const [selectedOrgRoles, setSelectedOrgRoles] = useState<string[]>(currentRoles)
   const [selectedScopedRoleId, setSelectedScopedRoleId] = useState('')
   const [fetchingRoles, setFetchingRoles] = useState(false)
+  const [rolesError, setRolesError] = useState(false)
   const [scopeType, setScopeType] = useState<'org' | 'department'>('org')
   const [scopeId, setScopeId] = useState('')
   const [revokingKey, setRevokingKey] = useState<string | null>(null)
@@ -74,27 +68,33 @@ export function RoleAssignmentDialog({
   useEffect(() => {
     if (!open) return
 
+    const controller = new AbortController()
     const fetchRoles = async () => {
       setFetchingRoles(true)
+      setRoles([])
+      setRolesError(false)
       try {
         const token = localStorage.getItem('token')
-        const res = await fetch('/api/roles', {
+        const res = await fetch('/api/roles?view=assignable', {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
+          cache: 'no-store',
+          signal: controller.signal,
         })
-        if (res.ok) {
-          const result = await res.json()
-          if (result.success && result.data?.roles) {
-            setRoles(result.data.roles.filter((role: Role) => isGenericallyAssignableRole(role.code)))
-          }
+        if (!res.ok) throw new Error('无法读取可分配角色')
+        const result = await res.json()
+        if (!result.success || !Array.isArray(result.data?.roles)) throw new Error('无效的角色列表')
+        if (!controller.signal.aborted) {
+          setRoles(result.data.roles.filter((role: OrgSummaryRole) => isGenericallyAssignableRole(role.code)))
         }
-      } catch (err) {
-        console.error('Fetch roles error:', err)
+      } catch {
+        if (!controller.signal.aborted) setRolesError(true)
       } finally {
-        setFetchingRoles(false)
+        if (!controller.signal.aborted) setFetchingRoles(false)
       }
     }
 
-    fetchRoles()
+    void fetchRoles()
+    return () => controller.abort()
   }, [open])
 
   // 同步 currentRoles 变化
@@ -152,6 +152,8 @@ export function RoleAssignmentDialog({
 
         {fetchingRoles ? (
           <div className="py-8 text-center text-slate-500">加载角色列表...</div>
+        ) : rolesError ? (
+          <p className="py-8 text-center text-slate-600" role="alert">无法读取可分配角色，请关闭后重试。</p>
         ) : assignableRoles.length === 0 ? (
           <div className="py-8 text-center text-slate-500">当前作用域没有可分配的角色</div>
         ) : (
@@ -178,11 +180,6 @@ export function RoleAssignmentDialog({
                       {role.code}
                     </Badge>
                   </label>
-                  {role.description && (
-                    <p className="text-sm text-slate-500 mt-1">
-                      {role.description}
-                    </p>
-                  )}
                 </div>
               </div>
             ))}

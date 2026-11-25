@@ -6,112 +6,72 @@ const mocks = vi.hoisted(() => ({
   requireAuth: vi.fn(),
   requireShippingOperator: vi.fn(),
   requireShippingConnectionManager: vi.fn(),
+  resolveShippingOwnerAccess: vi.fn(),
   getRequestAuthToken: vi.fn(),
-  loadShippingOperatorDecision: vi.fn(),
-  from: vi.fn(),
 }))
 
 vi.mock('@/lib/auth', () => ({ requireAuth: mocks.requireAuth, AuthError: class AuthError extends Error {} }))
-vi.mock('./operator-access', () => ({
-  requireShippingOperator: mocks.requireShippingOperator,
-  loadShippingOperatorDecision: mocks.loadShippingOperatorDecision,
-}))
+vi.mock('./operator-access', () => ({ requireShippingOperator: mocks.requireShippingOperator }))
 vi.mock('./connection-authorization', () => ({ requireShippingConnectionManager: mocks.requireShippingConnectionManager }))
+vi.mock('./entry-access', () => ({ resolveShippingOwnerAccess: mocks.resolveShippingOwnerAccess }))
 vi.mock('@/lib/auth-token', () => ({ getRequestAuthToken: mocks.getRequestAuthToken }))
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from } }))
 
 import { shippingHandler } from './http'
 
-const request = new NextRequest('https://sales.cyanlog.icu/api/shipping/owner/orders')
+const owner = 'https://sales.cyanlog.icu/api/shipping/owner/orders'
+const ledger = 'https://sales.cyanlog.icu/api/shipping/ledger'
+const ownerView = 'shipping:owner_view'
+const ownerSubmit = 'shipping:owner_submit'
+const user = { id: 'user-1', phone: null, display_name: '员工', org_id: 'org-1' }
 
-describe('Fxiaoke owner proposal admission', () => {
+describe('exact owner proposal admission', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.requireAuth.mockResolvedValue({ id: 'user-1', phone: null, display_name: '员工', org_id: 'org-1' })
+    vi.resetAllMocks()
+    mocks.requireAuth.mockResolvedValue(user)
     mocks.requireShippingOperator.mockRejectedValue(new ShippingError(403, 'operator required'))
     mocks.getRequestAuthToken.mockReturnValue('session-token')
-    mocks.loadShippingOperatorDecision.mockResolvedValue({ orgId: 'org-1', canOperate: false, roleCodes: ['FXIAOKE_BASELINE'] })
-    const query = { eq: vi.fn(), maybeSingle: vi.fn() }
-    query.eq.mockReturnValue(query)
-    query.maybeSingle.mockResolvedValue({ data: { user_id: 'user-1', auth_method: 'fxiaoke' }, error: null })
-    mocks.from.mockReturnValue({ select: () => query })
+    mocks.resolveShippingOwnerAccess.mockResolvedValue({ orgId: 'org-1', ownerPermissions: [ownerView, ownerSubmit] })
   })
 
-  it('passes the verified Fxiaoke member and current organization as a self proposal', async () => {
-    const action = vi.fn(async (_user, _orgId, selfSubmit) => ({ selfSubmit }))
-    const response = await shippingHandler(request, action, { allowFxiaokeSelfSubmit: true })
+  it('verifies the Fxiaoke session and passes the scoped actor to its own action', async () => {
+    const action = vi.fn(async () => ({ ok: true }))
+    const response = await shippingHandler(new NextRequest(owner), action, 'owner')
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ selfSubmit: true })
-    expect(action).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-1' }), 'org-1', true)
+    expect(mocks.resolveShippingOwnerAccess).toHaveBeenCalledWith(user, 'session-token')
+    expect(action).toHaveBeenCalledWith(user, 'org-1')
+    expect(mocks.requireShippingOperator).not.toHaveBeenCalled()
   })
 
-  it('allows only passive owner reads for a Fxiaoke read-only member', async () => {
-    const options = { allowFxiaokeSelfSubmit: true }
+  it('permits passive reads while denying owner submit, resubmit, tracking and unsupported methods', async () => {
     const action = vi.fn(async () => ({ ok: true }))
-    mocks.loadShippingOperatorDecision.mockResolvedValue({ orgId: 'org-1', canOperate: false, roleCodes: ['READONLY'] })
-    expect((await shippingHandler(request, action, options)).status).toBe(200)
-    expect((await shippingHandler(request, action, { ...options, requiresOwnerWrite: true })).status).toBe(403)
-    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
-      expect((await shippingHandler(new NextRequest(request.url, { method }), action, options)).status).toBe(403)
+    mocks.resolveShippingOwnerAccess.mockResolvedValue({ orgId: 'org-1', ownerPermissions: [ownerView] })
+    expect((await shippingHandler(new NextRequest(owner), action, 'owner')).status).toBe(200)
+    for (const [path, method] of [
+      [owner, 'POST'], [owner, 'PUT'], [owner, 'DELETE'],
+      [owner + '/SO-20261118-AABBCCDD/resubmit', 'GET'],
+      [owner + '/SO-20261118-AABBCCDD/tracking', 'POST'],
+    ]) {
+      expect((await shippingHandler(new NextRequest(path, { method }), action, 'owner')).status).toBe(403)
     }
-    expect(action).toHaveBeenCalledTimes(1)
+    expect(action).toHaveBeenCalledOnce()
   })
 
-  it('retains owner writes when the Fxiaoke baseline is also assigned', async () => {
+  it('does not carry an operator grant into an owner route after owner submission is revoked', async () => {
     const action = vi.fn(async () => ({ ok: true }))
-    mocks.loadShippingOperatorDecision.mockResolvedValue({ orgId: 'org-1', canOperate: false, roleCodes: ['READONLY', 'FXIAOKE_BASELINE'] })
-    expect((await shippingHandler(new NextRequest(request.url, { method: 'POST' }), action, { allowFxiaokeSelfSubmit: true })).status).toBe(200)
-    expect(action).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-1' }), 'org-1', true)
-  })
-
-  it('rejects owner reads when the exact organization has no assigned role', async () => {
-    const action = vi.fn()
-    mocks.loadShippingOperatorDecision.mockResolvedValue({ orgId: 'org-1', canOperate: false, roleCodes: [] })
-    expect((await shippingHandler(request, action, { allowFxiaokeSelfSubmit: true })).status).toBe(403)
+    mocks.requireShippingOperator.mockResolvedValue('org-1')
+    mocks.resolveShippingOwnerAccess.mockResolvedValue({ orgId: 'org-1', ownerPermissions: [ownerView] })
+    expect((await shippingHandler(new NextRequest(owner, { method: 'POST' }), action, 'owner')).status).toBe(403)
     expect(action).not.toHaveBeenCalled()
+    expect(mocks.requireShippingOperator).not.toHaveBeenCalled()
+    expect((await shippingHandler(new NextRequest(ledger, { method: 'POST' }), action)).status).toBe(200)
+    expect(mocks.requireShippingOperator).toHaveBeenCalledExactlyOnceWith(user.id, 'shipping:record_create')
   })
 
-  it('does not admit a local session through the Fxiaoke self proposal exception', async () => {
-    const query = { eq: vi.fn(), maybeSingle: vi.fn() }
-    query.eq.mockReturnValue(query)
-    query.maybeSingle.mockResolvedValue({ data: { user_id: 'user-1', auth_method: 'local' }, error: null })
-    mocks.from.mockReturnValue({ select: () => query })
-    const action = vi.fn()
-    const response = await shippingHandler(request, action, { allowFxiaokeSelfSubmit: true })
-    expect(response.status).toBe(403)
-    expect(action).not.toHaveBeenCalled()
-  })
-
-  it('does not look up an owner session if the current organization is inactive or unavailable', async () => {
-    mocks.loadShippingOperatorDecision.mockResolvedValueOnce(null)
-    const action = vi.fn()
-    const response = await shippingHandler(request, action, { allowFxiaokeSelfSubmit: true })
-    expect(response.status).toBe(403)
-    expect(mocks.from).not.toHaveBeenCalled()
-    expect(action).not.toHaveBeenCalled()
-  })
-
-  it('does not substitute another organization or callback path when current authorization fails', async () => {
-    mocks.loadShippingOperatorDecision.mockRejectedValueOnce(new ShippingError(503, 'unavailable'))
-    const action = vi.fn()
-    expect((await shippingHandler(request, action, { allowFxiaokeSelfSubmit: true })).status).toBe(503)
-    expect(mocks.from).not.toHaveBeenCalled()
-    expect(action).not.toHaveBeenCalled()
-  })
-
-  it('denies employee-only access after the authenticated organization changes', async () => {
-    mocks.loadShippingOperatorDecision.mockResolvedValueOnce({ orgId: 'org-2', canOperate: false })
-    const action = vi.fn()
-    expect((await shippingHandler(request, action, { allowFxiaokeSelfSubmit: true })).status).toBe(403)
-    expect(mocks.from).not.toHaveBeenCalled()
-    expect(action).not.toHaveBeenCalled()
-  })
-
-  it('allows established operators on owner routes without an employee-only session', async () => {
-    mocks.loadShippingOperatorDecision.mockResolvedValueOnce({ orgId: 'org-2', canOperate: true })
+  it('denies unknown or unavailable owner authorization without running the callback', async () => {
     const action = vi.fn(async () => ({ ok: true }))
-    expect((await shippingHandler(request, action, { allowFxiaokeSelfSubmit: true })).status).toBe(200)
-    expect(action).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-1' }), 'org-2', false)
-    expect(mocks.from).not.toHaveBeenCalled()
+    mocks.resolveShippingOwnerAccess.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error('unavailable'))
+    expect((await shippingHandler(new NextRequest(owner), action, 'owner')).status).toBe(403)
+    expect((await shippingHandler(new NextRequest(owner), action, 'owner')).status).toBe(503)
+    expect(action).not.toHaveBeenCalled()
   })
 })

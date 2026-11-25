@@ -33,15 +33,15 @@ import type { NextRequest } from 'next/server'
 import { getRequestAuthToken } from '@/lib/auth-token'
 import { createMiddlewareRestClient, type MiddlewareRestClient } from '@/lib/middleware-rest-client'
 import {
-  canAccessOrgAdmin, canEnterConfigurationCenter, hasConfigurationReadPermission, hasOrganizationSourcePermission,
+  canAccessOrgAdmin, canEnterConfigurationCenter, canListAssignableRoles, canReadRoleDirectory, hasConfigurationReadPermission, hasOrganizationSourcePermission,
   hasOrgDepartmentDirectoryPermission, hasPermission, ORG_BUSINESS_ROLE_ASSIGN, ORG_MEMBER_EDIT,
 } from '@/lib/permissions'
 import {
   ORG_MEMBER_INVITE, ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_REMOVE_MEMBERSHIP,
 } from '@/lib/admin/member-action-keys'
-import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, resolveRolePermissions, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
+import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions, resolveRolePermissions, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
 import {
-  canWriteFxiaokeOwnerShipping,
+  getEffectiveOwnerShippingPermissions,
   getEffectiveShippingPermissions,
   getShippingPermissionPublication,
   hasRestrictedShippingRoleSet,
@@ -110,6 +110,8 @@ type MiddlewareAuthContext = {
   authorizationRoleCodes: string[]
   allPermissions: string[]
   shippingPermissions: string[]
+  ownerShippingPermissions: string[]
+  activeMembership: boolean
   departmentWorkspaceAccess: boolean
 }
 
@@ -330,6 +332,7 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
   if (!organization) throw new Error('auth middleware organization permissions unavailable')
 
   const allPermissions: string[] = []
+  const ownerShippingPermissions: string[] = []
   const roleCodes: string[] = []
   const authorizationRoleCodes: string[] = []
   const activeMembership = organization.status === 'active'
@@ -343,6 +346,7 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
       roleCodes.push(r.code)
       const effective = resolveRolePermissions(organization.settings, r)
       allPermissions.push(...effective.permissions)
+      if (usesFxiaoke && activeMembership) ownerShippingPermissions.push(...resolveOwnerShippingPermissions(organization.settings, r))
       if (!effective.overridden) authorizationRoleCodes.push(r.code)
     }
   }
@@ -362,6 +366,8 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
     authorizationRoleCodes,
     allPermissions,
     shippingPermissions: activeMembership ? allPermissions : [],
+    ownerShippingPermissions,
+    activeMembership,
     departmentWorkspaceAccess,
   }
 }
@@ -372,6 +378,14 @@ async function getMiddlewareAuthContext(token: string, checkDepartmentWorkspace:
   return loadMiddlewareAuthContext(token, checkDepartmentWorkspace)
 }
 
+async function readShippingPermissionPublication(codes: ReadonlySet<string>) {
+  const rest = createMiddlewareRestClient()
+  const rows = (await Promise.all(Array.from(codes, code =>
+    rest.selectRows<unknown>('permission_points', { code }, MODULE_PERMISSION_ROW_FIELDS, 2)
+  ))).flat()
+  return getShippingPermissionPublication(rows)
+}
+
 async function allowsShippingPermission(grants: string[], required: readonly ShippingPermissionKey[]): Promise<boolean> {
   const relevant = new Set<string>(required.flatMap(key => {
     const legacy = legacyShippingPermission(key)
@@ -379,12 +393,14 @@ async function allowsShippingPermission(grants: string[], required: readonly Shi
     return hasPermission(grants, key) ? [key] : []
   }))
   if (!relevant.size) return false
-  const rest = createMiddlewareRestClient()
-  const rows = (await Promise.all(Array.from(relevant, code =>
-    rest.selectRows<unknown>('permission_points', { code }, MODULE_PERMISSION_ROW_FIELDS, 2)
-  ))).flat()
-  const allowed = getEffectiveShippingPermissions(grants, getShippingPermissionPublication(rows))
+  const allowed = getEffectiveShippingPermissions(grants, await readShippingPermissionPublication(relevant))
   return required.some(key => allowed.includes(key))
+}
+
+async function allowsShippingOwnerPermission(grants: string[], required: NonNullable<ReturnType<typeof shippingOwnerPermissionRequirement>>) {
+  if (!grants.includes(required) || !grants.includes('shipping:owner_view')) return false
+  const publication = await readShippingPermissionPublication(new Set([required, 'shipping:owner_view']))
+  return getEffectiveOwnerShippingPermissions(grants, publication).includes(required)
 }
 
 export async function middleware(request: NextRequest) {
@@ -452,13 +468,19 @@ export async function middleware(request: NextRequest) {
     const restrictedMember = (authContext.authMethod === 'fxiaoke' || authContext.roleCodes.includes(SHIPPING_OPERATOR_ROLE_CODE))
       && hasRestrictedShippingRoleSet(authContext.roleCodes)
     const read = request.method === 'GET' || request.method === 'HEAD'
-    const fxiaokeSession = authContext.authMethod === 'fxiaoke'
-    const canWriteFxiaokeOwner = fxiaokeSession && canWriteFxiaokeOwnerShipping(authContext.roleCodes)
     const ownerPermission = shippingOwnerPermissionRequirement(pathname, request.method)
-    const operatorOwnerAction = read || !restrictedMember || pathname === '/api/shipping/owner/orders'
-    const shippingPermission = ownerPermission && operatorOwnerAction && !(read ? fxiaokeSession : canWriteFxiaokeOwner)
-      ? ownerPermission
-      : shippingPermissionRequirement(pathname, request.method, request.nextUrl.searchParams.get('workspace') === '1')
+    const receiptLookup = read && /^\/api\/shipping\/public\/orders\/[^/]+$/.test(pathname)
+    // The receipt handler distinguishes actor-owned orders from old anonymous bearer receipts.
+    const legacyReceiptAdmission = receiptLookup && authContext.activeMembership && (
+      authContext.authMethod === 'fxiaoke' || await allowsShippingPermission(authContext.shippingPermissions, ['shipping:ledger_view'])
+    )
+    if (ownerPermission && !legacyReceiptAdmission
+      && !await allowsShippingOwnerPermission(authContext.ownerShippingPermissions, ownerPermission)) {
+      return NextResponse.json({ error: 'Forbidden', required: ownerPermission }, {
+        status: 403, headers: { 'Cache-Control': 'private, no-store' },
+      })
+    }
+    const shippingPermission = shippingPermissionRequirement(pathname, request.method, request.nextUrl.searchParams.get('workspace') === '1')
     const shippingSettingsWrite = request.method === 'POST' && pathname === '/api/shipping/settings'
     const requiredShipping: readonly ShippingPermissionKey[] = shippingSettingsWrite
       ? [...SHIPPING_SETTINGS_ACTION_KEYS.slice(1), SHIPPING_MANAGE_CONNECTIONS]
@@ -480,9 +502,10 @@ export async function middleware(request: NextRequest) {
     const organizationSourcePath = pathname === '/api/admin/organization-sources'
       || pathname.startsWith('/api/admin/organization-sources/')
     const organizationSourceAccess = organizationSourcePath && hasOrganizationSourcePermission(authContext.allPermissions)
-    const rolesIndexAccess = read && pathname === '/api/roles' && (hasConfigurationReadPermission(authContext.allPermissions)
-      || (hasPermission(authContext.allPermissions, 'user:view')
-        && hasPermission(authContext.allPermissions, ORG_BUSINESS_ROLE_ASSIGN)))
+    const rolesIndexAccess = read && pathname === '/api/roles'
+      && (request.nextUrl.searchParams.get('view') === 'assignable'
+        ? canListAssignableRoles(authContext.allPermissions, authContext.authorizationRoleCodes)
+        : canReadRoleDirectory(authContext.allPermissions, authContext.authorizationRoleCodes))
     // Department write handlers independently enforce the exact edit/delete action.
     const departmentDirectoryPath = (read && pathname === '/api/admin/org')
       || (pathname === '/api/admin/departments' && (read || request.method === 'POST'))
@@ -496,26 +519,21 @@ export async function middleware(request: NextRequest) {
         : NextResponse.redirect(buildRedirectUrl(request, '/'))
     }
     if (restrictedMember && pathname.startsWith('/api/') && ['GET', 'HEAD'].includes(request.method)
-      && !specificConfigurationAccess && !requiredShipping.length && !baselineReadAllowed(pathname)) {
+      && !specificConfigurationAccess && !ownerPermission && !requiredShipping.length && !baselineReadAllowed(pathname)) {
       return NextResponse.json({ error: '此数据尚未开放基础查看范围', code: 'READ_SCOPE_REQUIRED' }, { status: 403 })
     }
-    const ownerAction = request.method === 'POST' && (returnedOwnerOrderPath.test(pathname)
-      || ownerCarrierChanges.test(pathname)
-      || /^\/api\/shipping\/owner\/orders\/SO-\d{8}-[A-Z0-9]{8}\/tracking$/.test(pathname)
-      || /^\/api\/shipping\/owner\/orders\/SO-\d{8}-[A-Z0-9]{8}\/cancel$/.test(pathname))
-    const fxiaokeOwnerWrite = canWriteFxiaokeOwner
-      && (ownerAction || pathname === '/api/shipping/owner/orders' || pathname === '/api/shipping/owner/profile')
     if (restrictedMember
       && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
       && pathname !== '/api/auth/logout'
-      && !fxiaokeOwnerWrite
+      && !ownerPermission
       && !specificConfigurationAccess
       && !requiredShipping.length) {
       return NextResponse.json({ error: '基础查看账号不能执行此操作', code: 'READ_ONLY' }, { status: 403 })
     }
 
     // 路径级权限校验
-    const allowed = specificConfigurationAccess || (required === 'admin:access'
+    const allowed = pathname === '/api/roles' ? rolesIndexAccess
+      : specificConfigurationAccess || (required === 'admin:access'
       ? canAccessOrgAdmin(authContext.allPermissions, authContext.authorizationRoleCodes)
       : required === 'config:read' ? (pathname !== '/configs' && hasConfigurationReadPermission(authContext.allPermissions))
         : (!required || hasPermission(authContext.allPermissions, required)))

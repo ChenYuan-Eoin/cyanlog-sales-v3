@@ -8,20 +8,40 @@ import { createApiError } from '@/lib/api/errors'
 import { rolePermissionsEditBlockReason } from '@/lib/org-role-permissions'
 import { hasPublishedShippingBundle, REGISTERED_MODULE_PERMISSION_KEYS, SHIPPING_BUNDLE } from '@/lib/module-access'
 import { loadRoleModulePermissionCatalog } from '@/lib/permission-registry'
-import { PERMISSION_KEYS, resolveRolePermissions } from '@/lib/role-permission-policy'
+import { PERMISSION_KEYS } from '@/lib/role-permission-policy'
+import { ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions, resolveRolePermissions } from '@/lib/role-permission-resolution'
 import { isRoleId, withRolePermissionContext } from './context'
 
 export async function GET(req: NextRequest) {
-  return withRolePermissionContext(req, async ({ orgId, settings, canRead, canEdit, canEditPlatformRoot }) => {
-    if (!canRead) {
+  return withRolePermissionContext(req, async ({
+    orgId, settings, canRead, canEdit, canEditPlatformRoot, canAppointOrganizationSuperAdmin, canListAssignableRoles,
+  }) => {
+    const { searchParams } = new URL(req.url)
+    const assignable = searchParams.get('view') === 'assignable'
+    if (assignable ? !canListAssignableRoles : !canRead) {
       return errorResponse(createApiError('FORBIDDEN'))
     }
 
-    const { searchParams } = new URL(req.url)
     const roleId = searchParams.get('role_id')
     if (roleId !== null && !isRoleId(roleId)) return errorResponse(createApiError('VALIDATION_ERROR'))
     const limit = Math.min(Math.max(Number.parseInt(searchParams.get('limit') || '50', 10) || 50, 1), 100)
     const offset = Math.max(Number.parseInt(searchParams.get('offset') || '0', 10) || 0, 0)
+
+    if (assignable) {
+      let query = supabaseAdmin
+        .from('roles')
+        .select('id, code, name', { count: 'exact' })
+        .not('code', 'in', `(SUPER_ADMIN,${ORG_SUPER_ADMIN_ROLE_CODE})`)
+      if (roleId !== null) query = query.eq('id', roleId)
+      const { data, error, count } = await query.order('sort_order', { ascending: true }).range(offset, offset + limit - 1)
+      if (error) {
+        console.error('List assignable roles error:', error)
+        return errorResponse(createApiError('DB_ERROR', '查询失败'))
+      }
+      return successResponse({
+        roles: (data ?? []).map(({ id, code, name }) => ({ id, code, name })),
+      }, { total: count || 0, limit, offset, hasMore: (count || 0) > offset + limit })
+    }
 
     let query = supabaseAdmin
       .from('roles')
@@ -39,6 +59,7 @@ export async function GET(req: NextRequest) {
     const roles = (data || []).map((role) => ({
       ...role,
       permissions: resolveRolePermissions(settings, role).permissions,
+      owner_shipping_permissions: resolveOwnerShippingPermissions(settings, role),
       permissions_edit_block_reason: rolePermissionsEditBlockReason(role.code, canEditPlatformRoot),
     }))
     const permissionCatalog = await loadRoleModulePermissionCatalog()
@@ -56,7 +77,7 @@ export async function GET(req: NextRequest) {
         permission_keys: permissionKeys,
         permission_catalog: permissionCatalog,
         permissions_editable: canEdit,
-        can_assign_org_super_admin: canEdit,
+        can_assign_org_super_admin: canAppointOrganizationSuperAdmin === true,
         permissions_edit_block_reason: canEdit ? null : '仅当前组织的超级管理员可修改角色权限。',
       },
       {

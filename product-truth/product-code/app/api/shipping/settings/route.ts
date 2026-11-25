@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
       if (!access?.canOperate) throw new ShippingError(403, '当前账号没有自助收寄操作权限。')
       const settings = await loadShippingWorkspaceSettings(access.orgId)
       return NextResponse.json({
-        settings: { ...settings, canOperate: true, canManageConnections: access.canManageConnections, permissions: access.permissions },
+        settings: { ...settings, canOperate: true, canViewOwn: access.canViewOwn, canManageConnections: access.canManageConnections, permissions: access.permissions },
       }, { headers: { 'Cache-Control': 'no-store' } })
     }
     const { orgId, permissions } = await loadShippingConnectionAccess(user.id)

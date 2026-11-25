@@ -72,7 +72,7 @@ export default function ShippingWorkspace({ settings, userId }: { settings: Ship
         const result = await api<ShipmentReceipt & { receiptToken: string }>('/api/shipping/public/orders', { key: key.current, rawInput: rawAddress || undefined, input: { ...confirmation, payment: 'sender_monthly' }, contextToken: query.get('context') || undefined, businessCode: query.get('code') || undefined })
         setReceipt(result); setConfirmation(null); window.history.replaceState(null, '', `/shipping?receipt=${encodeURIComponent(result.receiptToken)}`)
       } else {
-        const result = await api<ShipmentReceipt>('/api/shipping/owner/orders', { key: key.current, input: confirmation, confirmed: true }); setReceipt(result); setConfirmation(null)
+        const result = await api<ShipmentReceipt>(settings.guest ? '/api/shipping/owner/orders' : '/api/shipping/ledger', { key: key.current, input: confirmation, confirmed: true }); setReceipt(result); setConfirmation(null)
       }
     }
     catch (e) {

@@ -1,8 +1,9 @@
 import {
   ORG_BUSINESS_ROLE_ASSIGN, ORG_DEPARTMENT_DIRECTORY_VIEW, ORG_DEPARTMENT_STRUCTURE_DELETE,
-  ORG_DEPARTMENT_STRUCTURE_EDIT, ORG_MEMBER_EDIT,
+  ORG_DEPARTMENT_STRUCTURE_EDIT, ORG_MEMBER_EDIT, ROLE_DIRECTORY_VIEW,
 } from './permissions'
 import { SHIPPING_ACTION_DEFINITIONS, shippingActionViewDependency } from './module-access'
+import { isShippingOwnerPermission } from './shipping/owner-permission-keys'
 import {
   ORG_MEMBER_INVITE, ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_REMOVE_MEMBERSHIP,
 } from './admin/member-action-keys'
@@ -136,6 +137,7 @@ export const BUILTIN_PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   definition({ key: 'config:write', category: 'console', label: '配置中心修改', description: '允许修改当前组织配置。', enforcementConsumer: 'lib/configs/access.ts' }),
   definition({ key: 'config:publish', category: 'console', label: '配置发布', description: '允许发布当前组织配置。', enforcementConsumer: 'lib/configs/access.ts' }),
   definition({ key: 'role:manage', category: 'console', label: '角色权限管理', description: '允许维护当前组织角色和权限。', enforcementConsumer: 'lib/org-role-permissions.ts#canEditRolePermissions' }),
+  definition({ key: ROLE_DIRECTORY_VIEW, category: 'org', label: '查看角色及成员', description: '查看当前组织的角色、有效成员和权限配置。', scopes: ['org'], dependencies: ['user:view'], enforcementConsumer: 'lib/permissions.ts#canReadRoleDirectory' }),
   definition({ key: 'report:*', category: 'console', label: '经营报表组合权限', description: '经营报表资源通配能力。', kind: 'bundle', status: 'draft', enforcementConsumer: null }),
   definition({ key: 'report:dept', category: 'console', label: '部门报表访问', description: '请求查看部门经营数据的保留权限。', status: 'draft', enforcementConsumer: null }),
   definition({ key: 'report:finance', category: 'console', label: '财务报表访问', description: '请求查看财务口径数据的保留权限。', status: 'draft', enforcementConsumer: null }),
@@ -190,7 +192,7 @@ export const BUILTIN_PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   ...Object.entries(SHIPPING_ACTION_DEFINITIONS).map(([key, [label, description]]) => {
     const dependency = shippingActionViewDependency(key)
     return definition({
-      key, label, description, category: 'shipping', scopes: ['org'],
+      key, label, description, category: 'shipping', scopes: [isShippingOwnerPermission(key) ? 'self' : 'org'],
       dependencies: dependency ? [dependency] : [],
       enforcementConsumer: 'lib/shipping/http.ts',
     })

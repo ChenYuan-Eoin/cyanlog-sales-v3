@@ -43,7 +43,11 @@ import {
   revokeRolePermissions,
   toggleExplicitRolePermission,
 } from '@/lib/role-permission-policy'
-import { getEffectiveShippingPermissions, legacyShippingPermission, REGISTERED_MODULE_PERMISSION_KEYS } from '@/lib/module-access'
+import {
+  getEffectiveOwnerShippingPermissions, getEffectiveShippingPermissions,
+  legacyShippingPermission, REGISTERED_MODULE_PERMISSION_KEYS, shippingActionViewDependency,
+} from '@/lib/module-access'
+import { isShippingOwnerPermission } from '@/lib/shipping/owner-permission-keys'
 import { ORG_BUSINESS_ROLE_ASSIGN, ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ORG_MEMBER_EDIT } from '@/lib/permissions'
 import { ORG_MEMBER_LIFECYCLE_ACTIONS } from '@/lib/admin/member-action-keys'
 import { success, error, confirmAction } from '@/lib/toast'
@@ -85,14 +89,16 @@ interface RoleDetailPanelProps {
     name: string
     description: string | null
     permissions: string[] | null
+    owner_shipping_permissions?: string[]
     permissions_edit_block_reason?: string | null
   }
   currentUserId: string | null
   saving: boolean
-  onSave: (perms: string[]) => void
+  onSave: (perms: string[], ownerShippingPermissions?: string[]) => void
   permissionsEditable?: boolean
   modulePermissionCatalog?: RoleModulePermissionCatalog
   permissionsEditBlockReason?: string | null
+  canAssignBusinessRoles?: boolean
   orgSuperAdminAuthority?: OrgSuperAdminAuthority
   orgSuperAdminRosterUnavailable?: boolean
   users: OrgSummaryUser[]
@@ -111,6 +117,7 @@ export function RoleDetailPanel({
   permissionsEditable = false,
   modulePermissionCatalog,
   permissionsEditBlockReason,
+  canAssignBusinessRoles = false,
   orgSuperAdminAuthority,
   orgSuperAdminRosterUnavailable = false,
   users,
@@ -120,10 +127,13 @@ export function RoleDetailPanel({
 }: RoleDetailPanelProps) {
   const [activeTab, setActiveTab] = useState('members')
   const [perms, setPerms] = useState<string[]>(role.permissions ?? [])
+  const [ownerPerms, setOwnerPerms] = useState<string[]>(role.owner_shipping_permissions ?? [])
   const isSuperAdmin = role.code === 'SUPER_ADMIN'
   const isOrgSuperAdmin = role.code === ORG_SUPER_ADMIN_ROLE_CODE
   const protectedRole = isSuperAdmin || isOrgSuperAdmin
   const canEditPermissions = permissionsEditable && !isOrgSuperAdmin && !role.permissions_edit_block_reason
+  const canEditOwnerPermissions = permissionsEditable && role.owner_shipping_permissions !== undefined
+    && (canEditPermissions || role.code === 'FXIAOKE_BASELINE')
   let assignmentBlockReason: string | null = null
   if (isSuperAdmin) {
     assignmentBlockReason = 'SUPER_ADMIN 是平台根角色，不能通过组织管理界面变更。'
@@ -133,6 +143,8 @@ export function RoleDetailPanel({
     assignmentBlockReason = orgSuperAdminRosterUnavailable
       ? '当前组织的在职成员暂无法核对，请刷新后重试。'
       : '仅本组织有分配权限的超级管理员可管理此角色的成员。'
+  } else if (!isOrgSuperAdmin && !canAssignBusinessRoles) {
+    assignmentBlockReason = '当前账号可查看成员分配记录。'
   }
 
   const stats = useMemo(
@@ -144,8 +156,12 @@ export function RoleDetailPanel({
   useEffect(() => {
     setPerms(role.permissions ?? [])
   }, [role.id, role.permissions])
+  useEffect(() => {
+    setOwnerPerms(role.owner_shipping_permissions ?? [])
+  }, [role.id, role.owner_shipping_permissions])
 
   const hasChanges = JSON.stringify([...perms].sort()) !== JSON.stringify([...(role.permissions ?? [])].sort())
+  const hasOwnerChanges = JSON.stringify([...ownerPerms].sort()) !== JSON.stringify([...(role.owner_shipping_permissions ?? [])].sort())
   const permissionGroups = useMemo(() => buildRolePermissionDirectory(modulePermissionCatalog), [modulePermissionCatalog])
   const availableModuleKeys = useMemo(() => new Set(
     modulePermissionCatalog?.flatMap(group => group.items
@@ -157,12 +173,22 @@ export function RoleDetailPanel({
     const actions = new Map(permissionGroups.flatMap(getDirectoryActions).map(item => [item.key, item]))
     const expanded = new Set(keys)
     for (const key of expanded) {
-      for (const dependency of actions.get(key)?.dependencies ?? []) expanded.add(dependency)
+      const ownerDependency = isShippingOwnerPermission(key) && shippingActionViewDependency(key)
+      if (ownerDependency) expanded.add(ownerDependency)
+      const dependencies = actions.get(key)?.dependencies ?? []
+      for (const dependency of dependencies) expanded.add(dependency)
     }
     return [...expanded]
   }
 
   function togglePermission(key: string) {
+    if (isShippingOwnerPermission(key)) {
+      if (!canEditOwnerPermissions || saving || !availableModuleKeys.has(key)) return
+      setOwnerPerms(current => current.includes(key)
+        ? toggleExplicitRolePermission(current, key)
+        : grantExplicitRolePermissions(current, includePermissionDependencies([key])))
+      return
+    }
     if (!canEditPermissions || saving) return
     const protectedPermissions = isSuperAdmin ? SUPER_ADMIN_CORE_PERMISSIONS : []
     setPerms(current => {
@@ -179,6 +205,13 @@ export function RoleDetailPanel({
   }
 
   function setPermissionGroup(keys: string[], enabled: boolean) {
+    if (keys.length > 0 && keys.every(isShippingOwnerPermission)) {
+      if (!canEditOwnerPermissions || saving) return
+      setOwnerPerms(current => enabled
+        ? grantExplicitRolePermissions(current, includePermissionDependencies(keys))
+        : current.filter(key => !keys.some(removed => removed === key)))
+      return
+    }
     if (!canEditPermissions || saving) return
     const protectedPermissions = isSuperAdmin ? SUPER_ADMIN_CORE_PERMISSIONS : []
     setPerms(current => enabled
@@ -216,12 +249,15 @@ export function RoleDetailPanel({
               )}
             </div>
           </div>
-          {canEditPermissions && activeTab === 'permissions' && (
+          {(canEditPermissions || canEditOwnerPermissions) && activeTab === 'permissions' && (
             <Button
-              onClick={() => onSave(perms)}
-              disabled={saving || !hasChanges}
+              onClick={() => {
+                if (hasOwnerChanges && canEditOwnerPermissions) onSave(canEditPermissions ? perms : role.permissions ?? [], ownerPerms)
+                else if (hasChanges && canEditPermissions) onSave(perms)
+              }}
+              disabled={saving || !(canEditPermissions && hasChanges) && !(canEditOwnerPermissions && hasOwnerChanges)}
             >
-              {saving ? '保存中...' : hasChanges ? '保存更改' : '已保存'}
+              {saving ? '保存中...' : (canEditPermissions && hasChanges) || (canEditOwnerPermissions && hasOwnerChanges) ? '保存更改' : '已保存'}
             </Button>
           )}
         </div>
@@ -267,10 +303,12 @@ export function RoleDetailPanel({
         <TabsContent value="permissions" className="m-0">
           <PermissionSettingTab
             perms={perms}
+            ownerPerms={ownerPerms}
             groups={permissionGroups}
             availableModuleKeys={availableModuleKeys}
             isSuperAdmin={isSuperAdmin}
             readOnly={!canEditPermissions || saving}
+            ownerReadOnly={!canEditOwnerPermissions || saving}
             blockReason={isOrgSuperAdmin
               ? '组织超级管理员的治理权限由系统固定。'
               : role.permissions_edit_block_reason ?? permissionsEditBlockReason}
@@ -880,17 +918,19 @@ function MemberAssignmentTab({
 
 interface PermissionSettingTabProps {
   perms: string[]
+  ownerPerms: string[]
   groups: PermissionDirectoryGroup[]
   availableModuleKeys: ReadonlySet<string>
   isSuperAdmin: boolean
   readOnly: boolean
+  ownerReadOnly: boolean
   blockReason?: string | null
   onToggle: (key: string) => void
   onSetGroup: (keys: string[], enabled: boolean) => void
 }
 
 function PermissionSettingTab({
-  perms, groups, availableModuleKeys, isSuperAdmin, readOnly, blockReason, onToggle, onSetGroup,
+  perms, ownerPerms, groups, availableModuleKeys, isSuperAdmin, readOnly, ownerReadOnly, blockReason, onToggle, onSetGroup,
 }: PermissionSettingTabProps) {
   const actions = groups.flatMap(getDirectoryActions)
   const availableKeys = new Set(actions.filter(item => item.available).map(item => item.key))
@@ -898,15 +938,21 @@ function PermissionSettingTab({
     registered: catalogShippingKeys,
     published: availableModuleKeys,
   }))
+  const effectiveOwnerKeys = new Set<string>(getEffectiveOwnerShippingPermissions(ownerPerms, { published: availableModuleKeys }))
   const permissionLabels = new Map(actions.map(item => [item.key, item.label]))
   const labelFor = (key: string) => permissionLabels.get(key) ?? legacyPermissionLabels[key] ?? key
-  const existingGrants = perms.filter(key => !availableKeys.has(key))
+  const existingGrants = [...new Set([...perms, ...ownerPerms])].filter(key => !availableKeys.has(key))
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
   function isEffective(key: string): boolean {
+    if (isShippingOwnerPermission(key)) return effectiveOwnerKeys.has(key)
     return legacyShippingPermission(key)
       ? effectiveShippingKeys.has(key)
       : isRolePermissionEnabled(perms, key)
+  }
+
+  function isExplicit(key: string) {
+    return isRolePermissionExplicitlyGranted(isShippingOwnerPermission(key) ? ownerPerms : perms, key)
   }
 
   function hasRetainedLegacyGrant(key: string): boolean {
@@ -926,6 +972,7 @@ function PermissionSettingTab({
   function renderGroup(group: PermissionDirectoryGroup, nested = false) {
     const isExpanded = !collapsedGroups.has(group.id)
     const items = group.actions ?? []
+    const groupReadOnly = items.length > 0 && items.every(item => isShippingOwnerPermission(item.key)) ? ownerReadOnly : readOnly
     const directKeys = items.filter(item => item.available).map(item => item.key)
     const expandedKeys = getDirectoryActions(group)
       .filter(item => item.available || effectiveShippingKeys.has(item.key)).map(item => item.key)
@@ -933,7 +980,7 @@ function PermissionSettingTab({
     const allEffective = expandedKeys.length > 0 && effectiveCount === expandedKeys.length
     const grantableKeys = directKeys.filter(key => !hasRetainedLegacyGrant(key) && (legacyShippingPermission(key)
       ? !isEffective(key)
-      : !isRolePermissionExplicitlyGranted(perms, key)))
+      : !isExplicit(key)))
     const candidatesToRevoke = directKeys.filter(key => isEffective(key)
       && (!isSuperAdmin || !SUPER_ADMIN_CORE_PERMISSIONS.includes(key))
       && !hasRetainedLegacyGrant(key)
@@ -962,7 +1009,7 @@ function PermissionSettingTab({
               {allEffective ? '全部生效' : effectiveCount > 0 ? '部分生效' : '未生效'}
             </Badge>
           )}
-          {!readOnly && directKeys.length > 0 && (
+          {!groupReadOnly && directKeys.length > 0 && (
             <div className="flex items-center gap-1">
               <Button
                 type="button"
@@ -993,12 +1040,13 @@ function PermissionSettingTab({
           {(items.length > 0 || (group.notes?.length ?? 0) > 0) && (
             <ul className="divide-y border-t px-4">
               {items.map(item => {
-                const explicit = isRolePermissionExplicitlyGranted(perms, item.key)
+                const ownerAction = isShippingOwnerPermission(item.key)
+                const explicit = isExplicit(item.key)
                 const effective = isEffective(item.key)
                 const shippingAction = legacyShippingPermission(item.key) !== null
                 const inheritedLegacy = hasRetainedLegacyGrant(item.key)
-                const checked = shippingAction || inheritedLegacy ? effective : explicit
-                const source = effective ? getPermissionGrantSource(perms, item.key) : null
+                const checked = ownerAction || shippingAction || inheritedLegacy ? effective : explicit
+                const source = effective && !ownerAction ? getPermissionGrantSource(perms, item.key) : null
                 const isCore = isSuperAdmin && SUPER_ADMIN_CORE_PERMISSIONS.includes(item.key)
                 const dependent = explicit && actions.find(action =>
                   action.available && action.dependencies?.includes(item.key) && isEffective(action.key))
@@ -1012,7 +1060,7 @@ function PermissionSettingTab({
                         type="checkbox"
                         aria-label={item.label}
                         checked={checked}
-                        disabled={readOnly || isCore || !!dependent || unavailableForRevoke || inheritedLegacy}
+                        disabled={groupReadOnly || isCore || !!dependent || unavailableForRevoke || inheritedLegacy}
                         onChange={() => onToggle(item.key)}
                         className="mt-1"
                       />
@@ -1022,7 +1070,7 @@ function PermissionSettingTab({
                         <span className="text-sm font-medium text-slate-900">{item.label}</span>
                         {!item.available && <Badge variant="outline">{effective ? '旧授权生效' : '待接入'}</Badge>}
                         {isCore && <Badge variant="outline">核心权限</Badge>}
-                        {explicit && item.available && <Badge variant="outline">显式授权</Badge>}
+                        {explicit && item.available && <Badge variant="outline">{ownerAction ? '角色授权' : '显式授权'}</Badge>}
                         {item.available && effective && !explicit && <Badge variant="secondary">当前有效</Badge>}
                         {source?.via === 'bundle' && <Badge variant="secondary">由 {labelFor(source.grant)} 汇总</Badge>}
                         {source?.via === 'dependency' && <Badge variant="secondary">由 {labelFor(source.grant)} 依赖生效</Badge>}
@@ -1072,6 +1120,7 @@ function PermissionSettingTab({
       {readOnly && blockReason && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
           {blockReason}
+          {!ownerReadOnly && <p>此角色的本人寄件权限可单独配置。</p>}
         </div>
       )}
       {groups.map(group => renderGroup(group))}

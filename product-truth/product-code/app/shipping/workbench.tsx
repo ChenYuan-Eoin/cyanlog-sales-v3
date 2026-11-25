@@ -500,7 +500,7 @@ function ShippingWorkbenchContent({ settings: initialSettings, simulation, reque
       const input: IntakeInput = row.intakeInput || { sender: batchSender, customerName: rules.companyName.enabled ? (row.customerName || '').trim() : '', submittedBy: { name: batchSender.name, phone: batchSender.phone, team: rules.team.enabled ? (row.team || '').trim() : '' }, recipient, cargo: row.cargo || uniformCargo, weight: 1, remark: '', source: 'manual', payment: 'sender_monthly' }
       setBatch(items => items.map(item => item.id === row.id ? { ...item, intakeInput: input, result: 'pending', error: undefined } : item))
       try {
-        const receipt = await request<SubmissionResult>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: row.key, input }) })
+        const receipt = await request<SubmissionResult>('/api/shipping/ledger', { method: 'POST', body: JSON.stringify({ key: row.key, input }) })
         const orderId = receipt.orderId || receipt.id
         if (orderId && receipt.orderNo && receipt.status && receipt.status in statusLabel) {
           succeeded += 1; affectedOrderIds.push(orderId)
@@ -772,6 +772,7 @@ function ShippingWorkbenchContent({ settings: initialSettings, simulation, reque
       <div className={styles.topbarActions}>
         {canCreate && <button type="button" className={`${styles.configButton} ${styles.intakeToggle}`} aria-expanded={intakeOpen} aria-controls="shipping-intake-column" onClick={() => setIntakeOpen(open => !open)}>{intakeOpen ? '收起寄件录入' : '寄件录入'}</button>}
         {simulation ? <><button className={styles.configButton} disabled={inputLocked || !!busy} onClick={simulation.onReset}>重置演示</button><a className={styles.configButton} href="/shipping">返回真实工作台</a></> : <button className={styles.configButton} disabled={!!busy || confirmationBusy || batchBusy} onClick={() => void refreshConfiguration()}>刷新寄件配置</button>}
+        {!isSimulation && settings.canViewOwn && <a className={styles.configButton} href="/sales-portal">本人寄件</a>}
         {canManageConnections && <a className={styles.configButton} href="/shipping/settings">寄件设置</a>}
         <div className={styles.connection}><span />{isSimulation ? '模拟体验' : selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : settings.configurationWarning ? '配置暂不可用' : '未配置快递连接'}<small>{payment === 'sender_cash' ? '寄方现结' : payment === 'recipient' ? '收方到付' : selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '月结账号待选择'}</small></div>
       </div>

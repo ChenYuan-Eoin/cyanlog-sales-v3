@@ -36,7 +36,7 @@ async function handle(req: NextRequest, userId: string, changing: boolean) {
   try {
     const actor = await requireAuth(req)
     const context = await loadOrgRolePermissionContext(actor.id)
-    if (!context?.canEdit || actor.id === userId) return rpcFailure('42501')
+    if (!context?.canAppointOrganizationSuperAdmin || actor.id === userId) return rpcFailure('42501')
     if (!z.guid().safeParse(userId).success) {
       return json({ error: '成员 ID 格式不正确', code: 'VALIDATION_ERROR' }, 400)
     }

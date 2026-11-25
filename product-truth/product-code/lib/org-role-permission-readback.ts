@@ -6,6 +6,7 @@ export type ConfigRoleRecord = {
   permissions: string[] | null
   sort_order: number | null
   permissions_edit_block_reason?: string | null
+  owner_shipping_permissions?: string[]
 }
 
 export type RoleModulePermissionCatalog = Array<{
@@ -54,6 +55,7 @@ function parseRole(value: unknown): ConfigRoleRecord | null {
     permissions: value.permissions,
     sort_order: typeof value.sort_order === 'number' ? value.sort_order : null,
     permissions_edit_block_reason: typeof value.permissions_edit_block_reason === 'string' ? value.permissions_edit_block_reason : null,
+    ...(permissionList(value.owner_shipping_permissions) ? { owner_shipping_permissions: value.owner_shipping_permissions } : {}),
   }
 }
 
@@ -110,7 +112,13 @@ export async function loadOrgRolePermissionSnapshot(
 
 export async function saveAndReadOrgRolePermissions(
   headers: HeadersInit,
-  input: { orgId: string; roleId: string; expectedPermissions: string[]; permissions: string[] },
+  input: {
+    orgId: string
+    roleId: string
+    expectedPermissions: string[]
+    permissions: string[]
+    ownerChange?: { expected: string[]; permissions: string[] }
+  },
 ): Promise<{ role: ConfigRoleRecord; snapshot: OrgRolePermissionSnapshot }> {
   const requestHeaders = new Headers(headers)
   requestHeaders.set('Content-Type', 'application/json')
@@ -121,12 +129,17 @@ export async function saveAndReadOrgRolePermissions(
       expected_org_id: input.orgId,
       expected_permissions: input.expectedPermissions,
       permissions: input.permissions,
+      ...(input.ownerChange ? {
+        expected_owner_shipping_permissions: input.ownerChange.expected,
+        owner_shipping_permissions: input.ownerChange.permissions,
+      } : {}),
     }),
   })
   const receipt = await readData(response, '角色权限保存失败，请刷新后重试。')
   const receiptRole = parseRole(receipt.role)
   if (receipt.org_id !== input.orgId || receiptRole?.id !== input.roleId
-    || !samePermissions(receiptRole.permissions, input.permissions)) {
+    || !samePermissions(receiptRole.permissions, input.permissions)
+    || (input.ownerChange && !samePermissions(receiptRole.owner_shipping_permissions, input.ownerChange.permissions))) {
     throw new RolePermissionRequestError('无法确认本次保存，请刷新角色列表核实。', response.status, true)
   }
 
@@ -138,7 +151,8 @@ export async function saveAndReadOrgRolePermissions(
     throw new RolePermissionRequestError('保存请求已返回成功，暂未核实回读结果。请刷新后核对。', status, true)
   }
   const role = snapshot.roles.length === 1 ? snapshot.roles[0] : null
-  if (snapshot.orgId !== input.orgId || role?.id !== input.roleId || !samePermissions(role.permissions, input.permissions)) {
+  if (snapshot.orgId !== input.orgId || role?.id !== input.roleId || !samePermissions(role.permissions, input.permissions)
+    || (input.ownerChange && !samePermissions(role.owner_shipping_permissions, input.ownerChange.permissions))) {
     throw new RolePermissionRequestError('回读结果与本次保存不一致，请刷新后核对当前组织权限。', 409, true)
   }
   return { role, snapshot }

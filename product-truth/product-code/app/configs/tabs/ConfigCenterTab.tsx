@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DOMAIN_FIELD_SPECS, type FieldSpec } from '../domain-specs'
+import { DOMAIN_REGISTRY, type ConfigDomain } from '@/lib/config-center/types'
+import type { OrgConfigAccessDecision } from '@/lib/configs/access'
 
 interface Row {
   id: string
@@ -31,9 +33,11 @@ interface VersionRow {
   created_at: string
 }
 
-export default function ConfigCenterTab({ domain, title, description }: { domain: string; title: string; description?: string }) {
+export default function ConfigCenterTab({ domain, title, description }: { domain: ConfigDomain; title: string; description?: string }) {
   const fields = DOMAIN_FIELD_SPECS[domain] || []
+  const supportsVersions = Boolean(DOMAIN_REGISTRY[domain].versionTable)
   const [rows, setRows] = useState<Row[]>([])
+  const [access, setAccess] = useState<Pick<OrgConfigAccessDecision, 'canWrite' | 'canPublish'> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -47,15 +51,20 @@ export default function ConfigCenterTab({ domain, title, description }: { domain
 
   const refresh = useCallback(async () => {
     setLoading(true)
+    setAccess(null)
     setError('')
     try {
-      const res = await fetch(api)
+      const res = await fetch(api, { cache: 'no-store' })
       const json = await res.json()
       if (!res.ok || !json.success) {
         setError(json.error?.message || '加载失败')
         setRows([])
       } else {
         setRows(json.data || [])
+        setAccess({
+          canWrite: json.meta?.access?.canWrite === true,
+          canPublish: json.meta?.access?.canPublish === true,
+        })
       }
     } catch {
       setError('加载失败')
@@ -69,7 +78,18 @@ export default function ConfigCenterTab({ domain, title, description }: { domain
     void refresh()
   }, [refresh])
 
+  function canEdit(row: Row | null) {
+    return access?.canWrite === true
+      && (!row || row.status === 'DRAFT' || (row.status === 'PUBLISHED' && access.canPublish))
+  }
+
+  function canRollback(row: Row | null) {
+    return supportsVersions && row && access?.canWrite === true
+      && (row.status === 'DRAFT' || access.canPublish)
+  }
+
   function openCreate() {
+    if (!canEdit(null)) return
     const init: Record<string, string> = {}
     for (const f of fields) {
       if (f.type === 'boolean') init[f.key] = 'false'
@@ -83,6 +103,7 @@ export default function ConfigCenterTab({ domain, title, description }: { domain
   }
 
   function openEdit(row: Row) {
+    if (!canEdit(row)) return
     const init: Record<string, string> = {}
     for (const f of fields) {
       const v = row[f.key]
@@ -127,6 +148,7 @@ export default function ConfigCenterTab({ domain, title, description }: { domain
   }
 
   async function save() {
+    if (!canEdit(editing)) return
     const payload: Record<string, unknown> = {}
     for (const f of fields) {
       try {
@@ -158,7 +180,9 @@ export default function ConfigCenterTab({ domain, title, description }: { domain
     }
   }
 
-  async function action(id: string, op: 'publish' | 'delete') {
+  async function action(row: Row, op: 'publish' | 'delete') {
+    if (row.status !== 'DRAFT' || !(op === 'publish' ? access?.canPublish : access?.canWrite)) return
+    const { id } = row
     setError('')
     if (op === 'delete') {
       const res = await fetch(`${api}/${id}`, { method: 'DELETE' })
@@ -180,6 +204,7 @@ export default function ConfigCenterTab({ domain, title, description }: { domain
   }
 
   async function loadVersions(row: Row) {
+    if (!supportsVersions) return
     const res = await fetch(`${api}/${row.id}/versions`)
     const json = await res.json()
     setVersions(json.success ? (json.data as VersionRow[]) : [])
@@ -187,7 +212,7 @@ export default function ConfigCenterTab({ domain, title, description }: { domain
   }
 
   async function rollback(version: number) {
-    if (!versionsFor) return
+    if (!versionsFor || !canRollback(versionsFor)) return
     setError('')
     const res = await fetch(`${api}/${versionsFor.id}/rollback`, {
       method: 'POST',
@@ -214,13 +239,13 @@ export default function ConfigCenterTab({ domain, title, description }: { domain
           <h2 className="text-lg font-semibold">{title}</h2>
           {description && <p className="text-sm text-muted-foreground">{description}</p>}
         </div>
-        <Button size="sm" onClick={openCreate}>新建</Button>
+        {canEdit(null) && <Button size="sm" onClick={openCreate}>新建</Button>}
       </div>
       {error && <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
       {loading ? (
         <div className="text-sm text-muted-foreground">加载中…</div>
       ) : rows.length === 0 ? (
-        <div className="text-sm text-muted-foreground">暂无配置，点击「新建」创建草稿。</div>
+        <div className="text-sm text-muted-foreground">{canEdit(null) ? '暂无配置，点击「新建」创建草稿。' : '暂无配置。'}</div>
       ) : (
         <Table>
           <TableHeader>
@@ -240,13 +265,13 @@ export default function ConfigCenterTab({ domain, title, description }: { domain
                 <TableCell><Badge variant={row.status === 'PUBLISHED' ? 'default' : 'secondary'}>{row.status}</Badge></TableCell>
                 <TableCell>{row.version ?? 1}</TableCell>
                 <TableCell className="text-right space-x-1">
-                  <Button size="sm" variant="outline" onClick={() => openEdit(row)}>编辑</Button>
-                  {row.status === 'DRAFT' && (
-                    <Button size="sm" variant="outline" onClick={() => action(row.id, 'publish')}>发布</Button>
+                  {canEdit(row) && <Button size="sm" variant="outline" onClick={() => openEdit(row)}>编辑</Button>}
+                  {row.status === 'DRAFT' && access?.canPublish && (
+                    <Button size="sm" variant="outline" onClick={() => action(row, 'publish')}>发布</Button>
                   )}
-                  <Button size="sm" variant="outline" onClick={() => loadVersions(row)}>版本</Button>
-                  {row.status === 'DRAFT' && (
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => action(row.id, 'delete')}>删除</Button>
+                  {supportsVersions && <Button size="sm" variant="outline" onClick={() => loadVersions(row)}>版本</Button>}
+                  {row.status === 'DRAFT' && access?.canWrite && (
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => action(row, 'delete')}>删除</Button>
                   )}
                 </TableCell>
               </TableRow>
@@ -255,7 +280,7 @@ export default function ConfigCenterTab({ domain, title, description }: { domain
         </Table>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen && canEdit(editing)} onOpenChange={setDialogOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing ? `编辑 ${title}` : `新建 ${title}`}</DialogTitle></DialogHeader>
           <div className="grid gap-3 py-2">
@@ -315,7 +340,7 @@ export default function ConfigCenterTab({ domain, title, description }: { domain
             {versions?.map((v) => (
               <div key={v.id} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
                 <span>v{v.version} · {v.status} · {new Date(v.created_at).toLocaleString()}</span>
-                <Button size="sm" variant="outline" onClick={() => rollback(v.version)}>回滚到该版本</Button>
+                {canRollback(versionsFor) && <Button size="sm" variant="outline" onClick={() => rollback(v.version)}>回滚到该版本</Button>}
               </div>
             ))}
           </div>

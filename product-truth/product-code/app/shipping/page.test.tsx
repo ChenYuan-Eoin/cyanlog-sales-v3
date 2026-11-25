@@ -17,16 +17,17 @@ vi.mock('@/lib/shipping/entry-access', () => ({ resolveShippingEntry: mocks.acce
 vi.mock('@/lib/shipping/workspace-settings', () => ({ loadShippingWorkspaceSettings: mocks.settings }))
 vi.mock('@/lib/shipping/intake-options', () => ({ loadIntakeOptionsForOrg: mocks.options }))
 vi.mock('@/lib/shipping/department-access', () => ({ loadFxiaokeShippingProfile: mocks.profile }))
-vi.mock('@/app/sales-portal/portal', () => ({ FxiaokeShippingProposal: function FxiaokeShippingProposal() { return null } }))
+vi.mock('@/app/sales-portal/portal', () => ({ FxiaokeShippingProposal: function FxiaokeShippingProposal() { return null }, AuthenticatedReceiptRoute: function AuthenticatedReceiptRoute() { return null } }))
 vi.mock('@/app/sales-portal/my-workorders', () => ({ default: function MyWorkorders() { return null } }))
 vi.mock('./workbench', () => ({ default: function ShippingWorkbench() { return null } }))
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }))
 
 import ShippingPage from './page'
+import SalesPortalPage from '@/app/sales-portal/page'
 
 const user = { id: 'member' }
 const rules = { teamOptions: [] }
-const access = { orgId: 'active-org', canOperate: false, canViewOwn: false, canSubmitOwn: false, canManageConnections: false }
+const access = { orgId: 'active-org', canOperate: false, canViewOwn: false, canSubmitOwn: false, canManageConnections: false, ownerPermissions: [] }
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -54,7 +55,7 @@ describe('self-service shipping entry', () => {
   })
 
   it('opens employee intake under the organization selected by the live resolver', async () => {
-    mocks.access.mockResolvedValue({ ...access, canViewOwn: true, canSubmitOwn: true })
+    mocks.access.mockResolvedValue({ ...access, canViewOwn: true, canSubmitOwn: true, ownerPermissions: ['shipping:owner_view', 'shipping:owner_submit'] })
     const page = await ShippingPage()
     const [navigation, proposal] = page.props.children
     expect(navigation).toBe(false)
@@ -81,7 +82,7 @@ describe('self-service shipping entry', () => {
   })
 
   it('offers the dedicated settings link when an employee can also manage connections', async () => {
-    mocks.access.mockResolvedValue({ ...access, canViewOwn: true, canSubmitOwn: true, canManageConnections: true })
+    mocks.access.mockResolvedValue({ ...access, canViewOwn: true, canSubmitOwn: true, ownerPermissions: ['shipping:owner_view', 'shipping:owner_submit'], canManageConnections: true })
     const page = await ShippingPage()
     const [navigation, proposal] = page.props.children
     expect(navigation.props.children.props.href).toBe('/shipping/settings')
@@ -99,8 +100,23 @@ describe('self-service shipping entry', () => {
     mocks.access.mockResolvedValue({ ...access, canOperate: true, canViewOwn: true, canSubmitOwn: true, canManageConnections })
     const page = await ShippingPage()
     expect(page.type.name).toBe('ShippingWorkbench')
-    expect(page.props.settings).toEqual({ environment: 'sandbox', ready: false, canOperate: true, canManageConnections })
+    expect(page.props.settings).toEqual({ environment: 'sandbox', ready: false, canOperate: true, canViewOwn: true, canManageConnections })
     expect(mocks.settings).toHaveBeenCalledWith('active-org')
     expect(mocks.options).not.toHaveBeenCalled()
   })
+})
+
+it('offers operator and explicitly preferred owner entries for the same verified session', async () => {
+  mocks.access.mockResolvedValue({
+    ...access, canOperate: true, canViewOwn: true, canSubmitOwn: true,
+    ownerPermissions: ['shipping:owner_view', 'shipping:owner_submit'],
+  })
+  const workspace = await ShippingPage()
+  expect(workspace.type.name).toBe('ShippingWorkbench')
+  expect(workspace.props.settings.canViewOwn).toBe(true)
+  const employee = await SalesPortalPage()
+  expect(employee.type.name).toBe('AuthenticatedReceiptRoute')
+  expect(employee.props.children.props.children[1].type.name).toBe('FxiaokeShippingProposal')
+  expect(mocks.access).toHaveBeenNthCalledWith(1, user, 'token')
+  expect(mocks.access).toHaveBeenNthCalledWith(2, user, 'token')
 })

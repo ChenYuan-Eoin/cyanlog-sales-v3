@@ -18,6 +18,7 @@ interface RoleAccessTabProps {
     name: string
     description: string | null
     permissions: string[] | null
+    owner_shipping_permissions?: string[]
     permissions_edit_block_reason?: string | null
     sort_order: number | null
   }>
@@ -28,7 +29,7 @@ interface RoleAccessTabProps {
   permissionsEditBlockReason?: string | null
   orgSuperAdminAuthority?: { orgId: string }
   orgSummary: OrgSummaryPayload | null
-  onSaveRole: (roleId: string, newPerms: string[]) => void
+  onSaveRole: (roleId: string, newPerms: string[], ownerShippingPermissions?: string[]) => void
   onRefresh: () => void | Promise<void>
 }
 
@@ -38,6 +39,7 @@ interface RoleWithStats {
   name: string
   description: string | null
   permissions: string[] | null
+  owner_shipping_permissions?: string[]
   permissions_edit_block_reason?: string | null
   sort_order: number | null
   membershipStats: RoleMembershipStats
@@ -203,9 +205,13 @@ export default function RoleAccessTab({
             permissionsEditable={permissionsEditable}
             modulePermissionCatalog={modulePermissionCatalog}
             permissionsEditBlockReason={permissionsEditBlockReason}
+            canAssignBusinessRoles={orgSummary?.member_actions?.assignRoles === true}
             currentUserId={currentUserId}
             saving={savingRoleId === selectedRole.id}
-            onSave={(perms) => onSaveRole(selectedRole.id, perms)}
+            onSave={(perms, ownerShippingPermissions) => {
+              if (ownerShippingPermissions === undefined) onSaveRole(selectedRole.id, perms)
+              else onSaveRole(selectedRole.id, perms, ownerShippingPermissions)
+            }}
             users={users}
             membershipStats={selectedRole.membershipStats}
             departments={departments}

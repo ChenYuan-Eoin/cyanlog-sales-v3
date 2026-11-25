@@ -15,7 +15,7 @@ describe('shipping demo uses the authenticated order receipt contract', () => {
     const fetch = vi.fn(() => { throw new Error('Demo must remain in memory') })
     vi.stubGlobal('fetch', fetch)
     const request = createShippingSimulation()
-    const create = (key: string) => request<Receipt>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key, input }) })
+    const create = (key: string) => request<Receipt>('/api/shipping/ledger', { method: 'POST', body: JSON.stringify({ key, input }) })
     const first = await create('service-first')
     const second = await create('service-second')
     const confirmation = { method: 'POST', body: JSON.stringify({ serviceId: 1, payment: 'recipient' }) }
@@ -25,7 +25,7 @@ describe('shipping demo uses the authenticated order receipt contract', () => {
     expect(ledger.records.find(order => order.id === second.orderId)).toMatchObject({ status: 'awaiting_confirmation', waybill: null, input: { serviceId: 2, payment: 'sender_monthly' } })
 
     await expect(request(`/api/shipping/ledger/${first.orderId}/confirm`, { method: 'POST', body: JSON.stringify({ serviceId: 2 }) })).rejects.toThrow('已处理')
-    const replayed = await request<Receipt>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: 'service-first', input }) })
+    const replayed = await request<Receipt>('/api/shipping/ledger', { method: 'POST', body: JSON.stringify({ key: 'service-first', input }) })
     expect(replayed).toEqual(confirmed)
     await request(`/api/shipping/ledger/${second.orderId}/confirm`, { method: 'POST', body: JSON.stringify({ serviceId: 2 }) })
     ledger = await request('/api/shipping/ledger?limit=50')
@@ -36,7 +36,7 @@ describe('shipping demo uses the authenticated order receipt contract', () => {
 
   it.each([999999, 0, -1, 1.5, '1', null])('rejects invalid or unavailable service %j without changing the order or allocating a waybill', async serviceId => {
     const request = createShippingSimulation()
-    const receipt = await request<Receipt>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: 'invalid-service', input }) })
+    const receipt = await request<Receipt>('/api/shipping/ledger', { method: 'POST', body: JSON.stringify({ key: 'invalid-service', input }) })
     const before = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
     await expect(request(`/api/shipping/ledger/${receipt.orderId}/confirm`, { method: 'POST', body: JSON.stringify({ serviceId, payment: 'recipient' }) })).rejects.toThrow()
     expect(await request('/api/shipping/ledger?limit=50')).toEqual(before)
@@ -46,8 +46,8 @@ describe('shipping demo uses the authenticated order receipt contract', () => {
 
   it('uses the saved service before its preference, or resolves a preference when no product was saved', async () => {
     const request = createShippingSimulation()
-    const urgent = await request<Receipt>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: 'urgent-preference', input: { ...input, serviceId: undefined, servicePreference: 'urgent' } }) })
-    const saved = await request<Receipt>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: 'saved-product', input: { ...input, servicePreference: 'urgent' } }) })
+    const urgent = await request<Receipt>('/api/shipping/ledger', { method: 'POST', body: JSON.stringify({ key: 'urgent-preference', input: { ...input, serviceId: undefined, servicePreference: 'urgent' } }) })
+    const saved = await request<Receipt>('/api/shipping/ledger', { method: 'POST', body: JSON.stringify({ key: 'saved-product', input: { ...input, servicePreference: 'urgent' } }) })
     await request(`/api/shipping/ledger/${urgent.orderId}/confirm`, { method: 'POST' })
     await request(`/api/shipping/ledger/${saved.orderId}/confirm`, { method: 'POST' })
     const ledger = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
@@ -57,7 +57,7 @@ describe('shipping demo uses the authenticated order receipt contract', () => {
 
   it('does not silently replace an unavailable saved product with a preferred service', async () => {
     const request = createShippingSimulation()
-    const receipt = await request<Receipt>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: 'obsolete-product', input: { ...input, serviceId: 999999, servicePreference: 'standard' } }) })
+    const receipt = await request<Receipt>('/api/shipping/ledger', { method: 'POST', body: JSON.stringify({ key: 'obsolete-product', input: { ...input, serviceId: 999999, servicePreference: 'standard' } }) })
     const before = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
     await expect(request(`/api/shipping/ledger/${receipt.orderId}/confirm`, { method: 'POST' })).rejects.toThrow('服务')
     expect(await request('/api/shipping/ledger?limit=50')).toEqual(before)
@@ -65,7 +65,7 @@ describe('shipping demo uses the authenticated order receipt contract', () => {
 
   it('stores the payment explicitly chosen at confirmation', async () => {
     const request = createShippingSimulation()
-    const receipt = await request<Receipt>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: 'payment-example', input }) })
+    const receipt = await request<Receipt>('/api/shipping/ledger', { method: 'POST', body: JSON.stringify({ key: 'payment-example', input }) })
     await request(`/api/shipping/ledger/${receipt.orderId}/confirm`, { method: 'POST', body: JSON.stringify({ payment: 'recipient' }) })
     const ledger = await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')
     expect(ledger.records.find(order => order.id === receipt.orderId)?.input.payment).toBe('recipient')
@@ -74,7 +74,7 @@ describe('shipping demo uses the authenticated order receipt contract', () => {
     const fetch = vi.fn(() => { throw new Error('Demo must remain in memory') })
     vi.stubGlobal('fetch', fetch)
     const request = createShippingSimulation()
-    const receipt = await request<Receipt>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: 'demo-key', input }) })
+    const receipt = await request<Receipt>('/api/shipping/ledger', { method: 'POST', body: JSON.stringify({ key: 'demo-key', input }) })
     expect(receipt).toEqual({ orderId: 'demo-order-5', orderNo: 'DEMO-REQ-5', status: 'awaiting_confirmation', waybill: null })
     expect(fetch).not.toHaveBeenCalled()
   })
@@ -82,8 +82,8 @@ describe('shipping demo uses the authenticated order receipt contract', () => {
   it('reuses the same order for repeated idempotency keys', async () => {
     const request = createShippingSimulation()
     const init = { method: 'POST', body: JSON.stringify({ key: 'demo-key', input }) }
-    const first = await request<Receipt>('/api/shipping/owner/orders', init)
-    const second = await request<Receipt>('/api/shipping/owner/orders', init)
+    const first = await request<Receipt>('/api/shipping/ledger', init)
+    const second = await request<Receipt>('/api/shipping/ledger', init)
     expect(second.orderId).toBe('demo-order-5')
     expect(second).toEqual(first)
     expect((await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')).records).toHaveLength(5)
@@ -91,7 +91,7 @@ describe('shipping demo uses the authenticated order receipt contract', () => {
 
   it('reconciles the existing record without creating a second order', async () => {
     const request = createShippingSimulation()
-    const initial = await request<Receipt>('/api/shipping/owner/orders', { method: 'POST', body: JSON.stringify({ key: 'demo-key', input }) })
+    const initial = await request<Receipt>('/api/shipping/ledger', { method: 'POST', body: JSON.stringify({ key: 'demo-key', input }) })
     const result = await request<Receipt>(`/api/shipping/ledger/${initial.orderId}/reconcile`, { method: 'POST' })
     expect(result).toEqual(initial)
     const confirmed = await request<Receipt>(`/api/shipping/ledger/${initial.orderId}/confirm`, { method: 'POST' })
@@ -105,9 +105,9 @@ describe('shipping demo uses the authenticated order receipt contract', () => {
   it('reclaims an intake receipt after confirmation without recreating or resetting the work order', async () => {
     const request = createShippingSimulation()
     const init = { method: 'POST', body: JSON.stringify({ key: 'demo-key', input }) }
-    const receipt = await request<Receipt>('/api/shipping/owner/orders', init)
+    const receipt = await request<Receipt>('/api/shipping/ledger', init)
     const confirmed = await request<Receipt>(`/api/shipping/ledger/${receipt.orderId}/confirm`, { method: 'POST' })
-    const reclaimed = await request<Receipt>('/api/shipping/owner/orders', init)
+    const reclaimed = await request<Receipt>('/api/shipping/ledger', init)
     expect(reclaimed).toEqual(confirmed)
     expect((await request<{ records: ShipmentOrder[] }>('/api/shipping/ledger?limit=50')).records).toHaveLength(5)
   })

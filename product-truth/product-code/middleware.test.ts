@@ -119,6 +119,12 @@ function mockExactOrgAuth(options: {
     }
     if (table === 'permission_points') {
       const code = url.searchParams.get('code')?.slice(3)
+      if (code?.startsWith('shipping:owner_')) return Response.json([{
+        code, kind: 'atomic', category: 'shipping', resource: 'shipping', action: code.slice('shipping:'.length),
+        supported_scope_types: ['self'], enforcement_consumer: 'lib/shipping/http.ts',
+        status: 'published', dependencies: code === 'shipping:owner_view' ? [] : ['shipping:owner_view'],
+        ...(options.shippingActions?.[code] ?? {}),
+      }])
       if (code && options.shippingActions?.[code]) return Response.json([{
         code, kind: 'atomic', category: 'shipping', resource: 'shipping', action: code.slice('shipping:'.length),
         supported_scope_types: ['org'], enforcement_consumer: 'lib/shipping/http.ts', ...options.shippingActions[code],
@@ -309,7 +315,8 @@ describe('role-free federated session boundary', () => {
     ))
 
     bind()
-    expect((await post('/api/shipping/owner/orders')).status).toBe(200)
+    expect((await post('/api/shipping/ledger')).status).toBe(200)
+    expect((await post('/api/shipping/owner/orders')).status).toBe(403)
     expect((await post('/api/shipping/owner/profile')).status).toBe(403)
     expect((await post('/api/quotes')).status).toBe(403)
 
@@ -320,7 +327,7 @@ describe('role-free federated session boundary', () => {
       { shippingOperatorStatus: 'disabled' },
     ]) {
       bind(deniedOperator)
-      expect((await post('/api/shipping/owner/orders')).status).toBe(403)
+      expect((await post('/api/shipping/ledger')).status).toBe(403)
     }
 
     bind({ roles: [baseline], authMethod: 'fxiaoke', shippingOperatorStatus: 'disabled' })
@@ -369,7 +376,8 @@ describe('role-free federated session boundary', () => {
     ))
     expect((await request('/configs?tab=org-structure')).status).toBe(200)
     expect((await request('/api/admin/org')).status).toBe(200)
-    expect((await request('/api/roles')).status).toBe(200)
+    expect((await request('/api/roles')).status).toBe(403)
+    expect((await request('/api/roles?view=assignable')).status).toBe(200)
     expect((await request(`/api/admin/users/${id}/roles`, 'POST')).status).toBe(200)
     expect((await request(`/api/admin/users/${id}/login-enabled`, 'PATCH')).status).toBe(403)
     expect((await request(`/api/admin/users/${id}/org-super-admin`, 'PATCH')).status).toBe(403)
@@ -393,6 +401,21 @@ describe('role-free federated session boundary', () => {
     expect(direct.headers.get('x-middleware-request-x-user-shipping-settings-view')).toBeNull()
     expect((await request('/api/configs')).status).toBe(403)
     expect((await request('/api/shipping/settings', 'POST')).status).toBe(403)
+  })
+
+  it('allows only explicitly authorized readers to open the full role directory', async () => {
+    const token = 'configuration-reader'
+    const role = { id: 'config-viewer', code: 'READONLY', permissions: ['config:read'] }
+    const auth = { authorization: `Bearer ${token}` }
+    mockExactOrgAuth({ token, orgId: 'org-a', authMethod: 'fxiaoke', roles: [{ roles: role }] })
+    expect((await middleware(makeRequest('https://sales.cyanlog.icu/configs', auth))).status).toBe(200)
+    expect((await middleware(makeRequest('https://sales.cyanlog.icu/api/roles', auth))).status).toBe(403)
+
+    mockExactOrgAuth({ token, orgId: 'org-a', authMethod: 'fxiaoke',
+      roles: [{ roles: { ...role, permissions: ['user:view', 'role:view'] } }] })
+    expect((await middleware(makeRequest('https://sales.cyanlog.icu/api/roles', auth))).status).toBe(200)
+    expect((await middleware(makeRequest('https://sales.cyanlog.icu/api/roles?view=assignable', auth))).status).toBe(403)
+    expect((await middleware(makeRequest('https://sales.cyanlog.icu/api/roles/role-id', auth, 'PATCH'))).status).toBe(403)
   })
 
   it('does not use the legacy grant to bypass a disabled granular action', async () => {
@@ -444,8 +467,11 @@ describe('role-free federated session boundary', () => {
     const profile = '/api/shipping/owner/profile'
     const receipt = `/api/shipping/public/orders/${'a'.repeat(43)}`
 
-    for (const path of [orders, profile, `${order}/resubmit`, `${order}/carrier-changes`, receipt]) {
+    for (const path of [orders, profile, receipt]) {
       expect((await request(path)).status, path).toBe(200)
+    }
+    for (const path of [`${order}/resubmit`, `${order}/carrier-changes`]) {
+      expect((await request(path)).status, path).toBe(ownerWriteStatus)
     }
     for (const path of [
       orders, profile, `${order}/resubmit`, `${order}/cancel`, `${order}/carrier-changes`, `${order}/tracking`,
@@ -459,6 +485,25 @@ describe('role-free federated session boundary', () => {
     expect((await request('/api/contracts/example', 'PATCH')).status).toBe(403)
     expect((await request('/api/shipping/orders', 'POST')).status).toBe(403)
     expect((await request(`${order}/tracking/unrelated`, 'POST')).status).toBe(403)
+  })
+
+  it('revokes owner submission while keeping a separately granted workbench intake for the same employee', async () => {
+    const token = 'employee-and-operator'
+    mockExactOrgAuth({
+      token, orgId: 'org-a', authMethod: 'fxiaoke',
+      roles: [
+        { roles: { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: [] } },
+        { roles: { id: 'operator', code: 'SHIPPING_OPERATOR', permissions: ['shipping:*'] } },
+      ],
+      settings: { shipping_owner_permission_overrides: { baseline: ['shipping:owner_view'], operator: ['shipping:owner_view'] } },
+    })
+    const request = (path: string, method = 'GET') => middleware(makeRequest(
+      `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
+    ))
+    expect((await request('/api/shipping/owner/orders')).status).toBe(200)
+    expect((await request('/api/shipping/owner/orders', 'POST')).status).toBe(403)
+    expect((await request('/api/shipping/owner/profile', 'POST')).status).toBe(403)
+    expect((await request('/api/shipping/ledger', 'POST')).status).toBe(200)
   })
 
   it('preserves separately assigned administrator access alongside the baseline role', async () => {

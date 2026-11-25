@@ -24,7 +24,7 @@ async function call(body?:unknown, target=endpoint) {
  if (!response.ok) throw new Error(data.error || '员工寄件服务暂不可用')
  return data
 }
-export default function EmployeeAccess({ children, requireVerification=false, rules=DEFAULT_INTAKE_RULES, initialEmployee=null, companySender=null, mode='public' }: { children:(state:EmployeeAccessState)=>ReactNode;requireVerification?:boolean;emailAvailable?:boolean;rules?:IntakeRules;initialEmployee?:EmployeeProfile|null;companySender?:Contact|null;mode?:'public'|'fxiaoke' }) {
+export default function EmployeeAccess({ children, requireVerification=false, rules=DEFAULT_INTAKE_RULES, initialEmployee=null, companySender=null, mode='public', canSaveCommonSender=true }: { children:(state:EmployeeAccessState)=>ReactNode;requireVerification?:boolean;emailAvailable?:boolean;rules?:IntakeRules;initialEmployee?:EmployeeProfile|null;companySender?:Contact|null;mode?:'public'|'fxiaoke';canSaveCommonSender?:boolean }) {
  const initialSender=initialEmployee?.sender || (!requireVerification ? companySender : null) || emptyContact()
  const [employee,setEmployee] = useState(initialEmployee), [loading,setLoading] = useState(true), [loadFailed,setLoadFailed] = useState(false), [busy,setBusy] = useState(false)
  const [error,setError] = useState(''), [notice,setNotice] = useState(''), [sessionKey,setSessionKey] = useState(0)
@@ -84,6 +84,7 @@ export default function EmployeeAccess({ children, requireVerification=false, ru
  }
  async function persistEmployeeSender(contact:Contact, selectedDepartmentId=departmentId) {
   if(!employee)throw new Error('身份已失效，请重新验证后保存。')
+  if(!canSaveCommonSender)throw new Error('当前账号无法保存常用地址。')
   if(running.current||loading)throw new Error('正在读取或保存寄件资料，请稍后重试。')
   const pickup=validatePickup(contact)
   const selectedTeam=employee.departments?.find(item=>item.id===selectedDepartmentId)?.name ?? team
@@ -121,7 +122,7 @@ export default function EmployeeAccess({ children, requireVerification=false, ru
  }
  async function apply(event:FormEvent) {
   event.preventDefault();if(running.current)return
-  if(employee&&saveCommon) {
+  if(employee&&saveCommon&&canSaveCommonSender) {
    await saveCurrentSender(draft)
    return
   }
@@ -162,7 +163,7 @@ export default function EmployeeAccess({ children, requireVerification=false, ru
   {mode==='fxiaoke'&&(employee?.departments?.length || 0)>1&&<div><label>所属部门<select required value={departmentId} disabled={busy||loading} aria-describedby="shipping-department-path" onChange={e=>{const next=employee?.departments?.find(item=>item.id===e.target.value);setDepartmentId(next?.id||'');setTeam(next?.name||'')}}><option value="">请选择本人所属部门</option>{employee?.departments?.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label><p id="shipping-department-path" className={styles.hint}>{selectedDepartment ? '部门路径：' + selectedDepartment.path : '仅显示本人已获寄件授权的标准部门。'}</p></div>}
   {!employee&&common&&<button type="button" className={styles.textButton} disabled={busy||loading} onClick={forgetCommon}>移除本设备常用地址</button>}
   <div className={styles.addressSummary}><MapPin size={18}/><div><strong>{sender.name||'寄件人待填写'} <span>{sender.phone}</span></strong><p>{addressText(sender)||'请填写实际揽收地址'}</p></div><button className={styles.textButton} type="button" disabled={busy||loading} aria-expanded={editing} onClick={()=>{senderTouched.current=true;if(editing){setDraft(sender);setEditing(false)}else{setDraft(sender);setEditing(true)}setError('');setSaveCommon(false)}}>{editing?'收起寄方编辑':'更换揽收地址'}</button></div>
-  {!editing&&source==='custom'&&senderCheck.success&&<button className={styles.textButton} type="button" disabled={busy||loading} onClick={()=>void saveCurrentSender(sender)}>
+  {!editing&&source==='custom'&&senderCheck.success&&(!employee||canSaveCommonSender)&&<button className={styles.textButton} type="button" disabled={busy||loading} onClick={()=>void saveCurrentSender(sender)}>
    {employee?'保存为我的常用地址':'保存为我的常用地址（本设备）'}
   </button>}
   <div hidden={!editing} className={styles.addressEditor}><form onSubmit={apply}><fieldset className={styles.fields} disabled={busy||loading}>
@@ -172,8 +173,8 @@ export default function EmployeeAccess({ children, requireVerification=false, ru
    {mode!=='fxiaoke'&&(verified||rules.team.enabled)&&<label>所属团队{!employee?.wecom&&rules.teamOptions.length?<select required={rules.team.required} value={team} onChange={e=>{senderTouched.current=true;setTeam(e.target.value)}}><option value="">请选择所属团队</option>{rules.teamOptions.map(name=><option key={name} value={name}>{name}</option>)}</select>:<input disabled={employee?.wecom} required={teamRule.required} maxLength={80} value={team} onChange={e=>{senderTouched.current=true;setTeam(e.target.value)}}/>}</label>}
    {employee?.phoneSource==='unavailable'&&<p>身份已验证，但寄件电话需管理员补齐或配置预置号码；已有工单仍可查询。</p>}
    {employee?.phoneSource==='preset'&&<p className={styles.hint}>联系电话使用管理员预置号码，身份仍以企业微信账号为准。</p>}
-   <div className={styles.addressActions}>{employee?<label className={styles.remember}><input type="checkbox" checked={saveCommon} onChange={e=>setSaveCommon(e.target.checked)}/>同时保存为我的常用地址</label>:<label className={styles.remember}><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/>同时保存为我的常用地址（本设备）</label>}<button className={styles.secondaryButton} type="button" onClick={()=>{customDraft.current=null;setDraft(sender);setEditing(false);setError('');setSaveCommon(false);setRemember(false)}}>取消编辑</button><button className={styles.primaryButton} type="submit">{busy?'保存中…':saveCommon?'保存揽收地址':'使用此地址'}</button></div>
+   <div className={styles.addressActions}>{employee?(canSaveCommonSender&&<label className={styles.remember}><input type="checkbox" checked={saveCommon} onChange={e=>setSaveCommon(e.target.checked)}/>同时保存为我的常用地址</label>):<label className={styles.remember}><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/>同时保存为我的常用地址（本设备）</label>}<button className={styles.secondaryButton} type="button" onClick={()=>{customDraft.current=null;setDraft(sender);setEditing(false);setError('');setSaveCommon(false);setRemember(false)}}>取消编辑</button><button className={styles.primaryButton} type="submit">{busy?'保存中…':saveCommon&&canSaveCommonSender?'保存揽收地址':'使用此地址'}</button></div>
   </fieldset></form></div>{error&&<p role="alert" className={styles.error}>{error}</p>}{notice&&<p role="status" className={styles.notice}>{notice}</p>}{loadFailed&&!requireVerification&&<button type="button" onClick={()=>void retry()}>重新读取资料</button>}
  </section>
- return children({employee,controls,identityControls,canSubmit:!loading&&!busy&&!editing&&(!requireVerification||Boolean(employee)&&!loadFailed)&&senderCheck.success&&(mode==='fxiaoke'?Boolean(selectedDepartment):teamCheck.success),unavailableReason,sessionKey,sender,team,departmentId,saveCommonSender:mode==='fxiaoke'&&employee?saveCommonSender:undefined})
+ return children({employee,controls,identityControls,canSubmit:!loading&&!busy&&!editing&&(!requireVerification||Boolean(employee)&&!loadFailed)&&senderCheck.success&&(mode==='fxiaoke'?Boolean(selectedDepartment):teamCheck.success),unavailableReason,sessionKey,sender,team,departmentId,saveCommonSender:mode==='fxiaoke'&&employee&&canSaveCommonSender?saveCommonSender:undefined})
 }
