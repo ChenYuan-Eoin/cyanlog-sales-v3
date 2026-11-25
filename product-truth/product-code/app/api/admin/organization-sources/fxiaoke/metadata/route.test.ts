@@ -33,7 +33,7 @@ beforeEach(() => {
   vi.resetAllMocks()
   mocks.auth.mockResolvedValue({ id: 'admin' })
   mocks.org.mockResolvedValue('org-a')
-  mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', permissions: ['org:source_preview'] }])
+  mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', roleCode: 'ADMIN', permissions: [] }])
   mocks.credentials.mockResolvedValue(credentials)
   mocks.transport.mockReturnValue('fixed-transport')
   mocks.inspect.mockResolvedValue({
@@ -75,14 +75,33 @@ it('rejects another organization before decrypting saved credentials', async () 
   expect(mocks.credentials).not.toHaveBeenCalled()
 })
 
-it('requires provider-read permission before decrypting saved credentials', async () => {
-  mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', permissions: ['org:source_view'] }])
+it.each(['org:source_view', 'org:source_connect', 'org:source_preview', 'org:source_apply', 'user:view'])(
+  'denies CRM metadata to an actor with only %s before accessing the provider',
+  async (permission) => {
+    mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', permissions: [permission] }])
+    expect((await GET(request())).status).toBe(403)
+    expect(mocks.credentials).not.toHaveBeenCalled()
+    expect(mocks.transport).not.toHaveBeenCalled()
+    expect(mocks.inspect).not.toHaveBeenCalled()
+  },
+)
+
+it.each(['ADMIN', 'SALES_OPS'])('honors overridden %s permissions', async (roleCode) => {
+  mocks.roles.mockResolvedValue([{
+    scopeType: 'org', scopeId: 'org-a', roleCode, permissionsOverridden: true, permissions: ['org:source_preview'],
+  }])
   expect((await GET(request())).status).toBe(403)
   expect(mocks.credentials).not.toHaveBeenCalled()
-  expect(mocks.inspect).not.toHaveBeenCalled()
 })
 
-it('uses the fixed-egress transport for a valid object description', async () => {
+it('does not use a department management grant for its organization', async () => {
+  mocks.roles.mockResolvedValue([{ scopeType: 'department', scopeId: 'org-a', permissions: ['admin:access'] }])
+  expect((await GET(request())).status).toBe(403)
+  expect(mocks.credentials).not.toHaveBeenCalled()
+})
+
+it('lets an existing sales operations role describe an object through fixed egress', async () => {
+  mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', roleCode: 'SALES_OPS', permissions: [] }])
   mocks.inspect.mockResolvedValue({
     ea: 'ea-test',
     operation: 'describe',

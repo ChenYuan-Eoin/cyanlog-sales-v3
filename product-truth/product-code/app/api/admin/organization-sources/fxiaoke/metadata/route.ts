@@ -14,7 +14,7 @@ export const maxDuration = 60
 export async function GET(req: NextRequest) {
   try {
     const context = await loadOrganizationSourceAccess(req)
-    if (!context?.access.preview) {
+    if (!context?.canInspectCrmMetadata) {
       return NextResponse.json({ error: '无权检查此企业的纷享对象元数据。' }, { status: 403 })
     }
     const { orgId } = context
