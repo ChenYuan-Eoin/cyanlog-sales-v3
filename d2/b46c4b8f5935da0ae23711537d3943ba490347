@@ -1,0 +1,16 @@
+{
+  "scope": "F054, IN-20261125-075 through IN-20261125-079",
+  "release_commit": "d2b46c4b8f5935da0ae23711537d3943ba490347",
+  "tested_commit": "d7d0b373ad555b9a369b638e8d2e73c6abbf8bff",
+  "shared_tree": "ee84cf856a00f6ef9c619848043686468d0da68b",
+  "pull_request": 12,
+  "local_tests": {"target_passed": 266, "full_passed": 3654, "skipped": 5, "lint": true, "typecheck": true, "build": true},
+  "preview": {"deployment_id": "dpl_qxVD4DWLeqdTt8wo7g8QsW43njtX", "ready": true, "browser_acceptance": false},
+  "database": {
+    "applied_version": "20261125033920", "target": "production", "release_only_schema": true,
+    "counts_unchanged": {"orders": 101, "waybills": 83, "revisions": 2},
+    "rpc_service_role_only": true, "old_rpc_retained": true, "rls": true,
+    "encrypted_recovery_sha256": "0e54fff1e0ad1c17eb02d72464e6a671e790c8af834cab10c95cc5f3af26f20b"
+  },
+  "operator_browser_acceptance": "pending production promotion"
+}
