@@ -10,37 +10,48 @@ type SalesSpace = {
   department_id: string | null
 }
 
-export type DepartmentSpace = {
+export type DepartmentOption = {
   department_id: string
   parent_department_id: string | null
   name: string
-  sales_space_ids: string[]
+}
+
+export type DepartmentSpace = DepartmentOption & { sales_space_ids: string[] }
+
+export function buildDepartmentOptions(departments: Department[]): DepartmentOption[] {
+  const activeDepartments = departments.filter(department => !department.status || department.status === 'active')
+  const departmentIds = new Set(activeDepartments.map(department => department.id))
+  return activeDepartments.map(department => ({
+    department_id: department.id,
+    parent_department_id: department.parent_id && departmentIds.has(department.parent_id) ? department.parent_id : null,
+    name: department.name,
+  }))
 }
 
 export function buildDepartmentSpaces(departments: Department[], salesSpaces: SalesSpace[]): DepartmentSpace[] {
-  const activeDepartments = departments.filter(department => !department.status || department.status === 'active')
-  const departmentIds = new Set(activeDepartments.map(department => department.id))
+  return attachHistoricalSpaceIds(buildDepartmentOptions(departments), salesSpaces)
+}
+
+export function attachHistoricalSpaceIds(departments: DepartmentOption[], salesSpaces: SalesSpace[]): DepartmentSpace[] {
   const salesSpaceIds = new Map<string, string[]>()
 
   for (const space of salesSpaces) {
-    if (!space.department_id || !departmentIds.has(space.department_id)) continue
+    if (!space.department_id) continue
     const ids = salesSpaceIds.get(space.department_id) ?? []
     ids.push(space.id)
     salesSpaceIds.set(space.department_id, ids)
   }
 
-  return activeDepartments.map(department => ({
-    department_id: department.id,
-    parent_department_id: department.parent_id && departmentIds.has(department.parent_id) ? department.parent_id : null,
-    name: department.name,
-    sales_space_ids: salesSpaceIds.get(department.id) ?? [],
+  return departments.map(department => ({
+    ...department,
+    sales_space_ids: salesSpaceIds.get(department.department_id) ?? [],
   }))
 }
 
 type DepartmentSelection = { departmentId: string; includeSubdepartments: boolean }
 
 export function resolveDepartmentSpaceIds(
-  spaces: DepartmentSpace[],
+  spaces: DepartmentOption[],
   authorizedRootIds: readonly string[],
   selection?: DepartmentSelection,
 ): Set<string> {

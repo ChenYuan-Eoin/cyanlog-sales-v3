@@ -5,20 +5,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { HomeInitialAuthError, loadHomeInitialData } from '@/lib/home-data-client'
 import { clearClientSession, logoutClientSession } from '@/lib/session-client'
-import { normalizeSalesSpaceName } from '@/lib/scoped-access'
 import type { DepartmentSpace } from '@/lib/department-spaces'
 
 // 类型定义（与数据库 schema 对应）
-interface SalesSpace {
-  id: string
-  name: string
-  description: string | null
-  department_id: string
-  owner_id: string
-  active_opportunities: number
-  pending_milestones: number
-}
-
 interface Opportunity {
   id: string
   space_id: string
@@ -72,32 +61,28 @@ interface Profile {
   email: string
   title: string | null
   primary_dept_id: string
-  org_id?: string | null
   canManageOrg?: boolean
   roles: { code: string; name: string }[]
-  spaces: SalesSpace[]
 }
 
-interface DashboardPayload {
-  spaces: SalesSpace[]
-  activeSpace: SalesSpace | null
-  opportunities: (Opportunity & { customer?: Customer })[]
-  milestones: Milestone[]
-  reminders: Reminder[]
-  agenda: AgendaItem[]
-}
+type PersonalDashboardPayload = { organizationId: string; reminders: Reminder[]; agenda: AgendaItem[] }
+type DepartmentOption = Pick<DepartmentSpace, 'department_id' | 'parent_department_id' | 'name'>
 
 type DepartmentSelection = {
   departmentId: string | null
   includeSubdepartments: boolean
 }
 
-type DepartmentDashboardPayload = Pick<DashboardPayload, 'opportunities' | 'milestones'> & {
-  departmentSpaces: DepartmentSpace[]
+type DepartmentDashboardPayload = {
+  organizationId: string
+  opportunities: (Opportunity & { customer?: Customer })[]
+  milestones: Milestone[]
+  departmentSpaces: DepartmentOption[]
   selection: DepartmentSelection
 }
 
 type DepartmentRosterPayload = {
+  organizationId: string
   status: 'ready'
   asOf: string
   total: number
@@ -110,13 +95,13 @@ const DEPARTMENT_SUMMARY: DepartmentSelection = { departmentId: null, includeSub
 
 class DepartmentMembershipError extends Error {}
 
-function departmentPreferenceKey(profile: Profile) {
-  return `dashboard:department:${profile.id}:${profile.org_id ?? ''}`
+function departmentPreferenceKey(userId: string, organizationId: string) {
+  return `dashboard:department:${userId}:${organizationId}`
 }
 
-function readDepartmentPreference(profile: Profile): DepartmentSelection | null {
+function readDepartmentPreference(userId: string, organizationId: string): DepartmentSelection | null {
   try {
-    const saved = sessionStorage.getItem(departmentPreferenceKey(profile))
+    const saved = sessionStorage.getItem(departmentPreferenceKey(userId, organizationId))
     if (!saved) return null
     const [departmentId, scope] = saved.split(':')
     return { departmentId: departmentId || null, includeSubdepartments: scope !== 'direct' }
@@ -125,13 +110,32 @@ function readDepartmentPreference(profile: Profile): DepartmentSelection | null 
   }
 }
 
-function saveDepartmentPreference(profile: Profile, selection: DepartmentSelection) {
-  const key = departmentPreferenceKey(profile)
+function saveDepartmentPreference(userId: string, organizationId: string, selection: DepartmentSelection) {
+  const key = departmentPreferenceKey(userId, organizationId)
   try {
     sessionStorage.setItem(key, `${selection.departmentId ?? ''}:${selection.includeSubdepartments ? 'subtree' : 'direct'}`)
   } catch {
     // The current selection remains usable when the browser blocks storage.
   }
+}
+
+function readPersonalDashboard(payload: unknown): PersonalDashboardPayload {
+  const personal = payload as Partial<PersonalDashboardPayload> | null
+  if (typeof personal?.organizationId !== 'string' || !personal.organizationId
+    || !Array.isArray(personal.reminders) || !Array.isArray(personal.agenda)) throw new DepartmentMembershipError()
+  return { organizationId: personal.organizationId, reminders: personal.reminders, agenda: personal.agenda }
+}
+
+async function fetchPersonalDashboard(token: string | null, signal: AbortSignal) {
+  const response = await fetch('/api/dashboard?view=personal', {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    cache: 'no-store',
+    signal,
+  })
+  if (response.status === 401) throw new HomeInitialAuthError()
+  if (response.status === 403) throw new DepartmentMembershipError()
+  if (!response.ok) throw new Error('Unable to load personal dashboard')
+  return readPersonalDashboard(await response.json())
 }
 
 async function fetchDepartmentDashboard(
@@ -153,7 +157,14 @@ async function fetchDepartmentDashboard(
     throw new DepartmentMembershipError()
   }
   if (!response.ok) throw new Error('Unable to load department dashboard')
-  return response.json()
+  const result = await response.json() as DepartmentDashboardPayload
+  if (typeof result?.organizationId !== 'string' || !result.organizationId
+    || !Array.isArray(result.departmentSpaces) || !Array.isArray(result.opportunities) || !Array.isArray(result.milestones)
+    || result.selection?.departmentId !== selection.departmentId
+    || result.selection?.includeSubdepartments !== selection.includeSubdepartments) {
+    throw new Error('Unable to verify department selection')
+  }
+  return result
 }
 
 function departmentQuery(selection: DepartmentSelection) {
@@ -165,10 +176,10 @@ function departmentQuery(selection: DepartmentSelection) {
   return params
 }
 
-function departmentOptionLabel(space: DepartmentSpace, byId: Map<string, DepartmentSpace>) {
-  const names = [space.name]
-  const seen = new Set([space.department_id])
-  let parentId = space.parent_department_id
+function departmentOptionLabel(department: DepartmentOption, byId: Map<string, DepartmentOption>) {
+  const names = [department.name]
+  const seen = new Set([department.department_id])
+  let parentId = department.parent_department_id
   while (parentId && !seen.has(parentId)) {
     const parent = byId.get(parentId)
     if (!parent) break
@@ -180,13 +191,16 @@ function departmentOptionLabel(space: DepartmentSpace, byId: Map<string, Departm
 }
 
 function DepartmentRoster({
-  selection, departments,
+  selection, departments, organizationId, revision,
 }: {
   selection: DepartmentSelection
-  departments: Map<string, DepartmentSpace>
+  departments: Map<string, DepartmentOption>
+  organizationId: string
+  revision: number
 }) {
   const [page, setPage] = useState(1)
-  const [state, setState] = useState<'loading' | 'unavailable' | DepartmentRosterPayload>('loading')
+  const [result, setResult] = useState<{ revision: number; data: 'unavailable' | DepartmentRosterPayload } | null>(null)
+  const state = result?.revision === revision ? result.data : 'loading'
   const { departmentId, includeSubdepartments } = selection
 
   useEffect(() => {
@@ -200,16 +214,19 @@ function DepartmentRoster({
       cache: 'no-store',
       signal,
     }).then(async response => {
-      const result = response.ok ? await response.json() : null
-      if (!signal.aborted) setState(result?.status === 'ready' ? result : 'unavailable')
+      const data = response.ok ? await response.json() : null
+      if (!signal.aborted) setResult({
+        revision,
+        data: data?.status === 'ready' && data.organizationId === organizationId ? data : 'unavailable',
+      })
     }).catch(() => {
-      if (!signal.aborted) setState('unavailable')
+      if (!signal.aborted) setResult({ revision, data: 'unavailable' })
     })
     return () => controller.abort()
-  }, [departmentId, includeSubdepartments, page])
+  }, [departmentId, includeSubdepartments, organizationId, page, revision])
 
   function goToPage(nextPage: number) {
-    setState('loading')
+    setResult(null)
     setPage(nextPage)
   }
 
@@ -284,9 +301,6 @@ function isFetchFailedError(error: unknown) {
 export default function HomePage() {
   const router = useRouter()
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [activeSpace, setActiveSpace] = useState<SalesSpace | null>(null)
-  const [legacyOpportunities, setLegacyOpportunities] = useState<DashboardPayload['opportunities']>([])
-  const [legacyMilestones, setLegacyMilestones] = useState<Milestone[]>([])
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [agenda, setAgenda] = useState<AgendaItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -295,132 +309,101 @@ export default function HomePage() {
   const [departmentUnavailable, setDepartmentUnavailable] = useState(false)
   const [pendingDepartment, setPendingDepartment] = useState<DepartmentSelection | null>(null)
   const [scopeError, setScopeError] = useState('')
+  const [sessionRevision, setSessionRevision] = useState(0)
+  const [rosterRevision, setRosterRevision] = useState(0)
+  const sessionToken = useRef<string | null>(null)
+  const organizationId = useRef<string | null>(null)
+  const initialRequest = useRef<AbortController | null>(null)
   const departmentRequest = useRef<AbortController | null>(null)
 
-  const applyDepartmentDashboard = useCallback((payload: DepartmentDashboardPayload, currentProfile: Profile) => {
+  const applyDepartmentDashboard = useCallback((payload: DepartmentDashboardPayload, userId: string) => {
     setDepartmentDashboard(payload)
     setDepartmentUnavailable(false)
-    saveDepartmentPreference(currentProfile, payload.selection)
+    setRosterRevision(revision => revision + 1)
+    saveDepartmentPreference(userId, payload.organizationId, payload.selection)
   }, [])
 
-  const applyPersonalDashboard = useCallback((data?: Pick<DashboardPayload, 'reminders' | 'agenda'>) => {
+  const applyPersonalDashboard = useCallback((data?: PersonalDashboardPayload) => {
     setAgenda(data?.agenda || [])
     setReminders(data?.reminders || [])
   }, [])
 
-  const applyDashboardPayload = useCallback((data: DashboardPayload, nextProfile?: Profile) => {
-    const normalizedSpaces = (data.spaces || []).map((space) => ({
-      ...space,
-      name: normalizeSalesSpaceName(space.name),
-    }))
-    const normalizedActiveSpace = data.activeSpace
-      ? {
-          ...data.activeSpace,
-          name: normalizeSalesSpaceName(data.activeSpace.name),
-        }
-      : null
-
-    if (nextProfile) {
-      setProfile({
-        ...nextProfile,
-        roles: nextProfile.roles || [],
-        spaces: normalizedSpaces,
-      })
-    } else {
-      setProfile(prev => prev ? { ...prev, spaces: normalizedSpaces } : null)
-    }
-    setActiveSpace(normalizedActiveSpace)
-    setLegacyOpportunities(data.opportunities || [])
-    setLegacyMilestones(data.milestones || [])
-    applyPersonalDashboard(data)
-  }, [applyPersonalDashboard])
-
-  // 加载全部数据
-  const switchSpace = useCallback(async (spaceId: string) => {
-    if (loading || spaceId === activeSpace?.id) return
+  const restartHome = useCallback((token: string | null) => {
+    sessionToken.current = token
+    organizationId.current = null
+    initialRequest.current?.abort()
+    departmentRequest.current?.abort()
+    departmentRequest.current = null
+    setProfile(null)
+    applyPersonalDashboard()
+    setDepartmentDashboard(null)
+    setDepartmentUnavailable(false)
+    setPendingDepartment(null)
     setScopeError('')
     setLoading(true)
-    try {
-      const token = localStorage.getItem('token')
-      const res = await fetch(`/api/dashboard?spaceId=${encodeURIComponent(spaceId)}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
-
-      if (!res.ok) {
-        if (res.status === 401) {
-          clearClientSession()
-          router.push('/login')
-          return
-        }
-        throw new Error('Dashboard load failed')
-      }
-
-      const data = await res.json() as DashboardPayload
-      if (data.activeSpace?.id !== spaceId) throw new Error('Sales space is no longer available')
-      applyDashboardPayload(data)
-    } catch (e) {
-      console.error('[Dashboard] load error', e)
-      setScopeError('无法切换销售空间。请重试。')
-    } finally {
-      setLoading(false)
-    }
-  }, [activeSpace?.id, applyDashboardPayload, loading, router])
+    setSessionRevision(revision => revision + 1)
+  }, [applyPersonalDashboard])
 
   useEffect(() => {
     let mounted = true
     const controller = new AbortController()
+    initialRequest.current = controller
+    const token = localStorage.getItem('token')
+    sessionToken.current = token
     ;(async () => {
-      const token = localStorage.getItem('token')
       const initialData = await loadHomeInitialData(token, { signal: controller.signal, view: 'personal' })
       const profileRow = initialData.profile as Profile | undefined
-      const dashboardPayload = initialData.dashboard as DashboardPayload
-
-      if (!mounted) return
+      if (!mounted || controller.signal.aborted) return
+      const dashboardPayload = readPersonalDashboard(initialData.dashboard)
       if (profileRow) {
-        applyDashboardPayload(dashboardPayload, profileRow)
+        organizationId.current = dashboardPayload.organizationId
+        setProfile({ ...profileRow, roles: profileRow.roles || [] })
+        applyPersonalDashboard(dashboardPayload)
 
-        const preferred = readDepartmentPreference(profileRow)
+        const preferred = readDepartmentPreference(profileRow.id, dashboardPayload.organizationId)
         try {
           let scoped = await fetchDepartmentDashboard(preferred ?? DEPARTMENT_SUMMARY, token, controller.signal)
           if (!scoped && preferred?.departmentId) {
             scoped = await fetchDepartmentDashboard(DEPARTMENT_SUMMARY, token, controller.signal)
-            if (mounted && scoped) setScopeError('上次查看的部门已不可用，已显示授权范围汇总。')
+            if (mounted && !controller.signal.aborted && scoped) setScopeError('上次查看的部门已不可用，已显示授权范围汇总。')
           }
-          if (!mounted) return
+          if (!mounted || controller.signal.aborted) return
           if (scoped) {
-            applyDepartmentDashboard(scoped, profileRow)
-          } else if (preferred) {
-            setDepartmentUnavailable(true)
-            setScopeError('上次使用的部门空间已不可访问。')
-          } else {
-            const legacy = await fetch('/api/dashboard', {
-              headers: token ? { Authorization: `Bearer ${token}` } : {},
-              cache: 'no-store',
-              signal: controller.signal,
-            })
-            if (!mounted) return
-            if (legacy.status === 401) throw new HomeInitialAuthError()
-            if (!legacy.ok) throw new Error('Unable to load sales dashboard')
-            const legacyDashboard: DashboardPayload = await legacy.json()
-            if (mounted) applyDashboardPayload(legacyDashboard)
+            if (scoped.organizationId !== dashboardPayload.organizationId) throw new DepartmentMembershipError()
+            applyDepartmentDashboard(scoped, profileRow.id)
+          } else if (preferred?.departmentId) {
+            saveDepartmentPreference(profileRow.id, dashboardPayload.organizationId, DEPARTMENT_SUMMARY)
+            setScopeError('上次查看的部门已不可用，当前显示个人工作台。')
           }
         } catch (error) {
           if (!mounted || isAbortError(error) || error instanceof HomeInitialAuthError) throw error
           setDepartmentUnavailable(true)
-          if (error instanceof DepartmentMembershipError) applyPersonalDashboard()
+          if (error instanceof DepartmentMembershipError) {
+            organizationId.current = null
+            applyPersonalDashboard()
+          }
           setScopeError(error instanceof DepartmentMembershipError
             ? '当前组织成员权限已变化，请重新加载。'
-            : '暂时无法验证部门空间。请重试。')
+            : '暂时无法验证部门。请重试。')
         }
       }
       setLoading(false)
     })().catch((error) => {
-      if (!mounted || isAbortError(error)) {
+      if (!mounted || controller.signal.aborted || isAbortError(error)) {
         return
       }
       if (error instanceof HomeInitialAuthError) {
+        organizationId.current = null
+        setProfile(null)
+        applyPersonalDashboard()
         clearClientSession()
         router.push('/login')
+        setLoading(false)
+        return
+      }
+      if (error instanceof DepartmentMembershipError) {
+        setDepartmentUnavailable(true)
+        setScopeError('暂时无法核对当前组织。请重试。')
         setLoading(false)
         return
       }
@@ -436,35 +419,57 @@ export default function HomePage() {
       }
       console.error('[Dashboard] initial load error', error)
       setLoading(false)
+    }).finally(() => {
+      if (initialRequest.current === controller) initialRequest.current = null
     })
     return () => {
       mounted = false
       controller.abort()
       departmentRequest.current?.abort()
     }
-  }, [applyDashboardPayload, applyDepartmentDashboard, applyPersonalDashboard, router])
+  }, [applyDepartmentDashboard, applyPersonalDashboard, router, sessionRevision])
 
-  const switchDepartment = useCallback(async (selection: DepartmentSelection) => {
+  const switchDepartment = useCallback(async (selection: DepartmentSelection, refreshPersonal = false) => {
     if (!profile) return
+    const token = localStorage.getItem('token')
+    if (token !== sessionToken.current) {
+      restartHome(token)
+      return
+    }
     departmentRequest.current?.abort()
     const controller = new AbortController()
     departmentRequest.current = controller
     setPendingDepartment(selection)
     setScopeError('')
     try {
-      const token = localStorage.getItem('token')
+      if (refreshPersonal) {
+        const personal = await fetchPersonalDashboard(token, controller.signal)
+        if (controller.signal.aborted) return
+        if (personal.organizationId !== organizationId.current) {
+          restartHome(token)
+          return
+        }
+        applyPersonalDashboard(personal)
+      }
       const payload = await fetchDepartmentDashboard(selection, token, controller.signal)
       if (controller.signal.aborted) return
       if (payload) {
-        applyDepartmentDashboard(payload, profile)
+        if (payload.organizationId !== organizationId.current) {
+          restartHome(token)
+          return
+        }
+        applyDepartmentDashboard(payload, profile.id)
         return
       }
       setDepartmentDashboard(null)
-      setDepartmentUnavailable(true)
-      setScopeError('该部门空间已不可访问，请重新加载授权范围。')
+      setDepartmentUnavailable(Boolean(selection.departmentId))
+      if (selection.departmentId) setScopeError('该部门已不可访问，请重新加载授权范围。')
     } catch (error) {
       if (controller.signal.aborted) return
       if (error instanceof HomeInitialAuthError) {
+        organizationId.current = null
+        setProfile(null)
+        applyPersonalDashboard()
         setDepartmentDashboard(null)
         setDepartmentUnavailable(true)
         clearClientSession()
@@ -472,32 +477,58 @@ export default function HomePage() {
         return
       }
       if (error instanceof DepartmentMembershipError) {
+        organizationId.current = null
         applyPersonalDashboard()
         setDepartmentDashboard(null)
         setDepartmentUnavailable(true)
         setScopeError('当前组织成员权限已变化，请重新加载。')
         return
       }
-      setScopeError('暂时无法切换部门空间。请重试。')
+      setScopeError('暂时无法切换部门。请重试。')
     } finally {
       if (departmentRequest.current === controller) {
         departmentRequest.current = null
         setPendingDepartment(null)
       }
     }
-  }, [applyDepartmentDashboard, applyPersonalDashboard, profile, router])
+  }, [applyDepartmentDashboard, applyPersonalDashboard, profile, restartHome, router])
 
   const departmentById = new Map((departmentDashboard?.departmentSpaces ?? []).map(space => [space.department_id, space]))
   const selection = departmentDashboard?.selection
+
+  useEffect(() => {
+    function revalidate() {
+      const token = localStorage.getItem('token')
+      if (token !== sessionToken.current) {
+        restartHome(token)
+        return
+      }
+      if (profile && !initialRequest.current) {
+        void switchDepartment(pendingDepartment ?? selection ?? DEPARTMENT_SUMMARY, true)
+      }
+    }
+
+    function onStorage(event: StorageEvent) {
+      if (event.key === 'token' || event.key === null) revalidate()
+    }
+
+    window.addEventListener('focus', revalidate)
+    window.addEventListener('storage', onStorage)
+    return () => {
+      window.removeEventListener('focus', revalidate)
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [pendingDepartment, profile, restartHome, selection, switchDepartment])
+
   const shownSelection = pendingDepartment ?? selection
   const selectedDepartment = selection?.departmentId ? departmentById.get(selection.departmentId) : undefined
   const currentView = departmentDashboard
     ? selectedDepartment
       ? `${selectedDepartment.name}（${selection?.includeSubdepartments ? '含下级部门' : '仅本部门'}）`
       : '授权范围汇总'
-    : departmentUnavailable ? '部门空间暂不可用' : loading ? undefined : activeSpace?.name
-  const opportunities = departmentDashboard?.opportunities ?? (departmentUnavailable ? [] : legacyOpportunities)
-  const milestones = departmentDashboard?.milestones ?? (departmentUnavailable ? [] : legacyMilestones)
+    : loading ? undefined : '个人工作台'
+  const opportunities = departmentDashboard?.opportunities ?? []
+  const milestones = departmentDashboard?.milestones ?? []
 
   // 统计计算
   const stats = {
@@ -509,12 +540,6 @@ export default function HomePage() {
       return d.toDateString() === today.toDateString()
     }).length,
     pendingApproval: milestones.filter(m => m.type === 'REVIEW' && m.status === 'PENDING').length,
-    monthlyContracts: opportunities.filter(o => {
-      if (o.status !== 'WON' || !o.expected_close_date) return false
-      const d = new Date(o.expected_close_date)
-      const now = new Date()
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
-    }).length,
   }
 
   const formatTime = (iso: string) => {
@@ -537,7 +562,7 @@ export default function HomePage() {
           <div className="breadcrumb">
             <span className="breadcrumb-current">首页</span>
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">销售工作台</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">工作台</h1>
           <p className="subtitle max-w-3xl">
             {profile
               ? `${profile.display_name}${currentView ? `，当前视图 ${currentView}` : ''}。`
@@ -546,7 +571,7 @@ export default function HomePage() {
         </div>
 
         <div className="grid gap-3 xl:min-w-[360px]">
-          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          {departmentDashboard && <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400">
               <circle cx="11" cy="11" r="8" />
               <path d="M21 21l-4.35-4.35" />
@@ -556,14 +581,14 @@ export default function HomePage() {
               placeholder="搜索机会、客户、节点"
             />
             <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">⌘K</span>
-          </div>
+          </div>}
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-sm font-semibold text-slate-900">{profile?.display_name || '...'}</div>
                 <div className="mt-1 text-xs text-slate-500">
-                  {profile?.roles?.[0]?.name || profile?.title || '销售'} · {todayLabel}
+                  {profile?.roles?.[0]?.name || profile?.title || '成员'} · {todayLabel}
                 </div>
                 {!departmentDashboard && currentView && <div className="mt-2 text-xs text-slate-500">{currentView}</div>}
               </div>
@@ -576,7 +601,7 @@ export default function HomePage() {
             {departmentDashboard && shownSelection && (
               <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]" aria-busy={Boolean(pendingDepartment)}>
                 <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-600">
-                  当前部门空间
+                  当前部门
                   <select
                     value={shownSelection.departmentId ?? ''}
                     onChange={event => {
@@ -612,14 +637,16 @@ export default function HomePage() {
                 )}
               </div>
             )}
-            {pendingDepartment && <p className="mt-2 text-xs text-slate-500" role="status">正在切换部门空间</p>}
+            {pendingDepartment && (departmentDashboard || pendingDepartment.departmentId) && (
+              <p className="mt-2 text-xs text-slate-500" role="status">正在切换部门</p>
+            )}
             {scopeError && (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-amber-800">
                 <p role="alert">{scopeError}</p>
                 {departmentUnavailable && (
                   <button type="button" className="underline" disabled={Boolean(pendingDepartment)}
-                    onClick={() => void switchDepartment(DEPARTMENT_SUMMARY)}>
-                    重新加载部门空间
+                    onClick={() => profile ? void switchDepartment(DEPARTMENT_SUMMARY, true) : restartHome(localStorage.getItem('token'))}>
+                    {profile ? '重新加载部门' : '重新加载工作台'}
                   </button>
                 )}
               </div>
@@ -649,53 +676,16 @@ export default function HomePage() {
         </div>
       </div>
 
-      {!departmentDashboard && !departmentUnavailable && !loading && (activeSpace || (profile?.spaces?.length ?? 0) > 1) && (
-        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <div className="text-sm font-semibold text-slate-900">{activeSpace?.name || '销售空间'}</div>
-              <div className="mt-1 text-sm text-slate-500">
-                {activeSpace
-                  ? `${activeSpace.active_opportunities ?? stats.activeOpportunities} 个活跃机会 · ${activeSpace.pending_milestones ?? stats.todayNodes} 个硬节点`
-                  : '选择一个销售空间后，首页会切换到对应业务视图。'}
-              </div>
-            </div>
-
-            {profile?.spaces && profile.spaces.length > 1 && (
-              <div className="flex flex-wrap gap-2">
-                {profile.spaces.map((sp) => {
-                  const isActive = sp.id === activeSpace?.id
-                  return (
-                    <button
-                      key={sp.id}
-                      aria-pressed={isActive}
-                      onClick={() => void switchSpace(sp.id)}
-                      className={`inline-flex items-center rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                        isActive
-                          ? 'border-blue-200 bg-blue-50 text-blue-700'
-                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      {sp.name}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="stats-grid">
+      {departmentDashboard && <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-card-header">
             <span className="stat-card-label">活跃机会</span>
-            <span className="stat-tag">{departmentDashboard ? '当前列表' : '总览'}</span>
+            <span className="stat-tag">当前列表</span>
           </div>
           {loading ? <div className="skeleton" style={{ width: 60, height: 32 }} /> : (
             <div className="stat-card-value">{stats.activeOpportunities}</div>
           )}
-          <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>本空间</div>
+          <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>当前范围</div>
         </div>
 
         <div className="stat-card">
@@ -706,7 +696,7 @@ export default function HomePage() {
           {loading ? <div className="skeleton" style={{ width: 60, height: 32 }} /> : (
             <div className="stat-card-value">{stats.todayNodes} <span style={{ fontSize: 'var(--text-h3)' }}>个</span></div>
           )}
-          <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>{departmentDashboard ? '当前列表' : '需跨角色协同'}</div>
+          <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>当前列表</div>
         </div>
 
         <div className="stat-card">
@@ -717,24 +707,14 @@ export default function HomePage() {
           {loading ? <div className="skeleton" style={{ width: 80, height: 32 }} /> : (
             <div className="stat-card-value" style={{ fontSize: '28px' }}>{stats.pendingApproval} 项</div>
           )}
-          <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>{departmentDashboard ? '当前列表' : '在审'}</div>
+          <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>当前列表</div>
         </div>
 
-        {!departmentDashboard && !departmentUnavailable && <div className="stat-card">
-          <div className="stat-card-header">
-            <span className="stat-card-label">本月已签约</span>
-            <span className="stat-tag success">{stats.monthlyContracts}</span>
-          </div>
-          {loading ? <div className="skeleton" style={{ width: 60, height: 32 }} /> : (
-            <div className="stat-card-value">{stats.monthlyContracts}</div>
-          )}
-          <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>单</div>
-        </div>}
-      </div>
+      </div>}
 
-      <div className="content-grid">
-        <div className="hero-card">
-          <div className="eyebrow">{currentView || '销售空间'}</div>
+      <div className={departmentDashboard ? 'content-grid' : undefined}>
+        {departmentDashboard && <div className="hero-card">
+          <div className="eyebrow">{currentView}</div>
           <h2>今日优先队列</h2>
           <p>优先处理下列项目与动作。每一项都还差一个明确节点。</p>
 
@@ -743,7 +723,7 @@ export default function HomePage() {
               <><div className="skeleton queue-card" /><div className="skeleton queue-card" /><div className="skeleton queue-card" /></>
             ) : opportunities.length === 0 ? (
               <div className="empty-state">
-                <p>{departmentUnavailable ? '部门范围待重新验证' : '本空间暂无活跃机会'}</p>
+                <p>当前范围暂无活跃机会</p>
               </div>
             ) : (
               opportunities.slice(0, 3).map(o => (
@@ -761,7 +741,7 @@ export default function HomePage() {
               ))
             )}
           </div>
-        </div>
+        </div>}
 
         <div className="side-panel">
           <div className="side-card">
@@ -831,9 +811,9 @@ export default function HomePage() {
           ))}
         </div>
       )}
-      {!loading && selection && (
-        <DepartmentRoster key={`${selection.departmentId ?? ''}:${selection.includeSubdepartments}`}
-          selection={selection} departments={departmentById} />
+      {!loading && departmentDashboard && selection && (
+        <DepartmentRoster key={`${departmentDashboard.organizationId}:${selection.departmentId ?? ''}:${selection.includeSubdepartments}`}
+          selection={selection} departments={departmentById} organizationId={departmentDashboard.organizationId} revision={rosterRevision} />
       )}
     </div>
   )

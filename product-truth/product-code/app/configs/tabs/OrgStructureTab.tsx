@@ -24,7 +24,7 @@ import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon,
 import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment } from '../types'
 import Fuse from 'fuse.js'
 import { success, error, confirmAction } from '@/lib/toast'
-import { buildDepartmentSpaces, resolveDepartmentSpaceIds } from '@/lib/department-spaces'
+import { buildDepartmentOptions, resolveDepartmentSpaceIds } from '@/lib/department-spaces'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
@@ -799,7 +799,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
                   disabled={Boolean(roleMutationRestriction)}
                   onSelect={async () => {
                     if (!await confirmAction(
-                      `确定要将 "${user.display_name}" 移出当前组织吗？\n只结束当前租户的成员关系、角色、部门和空间授权，人员账户与历史审计保留。`,
+                      `确定要将 "${user.display_name}" 移出当前组织吗？\n只结束当前租户的成员关系、角色和数据授权，人员账户与历史审计保留。`,
                       { confirmText: '移出当前组织', danger: true },
                     )) return
                     try {
@@ -940,10 +940,8 @@ export default function OrgStructureTab({
 }: OrgStructureTabProps) {
   const departments = useMemo(() => orgSummary?.departments ?? [], [orgSummary?.departments])
   const users = useMemo(() => orgSummary?.users ?? [], [orgSummary?.users])
-  const departmentSpaces = useMemo(() => (
-    orgSummary?.department_spaces ?? buildDepartmentSpaces(departments, orgSummary?.spaces ?? [])
-  ), [departments, orgSummary?.department_spaces, orgSummary?.spaces])
-  const orgDepartmentIds = useMemo(() => departmentSpaces.map(space => space.department_id), [departmentSpaces])
+  const departmentTree = useMemo(() => buildDepartmentOptions(departments), [departments])
+  const orgDepartmentIds = useMemo(() => departmentTree.map(department => department.department_id), [departmentTree])
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null)
   const [includeSubdepartments, setIncludeSubdepartments] = useState(true)
   const [employmentFilter, setEmploymentFilter] = useState<MemberFilter>('synced')
@@ -965,7 +963,7 @@ export default function OrgStructureTab({
 
   const departmentMemberCounts = useMemo(() => {
     if (countsUnavailable) return null
-    const parents = new Map(departmentSpaces.map(space => [space.department_id, space.parent_department_id]))
+    const parents = new Map(departmentTree.map(department => [department.department_id, department.parent_department_id]))
     const counts = new Map<string, number>()
     for (const user of statusUsers) {
       const seen = new Set<string>()
@@ -979,22 +977,21 @@ export default function OrgStructureTab({
       }
     }
     return counts
-  }, [countsUnavailable, departmentSpaces, statusUsers])
+  }, [countsUnavailable, departmentTree, statusUsers])
 
   // 根据选中部门过滤成员
   const filteredUsers = useMemo(() => {
     if (!selectedDeptId) return statusUsers
-    const allowedDeptIds = resolveDepartmentSpaceIds(departmentSpaces, orgDepartmentIds, {
+    const allowedDeptIds = resolveDepartmentSpaceIds(departmentTree, orgDepartmentIds, {
       departmentId: selectedDeptId, includeSubdepartments,
     })
     return statusUsers.filter(user => [...memberDepartmentIds(user)].some(id => allowedDeptIds.has(id)))
-  }, [statusUsers, departmentSpaces, orgDepartmentIds, selectedDeptId, includeSubdepartments])
+  }, [statusUsers, departmentTree, orgDepartmentIds, selectedDeptId, includeSubdepartments])
 
   // 统计信息
   const stats = useMemo(() => ({
     deptCount: (orgSummary?.departments ?? []).length,
     userCount: statusUsers.length,
-    spaceCount: (orgSummary?.spaces ?? []).length,
     filteredCount: filteredUsers.length,
   }), [orgSummary, statusUsers.length, filteredUsers.length])
 
@@ -1002,7 +999,6 @@ export default function OrgStructureTab({
     const departments = orgSummary?.departments ?? []
     return departments.find(d => d.id === selectedDeptId) ?? null
   }, [orgSummary, selectedDeptId])
-  const selectedDepartmentSpace = departmentSpaces.find(space => space.department_id === selectedDeptId)
 
   // 编辑用户状态
   const [editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)
@@ -1019,7 +1015,6 @@ export default function OrgStructureTab({
         <div className="flex flex-wrap gap-2">
           <StatCard icon={<BuildingIcon size={18} />} label="部门" value={stats.deptCount} />
           <StatCard icon={<UsersIcon size={18} />} label={`${MEMBER_FILTER_LABELS[employmentFilter]}成员`} value={countsUnavailable ? '—' : stats.userCount} />
-          <StatCard icon={<BuildingIcon size={18} />} label="销售空间" value={stats.spaceCount} />
         </div>
         <div className="text-sm text-slate-500">
           当前筛选：{selectedDept?.name || allMembersLabel}
@@ -1150,19 +1145,14 @@ export default function OrgStructureTab({
         </div>
 
         <div className="min-w-0 space-y-4">
-          {selectedDepartmentSpace && (
+          {currentUserId && selectedDept && (
             <div className="rounded-lg border bg-white p-4">
-              <h3 className="font-medium text-slate-900">部门空间</h3>
-              <p className="mt-2 text-sm text-slate-700">{selectedDepartmentSpace.name}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                已关联 {selectedDepartmentSpace.sales_space_ids.length} 个销售空间
-              </p>
-              {currentUserId && selectedDept && (
-                <DepartmentLeaderAccess
-                  key={JSON.stringify([orgSummary?.organization?.id, currentUserId, selectedDept.id, selectedDept.leader_id])}
-                  department={selectedDept}
-                />
-              )}
+              <h3 className="font-medium text-slate-900">部门管理</h3>
+              <p className="mt-2 text-sm text-slate-700">{selectedDept.name}</p>
+              <DepartmentLeaderAccess
+                key={JSON.stringify([orgSummary?.organization?.id, currentUserId, selectedDept.id, selectedDept.leader_id])}
+                department={selectedDept}
+              />
             </div>
           )}
           <div className="rounded-lg border bg-white p-4">
@@ -1311,8 +1301,7 @@ export default function OrgStructureTab({
           pendingRoles={assigningUser.pending_org_roles}
           organizationOnly={assigningUser.membership_status === 'invited'}
           departments={departments}
-          spaces={orgSummary?.spaces ?? []}
-          scopedRoles={assigningUser.scoped_roles}
+          scopedRoles={users.find(user => user.id === assigningUser.id)?.scoped_roles}
           open={true}
           onOpenChange={(open) => !open && setAssigningUser(null)}
           onSubmit={async (roleIds) => {
@@ -1334,15 +1323,15 @@ export default function OrgStructureTab({
             success(result.pending_role_ids?.length ? '组织角色已预分配，首次登录后生效' : '角色已保存')
             await onRefresh?.()
           }}
-          onSubmitScoped={async (roleId, scopeType, scopeId) => {
+          onSubmitScoped={async (roleId, departmentId) => {
             const res = await fetch(`/api/admin/users/${assigningUser.id}/role-scopes`, {
               method: 'POST',
               headers: buildAuthHeaders(true),
               body: JSON.stringify({
                 role_id: roleId,
-                scope_type: scopeType,
-                scope_id: scopeId,
-                reason: `${scopeType} role assignment`,
+                scope_type: 'department',
+                scope_id: departmentId,
+                reason: 'department role assignment',
               }),
             })
             const result = await res.json()

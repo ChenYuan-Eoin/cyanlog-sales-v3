@@ -99,7 +99,7 @@ export async function loadHomeInitialData(token: string | null | undefined, opti
         return profilePayload.user
       })
     void profileRequest.catch(() => undefined)
-    const dashboardRes = await fetch(options.view ? '/api/dashboard?view=personal' : '/api/dashboard', requestInit)
+    const dashboardRes = await fetch('/api/dashboard?view=personal', requestInit)
 
     if (dashboardRes.status === 401) {
       throw new HomeInitialAuthError()

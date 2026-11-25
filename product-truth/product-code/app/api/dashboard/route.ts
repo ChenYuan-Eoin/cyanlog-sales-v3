@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AuthError, requireAuth } from '@/lib/auth'
-import { DashboardDataError, getPersonalDashboardData, getVerifiedLegacyDashboardPayload } from '@/lib/dashboard-data'
-import { DepartmentAccessError, getDepartmentLegacyWorkspace, getPersonalDashboardOrg } from './department/data'
+import { DashboardDataError, getPersonalDashboardData } from '@/lib/dashboard-data'
+import { DepartmentAccessError, getPersonalDashboardOrg } from './department/data'
 
 export const preferredRegion = 'sin1'
 
@@ -11,29 +11,19 @@ export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
     const params = req.nextUrl.searchParams
-    const requestedSpaceId = params.get('spaceId')
     const view = params.get('view')
-    if (params.getAll('spaceId').length > 1 || params.getAll('view').length > 1 || requestedSpaceId === ''
-      || (view !== null && (view !== 'personal' || requestedSpaceId !== null))) {
+    if (params.has('spaceId')) {
+      return NextResponse.json({ error: '请按部门选择数据范围', code: 'DEPARTMENT_SELECTION_REQUIRED' }, { status: 400, headers: NO_STORE })
+    }
+    if (params.getAll('view').length > 1 || (view !== null && view !== 'personal')) {
       return NextResponse.json({ error: '工作台请求无效', code: 'INVALID_SELECTION' }, { status: 400, headers: NO_STORE })
     }
 
-    if (view === 'personal') {
-      const orgId = await getPersonalDashboardOrg(user.id)
-      const personal = await getPersonalDashboardData(user.id, orgId)
-      return NextResponse.json({
-        spaces: [], activeSpace: null, opportunities: [], milestones: [], ...personal,
-      }, { headers: NO_STORE })
-    }
-
-    try {
-      const { orgId, ...workspace } = await getDepartmentLegacyWorkspace(user.id, requestedSpaceId)
-      return NextResponse.json({ ...workspace, ...await getPersonalDashboardData(user.id, orgId) }, { headers: NO_STORE })
-    } catch (error) {
-      if (!(error instanceof DepartmentAccessError) || error.code !== 'DEPARTMENT_SCOPE_REQUIRED' || !error.orgId) throw error
-      const payload = await getVerifiedLegacyDashboardPayload(user, error.orgId, requestedSpaceId)
-      return NextResponse.json(payload, { headers: NO_STORE })
-    }
+    const organizationId = await getPersonalDashboardOrg(user.id)
+    const personal = await getPersonalDashboardData(user.id, organizationId)
+    return NextResponse.json({
+      spaces: [], activeSpace: null, opportunities: [], milestones: [], ...personal, organizationId,
+    }, { headers: NO_STORE })
   } catch (error) {
     let status = 500
     let code = 'INTERNAL_ERROR'

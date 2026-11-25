@@ -50,7 +50,6 @@ import type { RoleModulePermissionCatalog } from '@/lib/org-role-permission-read
 import type {
   OrgSummaryUser,
   OrgSummaryDepartment,
-  OrgSummarySpace,
   PermissionCatalogGroup,
 } from '../types'
 import {
@@ -186,7 +185,6 @@ interface RoleDetailPanelProps {
   users: OrgSummaryUser[]
   membershipStats?: RoleMembershipStats
   departments: OrgSummaryDepartment[]
-  _spaces: OrgSummarySpace[]
   onRefresh?: () => void | Promise<void>
 }
 
@@ -205,7 +203,6 @@ export function RoleDetailPanel({
   users,
   membershipStats,
   departments,
-  _spaces,
   onRefresh,
 }: RoleDetailPanelProps) {
   const [activeTab, setActiveTab] = useState('members')
@@ -366,14 +363,18 @@ interface MemberAssignmentTabProps {
   onRefresh?: () => void | Promise<void>
 }
 
-function MemberRoleStatus({ member }: { member: RoleMember }) {
-  const { hasOrgAssignment, pending, effective } = member
-  if (hasOrgAssignment && !pending && effective !== false) return null
+function MemberRoleStatus({ member, roleId }: { member: RoleMember; roleId: string }) {
+  const { user, hasOrgAssignment, pending, effective } = member
+  const hasLegacyBinding = user.scoped_roles?.some(role => role.roleId === roleId && role.scopeType === 'space')
+  if (hasOrgAssignment && !pending && effective !== false && !hasLegacyBinding) return null
   return (
     <div className="flex flex-wrap gap-1">
       {pending && <Badge variant="outline">待首次登录生效</Badge>}
-      {!hasOrgAssignment && !pending && (
-        <Badge variant="outline" title="通过组织架构中的成员角色分配管理">部门或空间绑定</Badge>
+      {!hasOrgAssignment && !pending && user.scoped_roles?.some(role => role.roleId === roleId && role.scopeType === 'department') && (
+        <Badge variant="outline" title="通过组织架构中的成员角色分配管理">部门绑定</Badge>
+      )}
+      {hasLegacyBinding && (
+        <Badge variant="outline" title="通过组织架构中的成员角色分配撤销">历史范围绑定</Badge>
       )}
       {effective === false && !pending && <Badge variant="outline">未生效</Badge>}
     </div>
@@ -699,7 +700,7 @@ function MemberAssignmentTab({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="font-medium leading-5 text-slate-900">{user.display_name}</div>
-                      <MemberRoleStatus member={member} />
+                      <MemberRoleStatus member={member} roleId={roleId} />
                       <div className="break-all text-xs leading-5 text-slate-500">{user.email}</div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <Badge variant="outline" className="max-w-full break-all">
@@ -766,7 +767,7 @@ function MemberAssignmentTab({
                           </div>
                           <div className="min-w-0">
                             <div className="font-medium text-slate-900">{user.display_name}</div>
-                            <MemberRoleStatus member={member} />
+                            <MemberRoleStatus member={member} roleId={roleId} />
                             <div className="max-w-[260px] break-all text-xs text-slate-500">{user.email}</div>
                           </div>
                         </div>

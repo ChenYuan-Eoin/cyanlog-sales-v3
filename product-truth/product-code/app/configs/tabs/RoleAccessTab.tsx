@@ -59,7 +59,7 @@ export default function RoleAccessTab({
 }: RoleAccessTabProps) {
   const users = orgSummary?.users ?? []
   const departments = orgSummary?.departments ?? []
-  const spaces = orgSummary?.spaces ?? []
+  const roster = orgSummary?.directory_roster
   const orgId = orgSummary?.organization?.id
   const memberBasis = orgSummary?.role_membership_stats
   const orgSuperAdminEditor = orgSuperAdminAuthority && orgSuperAdminAuthority.orgId === orgId
@@ -209,7 +209,6 @@ export default function RoleAccessTab({
             users={users}
             membershipStats={selectedRole.membershipStats}
             departments={departments}
-            _spaces={spaces}
             onRefresh={onRefresh}
           />
         ) : (
@@ -261,18 +260,14 @@ export default function RoleAccessTab({
 
         <div className="rounded-lg border bg-white p-4">
           <h3 className="font-medium text-slate-900">组织作用域</h3>
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+          <div className="mt-4 grid grid-cols-2 gap-2 text-center">
             <div className="rounded-lg bg-slate-50 px-2 py-3">
               <div className="text-lg font-semibold text-slate-900">{departments.length}</div>
               <div className="mt-1 text-[11px] text-slate-500">部门</div>
             </div>
             <div className="rounded-lg bg-slate-50 px-2 py-3">
-              <div className="text-lg font-semibold text-slate-900">{users.length}</div>
-              <div className="mt-1 text-[11px] text-slate-500">成员</div>
-            </div>
-            <div className="rounded-lg bg-slate-50 px-2 py-3">
-              <div className="text-lg font-semibold text-slate-900">{spaces.length}</div>
-              <div className="mt-1 text-[11px] text-slate-500">空间</div>
+              <div className="text-lg font-semibold text-slate-900">{roster?.status === 'ready' ? roster.members.length : '待核对'}</div>
+              <div className="mt-1 text-[11px] text-slate-500">同步在职</div>
             </div>
           </div>
           <button

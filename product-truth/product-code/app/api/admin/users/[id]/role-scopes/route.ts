@@ -34,7 +34,10 @@ async function changeScope(req: NextRequest, userId: string, action: 'assign' | 
     }
     const input = scopeSchema.safeParse(await req.json().catch(() => null))
     if (!input.success || !z.guid().safeParse(targetId).success) {
-      return failure('请提供有效的成员、角色和部门或空间', 'VALIDATION_ERROR', 400)
+      return failure('请提供有效的成员、角色和作用域', 'VALIDATION_ERROR', 400)
+    }
+    if (action === 'assign' && input.data.scope_type === 'space') {
+      return failure('请按部门分配角色，历史范围授权仅可撤销', 'LEGACY_SCOPE_ASSIGNMENT_FORBIDDEN', 409)
     }
     if (await userHasOrgRoleCode(targetId, orgId, 'SUPER_ADMIN')) {
       return failure('平台超级管理员的角色不能通过组织接口变更', 'PROTECTED_ROLE_MUTATION_FORBIDDEN', 403)
@@ -65,7 +68,7 @@ async function changeScope(req: NextRequest, userId: string, action: 'assign' | 
     if (error?.code === '23514' && error.details === 'ROLE_SCOPE_NOT_SUPPORTED') {
       return failure(SHIPPING_OPERATOR_ORG_SCOPE_MESSAGE, error.details, 409)
     }
-    if (error?.code === '23514') return failure('部门或空间与当前组织不匹配', 'INVALID_SCOPE', 409)
+    if (error?.code === '23514') return failure('作用域与当前组织不匹配', 'INVALID_SCOPE', 409)
     if (error?.code === 'PGRST202' || error?.code === '42883') {
       return failure('作用域角色服务正在更新', 'SCOPE_ASSIGNMENT_UNAVAILABLE', 503)
     }

@@ -68,7 +68,17 @@ describe('scoped role assignment route', () => {
     })
   })
 
-  it('revokes a space role through DELETE', async () => {
+  it('blocks new legacy space assignments before role validation or mutation', async () => {
+    const response = await POST(request('POST', {
+      role_id: role, scope_type: 'space', scope_id: scope,
+    }), context())
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'LEGACY_SCOPE_ASSIGNMENT_FORBIDDEN' })
+    expect(validateOrgRoleAssignment).not.toHaveBeenCalled()
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('revokes an existing legacy space role through DELETE', async () => {
     const response = await DELETE(request('DELETE', {
       role_id: role, scope_type: 'space', scope_id: scope, reason: '  Updated roster  ',
     }), context())
@@ -81,9 +91,9 @@ describe('scoped role assignment route', () => {
     })
   })
 
-  it.each(['department', 'space'])('rejects organization-only role creation at %s without running the RPC', async (scopeType) => {
+  it('rejects organization-only role creation at department scope without running the RPC', async () => {
     vi.mocked(validateOrgRoleAssignment).mockResolvedValueOnce({ ok: false, reason: 'ROLE_SCOPE_NOT_SUPPORTED' })
-    const response = await POST(request('POST', { role_id: role, scope_type: scopeType, scope_id: scope }), context())
+    const response = await POST(request('POST'), context())
 
     expect(response.status).toBe(409)
     expect(await response.json()).toEqual({ error: '顺丰寄件操作员只能分配到整个组织', code: 'ROLE_SCOPE_NOT_SUPPORTED' })
@@ -104,7 +114,7 @@ describe('scoped role assignment route', () => {
 
   it('rejects organization scope, request-supplied organization, protected target and reserved roles', async () => {
     expect((await POST(request('POST', { role_id: role, scope_type: 'org', scope_id: org }), context())).status).toBe(400)
-    expect((await POST(request('POST', { role_id: role, scope_type: 'space', scope_id: scope, org_id: org }), context())).status).toBe(400)
+    expect((await POST(request('POST', { role_id: role, scope_type: 'department', scope_id: scope, org_id: org }), context())).status).toBe(400)
 
     vi.mocked(userHasOrgRoleCode).mockResolvedValueOnce(true)
     const protectedTarget = await POST(request('POST'), context())

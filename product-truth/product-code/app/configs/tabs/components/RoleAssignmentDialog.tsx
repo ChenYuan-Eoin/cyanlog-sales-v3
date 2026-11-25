@@ -12,7 +12,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { BuildingIcon, ShieldIcon, XIcon } from 'lucide-react'
-import type { OrgSummaryDepartment, OrgSummarySpace, ScopedRoleAssignment } from '../../types'
+import type { OrgSummaryDepartment, ScopedRoleAssignment } from '../../types'
 import { isRoleAssignableInScope } from '@/lib/role-permission-resolution'
 import { isGenericallyAssignableRole } from '../role-assignment-policy'
 
@@ -30,10 +30,9 @@ interface RoleAssignmentDialogProps {
   organizationOnly?: boolean
   currentRoles: string[]
   departments: OrgSummaryDepartment[]
-  spaces?: OrgSummarySpace[]
   scopedRoles?: ScopedRoleAssignment[]
   onSubmit: (roleIds: string[]) => Promise<void>
-  onSubmitScoped?: (roleId: string, scopeType: 'department' | 'space', scopeId: string) => Promise<void>
+  onSubmitScoped?: (roleId: string, departmentId: string) => Promise<void>
   onRevokeScoped?: (roleId: string, scopeType: 'department' | 'space', scopeId: string) => Promise<void>
   trigger?: React.ReactNode
   open?: boolean
@@ -47,7 +46,6 @@ export function RoleAssignmentDialog({
   pendingRoles,
   organizationOnly = false,
   departments,
-  spaces = [],
   scopedRoles = [],
   onSubmit,
   onSubmitScoped,
@@ -64,7 +62,7 @@ export function RoleAssignmentDialog({
   const [selectedOrgRoles, setSelectedOrgRoles] = useState<string[]>(currentRoles)
   const [selectedScopedRoleId, setSelectedScopedRoleId] = useState('')
   const [fetchingRoles, setFetchingRoles] = useState(false)
-  const [scopeType, setScopeType] = useState<'org' | 'department' | 'space'>('org')
+  const [scopeType, setScopeType] = useState<'org' | 'department'>('org')
   const [scopeId, setScopeId] = useState('')
   const [revokingKey, setRevokingKey] = useState<string | null>(null)
   const assignableRoles = roles.filter(role => isRoleAssignableInScope(role.code, scopeType))
@@ -119,7 +117,7 @@ export function RoleAssignmentDialog({
         await onSubmit(selectedOrgRoles)
       } else {
         if (!onSubmitScoped || !scopeId || !selectedScopedRole) return
-        await onSubmitScoped(selectedScopedRole.id, scopeType, scopeId)
+        await onSubmitScoped(selectedScopedRole.id, scopeId)
       }
       onOpenChange(false)
     } finally {
@@ -128,7 +126,8 @@ export function RoleAssignmentDialog({
   }, [scopeType, onSubmit, selectedOrgRoles, onSubmitScoped, selectedScopedRole, scopeId, onOpenChange])
 
   const nonOrgScopedRoles = scopedRoles.filter(
-    assignment => assignment.scopeType !== 'org' && isGenericallyAssignableRole(assignment.roleCode),
+    assignment => (assignment.scopeType === 'department' || assignment.scopeType === 'space')
+      && isGenericallyAssignableRole(assignment.roleCode),
   )
 
   return (
@@ -188,56 +187,57 @@ export function RoleAssignmentDialog({
           </div>
         )}
 
+        {nonOrgScopedRoles.length > 0 && (
+          <div className="border-t pt-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <BuildingIcon className="h-4 w-4" />
+              <span>现有范围授权</span>
+            </div>
+            <div className="mt-2 space-y-2">
+              {nonOrgScopedRoles.map((assignment) => {
+                const scopeType = assignment.scopeType === 'space' ? 'space' : 'department'
+                const key = `${assignment.roleId}:${scopeType}:${assignment.scopeId}`
+                return (
+                  <div
+                    key={key}
+                    className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  >
+                    <Badge variant="secondary" className="shrink-0 text-xs">
+                      {assignment.roleName}
+                    </Badge>
+                    <span className="min-w-0 flex-1 truncate text-slate-600">
+                      {scopeType === 'department' ? '部门' : '历史范围'} · {assignment.scopeName}
+                    </span>
+                    {(scopeType === 'space' || !isRoleAssignableInScope(assignment.roleCode, scopeType)) && <Badge variant="outline">历史绑定 · 仅可撤销</Badge>}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 shrink-0 p-0"
+                      aria-label={`撤销 ${assignment.roleName}（${assignment.scopeName}）`}
+                      title="撤销范围授权"
+                      disabled={!onRevokeScoped || !assignment.scopeId || revokingKey === key}
+                      onClick={async () => {
+                        if (!onRevokeScoped || !assignment.scopeId) return
+                        setRevokingKey(key)
+                        try {
+                          await onRevokeScoped(assignment.roleId, scopeType, assignment.scopeId)
+                        } finally {
+                          setRevokingKey(null)
+                        }
+                      }}
+                    >
+                      <XIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {roles.length > 0 && (
           <>
-            {nonOrgScopedRoles.length > 0 && (
-              <div className="border-t pt-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                  <BuildingIcon className="h-4 w-4" />
-                  <span>现有范围授权</span>
-                </div>
-                <div className="mt-2 space-y-2">
-                  {nonOrgScopedRoles.map((assignment) => {
-                    const scopeType = assignment.scopeType as 'department' | 'space'
-                    const key = `${assignment.roleId}:${scopeType}:${assignment.scopeId}`
-                    return (
-                      <div
-                        key={key}
-                        className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm"
-                      >
-                        <Badge variant="secondary" className="shrink-0 text-xs">
-                          {assignment.roleName}
-                        </Badge>
-                        <span className="min-w-0 flex-1 truncate text-slate-600">
-                          {scopeType === 'department' ? '部门' : '销售空间'} · {assignment.scopeName}
-                        </span>
-                        {!isRoleAssignableInScope(assignment.roleCode, scopeType) && <Badge variant="outline">历史绑定 · 仅可撤销</Badge>}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 shrink-0 p-0"
-                          aria-label={`撤销 ${assignment.roleName}（${assignment.scopeName}）`}
-                          title="撤销范围授权"
-                          disabled={!onRevokeScoped || !assignment.scopeId || revokingKey === key}
-                          onClick={async () => {
-                            if (!onRevokeScoped || !assignment.scopeId) return
-                            setRevokingKey(key)
-                            try {
-                              await onRevokeScoped(assignment.roleId, scopeType, assignment.scopeId)
-                            } finally {
-                              setRevokingKey(null)
-                            }
-                          }}
-                        >
-                          <XIcon className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
             <div className="border-t pt-4">
               <div className="flex items-center gap-2 text-sm text-slate-600">
                 <BuildingIcon className="h-4 w-4" />
@@ -249,14 +249,13 @@ export function RoleAssignmentDialog({
                 className="mt-2 h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
                 value={scopeType}
                 onChange={(event) => {
-                  setScopeType(event.target.value as 'org' | 'department' | 'space')
+                  setScopeType(event.target.value === 'department' ? 'department' : 'org')
                   setScopeId('')
                   setSelectedScopedRoleId('')
                 }}
               >
                 <option value="org">整个组织</option>
                 <option value="department">指定部门</option>
-                <option value="space">指定销售空间</option>
               </select>
               {organizationOnly && <p className="mt-2 text-xs text-slate-500">预分配的组织角色将在首次登录后生效。</p>}
               {scopeType === 'department' && (
@@ -272,20 +271,7 @@ export function RoleAssignmentDialog({
                   ))}
                 </select>
               )}
-              {scopeType === 'space' && (
-                <select
-                  aria-label="选择销售空间角色作用域"
-                  className="mt-2 h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
-                  value={scopeId}
-                  onChange={(event) => setScopeId(event.target.value)}
-                >
-                  <option value="">请选择销售空间</option>
-                  {spaces.map((space) => (
-                    <option key={space.id} value={space.id}>{space.name}</option>
-                  ))}
-                </select>
-              )}
-              {scopeType !== 'org' && <p className="mt-2 text-xs text-slate-500">部门/空间范围每次分配一个角色，可在右侧作用域摘要中核对。</p>}
+              {scopeType !== 'org' && <p className="mt-2 text-xs text-slate-500">每次为一个部门分配一个角色。</p>}
             </div>
 
             <div className="flex justify-end gap-2">

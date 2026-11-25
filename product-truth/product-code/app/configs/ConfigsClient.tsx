@@ -81,7 +81,7 @@ const CONFIG_TABS: Record<ConfigTabId, {
   },
   'org-structure': {
     label: '组织架构',
-    description: '维护当前生效的部门、成员和销售空间，作为权限与审批的组织基础。',
+    description: '维护当前生效的部门和成员，作为权限与审批的组织基础。',
     section: 'org-access',
     icon: UsersIcon,
   },
@@ -93,7 +93,7 @@ const CONFIG_TABS: Record<ConfigTabId, {
   },
   'role-access': {
     label: '角色权限',
-    description: '按业务能力维护角色，并通过组织/部门/销售空间分配数据范围。',
+    description: '按业务能力维护角色，并按组织或部门分配数据范围。',
     section: 'org-access',
     icon: KeyRoundIcon,
   },
@@ -307,11 +307,6 @@ const DATA_SCOPE_LEVELS = [
     key: 'DEPT',
     label: '本部门',
     description: '可查看所在部门及其下级部门的业务数据。',
-  },
-  {
-    key: 'SPACE',
-    label: '销售空间',
-    description: '可查看被分配的销售空间数据。',
   },
   {
     key: 'ORG',
@@ -992,7 +987,6 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
         return [
           { label: '部门总数', value: countValue(orgSummary?.departments.length ?? 0) },
           { label: '同步在职', value: countValue(orgSummary?.directory_roster?.status === 'ready' ? orgSummary.directory_roster.members.length : null) },
-          { label: '销售空间', value: countValue(orgSummary?.spaces.length ?? 0) },
         ]
       case 'role-access':
         return [
@@ -1003,7 +997,7 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
       default:
         return []
     }
-  }, [activeTab, activeTabLoading, error, getConfigsByType, loadedTabs, orgSummary?.departments.length, orgSummary?.spaces.length, orgSummary?.directory_roster, products, roles.length, rules])
+  }, [activeTab, activeTabLoading, error, getConfigsByType, loadedTabs, orgSummary?.departments.length, orgSummary?.directory_roster, products, roles.length, rules])
 
   function switchSection(sectionId: ConfigSectionId) {
     const nextSection = CONFIG_SECTIONS.find((section) => section.id === sectionId)

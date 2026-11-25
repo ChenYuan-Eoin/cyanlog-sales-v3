@@ -125,16 +125,14 @@ it('lets an organization administrator view a department on its own and drill in
       { id: 'active-pending', departmentIds: ['sales', 'child'] },
       { id: 'child-only', departmentIds: ['child'] },
     ] },
-    department_spaces: [
-      { department_id: 'sales', parent_department_id: null, name: '销售父部门', sales_space_ids: [] },
-      { department_id: 'child', parent_department_id: 'sales', name: '销售子部门', sales_space_ids: ['historical-space'] },
-    ],
+    spaces: [{ id: 'historical-space', name: '历史销售区域', department_id: 'child', department_name: '销售子部门' }],
   }} currentUserId="actor" />)
 
   fireEvent.click(screen.getByRole('button', { name: /^销售父部门/ }))
   expect(screen.getByRole('button', { name: /^销售父部门/ })).toHaveTextContent('2')
   expect(screen.getByText('共 2 人（含子部门）')).toBeInTheDocument()
-  expect(screen.getByText('已关联 0 个销售空间')).toBeInTheDocument()
+  expect(screen.queryByText('销售空间')).not.toBeInTheDocument()
+  expect(screen.queryByText('部门空间')).not.toBeInTheDocument()
   fireEvent.change(screen.getByLabelText('部门成员范围'), { target: { value: 'direct' } })
   expect(screen.getByText('共 1 人（仅本部门）')).toBeInTheDocument()
   expect(screen.queryByText('仅在子部门')).not.toBeInTheDocument()
@@ -142,7 +140,7 @@ it('lets an organization administrator view a department on its own and drill in
   fireEvent.click(screen.getByRole('button', { name: /^销售子部门/ }))
   expect(screen.getByText('仅在子部门')).toBeInTheDocument()
   expect(screen.getByText('共 2 人（仅本部门）')).toBeInTheDocument()
-  expect(screen.getByText('已关联 1 个销售空间')).toBeInTheDocument()
+  expect(screen.queryByText('历史销售区域')).not.toBeInTheDocument()
 })
 
 it('uses server authority to let an organization super admin confirm the current department leader and verify the saved grant', async () => {

@@ -49,7 +49,8 @@ it('uses exactly the same effective, pending and scoped counts on the role list 
       },
     ],
     departments: [{ id: 'dept', name: '销售组', status: 'active', parent_name: null, member_count: 3 }],
-    spaces: [],
+    spaces: [{ id: 'legacy', name: '历史销售区域', department_id: 'dept', department_name: '销售组' }],
+    directory_roster: { status: 'ready', asOf: '2026-11-25T00:00:00Z', members: [{ id: member.id, departmentIds: ['dept'] }] },
     role_membership_stats: { effectiveAvailable: true, pendingAvailable: true, activeSpaceIds: [] },
   }
   render(<RoleAccessTab {...defaults} roles={[sales, manager]} orgSummary={orgSummary} />)
@@ -60,7 +61,10 @@ it('uses exactly the same effective, pending and scoped counts on the role list 
   expect(screen.getByText('SALES · 已生效 2 · 待生效 1 · 生效作用域绑定 3')).toBeInTheDocument()
   expect(screen.getByRole('tab', { name: '员工分配 (3)' })).toBeInTheDocument()
   expect(screen.queryByText('另一角色成员')).not.toBeInTheDocument()
-  expect(screen.getAllByText('部门或空间绑定').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('部门绑定').length).toBeGreaterThan(0)
+  const summary = screen.getByRole('heading', { name: '组织作用域' }).parentElement!
+  expect(within(summary).getByText('同步在职').parentElement).toHaveTextContent('1')
+  expect(within(summary).queryByText('空间')).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '从角色中移除 部门级销售' })).not.toBeInTheDocument()
   expect(screen.getAllByRole('button', { name: '从角色中移除 组织级销售' }).length).toBeGreaterThan(0)
   fireEvent.click(screen.getByRole('button', { name: '添加成员' }))

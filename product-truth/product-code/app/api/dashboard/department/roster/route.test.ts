@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthError, requireAuth } from '@/lib/auth'
+import { resolveDepartmentSpaceIds } from '@/lib/department-spaces'
 import { supabaseAdmin } from '@/lib/supabase'
 import { DepartmentAccessError, getDepartmentDashboardScope } from '../data'
 import { GET } from './route'
@@ -80,16 +81,16 @@ describe('department workspace roster', () => {
       if (table === 'organization_directory_cutover_runs') return runs as never
       throw new Error(`Unexpected roster lookup: ${table}`)
     })
+    const departmentSpaces = [
+      { department_id: firstBranch, parent_department_id: null, name: '甲部' },
+      { department_id: firstChild, parent_department_id: firstBranch, name: '甲一组' },
+      { department_id: secondBranch, parent_department_id: null, name: '乙部' },
+    ]
     vi.mocked(getDepartmentDashboardScope).mockImplementation(async (_userId, selection) => ({
-      orgId,
-      selection,
-      fullSpaceIds: [],
-      ownSpaceIds: [],
-      departmentSpaces: [
-        { department_id: firstBranch, parent_department_id: null, name: '甲部', sales_space_ids: [] },
-        { department_id: firstChild, parent_department_id: firstBranch, name: '甲一组', sales_space_ids: [] },
-        { department_id: secondBranch, parent_department_id: null, name: '乙部', sales_space_ids: [] },
-      ],
+      orgId, selection, departmentSpaces, allDepartments: departmentSpaces, grants: [], orgOversight: false,
+      selectedDepartmentIds: resolveDepartmentSpaceIds(departmentSpaces, [firstBranch, secondBranch], selection.departmentId
+        ? { departmentId: selection.departmentId, includeSubdepartments: selection.includeSubdepartments }
+        : undefined),
     }))
     sources.limit.mockResolvedValue({ data: [source], error: null })
     runs.limit.mockResolvedValue({ data: [{ id: 'confirmed-cutover' }], error: null })
@@ -122,7 +123,7 @@ describe('department workspace roster', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('Cache-Control')).toBe('no-store')
     expect(await response.json()).toEqual({
-      status: 'ready', asOf, total: 2, page: 1, pageSize: 20,
+      status: 'ready', organizationId: orgId, asOf, total: 2, page: 1, pageSize: 20,
       members: [
         { id: invited.id, displayName: invited.display_name, departmentIds: [firstBranch, firstChild] },
         { id: person(7).id, displayName: person(7).display_name, departmentIds: [firstBranch] },

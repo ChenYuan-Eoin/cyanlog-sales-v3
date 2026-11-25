@@ -9,7 +9,7 @@ vi.mock('@/lib/toast', () => ({ success: vi.fn(), error: vi.fn(), confirmAction:
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 const role = { id: 'root', code: 'SUPER_ADMIN', name: '超级管理员', description: null, permissions: ['*'] }
-const defaults = { role, currentUserId: 'actor', saving: false, users: [], departments: [], _spaces: [] }
+const defaults = { role, currentUserId: 'actor', saving: false, users: [], departments: [] }
 function openPermissions() {
   fireEvent.click(screen.getByRole('tab', { name: '权限设置' }))
 }

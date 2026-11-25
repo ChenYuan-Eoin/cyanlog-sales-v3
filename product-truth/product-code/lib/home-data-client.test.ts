@@ -32,8 +32,8 @@ describe('home-data-client', () => {
       if (url === '/api/auth/me') {
         return Promise.resolve(jsonResponse({ user: { id: 'u1', email: 'u@example.com' } }))
       }
-      if (url === '/api/dashboard') {
-        return Promise.resolve(jsonResponse({ spaces: [], activeSpace: null }))
+      if (url === '/api/dashboard?view=personal') {
+        return Promise.resolve(jsonResponse({ organizationId: 'org-1', agenda: [], reminders: [] }))
       }
       return Promise.resolve(new Response(null, { status: 404 }))
     })
@@ -41,11 +41,11 @@ describe('home-data-client', () => {
     const data = await loadHomeInitialData(null)
 
     expect(data.profile).toEqual({ id: 'u1', email: 'u@example.com' })
-    expect(data.dashboard).toEqual({ spaces: [], activeSpace: null })
+    expect(data.dashboard).toEqual({ organizationId: 'org-1', agenda: [], reminders: [] })
     expect(fetchMock).toHaveBeenCalledWith('/api/auth/me', expect.not.objectContaining({
       headers: expect.anything(),
     }))
-    expect(fetchMock).toHaveBeenCalledWith('/api/dashboard', expect.not.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith('/api/dashboard?view=personal', expect.not.objectContaining({
       headers: expect.anything(),
     }))
   })
@@ -55,8 +55,8 @@ describe('home-data-client', () => {
       if (url === '/api/auth/me') {
         return Promise.resolve(jsonResponse({ user: { id: 'u2', email: 'token@example.com' } }))
       }
-      if (url === '/api/dashboard') {
-        return Promise.resolve(jsonResponse({ spaces: [{ id: 's1' }], activeSpace: null }))
+      if (url === '/api/dashboard?view=personal') {
+        return Promise.resolve(jsonResponse({ organizationId: 'org-2', agenda: [], reminders: [] }))
       }
       return Promise.resolve(new Response(null, { status: 404 }))
     })
@@ -66,7 +66,7 @@ describe('home-data-client', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/auth/me', expect.objectContaining({
       headers: { Authorization: 'Bearer token-abc' },
     }))
-    expect(fetchMock).toHaveBeenCalledWith('/api/dashboard', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith('/api/dashboard?view=personal', expect.objectContaining({
       headers: { Authorization: 'Bearer token-abc' },
     }))
     expect([...store.keys()].some((key) => key.includes('home:initial'))).toBe(true)
@@ -88,28 +88,26 @@ describe('home-data-client', () => {
     store.set(legacy, 'old private data')
     store.set(legacyPersonal, 'old private data')
     const personal = [
+      { organizationId: 'org-3', agenda: [{ id: 'private-agenda' }], reminders: [{ id: 'private-reminder' }] },
       { agenda: [{ id: 'private-agenda' }] },
       { agenda: [] },
     ]
     fetchMock.mockImplementation((url: string) => {
       if (url === '/api/auth/me') return Promise.resolve(jsonResponse({ user: { id: 'u3' } }))
       if (url === '/api/dashboard?view=personal') return Promise.resolve(jsonResponse(personal.shift()))
-      return Promise.resolve(jsonResponse({
-        opportunities: [{ id: 'legacy' }], agenda: [{ id: 'private-agenda' }],
-        reminders: [{ id: 'private-reminder' }],
-      }))
+      return Promise.resolve(new Response(null, { status: 404 }))
     })
     await loadHomeInitialData(token)
     const scoped = await loadHomeInitialData(token, { view: 'personal' })
     const afterRevocation = await loadHomeInitialData(token, { view: 'personal' })
     expect(scoped.dashboard).toEqual({ agenda: [{ id: 'private-agenda' }] })
     expect(afterRevocation.dashboard).toEqual({ agenda: [] })
-    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/dashboard?view=personal')).toHaveLength(2)
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/dashboard?view=personal')).toHaveLength(3)
     expect(fetchMock).toHaveBeenCalledWith('/api/dashboard?view=personal', expect.objectContaining({ cache: 'no-store' }))
     expect(store.has(legacy)).toBe(false)
     expect(store.has(legacyPersonal)).toBe(false)
     const workspace = store.get(scopedCacheKey(token, 'home:initial:v2'))
-    expect(workspace).toContain('legacy')
+    expect(workspace).toContain('org-3')
     expect(workspace).not.toMatch(/private-agenda|private-reminder/)
   })
 })

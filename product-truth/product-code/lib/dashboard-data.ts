@@ -181,19 +181,10 @@ export async function getPersonalDashboardData(userId: string, orgId: string): P
 async function loadDashboardPayloadViaQueries(
   user: AuthUser,
   requestedSpaceId?: string | null,
-  requireAvailableSpace = false,
 ): Promise<DashboardPayload> {
   const orgId = user.org_id || await getFreshDefaultOrgId(user.id)
   const { spaces } = await listAccessibleSalesSpaces(user.id, orgId)
-  let availableSpaces = spaces
-  if (requireAvailableSpace && spaces.length > 0) {
-    const result = await supabaseAdmin.from('sales_spaces').select('id')
-      .eq('org_id', orgId).eq('status', 'active').in('id', spaces.map(space => space.id))
-    if (result.error) throw result.error
-    const liveIds = new Set((result.data ?? []).map(space => space.id))
-    availableSpaces = spaces.filter(space => liveIds.has(space.id))
-  }
-  const normalizedSpaces = availableSpaces
+  const normalizedSpaces = spaces
     .map((space) => ({
       id: space.id,
       name: space.name,
@@ -205,9 +196,6 @@ async function loadDashboardPayloadViaQueries(
     }))
 
   const requestedSpace = normalizedSpaces.find(space => space.id === requestedSpaceId)
-  if (requireAvailableSpace && requestedSpaceId != null && !requestedSpace) {
-    throw new DashboardDataError('无权查看所选销售空间', 'DASHBOARD_SPACE_FORBIDDEN', 403)
-  }
   if (normalizedSpaces.length === 0) {
     return {
       spaces: [],
@@ -268,15 +256,6 @@ async function loadDashboardPayloadViaQueries(
     milestones,
     reminders: [], agenda: [],
   }
-}
-
-export async function getVerifiedLegacyDashboardPayload(user: AuthUser, orgId: string, requestedSpaceId: string | null): Promise<DashboardPayload> {
-  // The historical payload RPC resolves role rows across all of the account's organizations.
-  const [workspace, personal] = await Promise.all([
-    loadDashboardPayloadViaQueries({ ...user, org_id: orgId }, requestedSpaceId, true),
-    getPersonalDashboardData(user.id, orgId),
-  ])
-  return { ...workspace, ...personal }
 }
 
 async function loadDashboardPayload(user: AuthUser, requestedSpaceId?: string | null): Promise<DashboardPayload> {

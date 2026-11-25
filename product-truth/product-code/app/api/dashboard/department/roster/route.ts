@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { AuthError, requireAuth } from '@/lib/auth'
-import { resolveDepartmentSpaceIds } from '@/lib/department-spaces'
 import { readDirectoryRosterSource, verifyDirectoryRoster } from '@/lib/organization-directory-roster'
 import { supabaseAdmin } from '@/lib/supabase'
 import { DepartmentAccessError, getDepartmentDashboardScope } from '../data'
@@ -30,7 +29,7 @@ async function rosterResponse(orgId: string, selectedIds: Set<string>, page: num
   })
   const start = (page - 1) * PAGE_SIZE
   return json({
-    status: 'ready', asOf: roster.asOf, members: members.slice(start, start + PAGE_SIZE),
+    status: 'ready', organizationId: orgId, asOf: roster.asOf, members: members.slice(start, start + PAGE_SIZE),
     total: members.length, page, pageSize: PAGE_SIZE,
   })
 }
@@ -53,13 +52,7 @@ export async function GET(req: NextRequest) {
       departmentId,
       includeSubdepartments: departmentId === null || includeSubdepartments !== 'false',
     })
-    const { departmentSpaces, selection } = scope
-    const roots = departmentSpaces.map(department => department.department_id)
-    const selected = resolveDepartmentSpaceIds(departmentSpaces, roots, selection.departmentId
-      ? { departmentId: selection.departmentId, includeSubdepartments: selection.includeSubdepartments }
-      : undefined)
-    if (selection.departmentId && selected.size === 0) throw new DepartmentAccessError(selection.departmentId)
-    return await rosterResponse(scope.orgId, selected, page)
+    return await rosterResponse(scope.orgId, scope.selectedDepartmentIds, page)
   } catch (error) {
     if (error instanceof AuthError) return json({ code: 'UNAUTHORIZED', error: '未登录或登录已过期' }, 401)
     if (error instanceof DepartmentAccessError) return json({ code: error.code, error: error.message }, 403)

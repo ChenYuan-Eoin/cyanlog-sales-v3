@@ -1,5 +1,5 @@
-import { DashboardDataError, type DashboardPayload } from '@/lib/dashboard-data'
-import { buildDepartmentSpaces, resolveDepartmentSpaceIds, type DepartmentSpace } from '@/lib/department-spaces'
+import type { DashboardPayload } from '@/lib/dashboard-data'
+import { attachHistoricalSpaceIds, buildDepartmentOptions, resolveDepartmentSpaceIds, type DepartmentOption, type DepartmentSpace } from '@/lib/department-spaces'
 import { hasPermission } from '@/lib/permissions'
 import { ORG_SUPER_ADMIN_ROLE_CODE, resolveRolePermissions } from '@/lib/role-permission-resolution'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -19,20 +19,18 @@ type OpportunityRow = Omit<DashboardPayload['opportunities'][number], 'customer'
 type MilestoneRow = Omit<DashboardPayload['milestones'][number], 'opportunity'>
 type CustomerRow = NonNullable<DashboardPayload['opportunities'][number]['customer']>
 type DepartmentDashboardPayload = Pick<DashboardPayload, 'opportunities' | 'milestones'> & {
-  departmentSpaces: DepartmentSpace[]
+  organizationId: string
+  departmentSpaces: DepartmentOption[]
   selection: DepartmentSelection
 }
 
 export class DepartmentAccessError extends Error {
   readonly code: 'DEPARTMENT_SCOPE_REQUIRED' | 'DEPARTMENT_SELECTION_FORBIDDEN' | 'DEPARTMENT_MEMBERSHIP_REQUIRED'
-  readonly orgId: string | null
-
-  constructor(departmentId: string | null, options: { orgId?: string; membershipRequired?: true } = {}) {
+  constructor(departmentId: string | null, options: { membershipRequired?: true } = {}) {
     super(options.membershipRequired ? '没有有效的组织成员资格'
-      : departmentId ? '无权查看所选部门空间' : '没有可用的部门空间授权')
+      : departmentId ? '无权查看所选部门' : '没有可用的部门授权')
     this.code = options.membershipRequired ? 'DEPARTMENT_MEMBERSHIP_REQUIRED'
       : departmentId ? 'DEPARTMENT_SELECTION_FORBIDDEN' : 'DEPARTMENT_SCOPE_REQUIRED'
-    this.orgId = this.code === 'DEPARTMENT_SCOPE_REQUIRED' ? options.orgId ?? null : null
   }
 }
 
@@ -104,7 +102,7 @@ async function getApprovedLeadDepartments(userId: string, orgId: string): Promis
 function spacesForPermission(
   grants: ActiveGrant[],
   permission: 'opportunity:*' | 'opportunity:own',
-  allDepartments: DepartmentSpace[],
+  allDepartments: DepartmentOption[],
   selectedDepartments: DepartmentSpace[],
 ): string[] {
   const allowed = grants.filter(grant => grant.permissions.includes('*') || grant.permissions.includes(permission))
@@ -186,18 +184,14 @@ export async function getDepartmentDashboardScope(userId: string, selection: Dep
     && (grant.permissions.includes('dept:view') || grant.permissions.includes('report:dept')))
   const approvedLeadDepartments = allDepartmentsVisible ? new Set<string>() : await getApprovedLeadDepartments(userId, orgId)
   if (!allDepartmentsVisible && departmentGrants.length === 0 && approvedLeadDepartments.size === 0) {
-    throw new DepartmentAccessError(selection.departmentId, { orgId })
+    throw new DepartmentAccessError(selection.departmentId)
   }
 
-  const [departments, spaces] = await Promise.all([
-    supabaseAdmin.from('departments').select('id,name,parent_id,status,leader_id').eq('org_id', orgId).eq('status', 'active')
-      .order('sort_order', { ascending: true }).order('id', { ascending: true }),
-    supabaseAdmin.from('sales_spaces').select('id,department_id').eq('org_id', orgId).eq('status', 'active'),
-  ])
+  const departments = await supabaseAdmin.from('departments').select('id,name,parent_id,status,leader_id')
+    .eq('org_id', orgId).eq('status', 'active').order('sort_order', { ascending: true }).order('id', { ascending: true })
   if (departments.error) throw departments.error
-  if (spaces.error) throw spaces.error
   const departmentRows = departments.data ?? []
-  const allDepartments = buildDepartmentSpaces(departmentRows, spaces.data ?? [])
+  const allDepartments = buildDepartmentOptions(departmentRows)
   const roots = allDepartmentsVisible
     ? allDepartments.map(department => department.department_id)
     : [
@@ -208,55 +202,42 @@ export async function getDepartmentDashboardScope(userId: string, selection: Dep
       ]
   const visibleIds = resolveDepartmentSpaceIds(allDepartments, roots)
   if (selection.departmentId && !visibleIds.has(selection.departmentId)) throw new DepartmentAccessError(selection.departmentId)
-  if (visibleIds.size === 0 && !allDepartmentsVisible && departmentGrants.length === 0) {
-    throw new DepartmentAccessError(null, { orgId })
-  }
+  if (visibleIds.size === 0 && !allDepartmentsVisible) throw new DepartmentAccessError(null)
 
   const departmentSpaces = allDepartments.filter(department => visibleIds.has(department.department_id)).map(department => ({
     ...department,
     parent_department_id: department.parent_department_id && visibleIds.has(department.parent_department_id)
       ? department.parent_department_id : null,
   }))
-  const selectedIds = selection.departmentId
+  const selectedDepartmentIds = selection.departmentId
     ? resolveDepartmentSpaceIds(departmentSpaces, roots, { ...selection, departmentId: selection.departmentId })
     : visibleIds
-  const selectedDepartments = departmentSpaces.filter(department => selectedIds.has(department.department_id))
+  return { orgId, departmentSpaces, selection, selectedDepartmentIds, allDepartments, grants, orgOversight }
+}
+
+export async function getDepartmentDashboard(userId: string, requestedSelection: DepartmentSelection): Promise<DepartmentDashboardPayload> {
+  const { orgId, departmentSpaces, selection, selectedDepartmentIds, allDepartments, grants, orgOversight } =
+    await getDepartmentDashboardScope(userId, requestedSelection)
+  const overview = { organizationId: orgId, departmentSpaces, selection }
+  const canReadOpportunities = orgOversight || grants.some(grant => grant.permissions.some(
+    permission => permission === '*' || permission === 'opportunity:*' || permission === 'opportunity:own',
+  ))
+  if (selectedDepartmentIds.size === 0 || !canReadOpportunities) {
+    return { ...overview, opportunities: [], milestones: [] }
+  }
+
+  // Existing opportunities have a historical foreign key. It contributes no
+  // departments or authority, and is resolved only after the department check.
+  const historical = await supabaseAdmin.from('sales_spaces').select('id,department_id').eq('org_id', orgId).eq('status', 'active')
+  if (historical.error) throw historical.error
+  const selectedOptions = departmentSpaces.filter(department => selectedDepartmentIds.has(department.department_id))
+  const selectedDepartments = attachHistoricalSpaceIds(selectedOptions, historical.data ?? [])
   // Organization management includes this workbench's selected-department overview.
   const fullSpaces = new Set(orgOversight
     ? selectedDepartments.flatMap(department => department.sales_space_ids)
     : spacesForPermission(grants, 'opportunity:*', allDepartments, selectedDepartments))
   const ownSpaceIds = spacesForPermission(grants, 'opportunity:own', allDepartments, selectedDepartments)
     .filter(spaceId => !fullSpaces.has(spaceId))
-  return { orgId, departmentSpaces, selection, fullSpaceIds: [...fullSpaces], ownSpaceIds }
-}
-
-export async function getDepartmentDashboard(userId: string, requestedSelection: DepartmentSelection): Promise<DepartmentDashboardPayload> {
-  const { orgId, departmentSpaces, selection, fullSpaceIds, ownSpaceIds } = await getDepartmentDashboardScope(userId, requestedSelection)
-  const rows = await getDashboardRows(userId, orgId, fullSpaceIds, ownSpaceIds)
-  return { departmentSpaces, selection, ...rows }
-}
-
-export async function getDepartmentLegacyWorkspace(userId: string, requestedSpaceId: string | null) {
-  const { orgId, fullSpaceIds, ownSpaceIds } = await getDepartmentDashboardScope(userId, {
-    departmentId: null, includeSubdepartments: true,
-  })
-  const spaceIds = [...fullSpaceIds, ...ownSpaceIds]
-  const spaceForbidden = () => new DashboardDataError('无权查看所选销售空间', 'DASHBOARD_SPACE_FORBIDDEN', 403)
-  if (requestedSpaceId !== null && !spaceIds.includes(requestedSpaceId)) throw spaceForbidden()
-  if (spaceIds.length === 0) {
-    return { orgId, spaces: [], activeSpace: null, opportunities: [], milestones: [] }
-  }
-
-  const { data, error } = await supabaseAdmin.from('sales_spaces').select('id,name,description,department_id,owner_id')
-    .eq('org_id', orgId).eq('status', 'active').in('id', spaceIds)
-    .order('name', { ascending: true }).order('id', { ascending: true })
-  if (error) throw error
-  const spaces = (data ?? []).map(space => ({ ...space, active_opportunities: null, pending_milestones: null }))
-  const activeSpace = requestedSpaceId === null ? spaces[0] ?? null : spaces.find(space => space.id === requestedSpaceId)
-  if (requestedSpaceId !== null && !activeSpace) throw spaceForbidden()
-  const teamSpaces = activeSpace && fullSpaceIds.includes(activeSpace.id) ? [activeSpace.id] : []
-  const personalSpaces = activeSpace && ownSpaceIds.includes(activeSpace.id) ? [activeSpace.id] : []
-  const rows = await getDashboardRows(userId, orgId, teamSpaces, personalSpaces)
-
-  return { orgId, spaces, activeSpace: activeSpace ?? null, ...rows }
+  const rows = await getDashboardRows(userId, orgId, [...fullSpaces], ownSpaceIds)
+  return { ...overview, ...rows }
 }

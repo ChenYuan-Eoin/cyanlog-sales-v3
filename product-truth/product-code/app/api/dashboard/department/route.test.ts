@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthError, requireAuth } from '@/lib/auth'
-import { getFreshDefaultOrgId, listAccessibleSalesSpaces } from '@/lib/scoped-access'
 import { GET } from './route'
 import { GET as getCompatibilityDashboard } from '../route'
 
@@ -10,10 +9,6 @@ vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from, rpc: mocks
 vi.mock('@/lib/auth', () => ({
   AuthError: class extends Error {},
   requireAuth: vi.fn(),
-}))
-vi.mock('@/lib/scoped-access', () => ({
-  getFreshDefaultOrgId: vi.fn(),
-  listAccessibleSalesSpaces: vi.fn(),
 }))
 
 type Row = Record<string, unknown>
@@ -101,8 +96,6 @@ beforeEach(() => {
   failureCode = null
   mocks.from.mockReset().mockImplementation(query)
   mocks.rpc.mockReset()
-  vi.mocked(getFreshDefaultOrgId).mockReset()
-  vi.mocked(listAccessibleSalesSpaces).mockReset()
   vi.mocked(requireAuth).mockReset().mockResolvedValue({
     id: userId, email: null, phone: null, display_name: null, org_id: 'stale-token-org',
   })
@@ -155,12 +148,13 @@ describe('GET /api/dashboard/department', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('Cache-Control')).toBe('no-store')
     const data = await response.json()
+    expect(data.organizationId).toBe(orgId)
     expect(data.selection).toEqual({ departmentId: null, includeSubdepartments: true })
     expect(data.departmentSpaces).toEqual([
-      { department_id: 'sales-a', parent_department_id: null, name: 'sales-a', sales_space_ids: ['space-a'] },
-      { department_id: 'sales-a-child', parent_department_id: 'sales-a', name: 'sales-a-child', sales_space_ids: ['space-child'] },
-      { department_id: 'sales-b', parent_department_id: null, name: 'sales-b', sales_space_ids: ['space-b'] },
-      { department_id: 'new-department', parent_department_id: 'sales-a', name: 'new-department', sales_space_ids: [] },
+      { department_id: 'sales-a', parent_department_id: null, name: 'sales-a' },
+      { department_id: 'sales-a-child', parent_department_id: 'sales-a', name: 'sales-a-child' },
+      { department_id: 'sales-b', parent_department_id: null, name: 'sales-b' },
+      { department_id: 'new-department', parent_department_id: 'sales-a', name: 'new-department' },
     ])
     expect(data.opportunities.map((row: Row) => row.id)).toEqual(['a-opp', 'b-owned', 'child-opp'])
     expect(data.opportunities[0].customer).toMatchObject({ name: '本组织客户' })
@@ -190,6 +184,30 @@ describe('GET /api/dashboard/department', () => {
     expect(response.status).toBe(403)
     expect(await response.json()).toMatchObject({ code: 'DEPARTMENT_SELECTION_FORBIDDEN' })
     expect(mocks.from).not.toHaveBeenCalledWith('opportunities')
+    expect(mocks.from).not.toHaveBeenCalledWith('sales_spaces')
+  })
+
+  it('华南负责人可独立选择大部门和下级部门，组织改隶后平台部分支立即离开授权树', async () => {
+    tables.departments[1].name = '华南'
+    tables.departments[2].name = '华南一组'
+    tables.departments[3].name = '平台部'
+    tables.user_roles = [
+      grant('department', 'sales-a', role('south-gm', ['dept:view', 'opportunity:*'])),
+      grant('space', 'space-b', role('historical-binding', ['opportunity:*'])),
+    ]
+    const summary = await (await request()).json()
+    expect(summary.departmentSpaces.map((row: Row) => row.name)).toEqual(['华南', '华南一组', 'new-department'])
+    expect(summary.opportunities.map((row: Row) => row.id)).toEqual(['a-opp', 'child-opp'])
+    expect((await request('?departmentId=sales-b')).status).toBe(403)
+    expect((await request('?departmentId=sales-a-child&includeSubdepartments=false')).status).toBe(200)
+
+    tables.departments[2].parent_id = 'sales-b'
+    tables.departments[5].name = '新建部门'
+    const refreshed = await (await request()).json()
+    expect(refreshed.departmentSpaces.map((row: Row) => row.name)).toEqual(['华南', '新建部门'])
+    expect(refreshed.opportunities.map((row: Row) => row.id)).toEqual(['a-opp'])
+    expect((await request('?departmentId=sales-a-child')).status).toBe(403)
+    expect((await request('?departmentId=new-department')).status).toBe(200)
   })
 
   it('组织级超管可以选择所有启用部门，明确撤回业务权限不会恢复模板通配', async () => {
@@ -217,7 +235,7 @@ describe('GET /api/dashboard/department', () => {
         expect.objectContaining({ department_id: 'sales-a-child' }),
         expect.objectContaining({ department_id: 'sales-b' }),
         expect.objectContaining({ department_id: 'sales-c' }),
-        expect.objectContaining({ department_id: 'new-department', sales_space_ids: [] }),
+        expect.objectContaining({ department_id: 'new-department' }),
       ],
       opportunities: [expect.objectContaining({ id: 'a-opp' })],
       milestones: [],
@@ -307,6 +325,7 @@ describe('GET /api/dashboard/department', () => {
       milestones: [],
     })
     expect(mocks.from).not.toHaveBeenCalledWith('opportunities')
+    expect(mocks.from).not.toHaveBeenCalledWith('sales_spaces')
     expect((await request('?departmentId=sales-c')).status).toBe(403)
     expect((await request('?departmentId=parent')).status).toBe(403)
     expect((await request('?departmentId=inactive-department')).status).toBe(403)
@@ -373,48 +392,25 @@ describe('GET /api/dashboard/department', () => {
   })
 })
 
-describe('GET /api/dashboard compatibility', () => {
-  it('组织超级管理员可以选择各个已启用且归属当前组织部门的销售空间', async () => {
+describe('GET /api/dashboard personal view', () => {
+  it('拒绝旧空间选择，部门选择只由部门接口授权', async () => {
     tables.user_roles = [grant('org', orgId, role('tenant-admin', [], 'ORG_SUPER_ADMIN'))]
-    const response = await compatibilityRequest('?spaceId=space-c')
-    expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({
-      spaces: ['space-a', 'space-child', 'space-b', 'space-c'].map(id => ({ id })),
-      activeSpace: { id: 'space-c' },
-      opportunities: [expect.objectContaining({ id: 'c-opp' })],
-    })
-    for (const id of ['disabled-space', 'foreign-space', 'inactive-dept-space']) {
-      expect((await compatibilityRequest(`?spaceId=${id}`)).status).toBe(403)
+    for (const id of ['space-c', 'foreign-space', 'unmapped-space']) {
+      const response = await compatibilityRequest(`?spaceId=${id}`)
+      expect(response.status).toBe(400)
+      expect(await response.json()).toMatchObject({ code: 'DEPARTMENT_SELECTION_REQUIRED' })
     }
-  })
-
-  it('只返回所选的合规空间数据，按本人权限过滤并拒绝未授权的显式空间', async () => {
-    const ownSpace = await compatibilityRequest('?spaceId=space-b')
-    expect(ownSpace.status).toBe(200)
-    expect(ownSpace.headers.get('Cache-Control')).toBe('no-store')
-    expect(await ownSpace.json()).toMatchObject({
-      activeSpace: { id: 'space-b', name: 'space-b' },
-      opportunities: [expect.objectContaining({ id: 'b-owned' })],
-      milestones: [expect.objectContaining({ id: 'own-milestone' })],
-    })
-    const defaultSpace = await compatibilityRequest()
-    expect(await defaultSpace.json()).toMatchObject({
-      activeSpace: { id: 'space-a', name: 'space-a' },
-      opportunities: [expect.objectContaining({ id: 'a-opp' })],
-    })
-    const forbidden = await compatibilityRequest('?spaceId=space-c')
-    expect(forbidden.status).toBe(403)
-    expect(await forbidden.json()).toMatchObject({ code: 'DASHBOARD_SPACE_FORBIDDEN' })
-    expect(listAccessibleSalesSpaces).not.toHaveBeenCalled()
+    expect(mocks.from).not.toHaveBeenCalled()
     expect(mocks.rpc).not.toHaveBeenCalled()
   })
 
-  it('部门权限仍有效但没有启用部门时保持空视图', async () => {
-    tables.departments = tables.departments.map(row => ({ ...row, status: 'inactive' }))
+  it('无选择参数时兼容个人视图，避免旧空间覆盖当前授权范围', async () => {
     const empty = await compatibilityRequest()
     expect(empty.status).toBe(200)
-    expect(await empty.json()).toMatchObject({ spaces: [], activeSpace: null, opportunities: [], milestones: [] })
-    expect(listAccessibleSalesSpaces).not.toHaveBeenCalled()
+    expect(await empty.json()).toMatchObject({
+      organizationId: orgId, spaces: [], activeSpace: null, opportunities: [], milestones: [],
+    })
+    expect(mocks.from).not.toHaveBeenCalledWith('sales_spaces')
   })
 
   it('个人视图只读取当前组织内与本人关联的提醒和日程', async () => {
@@ -436,7 +432,7 @@ describe('GET /api/dashboard compatibility', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('Cache-Control')).toBe('no-store')
     expect(await response.json()).toMatchObject({
-      spaces: [], activeSpace: null, opportunities: [], milestones: [],
+      organizationId: orgId, spaces: [], activeSpace: null, opportunities: [], milestones: [],
       reminders: [expect.objectContaining({ id: 'personal-reminder' })],
       agenda: [expect.objectContaining({ id: 'personal-agenda' })],
     })
@@ -444,34 +440,12 @@ describe('GET /api/dashboard compatibility', () => {
     expect(mocks.from).not.toHaveBeenCalledWith('opportunities')
   })
 
-  it('只为有效但无部门权限的账号保留已授权的旧空间查询', async () => {
-    tables.user_roles = []
-    tables.opportunities = tables.opportunities.map(row => ({ ...row, customer: tables.customers[0] }))
-    vi.mocked(listAccessibleSalesSpaces).mockResolvedValue({
-      assignments: [],
-      spaces: [{
-        id: 'space-a', department_id: 'sales-a', name: 'space-a', description: null, owner_id: userId,
-        active_opportunities: 1, pending_milestones: 0,
-      }],
-    })
-    const response = await compatibilityRequest('?spaceId=space-a')
-    expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({
-      activeSpace: { id: 'space-a' },
-      opportunities: [expect.objectContaining({ id: 'a-opp' })],
-    })
-    expect(listAccessibleSalesSpaces).toHaveBeenCalledWith(userId, orgId)
-    expect((await compatibilityRequest('?spaceId=space-b')).status).toBe(403)
-    expect(getFreshDefaultOrgId).not.toHaveBeenCalled()
-    expect(mocks.rpc).not.toHaveBeenCalled()
-
-    vi.mocked(listAccessibleSalesSpaces).mockClear()
+  it('个人视图仍要求有效的当前组织成员资格', async () => {
     const membership = tables.user_organizations
     tables.user_organizations = []
     const invalidMember = await compatibilityRequest()
     expect(invalidMember.status).toBe(403)
     expect(await invalidMember.json()).toMatchObject({ code: 'DEPARTMENT_MEMBERSHIP_REQUIRED' })
-    expect(listAccessibleSalesSpaces).not.toHaveBeenCalled()
 
     tables.user_organizations = membership
     tables.organizations[0].status = 'disabled'
