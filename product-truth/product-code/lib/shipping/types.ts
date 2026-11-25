@@ -12,7 +12,7 @@ export type RouteEvent = { time: string; location: string; description: string; 
 export type TrackingResult = { waybill: string; events: RouteEvent[]; queriedAt: string; shipmentStatus?: ShipmentOrderStatus; source?: 'carrier' | 'sandbox_mock' | 'simulation'; courier?: { name?: string; employeeId?: string; phone?: string } }
 export type SavedShippingContact = { id: string; label: string; contact: Contact }
 export type ShippingSettings = { intakeRules?: IntakeRules; intakeRulesWarning?: string; guest?: boolean; canOperate?: boolean; canManageConnections?: boolean; lastShipment?: ShippingInput; defaultsWarning?: string; configurationWarning?: string; environment: 'sandbox' | 'production'; ready: boolean; reason: string; services: Array<{ id: number; name: string; preference?: 'standard' | 'urgent' }>; monthlyTail: string; sender: Contact; canSubmit: boolean; connectionId?: string; defaultBillingAccountId?: string; carrierConnections?: Array<{ id: string; carrier: 'sf'; environment: 'sandbox' | 'production'; status: string; orderCapability: string; services: Array<{ id: number; name: string; preference: 'standard' | 'urgent' }> }>; billingAccounts?: Array<{ id: string; connectionId: string; displayName: string; tail: string; environment: 'sandbox' | 'production'; isDefault: boolean; status: 'active' | 'inactive' }> }
-export type ShipmentOrderStatus = 'accepted' | 'awaiting_confirmation' | 'returned' | 'confirmed' | 'ordering' | 'order_unknown' | 'waybill_created' | 'in_transit' | 'delivered' | 'cancelled' | 'order_failed'
+export type ShipmentOrderStatus = 'accepted' | 'awaiting_confirmation' | 'returned' | 'resubmitted' | 'confirmed' | 'ordering' | 'order_unknown' | 'waybill_created' | 'in_transit' | 'delivered' | 'cancelled' | 'order_failed'
 export type ShipmentRelation = { salesRef: string | null; customerRef: string | null; assignmentStatus: 'assigned' | 'unassigned' }
 export type ShipmentOrder = {
   failure?: { message: string; at: string }
@@ -25,6 +25,9 @@ export type ShipmentOrder = {
   relation: ShipmentRelation
   input: ShippingInput
   waybill: string | null
+  trackingUpdatedAt?: string | null
+  trackingStatus?: TrackingEventStatus | null
+  trackingEvents?: RouteEvent[]
   revision?: number
   amendedAt?: string | null
   nextReviewAt: string | null

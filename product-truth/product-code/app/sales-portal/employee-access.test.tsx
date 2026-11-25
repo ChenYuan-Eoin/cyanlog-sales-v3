@@ -88,6 +88,20 @@ it('restores anonymous company, device common and custom choices without employe
  expect(screen.getByLabelText('当前寄件地址').textContent).toBe('我的姓名|我的常用路99号')
  expect(fetcher).not.toHaveBeenCalled()
 })
+it('can save a custom pickup to this device after using it once', () => {
+ const company = { ...profile.sender, address:'公司默认路16号' }
+ render(<EmployeeAccess companySender={company}>{({controls})=>controls}</EmployeeAccess>)
+ fireEvent.click(screen.getByRole('radio',{name:/自定义地址/}))
+ fireEvent.change(screen.getByLabelText('详细寄件地址'),{target:{value:'自定义路7号'}})
+ fireEvent.change(screen.getByLabelText('所属团队'),{target:{value:'销售部'}})
+ fireEvent.click(screen.getByRole('button',{name:'使用此地址'}))
+ expect(localStorage.getItem('shipping-anonymous-sender-v1')).toBeNull()
+ fireEvent.click(screen.getByRole('button',{name:'保存为我的常用地址（本设备）'}))
+ expect(JSON.parse(localStorage.getItem('shipping-anonymous-sender-v1')!).sender.address).toBe('自定义路7号')
+ expect(screen.getByRole('radio',{name:/我的常用/})).toHaveProperty('checked',true)
+ expect(fetcher).not.toHaveBeenCalled()
+})
+
 it('does not overwrite a manual draft when company options arrive late',()=>{
  const renderForm=(companySender:typeof profile.sender|null)=><EmployeeAccess companySender={companySender}>{({controls})=><>{controls}</>}</EmployeeAccess>
  const view=render(renderForm(null));fireEvent.change(screen.getByLabelText('寄件人姓名'),{target:{value:'正在填写'}})
@@ -116,8 +130,9 @@ it('restores Fxiaoke company, common and custom pickup with account-bound profil
  fireEvent.change(screen.getByLabelText('寄件人姓名'),{target:{value:'本次揽收人'}})
  fireEvent.change(screen.getByLabelText('寄件人联系电话'),{target:{value:'13600000000'}})
  fireEvent.change(screen.getByLabelText('详细寄件地址'),{target:{value:'新常用路3号'}})
- fireEvent.click(screen.getByLabelText('同时保存为我的常用地址'))
- fireEvent.click(screen.getByRole('button',{name:'保存揽收地址'}))
+ fireEvent.click(screen.getByRole('button',{name:'使用此地址'}))
+ expect(fetcher.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(0)
+ fireEvent.click(screen.getByRole('button',{name:'保存为我的常用地址'}))
  await screen.findByText('揽收地址已保存为我的常用地址，下次自动带入。')
  const post=fetcher.mock.calls.find(([url,init])=>url==='/api/shipping/owner/profile'&&init?.method==='POST')
  expect(JSON.parse(post![1].body)).toMatchObject({action:'save_profile',profile:{team:'市场部',departmentId:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',sender:{name:'本次揽收人',phone:'13600000000',address:'新常用路3号'}}})

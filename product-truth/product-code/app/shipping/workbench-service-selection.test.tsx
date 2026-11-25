@@ -35,7 +35,7 @@ function setup(orders = pendingOrders(), configuration = settings, behavior: Set
   const outcomes = [...(behavior.confirmationStates || [])]
   const sent: Array<{ url: string; body: Record<string, unknown> }> = []
   fetcher.mockImplementation(async (url, init) => {
-    if (url === '/api/shipping/ledger?limit=50') {
+    if (url === '/api/shipping/ledger?limit=50&page=0') {
       if (sent.length && behavior.ledgerUnavailableAfterConfirmation) throw new TypeError('fixture ledger unavailable')
       return Response.json({ records: ledger })
     }
@@ -91,7 +91,7 @@ function choose(order: ShipmentOrder, label: string) {
 
 function serviceSummary(order: ShipmentOrder) {
   const region = within(screen.getByRole('region', { name: '逐票下单产品核对' }))
-  const row = region.getByText(order.orderNo).closest('li')
+  const row = region.getByText(`${order.input.customerName} · ${order.input.recipient.name}`).closest('li')
   expect(row).not.toBeNull()
   return row!.textContent || ''
 }

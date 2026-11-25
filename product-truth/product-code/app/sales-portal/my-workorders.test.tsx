@@ -161,7 +161,7 @@ it('shows the real returned reason and labels a missing reason without reusing s
   expect(screen.getByRole('listitem', { name: '提报 NOT_RETURNED' })).not.toHaveTextContent('旧原因')
 })
 
-it('uses the card information layout, supports copying identifiers and omits cut-down summaries', async () => {
+it('shows and copies the waybill without displaying the internal order number', async () => {
   const writeText = vi.fn().mockResolvedValue(undefined)
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
   fetcher.mockResolvedValue(response({ orders: [order('S0-20261118-03566890', {
@@ -184,10 +184,11 @@ it('uses the card information layout, supports copying identifiers and omits cut
   expect(card).not.toHaveTextContent('今日 19:00-20:00')
   expect(card).not.toHaveTextContent('上海虹桥集散中心')
 
-  fireEvent.click(within(card).getByRole('button', { name: '复制提报单号' }))
-  await waitFor(() => expect(within(card).getByRole('status')).toHaveTextContent('已复制提报单号'))
-  expect(writeText).toHaveBeenCalledWith('S0-20261118-03566890')
-  expect(within(card).getByRole('button', { name: '复制顺丰单号' })).toBeInTheDocument()
+  expect(within(card).queryByText('S0-20261118-03566890')).not.toBeInTheDocument()
+  expect(within(card).queryByRole('button', { name: '复制提报单号' })).not.toBeInTheDocument()
+  fireEvent.click(within(card).getByRole('button', { name: '复制顺丰单号' }))
+  await waitFor(() => expect(within(card).getByRole('status')).toHaveTextContent('已复制顺丰单号'))
+  expect(writeText).toHaveBeenCalledWith('SF-S0-20261118-03566890')
 })
 
 it('loads in-transit forwarding and return actions directly on the card', async () => {

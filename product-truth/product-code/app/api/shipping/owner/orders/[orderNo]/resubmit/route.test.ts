@@ -31,7 +31,7 @@ const sessionFixture = 'local-test'
 const options = { headers: { authorization: 'Bearer ' + sessionFixture } }
 const read = () => GET(new NextRequest(path, options), ctx)
 const post = (body: unknown = submission) => POST(new NextRequest(path, { ...options, method: 'POST', body: JSON.stringify(body) }), ctx)
-const result = { orderNo: number, revision: 2, status: 'awaiting_confirmation', replayed: false }
+const result = { orderNo: 'SO-20261125-ABCD1618', revision: 1, status: 'awaiting_confirmation', createdAt: '2026-11-25T03:00:00Z', nextReviewAt: '2026-11-25T03:00:00Z', resubmittedFrom: number, replayed: false }
 let order: Record<string, unknown>
 beforeEach(() => {
   order = {
@@ -73,18 +73,20 @@ it.each([{ org_id: 'org-B' }, { created_by: 'user-B' }, { intake_source: 'anonym
   expect((await read()).status).toBe(404)
 })
 
-it.each([{ status: 'awaiting_confirmation' }, { shipping_waybills: [{ waybill_no: 'SF1234' }] }])('does not open a frozen work order %j', async patch => {
+it.each([{ status: 'awaiting_confirmation' }, { status: 'resubmitted' }, { provider_order_id: 'uncertain' }, { cancellation: { phase: 'unknown' } }, { shipping_waybills: [{ waybill_no: 'SF1234' }] }])('does not open a frozen work order %j', async patch => {
   Object.assign(order, patch)
   expect((await read()).status).toBe(409)
 })
 
-it('applies the current employee identity and department before invoking the original-number transaction', async () => {
+it('applies the current employee identity and department before invoking the successor transaction', async () => {
   const response = await post()
   expect(response.status).toBe(200)
   expect(await response.json()).toEqual(result)
   expect(mock.rpc).toHaveBeenCalledOnce()
-  expect(mock.rpc).toHaveBeenCalledWith('resubmit_returned_owner_shipment_v1', expect.objectContaining({
+  expect(mock.rpc).toHaveBeenCalledWith('resubmit_returned_owner_shipment_v2', expect.objectContaining({
     p_org_id: 'org-A', p_actor_id: actor.id, p_order_no: number, p_request_key: submission.key,
+    p_new_order_no: expect.stringMatching(/^SO-\d{8}-[A-Z0-9]{8}$/),
+    p_receipt_token_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
     p_expected_revision: 1, p_request_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
     p_shipment_payload: expect.objectContaining({ submittedBy: { name: actor.display_name, phone: actor.phone, team: '销售部', departmentId } }),
   }))

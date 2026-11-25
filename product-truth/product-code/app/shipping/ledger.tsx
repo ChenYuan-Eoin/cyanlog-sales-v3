@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ShipmentOrder, ShipmentOrderStatus } from '@/lib/shipping/types'
 import styles from './workspace.module.css'
 
-const labels: Record<ShipmentOrderStatus, string> = { accepted: '已受理', awaiting_confirmation: '待核对', returned: '已退回', confirmed: '已确认', ordering: '下单中', order_unknown: '结果待确认', waybill_created: '运单已生成', in_transit: '运输中', delivered: '已签收', cancelled: '已作废', order_failed: '下单失败' }
+const labels: Record<ShipmentOrderStatus, string> = { accepted: '已受理', awaiting_confirmation: '待核对', returned: '已退回', resubmitted: '已重提', confirmed: '已确认', ordering: '下单中', order_unknown: '结果待确认', waybill_created: '运单已生成', in_transit: '运输中', delivered: '已签收', cancelled: '已作废', order_failed: '下单失败' }
 
 async function request<T>(url: string, body?: unknown): Promise<T> {
   const response = await fetch(url, { method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? undefined : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), cache: 'no-store' })
