@@ -20,6 +20,9 @@
 }
 .recordPanel{container-type:inline-size;min-width:0;font-size:12px}
 .recordToolbar{display:grid;grid-template-columns:minmax(0,1fr) 34px;align-items:start;gap:6px;margin-bottom:10px}
+.returnEditToolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.returnEditToolbar strong,.returnSenderDetails summary{overflow-wrap:anywhere;min-width:0}
+.returnSenderDetails summary{cursor:pointer}
 .recordFilters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));min-width:0;width:100%;gap:5px}
 .recordFilters button,.refreshRecords,.loadMore{min-height:30px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink);padding:4px 9px;font-size:12px;line-height:1.35;white-space:nowrap}
 .recordFilters button{width:100%;padding-inline:5px;font-size:11px}

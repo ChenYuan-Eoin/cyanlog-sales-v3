@@ -7,7 +7,7 @@ import { OwnerCarrierChanges } from './owner-carrier-changes'
 import styles from './sales-portal.module.css'
 
 const labels: Record<string, string> = {
-  accepted: '已受理', awaiting_confirmation: '待审核', returned: '前台已退回', confirmed: '已确认',
+  accepted: '已受理', awaiting_confirmation: '待审核', returned: '前台已退回', resubmitted: '已重提', confirmed: '已确认',
   ordering: '下单中', order_unknown: '结果待确认', waybill_created: '待揽收', in_transit: '运输中',
   delivered: '已签收', cancelled: '已取消', order_failed: '下单未成功',
 }
@@ -19,7 +19,8 @@ const dateTimeFormat = new Intl.DateTimeFormat('zh-CN', {
 type Stage = 'processing' | 'waiting' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'returned' | 'cancelled'
 type Filter = 'all' | 'waiting' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'returned'
 export type ReturnedShipment = { orderNo: string; revision: number; input: ShippingInput; returnedReason?: string | null }
-export type RestoreOwnerRecord = (receipt?: Pick<ShipmentReceipt, 'orderNo' | 'revision' | 'status' | 'customerName'>) => void
+type ResubmittedReceipt = ShipmentReceipt & { resubmittedFrom: string }
+export type RestoreOwnerRecord = (receipt?: Pick<ShipmentReceipt, 'orderNo' | 'revision' | 'status' | 'customerName'> | ResubmittedReceipt) => void
 
 function stageOf(order: ShipmentReceipt): Stage {
   if (order.status === 'returned') return 'returned'
@@ -113,7 +114,7 @@ function ReceiptCard({ order, scope, locked, opening, onResubmit, onCancelled, o
       <span>顺丰单号</span>
       {order.waybill
         ? <span className={styles.trackingNumberGroup}><strong className={styles.trackingNumber} title={order.waybill}>{order.waybill}</strong><CopyControl value={order.waybill} label="顺丰单号" onCopy={(value, label) => void copy(value, label)} /></span>
-        : <span className={styles.mutedText}>待审核下单后生成</span>}
+        : <span className={styles.mutedText}>{order.status === 'resubmitted' ? '此记录未出运单' : '待审核下单后生成'}</span>}
     </div>
     {copyFeedback && <span className={styles.copyFeedback} role="status">{copyFeedback}</span>}
 
@@ -268,6 +269,21 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
         throw new Error('原提报资料不完整，请刷新记录。')
       }
       if (!controller.signal.aborted) onResubmit({ ...original, returnedReason: original.returnedReason || order.returnedReason }, receipt => {
+        if (receipt && 'resubmittedFrom' in receipt && receipt.resubmittedFrom === order.orderNo) {
+          const limit = view.current.filter === 'all' ? view.current.limit + 1 : 5
+          view.current = { filter: 'all', limit }
+          setFilter('all')
+          setDisplayLimit(limit)
+          const updated = receipts.current
+            .filter(item => item.orderNo !== receipt.orderNo)
+            .map(item => item.orderNo === order.orderNo ? { ...item, status: 'resubmitted' as const, canCancel: false } : item)
+          updated.push(receipt)
+          updated.sort((first, second) => (Date.parse(second.createdAt || '') || 0) - (Date.parse(first.createdAt || '') || 0))
+          receipts.current = updated
+          setOrders(updated)
+          void load()
+          return
+        }
         if (receipt?.orderNo === order.orderNo) {
           setOrders(current => current?.map(item => item.orderNo === order.orderNo ? { ...item, ...receipt } : item) ?? null)
         }

@@ -9,9 +9,10 @@ import { DEFAULT_INTAKE_RULES, intakeFieldSchema, type IntakeRules } from '@/lib
 import { emptyContact, type Contact } from '@/lib/shipping/types'
 import styles from './sales-portal.module.css'
 
+export type SaveCommonSender = (sender: Contact, departmentId?: string) => Promise<void>
 type AddressSource = 'company' | 'personal' | 'custom'
 export type EmployeeProfile = { id:string;email:string;identityName?:string;identityPhone?:string;sender:Contact|null;senderChoices?:{company:Contact|null;personal:Contact|null};senderSource?:AddressSource;team:string;departmentId?:string;departments?:Array<{id:string;name:string;path:string;isPrimary:boolean}>;updatedAt:string;wecom?:boolean;fxiaoke?:boolean;companyName?:string;phoneSource?:'wecom'|'preset'|'unavailable' }
-export type EmployeeAccessState = { employee:EmployeeProfile|null;controls:ReactNode;identityControls:ReactNode;canSubmit:boolean;unavailableReason:string;sessionKey:number;sender:Contact;team:string;departmentId:string }
+export type EmployeeAccessState = { employee:EmployeeProfile|null;controls:ReactNode;identityControls:ReactNode;canSubmit:boolean;unavailableReason:string;sessionKey:number;sender:Contact;team:string;departmentId:string;saveCommonSender?:SaveCommonSender }
 const endpoint = '/api/shipping/public/employee'
 const sourceLabels = { company:'公司默认', personal:'我的常用', custom:'本次地址' }
 const addressFields = ['province','city','county','address'] as const
@@ -73,24 +74,68 @@ export default function EmployeeAccess({ children, requireVerification=false, ru
   if(!employee&&next==='personal'&&common)setTeam(common.team)
   setSource(next);setSender(contact);setDraft(contact);setDirty(true);setEditing(false)
  }
+ function validatePickup(contact:Contact) {
+  const result=contactSchema.safeParse({...contact,phone:normalizeDomesticShippingPhone(contact.phone)})
+  if(!result.success)throw new Error(result.error.issues.map(issue=>issue.message).join('；'))
+  if(employee?.wecom&&(result.data.name!==employee.sender?.name||result.data.phone!==employee.sender?.phone)) {
+   throw new Error('寄件身份已变化，请刷新企业资料后重试。')
+  }
+  return result.data
+ }
+ async function persistEmployeeSender(contact:Contact, selectedDepartmentId=departmentId) {
+  if(!employee)throw new Error('身份已失效，请重新验证后保存。')
+  if(running.current||loading)throw new Error('正在读取或保存寄件资料，请稍后重试。')
+  const pickup=validatePickup(contact)
+  const selectedTeam=employee.departments?.find(item=>item.id===selectedDepartmentId)?.name ?? team
+  running.current=true;setBusy(true)
+  try {
+   const data=await call({action:'save_profile',profile:{sender:pickup,team:selectedTeam,departmentId:mode==='fxiaoke'?selectedDepartmentId:undefined,expectedUpdatedAt:employee.updatedAt}},profileEndpoint)
+   const next=data.employee as EmployeeProfile|null
+   if(!next||next.id!==employee.id) {
+    accept(next||null)
+    throw new Error('寄件身份已变化，请重新读取资料。')
+   }
+   return next
+  } finally { running.current=false;setBusy(false) }
+ }
+ async function saveCommonSender(contact:Contact, selectedDepartmentId?:string) {
+  // The return editor owns its draft. Only update the account profile here.
+  setEmployee(await persistEmployeeSender(contact,selectedDepartmentId))
+ }
+ function saveDeviceSender(contact:Contact) {
+  localStorage.setItem('shipping-anonymous-sender-v1',JSON.stringify({remember:true,sender:contact,team}))
+  setCommon({sender:contact,team})
+  setSource('personal')
+  setNotice('已保存为本设备的常用地址，下次自动带入。')
+ }
+ async function saveCurrentSender(contact:Contact) {
+  setError('');setNotice('')
+  try {
+   if(employee) {
+    accept(await persistEmployeeSender(contact))
+    setNotice('揽收地址已保存为我的常用地址，下次自动带入。')
+   } else {
+    saveDeviceSender(validatePickup(contact))
+   }
+  } catch(e) { setError(e instanceof Error ? e.message : '保存常用地址失败。') }
+ }
  async function apply(event:FormEvent) {
   event.preventDefault();if(running.current)return
-  setError('')
-  const result=contactSchema.safeParse({...draft,phone:normalizeDomesticShippingPhone(draft.phone)})
-  if(!result.success){setError(result.error.issues.map(issue=>issue.message).join('；'));return}
-  if(employee?.wecom&&(result.data.name!==employee.sender?.name||result.data.phone!==employee.sender?.phone)){setError('寄件身份已变化，请刷新企业资料后重试。');return}
   if(employee&&saveCommon) {
-   running.current=true;setBusy(true)
-   try {const next=(await call({action:'save_profile',profile:{sender:result.data,team,departmentId:mode==='fxiaoke'?departmentId:undefined,expectedUpdatedAt:employee.updatedAt}},profileEndpoint)).employee as EmployeeProfile|null;if(!next)throw new Error('身份已失效，请重新验证后保存。');accept(next);setNotice('揽收地址已保存为我的常用地址，下次自动带入。')}catch(e){setError((e as Error).message)}finally{running.current=false;setBusy(false)}
-  } else {
-   senderTouched.current=true;customDraft.current=result.data
-   setSender(result.data);setSource('custom');setDirty(true);setEditing(false);setNotice('已使用本次揽收地址。')
-   if(!employee&&remember){
-    try{localStorage.setItem('shipping-anonymous-sender-v1',JSON.stringify({remember:true,sender:result.data,team}));setCommon({sender:result.data,team});setSource('personal');setNotice('已保存为本设备的常用地址，下次自动带入。')}
-    catch{setNotice('本次地址已使用，但浏览器未能保存常用地址。')}
+   await saveCurrentSender(draft)
+   return
+  }
+  setError('')
+  try {
+   const pickup=validatePickup(draft)
+   senderTouched.current=true;customDraft.current=pickup
+   setSender(pickup);setSource('custom');setDirty(true);setEditing(false);setNotice('已使用本次揽收地址。')
+   if(!employee&&remember) {
+    try { saveDeviceSender(pickup) }
+    catch { setNotice('本次地址已使用，但浏览器未能保存常用地址。') }
     setRemember(false)
    }
-  }
+  } catch(e) { setError(e instanceof Error ? e.message : '请核对揽收地址。') }
  }
  async function logout() {
   if(running.current)return
@@ -117,6 +162,9 @@ export default function EmployeeAccess({ children, requireVerification=false, ru
   {mode==='fxiaoke'&&(employee?.departments?.length || 0)>1&&<div><label>所属部门<select required value={departmentId} disabled={busy||loading} aria-describedby="shipping-department-path" onChange={e=>{const next=employee?.departments?.find(item=>item.id===e.target.value);setDepartmentId(next?.id||'');setTeam(next?.name||'')}}><option value="">请选择本人所属部门</option>{employee?.departments?.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label><p id="shipping-department-path" className={styles.hint}>{selectedDepartment ? '部门路径：' + selectedDepartment.path : '仅显示本人已获寄件授权的标准部门。'}</p></div>}
   {!employee&&common&&<button type="button" className={styles.textButton} disabled={busy||loading} onClick={forgetCommon}>移除本设备常用地址</button>}
   <div className={styles.addressSummary}><MapPin size={18}/><div><strong>{sender.name||'寄件人待填写'} <span>{sender.phone}</span></strong><p>{addressText(sender)||'请填写实际揽收地址'}</p></div><button className={styles.textButton} type="button" disabled={busy||loading} aria-expanded={editing} onClick={()=>{senderTouched.current=true;if(editing){setDraft(sender);setEditing(false)}else{setDraft(sender);setEditing(true)}setError('');setSaveCommon(false)}}>{editing?'收起寄方编辑':'更换揽收地址'}</button></div>
+  {!editing&&source==='custom'&&senderCheck.success&&<button className={styles.textButton} type="button" disabled={busy||loading} onClick={()=>void saveCurrentSender(sender)}>
+   {employee?'保存为我的常用地址':'保存为我的常用地址（本设备）'}
+  </button>}
   <div hidden={!editing} className={styles.addressEditor}><form onSubmit={apply}><fieldset className={styles.fields} disabled={busy||loading}>
    <label>粘贴寄方信息<textarea aria-label="寄方地址文本" rows={2} value={senderText} onChange={e=>{senderTouched.current=true;setSenderText(e.target.value)}} placeholder="粘贴实际揽收地址"/></label><button className={styles.textButton} type="button" disabled={!senderText.trim()} onClick={()=>{const parsed=parseAddress(senderText);if(addressFields.every(field=>parsed.contact[field])){setDraft(employee?.wecom?{...parsed.contact,name:sender.name,phone:sender.phone}:parsed.contact);setNotice(parsed.warnings.filter(w=>!employee?.wecom||!/(联系电话|联系人姓名)/.test(w)).join('；'))}else{setNotice('本次未能识别完整揽收地址，现有寄方资料已保留。'+parsed.warnings.join('；'))}}}>解析寄方信息</button>
    <div className={styles.grid2}>{(['name','phone',...addressFields] as const).map((field,index)=><label key={field}>{['寄件人姓名','寄件人联系电话','寄件省份','寄件城市','寄件区县','详细寄件地址'][index]}<input required disabled={employee?.wecom&&(field==='name'||field==='phone')} value={draft[field]} onChange={e=>{if(employee?.wecom&&(field==='name'||field==='phone'))return;senderTouched.current=true;setDraft(current=>({...current,[field]:e.target.value}))}}/></label>)}</div>
@@ -127,5 +175,5 @@ export default function EmployeeAccess({ children, requireVerification=false, ru
    <div className={styles.addressActions}>{employee?<label className={styles.remember}><input type="checkbox" checked={saveCommon} onChange={e=>setSaveCommon(e.target.checked)}/>同时保存为我的常用地址</label>:<label className={styles.remember}><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/>同时保存为我的常用地址（本设备）</label>}<button className={styles.secondaryButton} type="button" onClick={()=>{customDraft.current=null;setDraft(sender);setEditing(false);setError('');setSaveCommon(false);setRemember(false)}}>取消编辑</button><button className={styles.primaryButton} type="submit">{busy?'保存中…':saveCommon?'保存揽收地址':'使用此地址'}</button></div>
   </fieldset></form></div>{error&&<p role="alert" className={styles.error}>{error}</p>}{notice&&<p role="status" className={styles.notice}>{notice}</p>}{loadFailed&&!requireVerification&&<button type="button" onClick={()=>void retry()}>重新读取资料</button>}
  </section>
- return children({employee,controls,identityControls,canSubmit:!loading&&!busy&&!editing&&(!requireVerification||Boolean(employee)&&!loadFailed)&&senderCheck.success&&(mode==='fxiaoke'?Boolean(selectedDepartment):teamCheck.success),unavailableReason,sessionKey,sender,team,departmentId})
+ return children({employee,controls,identityControls,canSubmit:!loading&&!busy&&!editing&&(!requireVerification||Boolean(employee)&&!loadFailed)&&senderCheck.success&&(mode==='fxiaoke'?Boolean(selectedDepartment):teamCheck.success),unavailableReason,sessionKey,sender,team,departmentId,saveCommonSender:mode==='fxiaoke'&&employee?saveCommonSender:undefined})
 }

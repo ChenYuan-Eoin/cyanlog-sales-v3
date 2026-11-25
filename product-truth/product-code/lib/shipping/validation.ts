@@ -44,7 +44,7 @@ export const shipmentLedgerQuerySchema = z.object({
   salesRef: z.string().trim().max(120).optional(),
   customerRef: z.string().trim().max(120).optional(),
   contact: z.string().trim().max(60).optional(),
-  status: z.enum(['accepted','awaiting_confirmation','returned','confirmed','ordering','order_unknown','waybill_created','in_transit','delivered','cancelled','order_failed']).optional(),
+  status: z.enum(['accepted','awaiting_confirmation','returned','resubmitted','confirmed','ordering','order_unknown','waybill_created','in_transit','delivered','cancelled','order_failed']).optional(),
   cursor: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 }).strict()

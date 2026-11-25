@@ -2,7 +2,8 @@ import React from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
-import { SalesRequestForm } from './portal'
+import { FxiaokeShippingProposal, SalesRequestForm } from './portal'
+import { DEFAULT_INTAKE_RULES } from '@/lib/shipping/intake-rules'
 
 const orderNo = 'SO-20261118-1111AAAA'
 const issuedOrderNo = 'SO-20261118-2222BBBB'
@@ -35,7 +36,7 @@ beforeEach(() => {
     }
     if (url === detailPath && init?.method === 'POST') {
       saved = true
-      return json({ orderNo, status: 'awaiting_confirmation', revision: 2, waybill: null })
+      return json({ orderNo, status: 'awaiting_confirmation', revision: 2, waybill: null, resubmittedFrom: null, replayed: true })
     }
     if (url === detailPath && (!init?.method || init.method === 'GET')) return json({ orderNo, revision: 1, input, returnedReason: '缺少楼层' })
     throw new Error(`Unexpected request: ${init?.method || 'GET'} ${url}`)
@@ -58,7 +59,7 @@ async function openReturnedOrder() {
   await waitFor(() => expect(screen.getByLabelText('收件人')).toHaveValue(recipient.name))
 }
 
-it('fills the returned ticket, previews the edits and submits one revision to the original order', async () => {
+it('loads edits and accepts a legacy replay of the original order revision without adding a record', async () => {
   renderForm()
   await openReturnedOrder()
   expect(send.mock.calls.filter(([url, init]) => url === detailPath && init?.method !== 'POST')).toHaveLength(1)
@@ -91,6 +92,94 @@ it('fills the returned ticket, previews the edits and submits one revision to th
   await waitFor(() => expect(updated).toHaveTextContent('待审核'))
   expect(updated).toHaveTextContent('待审核')
   expect(within(updated).queryByRole('button', { name: '修改并重提' })).not.toBeInTheDocument()
+})
+
+it('shows the original in history and the successor under its new submission date', async () => {
+  const fallback = send.getMockImplementation()!
+  const successorNo = 'SO-20261125-3333CCCC'
+  const successor = {
+    orderNo: successorNo, status: 'awaiting_confirmation', revision: 1, waybill: null,
+    createdAt: '2026-11-25T01:00:00Z', nextReviewAt: '2026-11-25T03:00:00Z',
+    customerName: '今日重提客户', resubmittedFrom: orderNo,
+  }
+  let persisted = false
+  send.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url === detailPath && init?.method === 'POST') {
+      persisted = true
+      return json({ ...successor, replayed: false })
+    }
+    if (persisted && url.endsWith('owner/orders?page=0')) {
+      return json({
+        orders: [
+          { ...successor, customerName: '服务端回读客户' },
+          { orderNo, status: 'resubmitted', revision: 1, waybill: null,
+            createdAt: '2026-11-18T10:03:00Z', customerName: input.customerName },
+        ],
+        nextPage: null,
+      })
+    }
+    return fallback(url, init)
+  })
+  renderForm()
+  const filter = await screen.findByRole('button', { name: '已退回' })
+  fireEvent.click(filter)
+  await waitFor(() => expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeEnabled())
+  await openReturnedOrder()
+  fireEvent.change(screen.getByLabelText('单票客户公司名称'), { target: { value: successor.customerName } })
+  fireEvent.click(screen.getByRole('button', { name: '预览工单' }))
+  expect(screen.getByRole('region', { name: '寄出预览' })).toHaveTextContent('原记录保留')
+  fireEvent.click(screen.getByRole('button', { name: '确认重提' }))
+  expect(await screen.findByRole('button', { name: '全部 (2)' })).toHaveAttribute('aria-pressed', 'true')
+  const recent = screen.getByRole('region', { name: '2026年11月25日' })
+  expect(within(recent).getByRole('listitem', { name: `提报 ${successorNo}` })).toHaveTextContent('待审核')
+  await within(recent).findByText('服务端回读客户')
+  const oldDate = screen.getByRole('region', { name: '2026年11月18日' })
+  const original = within(oldDate).getByRole('listitem', { name: `提报 ${orderNo}` })
+  expect(original).toHaveTextContent('已重提')
+  expect(original).toHaveTextContent(input.customerName)
+  expect(within(original).queryByRole('button', { name: '修改并重提' })).not.toBeInTheDocument()
+  expect(send.mock.calls.filter(([url, init]) => url === detailPath && init?.method === 'POST')).toHaveLength(1)
+})
+
+it('saves the edited pickup address to the employee profile without resubmitting or losing the draft', async () => {
+  const fallback = send.getMockImplementation()!
+  const profilePath = '/api/shipping/owner/profile'
+  const profile = {
+    id: 'staff', email: 'staff@example.test', fxiaoke: true, team: '销售部',
+    updatedAt: '2026-11-18T00:00:00Z', sender: currentSender, departmentId: deptId,
+    departments: [{ id: deptId, name: '销售部', path: '总部 / 销售部', isPrimary: true }],
+    senderChoices: { company: currentSender, personal: null },
+  }
+  const newSender = { ...savedSender, address: '修改后的揽收地址22号' }
+  let profileWrites = 0
+  send.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url !== profilePath) return fallback(url, init)
+    if (init?.method !== 'POST') return json({ employee: profile })
+    profileWrites++
+    if (profileWrites === 1) return new Response(JSON.stringify({ error: '资料已更新，请重试。' }), { status: 409 })
+    return json({ employee: { ...profile, sender: newSender, senderChoices: { ...profile.senderChoices, personal: newSender } } })
+  })
+
+  render(<FxiaokeShippingProposal profile={profile} rules={DEFAULT_INTAKE_RULES} services={serviceOptions} />)
+  await openReturnedOrder()
+  fireEvent.click(screen.getByText(/寄件人 · 原单寄方/))
+  fireEvent.change(screen.getByLabelText('寄件详细地址'), { target: { value: newSender.address } })
+  fireEvent.change(screen.getByLabelText('详细地址'), { target: { value: '收件地址草稿不丢失' } })
+  const save = screen.getByRole('button', { name: '保存为我的常用地址' })
+  fireEvent.click(save)
+  expect(await screen.findByRole('alert')).toHaveTextContent('资料已更新，请重试。')
+  expect(screen.getByLabelText('寄件详细地址')).toHaveValue(newSender.address)
+  fireEvent.click(save)
+  await screen.findByText('揽收地址已保存为我的常用地址，下次可以直接选用。')
+  expect(screen.getByLabelText('详细地址')).toHaveValue('收件地址草稿不丢失')
+  const writes = send.mock.calls.filter(([url, init]) => init?.method === 'POST' && !url.endsWith('/tracking'))
+  expect(writes.map(([url]) => url)).toEqual([profilePath, profilePath])
+  expect(JSON.parse(writes[1][1].body)).toMatchObject({
+    action: 'save_profile', profile: { departmentId: deptId, expectedUpdatedAt: profile.updatedAt, sender: newSender },
+  })
+  fireEvent.change(screen.getByLabelText('寄件详细地址'), { target: { value: '另外编辑的地址' } })
+  fireEvent.click(screen.getByRole('button', { name: '使用我的常用地址' }))
+  expect(screen.getByLabelText('寄件详细地址')).toHaveValue(newSender.address)
 })
 
 it('loads later pages, refreshes page zero and can reopen the updated older record', async () => {
