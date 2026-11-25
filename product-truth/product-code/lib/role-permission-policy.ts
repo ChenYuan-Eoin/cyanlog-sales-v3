@@ -1,5 +1,5 @@
 import { hasPermission } from '@/lib/permissions'
-import { REGISTERED_MODULE_PERMISSION_KEYS } from '@/lib/module-access'
+import { hasPublishedShippingBundle, REGISTERED_MODULE_PERMISSION_KEYS, SHIPPING_BUNDLE } from '@/lib/module-access'
 
 const registeredModuleKeys = new Set<string>(REGISTERED_MODULE_PERMISSION_KEYS)
 
@@ -15,7 +15,7 @@ export const PERMISSION_KEYS: string[] = [
   'quote:approve', 'quote:view', 'customer:*', 'customer:view', 'customer:create',
   'contract:*', 'contract:view', 'contract:upload', 'contract:create', 'contract:write',
   'contract:review', 'contract:approve', 'contract:read', 'template:view', 'payment:*',
-  'shipping:*', 'shipping:manage_connections', 'shipping:operate',
+  SHIPPING_BUNDLE, ...REGISTERED_MODULE_PERMISSION_KEYS,
 ]
 
 export const SUPER_ADMIN_CORE_PERMISSIONS: string[] = [
@@ -160,7 +160,10 @@ export function revokeRolePermissions(
   protectedPermissions: string[] = [],
   availableModuleKeys?: ReadonlySet<string>,
 ): string[] {
-  const canExpand = (key: string) => !availableModuleKeys || !registeredModuleKeys.has(key) || availableModuleKeys.has(key)
+  const shippingBundleAvailable = !availableModuleKeys || hasPublishedShippingBundle(availableModuleKeys)
+  const canExpand = (key: string) => key === SHIPPING_BUNDLE
+    ? shippingBundleAvailable
+    : !availableModuleKeys || !registeredModuleKeys.has(key) || availableModuleKeys.has(key)
   const next = Array.from(new Set(keys)).reduce((draft, key) => {
     if (protectedPermissions.includes(key) || (!isRolePermissionEnabled(draft, key) && !draft.includes(key))) return draft
     return revokeEffectiveRolePermission(draft, key, protectedPermissions, canExpand)

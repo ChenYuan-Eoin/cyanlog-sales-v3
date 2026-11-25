@@ -112,14 +112,14 @@ describe('F054 shipping operator role parity migration', () => {
     return rows
   }
 
-  async function lifecycle() {
+  async function lifecycle(key = 'shipping:operate') {
     const { rows } = await db.query(`
       select version.lifecycle_version, version.status, version.snapshot->'scopeTypes' as scopes,
         version.snapshot->>'enforcementConsumer' as consumer
       from public.permission_point_versions as version
       join public.permission_points as point on point.id = version.permission_point_id
-      where point.code = 'shipping:operate' order by version.lifecycle_version
-    `)
+      where point.code = $1 order by version.lifecycle_version
+    `, [key])
     return rows
   }
 
@@ -152,6 +152,12 @@ describe('F054 shipping operator role parity migration', () => {
       { lifecycle_version: 1, status: 'published', scopes: ['org', 'department'], consumer: 'lib/shipping/operator-access.ts#requireShippingOperator' },
       { lifecycle_version: 2, status: 'published', scopes: ['org'], consumer: 'lib/shipping/operator-access.ts#requireShippingOperator' },
     ])
+    expect(await lifecycle('shipping:*')).toEqual([
+      { lifecycle_version: 1, status: 'published', scopes: ['org', 'department', 'space', 'self'], consumer: 'lib/permissions.ts#hasPermission' },
+      { lifecycle_version: 2, status: 'published', scopes: ['org'], consumer: 'lib/permissions.ts#hasPermission' },
+    ])
+    expect((await db.query("select supported_scope_types from public.permission_points where code = 'shipping:*'")).rows)
+      .toEqual([{ supported_scope_types: ['org'] }])
   })
 
   it('preserves the already-installed role and binding, and repeated execution leaves one new snapshot', async () => {
@@ -169,6 +175,7 @@ describe('F054 shipping operator role parity migration', () => {
     expect(await bindings()).toEqual(before)
     expect(await directGrants()).toEqual([])
     expect(await lifecycle()).toHaveLength(2)
+    expect(await lifecycle('shipping:*')).toHaveLength(2)
     expect((await db.query('select name, sort_order from public.roles where code = $1', ['SHIPPING_OPERATOR'])).rows)
       .toEqual([{ name: '现有操作员', sort_order: 12 }])
   })

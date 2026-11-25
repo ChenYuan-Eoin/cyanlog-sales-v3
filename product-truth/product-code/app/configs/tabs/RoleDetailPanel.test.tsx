@@ -297,7 +297,7 @@ it('makes only published shipping actions assignable while preserving saved and 
   const operation = screen.getByRole('checkbox', { name: '寄件操作' })
   const connection = screen.getByRole('checkbox', { name: '寄件连接管理' })
   expect(operation).toBeEnabled()
-  expect(connection).toBeDisabled()
+  expect(connection).toBeEnabled()
   expect(connection).toBeChecked()
   expect(within(connection.closest('label')!).getByText('已保存')).toBeInTheDocument()
   expect(screen.getByRole('checkbox', { name: '寄件全部权限' })).toBeDisabled()
@@ -305,4 +305,20 @@ it('makes only published shipping actions assignable while preserving saved and 
   fireEvent.click(operation)
   fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
   expect(onSave).toHaveBeenCalledWith(['shipping:manage_connections', 'tenant-unregistered:approve', 'shipping:operate'])
+})
+
+it('allows a saved shipping bundle to be removed when granting it is unavailable', () => {
+  const onSave = vi.fn()
+  render(<RoleDetailPanel {...defaults} role={{
+    id: 'sales', code: 'SALES', name: '销售', description: null,
+    permissions: ['shipping:*', 'quote:view'],
+  }} permissionsEditable onSave={onSave} />)
+  openPermissions()
+  const bundle = screen.getByRole('checkbox', { name: '寄件全部权限' })
+  expect(bundle).toBeChecked()
+  fireEvent.click(bundle)
+  expect(bundle).not.toBeChecked()
+  expect(bundle).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  expect(onSave).toHaveBeenCalledWith(['quote:view'])
 })

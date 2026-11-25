@@ -174,6 +174,7 @@ describe('department views in the sales dashboard', () => {
     request.mockResolvedValueOnce(Response.json({ code: 'DEPARTMENT_SELECTION_FORBIDDEN' }, { status: 403 }))
       .mockResolvedValueOnce(dashboard(null, true))
       .mockResolvedValueOnce(Response.json({ code: 'DEPARTMENT_SELECTION_FORBIDDEN' }, { status: 403 }))
+      .mockResolvedValueOnce(Response.json({ code: 'DEPARTMENT_SCOPE_REQUIRED' }, { status: 403 }))
     render(<HomePage />)
 
     const view = await screen.findByLabelText('当前部门')
@@ -186,11 +187,14 @@ describe('department views in the sales dashboard', () => {
     expect(screen.getByText('个人日程')).toBeInTheDocument()
   })
 
-  it('revalidates the same exact department and roster on focus, then clears them on a confirmed revoke', async () => {
+  it('refreshes the exact department and roster, then reloads the authorized summary after a revoke despite a personal failure', async () => {
     sessionStorage.setItem('dashboard:department:user:org', 'east:direct')
     request.mockResolvedValueOnce(dashboard('east', false, '旧华东机会'))
       .mockResolvedValueOnce(dashboard('east', false, '新华东机会'))
       .mockResolvedValueOnce(Response.json({ code: 'DEPARTMENT_SELECTION_FORBIDDEN' }, { status: 403 }))
+      .mockResolvedValueOnce(dashboard(null, true, '新范围汇总机会', departments.filter(department => department.department_id === 'north')))
+    personalRequest.mockResolvedValueOnce(Response.json(personalDashboard))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
     const roster = (name: string) => Response.json({
       status: 'ready', organizationId: 'org', asOf: '2026-11-25T00:00:00Z', total: 1, page: 1, pageSize: 20,
       members: [{ id: 'east-person', displayName: name, departmentIds: ['east'] }],
@@ -212,9 +216,39 @@ describe('department views in the sales dashboard', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('该部门已不可访问')
     expect(screen.queryByText('新华东机会')).not.toBeInTheDocument()
     expect(screen.queryByText('新在职成员')).not.toBeInTheDocument()
+    expect(screen.getByText('新范围汇总机会')).toBeInTheDocument()
+    expect(screen.getByLabelText('当前部门')).toHaveValue('')
+    expect(screen.queryByRole('option', { name: '华东销售' })).not.toBeInTheDocument()
+    expect(sessionStorage.getItem('dashboard:department:user:org')).toBe(':subtree')
+    expect(rosterRequest).toHaveBeenLastCalledWith('/api/dashboard/department/roster?page=1', expect.anything())
     expect(request.mock.calls.map(([url]) => url)).toEqual(
-      Array(3).fill('/api/dashboard/department?departmentId=east&includeSubdepartments=false'),
+      [...Array(3).fill('/api/dashboard/department?departmentId=east&includeSubdepartments=false'), '/api/dashboard/department'],
     )
+  })
+
+  it('withholds department data after an inconclusive refresh and retries the last confirmed selection', async () => {
+    sessionStorage.setItem('dashboard:department:user:org', 'east:direct')
+    const personal = deferredResponse()
+    personalRequest.mockReturnValueOnce(personal.promise)
+    request.mockResolvedValueOnce(dashboard('east', false, '先前确认的机会'))
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(dashboard('east', false, '重新核对的机会'))
+    render(<HomePage />)
+
+    expect(await screen.findByRole('link', { name: /先前确认的机会/ })).toBeInTheDocument()
+    fireEvent.focus(window)
+    expect(await screen.findByRole('alert')).toHaveTextContent('暂时无法核对部门权限')
+    expect(screen.queryByRole('link', { name: /先前确认的机会/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '同步在职名单' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('当前部门')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '重新加载部门' }))
+    expect(await screen.findByRole('link', { name: /重新核对的机会/ })).toBeInTheDocument()
+    expect(screen.getByLabelText('当前部门')).toHaveValue('east')
+    expect(screen.getByLabelText('部门数据范围')).toHaveValue('direct')
+    expect(personalRequest.mock.calls[0][1]?.signal?.aborted).toBe(true)
+    await act(async () => personal.resolve(Response.json({ ...personalDashboard, agenda: [] })))
+    expect(screen.getByText('个人日程')).toBeInTheDocument()
   })
 
   it('clears the previous workbench on token change and ignores a late response from that session', async () => {
@@ -255,9 +289,11 @@ describe('department views in the sales dashboard', () => {
     sessionStorage.setItem('dashboard:department:user:new-org', 'south:subtree')
     const nextPersonal = { ...personalDashboard, organizationId: 'new-org', agenda: [] }
     const nextBootstrap = deferredResponse()
+    const previousRefresh = deferredResponse()
     mocks.load.mockResolvedValueOnce({ profile, dashboard: personalDashboard })
       .mockImplementationOnce(async () => ({ profile, dashboard: await (await nextBootstrap.promise).json() }))
     request.mockResolvedValueOnce(dashboard('east', false, '原组织部门机会'))
+      .mockReturnValueOnce(previousRefresh.promise)
       .mockResolvedValueOnce(dashboard('south', true, '当前组织部门机会', departments, 'new-org'))
     personalRequest.mockResolvedValueOnce(Response.json(nextPersonal))
     render(<HomePage />)
@@ -271,8 +307,11 @@ describe('department views in the sales dashboard', () => {
 
     await act(async () => { nextBootstrap.resolve(Response.json(nextPersonal)) })
     expect(await screen.findByText('当前组织部门机会')).toBeInTheDocument()
+    await act(async () => { previousRefresh.resolve(dashboard('east', false, '原组织迟到的机会')) })
+    expect(screen.queryByText('原组织迟到的机会')).not.toBeInTheDocument()
     expect(screen.getByLabelText('当前部门')).toHaveValue('south')
     expect(request.mock.calls.map(([url]) => url)).toEqual([
+      '/api/dashboard/department?departmentId=east&includeSubdepartments=false',
       '/api/dashboard/department?departmentId=east&includeSubdepartments=false',
       '/api/dashboard/department?departmentId=south&includeSubdepartments=true',
     ])

@@ -6,7 +6,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 import { rolePermissionsEditBlockReason } from '@/lib/org-role-permissions'
-import { REGISTERED_MODULE_PERMISSION_KEYS } from '@/lib/module-access'
+import { hasPublishedShippingBundle, REGISTERED_MODULE_PERMISSION_KEYS, SHIPPING_BUNDLE } from '@/lib/module-access'
 import { loadRoleModulePermissionCatalog } from '@/lib/permission-registry'
 import { PERMISSION_KEYS, resolveRolePermissions } from '@/lib/role-permission-policy'
 import { isRoleId, withRolePermissionContext } from './context'
@@ -42,9 +42,12 @@ export async function GET(req: NextRequest) {
       permissions_edit_block_reason: rolePermissionsEditBlockReason(role.code, canEditPlatformRoot),
     }))
     const permissionCatalog = await loadRoleModulePermissionCatalog()
+    const publishedModuleKeys = permissionCatalog.flatMap(group => group.items.map(item => item.key))
+    const shippingBundleAvailable = hasPublishedShippingBundle(new Set(publishedModuleKeys))
     const permissionKeys = [
-      ...PERMISSION_KEYS.filter(key => !REGISTERED_MODULE_PERMISSION_KEYS.some(registered => registered === key)),
-      ...permissionCatalog.flatMap(group => group.items.map(item => item.key)),
+      ...PERMISSION_KEYS.filter(key => !REGISTERED_MODULE_PERMISSION_KEYS.some(registered => registered === key)
+        && (key !== SHIPPING_BUNDLE || shippingBundleAvailable)),
+      ...publishedModuleKeys,
     ].sort()
     return successResponse(
       {

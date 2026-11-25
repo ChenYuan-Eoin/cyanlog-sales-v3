@@ -149,7 +149,7 @@ describe('GET /api/roles organization permissions', () => {
   })
 })
 
-it('only requests the two actionable shipping definitions for the existing role catalog', async () => {
+it.each([false, true])('advertises the shipping bundle only when both actions are published (both=%s)', async bothPublished => {
   const definition = {
     id: 'one', code: 'shipping:operate', name: '寄件操作', resource: 'shipping', action: 'operate',
     kind: 'atomic', status: 'published', category: 'shipping', supported_scope_types: ['org'], dependencies: [],
@@ -159,7 +159,7 @@ it('only requests the two actionable shipping definitions for the existing role 
     assignments: [root],
     globalRoles: [{ ...roles[1], permissions: ['preserved:legacy', 'shipping:manage_connections'] }],
     permissionRows: [definition, {
-      ...definition, id: 'two', code: 'shipping:manage_connections', action: 'manage_connections', status: 'draft',
+      ...definition, id: 'two', code: 'shipping:manage_connections', action: 'manage_connections', status: bothPublished ? 'published' : 'draft',
       enforcement_consumer: 'lib/shipping/connection-authorization.ts',
     }],
   })
@@ -167,7 +167,14 @@ it('only requests the two actionable shipping definitions for the existing role 
   expect(permissionQuery.in).toHaveBeenCalledWith('code', ['shipping:operate', 'shipping:manage_connections'])
   expect(data.roles[0].permissions).toEqual(['preserved:legacy', 'shipping:manage_connections'])
   expect(data.permission_keys).toContain('shipping:operate')
-  expect(data.permission_keys).not.toContain('shipping:manage_connections')
+  if (bothPublished) {
+    expect(data.permission_keys).toEqual(expect.arrayContaining(['shipping:manage_connections', 'shipping:*']))
+  } else {
+    expect(data.permission_keys).not.toContain('shipping:manage_connections')
+    expect(data.permission_keys).not.toContain('shipping:*')
+  }
   expect(data.permission_keys).not.toContain('preserved:legacy')
-  expect(data.permission_catalog).toMatchObject([{ id: 'shipping', items: [{ key: 'shipping:operate', selectable: true }] }])
+  expect(data.permission_catalog[0]).toMatchObject({
+    id: 'shipping', items: expect.arrayContaining([expect.objectContaining({ key: 'shipping:operate', selectable: true })]),
+  })
 })

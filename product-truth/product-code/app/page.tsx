@@ -441,32 +441,10 @@ export default function HomePage() {
     departmentRequest.current = controller
     setPendingDepartment(selection)
     setScopeError('')
-    try {
-      if (refreshPersonal) {
-        const personal = await fetchPersonalDashboard(token, controller.signal)
-        if (controller.signal.aborted) return
-        if (personal.organizationId !== organizationId.current) {
-          restartHome(token)
-          return
-        }
-        applyPersonalDashboard(personal)
-      }
-      const payload = await fetchDepartmentDashboard(selection, token, controller.signal)
-      if (controller.signal.aborted) return
-      if (payload) {
-        if (payload.organizationId !== organizationId.current) {
-          restartHome(token)
-          return
-        }
-        applyDepartmentDashboard(payload, profile.id)
-        return
-      }
-      setDepartmentDashboard(null)
-      setDepartmentUnavailable(Boolean(selection.departmentId))
-      if (selection.departmentId) setScopeError('该部门已不可访问，请重新加载授权范围。')
-    } catch (error) {
-      if (controller.signal.aborted) return
+    const { signal } = controller
+    const handleAuthorityError = (error: unknown) => {
       if (error instanceof HomeInitialAuthError) {
+        controller.abort()
         organizationId.current = null
         setProfile(null)
         applyPersonalDashboard()
@@ -474,27 +452,88 @@ export default function HomePage() {
         setDepartmentUnavailable(true)
         clearClientSession()
         router.push('/login')
-        return
+        return true
       }
       if (error instanceof DepartmentMembershipError) {
+        controller.abort()
         organizationId.current = null
         applyPersonalDashboard()
         setDepartmentDashboard(null)
         setDepartmentUnavailable(true)
         setScopeError('当前组织成员权限已变化，请重新加载。')
+        return true
+      }
+      return false
+    }
+    const personalRefresh = refreshPersonal
+      ? fetchPersonalDashboard(token, signal).then(personal => {
+        if (signal.aborted) return
+        if (personal.organizationId !== organizationId.current) {
+          restartHome(token)
+          return
+        }
+        applyPersonalDashboard(personal)
+      }).catch(error => {
+        if (!signal.aborted) handleAuthorityError(error)
+      })
+      : null
+
+    let selectionDenied = false
+    try {
+      let payload = await fetchDepartmentDashboard(selection, token, signal)
+      if (signal.aborted) return
+      if (!payload && selection.departmentId) {
+        selectionDenied = true
+        setDepartmentDashboard(null)
+        setDepartmentUnavailable(true)
+        setPendingDepartment(DEPARTMENT_SUMMARY)
+        payload = await fetchDepartmentDashboard(DEPARTMENT_SUMMARY, token, signal)
+        if (signal.aborted) return
+      }
+      if (payload) {
+        if (payload.organizationId !== organizationId.current) {
+          restartHome(token)
+          return
+        }
+        applyDepartmentDashboard(payload, profile.id)
+        if (selectionDenied) setScopeError('该部门已不可访问，已显示授权范围汇总。')
         return
       }
-      setScopeError('暂时无法切换部门。请重试。')
+      setDepartmentDashboard(null)
+      setDepartmentUnavailable(false)
+      if (selectionDenied && organizationId.current) {
+        saveDepartmentPreference(profile.id, organizationId.current, DEPARTMENT_SUMMARY)
+        setScopeError('该部门已不可访问，当前显示个人工作台。')
+      }
+    } catch (error) {
+      if (signal.aborted || handleAuthorityError(error)) return
+      if (refreshPersonal || selectionDenied) {
+        setDepartmentDashboard(null)
+        setDepartmentUnavailable(true)
+        setScopeError('暂时无法核对部门权限，请重试。')
+      } else {
+        setScopeError('暂时无法切换部门。请重试。')
+      }
     } finally {
       if (departmentRequest.current === controller) {
-        departmentRequest.current = null
         setPendingDepartment(null)
       }
+      await personalRefresh
+      if (departmentRequest.current === controller) departmentRequest.current = null
     }
   }, [applyDepartmentDashboard, applyPersonalDashboard, profile, restartHome, router])
 
   const departmentById = new Map((departmentDashboard?.departmentSpaces ?? []).map(space => [space.department_id, space]))
   const selection = departmentDashboard?.selection
+  const reloadDepartment = useCallback(() => {
+    const token = localStorage.getItem('token')
+    if (token !== sessionToken.current || !profile || !organizationId.current) {
+      restartHome(token)
+      return
+    }
+    const saved = readDepartmentPreference(profile.id, organizationId.current)
+    return switchDepartment(pendingDepartment ?? selection ?? saved ?? DEPARTMENT_SUMMARY, true)
+  }, [pendingDepartment, profile, restartHome, selection, switchDepartment])
 
   useEffect(() => {
     function revalidate() {
@@ -504,7 +543,7 @@ export default function HomePage() {
         return
       }
       if (profile && !initialRequest.current) {
-        void switchDepartment(pendingDepartment ?? selection ?? DEPARTMENT_SUMMARY, true)
+        void reloadDepartment()
       }
     }
 
@@ -518,7 +557,7 @@ export default function HomePage() {
       window.removeEventListener('focus', revalidate)
       window.removeEventListener('storage', onStorage)
     }
-  }, [pendingDepartment, profile, restartHome, selection, switchDepartment])
+  }, [profile, reloadDepartment, restartHome])
 
   const shownSelection = pendingDepartment ?? selection
   const selectedDepartment = selection?.departmentId ? departmentById.get(selection.departmentId) : undefined
@@ -645,7 +684,7 @@ export default function HomePage() {
                 <p role="alert">{scopeError}</p>
                 {departmentUnavailable && (
                   <button type="button" className="underline" disabled={Boolean(pendingDepartment)}
-                    onClick={() => profile ? void switchDepartment(DEPARTMENT_SUMMARY, true) : restartHome(localStorage.getItem('token'))}>
+                    onClick={() => void reloadDepartment()}>
                     {profile ? '重新加载部门' : '重新加载工作台'}
                   </button>
                 )}

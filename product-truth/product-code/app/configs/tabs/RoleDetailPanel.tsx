@@ -45,7 +45,7 @@ import {
 } from '@/lib/role-permission-policy'
 import { success, error, confirmAction } from '@/lib/toast'
 import { ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
-import { REGISTERED_MODULE_PERMISSION_KEYS, SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE } from '@/lib/module-access'
+import { hasPublishedShippingBundle, REGISTERED_MODULE_PERMISSION_KEYS, SHIPPING_BUNDLE, SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE } from '@/lib/module-access'
 import type { RoleModulePermissionCatalog } from '@/lib/org-role-permission-readback'
 import type {
   OrgSummaryUser,
@@ -147,9 +147,9 @@ const PERMISSION_CATALOG: PermissionSettingGroup[] = [
 const EXTRA_PERMISSION_GROUP: PermissionSettingGroup = {
   id: 'shipping-domain', label: '寄件操作', description: '管理寄件业务与承运商连接。',
   items: [
-    { key: 'shipping:*', label: '寄件全部权限', description: '包含寄件操作与连接配置。' },
-    { key: 'shipping:operate', label: '寄件操作', description: '寄件操作权限尚未发布。', selectable: false },
-    { key: 'shipping:manage_connections', label: '寄件连接管理', description: '寄件连接权限尚未发布。', selectable: false },
+    { key: SHIPPING_BUNDLE, label: '寄件全部权限', description: '包含当前组织的寄件操作与连接管理。' },
+    { key: SHIPPING_OPERATE, label: '寄件操作', description: '寄件操作权限尚未发布。', selectable: false },
+    { key: SHIPPING_MANAGE_CONNECTIONS, label: '寄件连接管理', description: '寄件连接权限尚未发布。', selectable: false },
   ],
 }
 
@@ -965,10 +965,10 @@ function PermissionSettingTab({
   const effectivePerms = perms.filter(key => moduleKeys.has(key)
     || !REGISTERED_MODULE_PERMISSION_KEYS.some(registered => registered === key))
   const moduleByKey = new Map(moduleItems.map(item => [item.key, item] as const))
-  const shippingBundleAvailable = moduleKeys.has(SHIPPING_OPERATE) && moduleKeys.has(SHIPPING_MANAGE_CONNECTIONS)
+  const shippingBundleAvailable = hasPublishedShippingBundle(moduleKeys)
   const staticGroups = [...PERMISSION_CATALOG, EXTRA_PERMISSION_GROUP].map(group => ({
     ...group, items: group.items.map(item => {
-      if (item.key === 'shipping:*' && !shippingBundleAvailable) {
+      if (item.key === SHIPPING_BUNDLE && !shippingBundleAvailable) {
         return { ...item, description: '寄件操作和寄件连接管理均发布后可设置全部权限。', selectable: false }
       }
       return moduleByKey.get(item.key) ?? item
@@ -1021,10 +1021,13 @@ function PermissionSettingTab({
       {groups.map(group => {
         const isExpanded = !collapsedGroups.has(group.id)
         const groupPermissions = group.items.filter(item => item.selectable !== false).map(item => item.key)
+        const revokeOnly = group.id === EXTRA_PERMISSION_GROUP.id
+          ? group.items.filter(item => item.selectable === false && perms.includes(item.key)).map(item => item.key)
+          : []
         const hasAllExplicit = groupPermissions.length > 0
           && groupPermissions.every(key => isRolePermissionExplicitlyGranted(perms, key))
         const hasSomeEffective = groupPermissions.some(key => isRolePermissionEnabled(effectivePerms, key))
-        const canClear = hasSomeEffective || groupPermissions.some(key => perms.includes(key))
+        const canClear = hasSomeEffective || revokeOnly.length > 0
 
         return (
           <div key={group.id} className="rounded-xl border border-slate-200">
@@ -1050,14 +1053,14 @@ function PermissionSettingTab({
                   {hasAllExplicit ? '全部显式' : hasSomeEffective ? '部分生效' : '未生效'}
                 </Badge>
               )}
-              {!readOnly && groupPermissions.length > 0 && (
+              {!readOnly && (groupPermissions.length > 0 || revokeOnly.length > 0) && (
                 <div className="flex items-center gap-1">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => onSetGroup(groupPermissions, true)}
-                    disabled={hasAllExplicit}
+                    disabled={groupPermissions.length === 0 || hasAllExplicit}
                     aria-label={`选择${group.label}全部权限`}
                     title={`选择${group.label}全部权限`}
                   >
@@ -1067,7 +1070,7 @@ function PermissionSettingTab({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => onSetGroup(groupPermissions, false)}
+                    onClick={() => onSetGroup([...groupPermissions, ...revokeOnly], false)}
                     disabled={!canClear}
                     aria-label={`清除${group.label}全部权限`}
                     title={`清除${group.label}全部权限`}
@@ -1088,7 +1091,7 @@ function PermissionSettingTab({
                     const grantSource = effective ? getPermissionGrantSource(effectivePerms, item.key) : null
                     const isCore = isSuperAdmin && SUPER_ADMIN_CORE_PERMISSIONS.includes(item.key)
                     const missingDependency = item.dependencies?.find(key => !isRolePermissionEnabled(effectivePerms, key))
-                    const disabled = readOnly || isCore || item.selectable === false
+                    const disabled = readOnly || isCore || (item.selectable === false && !revokeOnly.includes(item.key))
                     return (
                       <label
                         key={item.key}

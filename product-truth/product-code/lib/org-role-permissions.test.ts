@@ -191,3 +191,26 @@ it('requires just the shipping action being added to have valid published regist
   expect(await saveOrgRolePermissions('org-1', 'role-1', [], permissions))
     .toMatchObject({ ok: true, role: { permissions: [] } })
 })
+
+it('validates both published shipping actions when saving a new bundle and preserves an existing bundle', async () => {
+  const state = database()
+  const bundle = ['shipping:*']
+  const operationsOnly = buildPermissionCatalog(BUILTIN_PERMISSION_DEFINITIONS.filter(item => item.key === 'shipping:operate'))
+  vi.mocked(loadRoleModulePermissionCatalog).mockResolvedValueOnce(operationsOnly)
+  expect(await saveOrgRolePermissions('org-1', 'role-1', bundle, salesPermissions))
+    .toEqual({ ok: false, reason: 'invalid' })
+  expect(state.operations.some(entry => entry.patch)).toBe(false)
+
+  const bothActions = buildPermissionCatalog(BUILTIN_PERMISSION_DEFINITIONS.filter(item =>
+    item.key === 'shipping:operate' || item.key === 'shipping:manage_connections'))
+  vi.mocked(loadRoleModulePermissionCatalog).mockResolvedValueOnce(bothActions)
+  expect(await saveOrgRolePermissions('org-1', 'role-1', bundle, salesPermissions))
+    .toMatchObject({ ok: true, role: { permissions: bundle } })
+
+  vi.mocked(loadRoleModulePermissionCatalog).mockClear()
+  expect(await saveOrgRolePermissions('org-1', 'role-1', [...bundle, 'quote:view'], bundle))
+    .toMatchObject({ ok: true, role: { permissions: [...bundle, 'quote:view'] } })
+  expect(loadRoleModulePermissionCatalog).not.toHaveBeenCalled()
+  expect(await saveOrgRolePermissions('org-1', 'role-1', ['quote:view'], [...bundle, 'quote:view']))
+    .toMatchObject({ ok: true, role: { permissions: ['quote:view'] } })
+})

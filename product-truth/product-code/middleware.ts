@@ -34,7 +34,7 @@ import { getRequestAuthToken } from '@/lib/auth-token'
 import { createMiddlewareRestClient } from '@/lib/middleware-rest-client'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
 import { ORG_SUPER_ADMIN_ROLE_CODE, resolveRolePermissions, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
-import { getPublishedModulePermissionKeys, MODULE_PERMISSION_ROW_FIELDS, shippingPermissionRequirement } from '@/lib/module-access'
+import { getPublishedModulePermissionKeys, MODULE_PERMISSION_ROW_FIELDS, SHIPPING_OPERATE, shippingPermissionRequirement } from '@/lib/module-access'
 import { sessionDeadline } from '@/lib/auth/fxiaoke-session'
 
 const PUBLIC_PATHS = ['/login', '/accept-invitation']
@@ -334,9 +334,15 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(buildRedirectUrl(request, '/pending-access'))
     }
 
-    const shippingPermission = shippingPermissionRequirement(
-      pathname, request.method, request.nextUrl.searchParams.get('workspace') === '1',
-    )
+    // An operational shipping role adds only the matching shipping actions.
+    const restrictedMember = (authContext.authMethod === 'fxiaoke' || authContext.roleCodes.includes(SHIPPING_OPERATOR_ROLE_CODE))
+      && authContext.roleCodes.every(code => ['FXIAOKE_BASELINE', 'READONLY', SHIPPING_OPERATOR_ROLE_CODE].includes(code))
+    const isOwnerOrderSubmission = request.method === 'POST' && pathname === '/api/shipping/owner/orders'
+    const canSubmitFxiaokeOrder = authContext.authMethod === 'fxiaoke'
+      && (!restrictedMember || authContext.roleCodes.includes('FXIAOKE_BASELINE'))
+    const shippingPermission = isOwnerOrderSubmission && !canSubmitFxiaokeOrder
+      ? SHIPPING_OPERATE
+      : shippingPermissionRequirement(pathname, request.method, request.nextUrl.searchParams.get('workspace') === '1')
     if (shippingPermission && (!hasPermission(authContext.shippingPermissions, shippingPermission)
       || !await isPublishedShippingPermission(shippingPermission))) {
       return pathname.startsWith('/api/')
@@ -344,9 +350,6 @@ export async function middleware(request: NextRequest) {
         : NextResponse.redirect(buildRedirectUrl(request, '/', '?denied=shipping'))
     }
 
-    // An operational shipping role adds only the matching shipping actions.
-    const restrictedMember = (authContext.authMethod === 'fxiaoke' || authContext.roleCodes.includes(SHIPPING_OPERATOR_ROLE_CODE))
-      && authContext.roleCodes.every(code => ['FXIAOKE_BASELINE', 'READONLY', SHIPPING_OPERATOR_ROLE_CODE].includes(code))
     if (restrictedMember && required && (required === 'config:read' || required === 'admin:access')) {
       return pathname.startsWith('/api/')
         ? NextResponse.json({ error: 'Forbidden', required }, { status: 403 })

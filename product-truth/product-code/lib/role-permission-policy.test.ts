@@ -158,6 +158,7 @@ it('only expands published shipping actions while preserving the original catalo
   const next = revokeRolePermissions(['*'], ['report:finance'], [], allowed)
   expect(next).toContain('shipping:operate')
   expect(next).not.toContain('shipping:manage_connections')
+  expect(next).not.toContain('shipping:*')
   expect(next).not.toContain('tender:view')
   expect(next).not.toContain('knowledge:view')
   expect(next).toContain('quote:create')

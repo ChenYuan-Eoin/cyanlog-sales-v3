@@ -1,7 +1,12 @@
 export const SHIPPING_OPERATE = 'shipping:operate'
 export const SHIPPING_MANAGE_CONNECTIONS = 'shipping:manage_connections'
+export const SHIPPING_BUNDLE = 'shipping:*'
 export const REGISTERED_MODULE_PERMISSION_KEYS = [SHIPPING_OPERATE, SHIPPING_MANAGE_CONNECTIONS] as const
 export const MODULE_PERMISSION_ROW_FIELDS = 'code,status,kind,category,resource,action,supported_scope_types,dependencies,enforcement_consumer'
+
+export function hasPublishedShippingBundle(keys: ReadonlySet<string>): boolean {
+  return REGISTERED_MODULE_PERMISSION_KEYS.every(key => keys.has(key))
+}
 
 const shippingConsumers = {
   [SHIPPING_OPERATE]: 'lib/shipping/operator-access.ts#requireShippingOperator',

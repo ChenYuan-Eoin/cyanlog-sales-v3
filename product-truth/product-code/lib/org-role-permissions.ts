@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase'
-import { REGISTERED_MODULE_PERMISSION_KEYS } from '@/lib/module-access'
+import { REGISTERED_MODULE_PERMISSION_KEYS, SHIPPING_BUNDLE } from '@/lib/module-access'
 import {
   canAccessOrgAdmin, hasPermission, isOrgDelegationSensitivePermission,
 } from '@/lib/permissions'
@@ -163,10 +163,10 @@ export async function saveOrgRolePermissions(
   const tenantActor = authorizedSnapshot && !authorizedSnapshot.canEditPlatformRoot ? authorizedSnapshot : null
   if (tenantActor && permissions.includes('*')) return { ok: false, reason: 'escalation_forbidden' }
 
-  const grantsRequiringPublishedDefinition = new Set(
-    REGISTERED_MODULE_PERMISSION_KEYS.filter(key => newGrants.includes(key)),
-  )
-  if (grantsRequiringPublishedDefinition.size > 0) {
+  const grantsRequiringPublishedDefinition = newGrants.includes(SHIPPING_BUNDLE)
+    ? REGISTERED_MODULE_PERMISSION_KEYS
+    : REGISTERED_MODULE_PERMISSION_KEYS.filter(key => newGrants.includes(key))
+  if (grantsRequiringPublishedDefinition.length > 0) {
     const { loadRoleModulePermissionCatalog } = await import('@/lib/permission-registry')
     const catalog = await loadRoleModulePermissionCatalog()
     const available = new Map(catalog.flatMap(group => group.items.map(item => [item.key, item.dependencies] as const)))

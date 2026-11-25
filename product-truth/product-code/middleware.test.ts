@@ -269,6 +269,40 @@ describe('role-free federated session boundary', () => {
     }
   })
 
+  it.each(['local', 'fxiaoke'] as const)('allows a %s shipping operator to create a workbench order within the current organization', async authMethod => {
+    const token = 'operator-create-token'
+    const operator = { roles: { id: 'operator', code: 'SHIPPING_OPERATOR', permissions: ['shipping:operate'] } }
+    const baseline = { roles: { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view'] } }
+    const readonly = { roles: { id: 'readonly', code: 'READONLY', permissions: ['quote:view'] } }
+    const bind = (overrides: Partial<Parameters<typeof mockExactOrgAuth>[0]> = {}) => mockExactOrgAuth({
+      token, orgId: 'org-a', authMethod, roles: [operator], ...overrides,
+    })
+    const post = (path: string) => middleware(makeRequest(
+      `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, 'POST',
+    ))
+
+    bind()
+    expect((await post('/api/shipping/owner/orders')).status).toBe(200)
+    expect((await post('/api/shipping/owner/profile')).status).toBe(403)
+    expect((await post('/api/quotes')).status).toBe(403)
+
+    for (const deniedOperator of [
+      { roles: [readonly, { ...operator, scope_type: 'department', scope_id: 'dept-a' }] },
+      { roles: [readonly, { ...operator, org_id: 'other-org', scope_id: 'other-org' }] },
+      { roles: [readonly], authMethod: 'fxiaoke' as const },
+      { shippingOperatorStatus: 'disabled' },
+    ]) {
+      bind(deniedOperator)
+      expect((await post('/api/shipping/owner/orders')).status).toBe(403)
+    }
+
+    bind({ roles: [baseline], authMethod: 'fxiaoke', shippingOperatorStatus: 'disabled' })
+    expect((await post('/api/shipping/owner/orders')).status).toBe(200)
+
+    bind({ roles: [{ roles: { id: 'sales', code: 'SALES', permissions: ['quote:view'] } }], authMethod: 'fxiaoke', shippingOperatorStatus: 'disabled' })
+    expect((await post('/api/shipping/owner/orders')).status).toBe(200)
+  })
+
   it('keeps the shipping connection manager separate from ledger operations', async () => {
     const token = 'connection-manager'
     mockExactOrgAuth({ token, orgId: 'org-a', roles: [

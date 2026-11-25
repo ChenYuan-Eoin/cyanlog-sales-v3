@@ -164,7 +164,7 @@ export const BUILTIN_PERMISSION_DEFINITIONS: PermissionDefinition[] = [
 
   definition({ key: 'payment:*', category: 'payment', label: '财务与回款组合权限', description: '支付与回款资源通配能力。', kind: 'bundle', enforcementConsumer: 'lib/permissions.ts#hasPermission' }),
 
-  definition({ key: 'shipping:*', category: 'shipping', label: '寄件组合权限', description: '包含寄件操作与连接管理。', kind: 'bundle', enforcementConsumer: 'lib/permissions.ts#hasPermission' }),
+  definition({ key: 'shipping:*', category: 'shipping', label: '寄件组合权限', description: '包含当前组织的寄件操作与连接管理。', scopes: ['org'], kind: 'bundle', enforcementConsumer: 'lib/permissions.ts#hasPermission' }),
   definition({ key: 'shipping:operate', category: 'shipping', label: '寄件操作', description: '允许在当前组织查看收寄台账、核对工单和执行已授权的承运商操作。', scopes: ['org'], enforcementConsumer: 'lib/shipping/operator-access.ts#requireShippingOperator' }),
   definition({ key: 'shipping:manage_connections', category: 'shipping', label: '寄件连接管理', description: '允许维护当前组织的承运商与企业接入配置。', scopes: ['org'], enforcementConsumer: 'lib/shipping/connection-authorization.ts' }),
 ]

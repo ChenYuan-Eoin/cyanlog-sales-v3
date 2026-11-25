@@ -15,16 +15,25 @@ on conflict (code) do nothing;
 
 with definitions as (
   update public.permission_points
-  set description = '允许在当前组织执行获授权的顺丰寄件业务操作。',
+  set description = case code
+        when 'shipping:operate' then '允许在当前组织执行获授权的顺丰寄件业务操作。'
+        else '包含当前组织的寄件操作与连接管理。'
+      end,
       lifecycle_version = 2,
       supported_scope_types = array['org']::text[],
       published_at = now(),
       updated_at = now()
-  where code = 'shipping:operate' and status = 'published' and lifecycle_version = 1
-    and resource = 'shipping' and action = 'operate' and kind = 'atomic' and category = 'shipping'
-    and supported_scope_types = array['org', 'department']::text[]
+  where status = 'published' and lifecycle_version = 1
+    and resource = 'shipping' and category = 'shipping'
     and cardinality(dependencies) = 0 and cardinality(conflicts) = 0 and cardinality(implied_by) = 0
-    and enforcement_consumer = 'lib/shipping/operator-access.ts#requireShippingOperator'
+    and (
+      (code = 'shipping:operate' and action = 'operate' and kind = 'atomic'
+        and supported_scope_types = array['org', 'department']::text[]
+        and enforcement_consumer = 'lib/shipping/operator-access.ts#requireShippingOperator')
+      or (code = 'shipping:*' and action = '*' and kind = 'bundle'
+        and supported_scope_types = array['org', 'department', 'space', 'self']::text[]
+        and enforcement_consumer = 'lib/permissions.ts#hasPermission')
+    )
   returning *
 )
 insert into public.permission_point_versions (
