@@ -36,6 +36,8 @@ describe('shipping-only registered actions', () => {
     expect(shippingPermissionRequirement('/api/shipping/settings', 'POST', true)).toBe(SHIPPING_MANAGE_CONNECTIONS)
     expect(shippingPermissionRequirement('/shipping/settings', 'GET', false)).toBe(SHIPPING_MANAGE_CONNECTIONS)
     expect(shippingPermissionRequirement('/api/shipping/ledger/ORDER-0/confirm', 'POST', false)).toBe(SHIPPING_OPERATE)
+    expect(shippingPermissionRequirement('/api/shipping/ledger/ORDER-0/carrier-changes', 'GET', false)).toBe(SHIPPING_OPERATE)
+    expect(shippingPermissionRequirement('/api/shipping/ledger/ORDER-0/carrier-changes', 'POST', false)).toBe(SHIPPING_OPERATE)
     expect(shippingPermissionRequirement('/api/shipping/owner/orders', 'GET', false)).toBeNull()
   })
 })

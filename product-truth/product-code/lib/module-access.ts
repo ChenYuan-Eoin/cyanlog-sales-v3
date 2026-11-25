@@ -26,7 +26,7 @@ export function getPublishedModulePermissionKeys(rows: readonly unknown[]): stri
 const SHIPPING_CONNECTION_ROUTES = new Set([
   '/api/shipping/intake-settings', '/api/shipping/wecom', '/api/shipping/wecom/bot',
 ])
-const SHIPPING_LEDGER_READ = /^\/api\/shipping\/ledger\/[^/]+\/carrier-changes$/
+const SHIPPING_LEDGER_CARRIER_CHANGES = /^\/api\/shipping\/ledger\/[^/]+\/carrier-changes$/
 const SHIPPING_LEDGER_WRITE = /^\/api\/shipping\/ledger\/[^/]+\/(amend|assign|cancel|confirm|reconcile|reopen|return)$/
 const SHIPPING_LEGACY_RECONCILE = /^\/api\/shipping\/orders\/[^/]+\/reconcile$/
 
@@ -39,7 +39,8 @@ export function shippingPermissionRequirement(path: string, method: string, work
   }
   if (SHIPPING_CONNECTION_ROUTES.has(path) && (read || write)) return SHIPPING_MANAGE_CONNECTIONS
   if (path === '/api/shipping/contacts' && (read || write)) return SHIPPING_OPERATE
-  if (read && (path === '/api/shipping/ledger' || path === '/api/shipping/orders' || SHIPPING_LEDGER_READ.test(path))) {
+  if ((read || write) && SHIPPING_LEDGER_CARRIER_CHANGES.test(path)) return SHIPPING_OPERATE
+  if (read && (path === '/api/shipping/ledger' || path === '/api/shipping/orders')) {
     return SHIPPING_OPERATE
   }
   if (write && (path === '/api/shipping/tracking' || SHIPPING_LEDGER_WRITE.test(path)

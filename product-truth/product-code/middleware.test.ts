@@ -209,6 +209,7 @@ describe('role-free federated session boundary', () => {
     expect((await middleware(request(changes, 'POST'))).status).toBe(200)
     expect((await middleware(request(changes + '/other', 'POST'))).status).toBe(403)
     expect((await middleware(request('/api/shipping/ledger/sample/carrier-changes'))).status).toBe(403)
+    expect((await middleware(request('/api/shipping/ledger/sample/carrier-changes', 'POST'))).status).toBe(403)
     const returnedOrder = '/api/shipping/owner/orders/SO-20261118-1111AAAA/resubmit'
     expect((await middleware(request(returnedOrder))).status).toBe(200)
     expect((await middleware(request(returnedOrder, 'POST'))).status).toBe(200)
@@ -248,6 +249,7 @@ describe('role-free federated session boundary', () => {
     expect((await request('/api/shipping/settings?workspace=1')).status).toBe(200)
     expect((await request('/api/shipping/ledger')).status).toBe(200)
     expect((await request('/api/shipping/ledger/example/confirm', 'POST')).status).toBe(200)
+    expect((await request('/api/shipping/ledger/example/carrier-changes', 'POST')).status).toBe(200)
     expect((await request('/api/shipping/settings')).status).toBe(403)
     expect((await request('/api/quotes', 'POST')).status).toBe(403)
     expect((await request('/api/shipping/orders', 'POST')).status).toBe(403)
@@ -262,6 +264,7 @@ describe('role-free federated session boundary', () => {
       bind(state)
       expect((await request('/api/shipping/ledger')).status).toBe(403)
       expect((await request('/api/shipping/ledger/example/confirm', 'POST')).status).toBe(403)
+      expect((await request('/api/shipping/ledger/example/carrier-changes', 'POST')).status).toBe(403)
       expect((await request('/api/shipping/owner/orders', 'POST')).status).toBe(200)
     }
   })
@@ -279,6 +282,7 @@ describe('role-free federated session boundary', () => {
     expect((await request('/api/shipping/intake-settings', 'POST')).status).toBe(200)
     expect((await request('/api/shipping/settings?workspace=1')).status).toBe(403)
     expect((await request('/api/shipping/ledger/example/confirm', 'POST')).status).toBe(403)
+    expect((await request('/api/shipping/ledger/example/carrier-changes', 'POST')).status).toBe(403)
   })
 
   it.each([
