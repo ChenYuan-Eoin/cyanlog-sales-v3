@@ -15,7 +15,7 @@ const fetcher = vi.fn()
 const fixtureOrders: ShipmentOrder[] = workbenchOrdersForTest.map((order, index) => ({ ...order, id: `order-${index + 1}`, input: { ...order.input, serviceId: 2, serviceName: '顺丰标快' } }))
 
 function useLedger(records: ShipmentOrder[]) {
-  fetcher.mockImplementation(async (url: string) => new Response(JSON.stringify(url === '/api/shipping/ledger?limit=50' ? { records } : {}), { status: 200 }))
+  fetcher.mockImplementation(async (url: string) => new Response(JSON.stringify(url === '/api/shipping/ledger?limit=50&page=0' ? { records } : {}), { status: 200 }))
 }
 
 beforeEach(() => { fetcher.mockReset(); useLedger([]); vi.stubGlobal('React', React); vi.stubGlobal('fetch', fetcher) })
@@ -101,11 +101,32 @@ describe('self-service shipping workbench', () => {
     expect(within(screen.getByRole('region',{name:'下单异常处理'})).getByRole('alert').textContent).toContain('明确拒绝')
   })
 
+  it('applies a custom Shanghai time range to the server and retains it on the next page', async () => {
+    fetcher.mockImplementation(async (url: string) => {
+      const query = new URL(url, 'https://example.test').searchParams
+      return Response.json({ records: [], nextPage: query.has('submittedFrom') && query.get('page') === '0' ? 1 : null })
+    })
+    render(<ShippingWorkbench settings={settings}/>)
+    fireEvent.click(screen.getByRole('button', { name: '自定义时间' }))
+    fireEvent.change(screen.getByLabelText('开始日期'), { target: { value: '2026-11-18' } })
+    fireEvent.change(screen.getByLabelText('结束日期'), { target: { value: '2026-11-18' } })
+    fireEvent.change(screen.getByLabelText('开始时间（可选）'), { target: { value: '16:15' } })
+    fireEvent.change(screen.getByLabelText('结束时间（可选）'), { target: { value: '17:00' } })
+    fireEvent.click(screen.getByRole('button', { name: '应用' }))
+    fireEvent.click(await screen.findByRole('button', { name: '下一页' }))
+    expect(await screen.findByText('第 2 页')).toBeTruthy()
+    const requests = fetcher.mock.calls.map(([url]) => new URL(String(url), 'https://example.test').searchParams)
+    expect(requests.filter(query => query.has('submittedFrom')).map(query => Object.fromEntries(query))).toEqual([
+      { limit: '50', page: '0', submittedFrom: '2026-11-18T08:15:00.000Z', submittedBefore: '2026-11-18T09:01:00.000Z' },
+      { limit: '50', page: '1', submittedFrom: '2026-11-18T08:15:00.000Z', submittedBefore: '2026-11-18T09:01:00.000Z' },
+    ])
+  })
   it('keeps an external failed query separate from the unrelated selected work order', async () => {
     const order = { ...fixtureOrders[0], status: 'returned' as const, waybill: null }
     fetcher.mockImplementation(async (url: string) => url.endsWith('/tracking') ? Response.json({ error: '请校验运单归属' }, { status: 403 }) : Response.json({ records: [order] }))
     render(<ShippingWorkbench settings={settings}/>)
-    await screen.findAllByText(order.orderNo)
+    await screen.findByRole('button', { name: `查看单据 ${order.orderNo}` })
+    expect(screen.queryByText(order.orderNo)).toBeNull()
     fireEvent.change(screen.getByLabelText('备用查询运单号'), { target: { value: 'SF0213179537901' } })
     fireEvent.click(screen.getByRole('button', { name: '查询轨迹' }))
     await screen.findByRole('alert')
@@ -320,7 +341,7 @@ describe('self-service shipping workbench', () => {
     let ledgerLoads = 0
     fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url.endsWith('/confirm')) { sent.push({ url, body: JSON.parse(String(init?.body)) }); return Response.json({ status: 'waybill_created', waybill: `SF${String(sent.length).padStart(12, '0')}` }) }
-      if (url === '/api/shipping/ledger?limit=50') ledgerLoads += 1
+      if (url === '/api/shipping/ledger?limit=50&page=0') ledgerLoads += 1
       return Response.json({ records: pending })
     })
     render(<ShippingWorkbench settings={settings}/>)
@@ -341,7 +362,7 @@ describe('self-service shipping workbench', () => {
     expect(sent.map(item => item.url)).toEqual(pending.map(order => `/api/shipping/ledger/${order.id}/confirm`))
     expect(sent.every(item => !('sender' in item.body) && !('input' in item.body))).toBe(true)
     expect(ledgerLoads).toBe(2)
-    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/tracking'))).toBe(false)
+    expect(fetcher.mock.calls.filter(([url, options]) => options?.method === 'POST' && !String(url).endsWith('/tracking'))).toHaveLength(2)
     expect(middle.queryAllByRole('checkbox')).toHaveLength(0)
   })
 
@@ -410,7 +431,7 @@ describe('self-service shipping workbench', () => {
       await screen.findByText('工单已退回并记录原因，未向顺丰下单。')
       expect(fetcher).toHaveBeenCalledWith(`/api/shipping/ledger/${order.id}/return`, expect.objectContaining({ method: 'POST', body: JSON.stringify({ reason: '请补充材料说明' }) }))
       expect(fetcher.mock.calls.some(([url]) => /confirm|cancel/.test(String(url)))).toBe(false)
-      expect(screen.getByText('工单已退回')).toBeTruthy()
+      expect(within(screen.getByRole('region', { name: '收寄件台账与待办' })).getByText('工单已退回')).toBeTruthy()
     }
   })
 
@@ -589,11 +610,16 @@ describe('self-service shipping workbench', () => {
   it('cancels an actual uncollected ledger order through the cancellation API', async () => {
     const uncollected = { ...fixtureOrders[1], id: 'real-order-1', status: 'waybill_created' as const }
     fetcher.mockImplementation(async (url: string) => {
-      if (url === '/api/shipping/ledger?limit=50') return new Response(JSON.stringify({ records: [uncollected] }), { status: 200 })
-      return new Response(JSON.stringify({ status: 'cancelled' }), { status: 200 })
+      if (url === '/api/shipping/ledger?limit=50&page=0') return new Response(JSON.stringify({ records: [uncollected] }), { status: 200 })
+      if (url.endsWith('/tracking')) return Response.json({
+        waybill: uncollected.waybill, source: 'carrier', shipmentStatus: 'waybill_created',
+        events: [{ time: '2026-09-27 08:00:00', status: 'waybill_created', description: '待揽收' }],
+      })
+      return Response.json({ status: 'cancelled' })
     })
     render(<ShippingWorkbench settings={settings}/>)
     expect((await screen.findAllByText('远景能源')).length).toBeGreaterThan(0)
+    await waitFor(() => expect(screen.getByRole('button', { name: '取消运单' })).toHaveProperty('disabled', false))
     fireEvent.click(screen.getByRole('button', { name: '取消运单' }))
     expect(await screen.findByText('顺丰运单已取消。')).toBeTruthy()
     expect(fetcher).toHaveBeenCalledWith('/api/shipping/ledger/real-order-1/cancel', expect.objectContaining({ method: 'POST' }))
@@ -601,7 +627,7 @@ describe('self-service shipping workbench', () => {
   })
 
   it('shows the stored SF instruction only in the expanded owner delivery details', async () => {
-    const order = { ...fixtureOrders[2], intakeSource: 'owner_web' as const }
+    const order = { ...fixtureOrders[2], intakeSource: 'owner_web' as const, status: 'delivered' as const }
     const endpoint = '/api/shipping/ledger/' + order.id + '/carrier-changes'
     const latest = {
       action: 'modify_recipient', status: 'accepted', requestedAt: '2026-11-18T09:00:00Z',
@@ -612,46 +638,103 @@ describe('self-service shipping workbench', () => {
       Response.json(url === endpoint ? { latest } : { records: [order] }))
     render(<ShippingWorkbench settings={settings}/>)
     const expand = await screen.findByRole('button', { name: `展开递送信息 ${order.waybill}` })
-    expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/shipping/ledger?limit=50'])
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/shipping/ledger?limit=50&page=0'])
     fireEvent.click(expand)
     const receipt = await screen.findByRole('region', { name: '顺丰指令记录' })
     expect(receipt.textContent).toContain('顺丰已受理指令，实际处理结果待确认')
     expect(receipt.textContent).toContain(order.input.recipient.address)
     expect(receipt.textContent).toContain('新街45号二楼')
     expect(within(receipt).queryByRole('button')).toBeNull()
-    expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/shipping/ledger?limit=50', endpoint])
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/shipping/ledger?limit=50&page=0', endpoint])
     fireEvent.click(screen.getByRole('button', { name: `收起递送信息 ${order.waybill}` }))
     expect(screen.queryByRole('region', { name: '顺丰指令记录' })).toBeNull()
     expect(fetcher.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
   })
 
-  it.each(['waybill_created', 'in_transit'] as const)('keeps loading, selecting and expanding %s orders free of carrier calls', async status => {
-    vi.useFakeTimers()
-    try {
-      const first = { ...fixtureOrders[1], status }
-      const second = { ...fixtureOrders[2], status, id: 'second-shipped-order', waybill: 'SF1234567890124' }
-      useLedger([first, second])
-      render(<ShippingWorkbench settings={settings}/>)
-      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
-      fireEvent.click(screen.getByRole('button', { name: `展开递送信息 ${second.waybill}` }))
-      expect(screen.getByRole('region', { name: `工单 ${second.orderNo} 递送信息` })).toBeTruthy()
-      await act(async () => { await vi.advanceTimersByTimeAsync(2 * 60 * 1000) })
-      expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/shipping/ledger?limit=50'])
-      expect(screen.getByRole('button', { name: '刷新递送信息' })).toHaveProperty('disabled', false)
-    } finally { vi.useRealTimers() }
+  it('shows historical events without carrier requests for terminal orders', async () => {
+    const order = {
+      ...fixtureOrders[3],
+      trackingUpdatedAt: '2026-11-20T10:41:16.000Z',
+      trackingEvents: [{ time: '2026-11-20T10:41:16.000Z', location: '深圳市', description: '已妥投至前台', status: 'delivered' as const }],
+    }
+    useLedger([order])
+    render(<ShippingWorkbench settings={settings}/>)
+    fireEvent.click(await screen.findByRole('button', { name: `展开递送信息 ${order.waybill}` }))
+    expect(within(screen.getByRole('region', { name: `工单 ${order.orderNo} 递送信息` })).getByText('已妥投至前台')).toBeTruthy()
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/shipping/ledger?limit=50&page=0'])
   })
 
-  it('refreshes the selected waybill only after an explicit click, stores pickup status and removes cancellation without another ledger request', async () => {
-    const order = { ...fixtureOrders[1], status: 'waybill_created' as const }
-    fetcher.mockImplementation(async (url: string) => new Response(JSON.stringify(url.startsWith('/api/shipping/ledger') ? { records: [order] } : { waybill: order.waybill, queriedAt: '2026-09-27T00:00:00Z', shipmentStatus: 'in_transit', events: [{ time: '2026-09-27 08:00:00', location: '深圳市', description: '顺丰速运 已收取快件', status: 'in_transit' }] }), { status: 200 }))
+  it('synchronizes each visible active operator waybill before displaying the refreshed ledger state', async () => {
+    let persisted = false
+    const order = { ...fixtureOrders[1], id: 'operator-order', status: 'waybill_created' as const, waybill: 'SF5169741550975', orderNo: 'SO-20261118-87431B2C', input: { ...fixtureOrders[1].input, customerName: '华夏金租收件', recipient: { ...fixtureOrders[1].input.recipient, city: '北京市' } } }
+    fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/shipping/tracking' && init?.method === 'POST') { persisted = true; return Response.json({ waybill: order.waybill, source: 'carrier', shipmentStatus: 'delivered', events: [{ time: '2026-11-20 18:41:16', description: '已派送成功（公司前台）', status: 'delivered' }] }) }
+      if (url === '/api/shipping/ledger?limit=50&page=0') return Response.json({ records: [persisted ? { ...order, status: 'delivered' as const } : order] })
+      return Response.json({})
+    })
     render(<ShippingWorkbench settings={settings}/>)
-    await screen.findAllByText('远景能源')
+    await screen.findByRole('button', { name: `展开递送信息 ${order.waybill}` })
+    await waitFor(() => expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith('/tracking'))).toHaveLength(1))
+    await waitFor(() => expect(fetcher.mock.calls.filter(([url]) => url === '/api/shipping/ledger?limit=50&page=0')).toHaveLength(2))
+    expect(screen.getByRole('button', { name: '展开递送信息 SF5169741550975' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '展开递送信息 SF5169741550975' }))
+    expect(await screen.findByRole('heading', { name: '已签收' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
+  })
+
+  it('periodically refreshes active waybills only while the workbench is visible', async () => {
+    vi.useFakeTimers()
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    try {
+      const active = fixtureOrders[1]
+      useLedger([active, fixtureOrders[3]])
+      render(<ShippingWorkbench settings={settings}/>)
+      const queried = () => fetcher.mock.calls.filter(([url]) => String(url).endsWith('/tracking'))
+        .map(([, init]) => JSON.parse(String(init.body)).waybill)
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+      expect(queried()).toEqual([active.waybill])
+      visibility.mockReturnValue('hidden')
+      await act(async () => { await vi.advanceTimersByTimeAsync(120_000) })
+      expect(queried()).toEqual([active.waybill])
+      visibility.mockReturnValue('visible')
+      await act(async () => { document.dispatchEvent(new Event('visibilitychange')) })
+      expect(queried()).toEqual([active.waybill, active.waybill])
+    } finally {
+      visibility.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('locks only an operator order whose carrier refresh could not be verified', async () => {
+    const order = { ...fixtureOrders[1], id: 'unverified-order', status: 'waybill_created' as const, waybill: 'SF5162262103864', input: { ...fixtureOrders[1].input, customerName: '华夏金租收件' } }
+    fetcher.mockImplementation(async (url: string, init?: RequestInit) => url === '/api/shipping/tracking' && init?.method === 'POST'
+      ? Response.json({ error: '顺丰最新状态暂不可用' }, { status: 503 })
+      : Response.json({ records: [order] }))
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findByRole('button', { name: `展开递送信息 ${order.waybill}` })
+    await waitFor(() => expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith('/tracking'))).toHaveLength(1))
+    expect((await screen.findAllByText(/状态尚未核实/)).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: '取消运单' })).toHaveProperty('disabled', true)
+  })
+
+  it('can retry a failed automatic lookup from the selected waybill', async () => {
+    const order = { ...fixtureOrders[1], status: 'waybill_created' as const }
+    let calls = 0
+    fetcher.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/shipping/ledger')) return Response.json({ records: [order] })
+      if (++calls === 1) return Response.json({ error: '暂时无法查询' }, { status: 503 })
+      return Response.json({
+        waybill: order.waybill, source: 'carrier', shipmentStatus: 'in_transit', queriedAt: '2026-09-27T00:00:00Z',
+        events: [{ time: '2026-09-27 08:00:00', location: '深圳市', description: '顺丰速运 已收取快件', status: 'in_transit' }],
+      })
+    })
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findAllByText(/状态尚未核实/)
     fireEvent.click(screen.getByRole('button', { name: '刷新' }))
     expect(await screen.findByText('顺丰速运 已收取快件')).toBeTruthy()
     expect(screen.getByRole('heading', { name: '运输中' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
-    expect(fetcher.mock.calls.filter(([url]) => String(url).startsWith('/api/shipping/ledger'))).toHaveLength(1)
-    expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith('/tracking'))).toHaveLength(1)
+    expect(calls).toBe(2)
   })
 
   it.each(['cancelled', 'delivered'] as const)('does not downgrade a %s order after a stale tracking response', async status => {
@@ -668,7 +751,7 @@ describe('self-service shipping workbench', () => {
   it('switches the same expanded card from pre-dispatch service review to post-dispatch delivery information', async () => {
     let current: ShipmentOrder = { ...fixtureOrders[0], status: 'awaiting_confirmation', waybill: null }
     fetcher.mockImplementation(async (url: string) => {
-      if (url === '/api/shipping/ledger?limit=50') return Response.json({ records: [current] })
+      if (url === '/api/shipping/ledger?limit=50&page=0') return Response.json({ records: [current] })
       if (url.endsWith('/confirm')) {
         current = { ...current, status: 'waybill_created', waybill: 'SF1234567890123' }
         return Response.json({ status: 'waybill_created', waybill: current.waybill })
@@ -753,7 +836,7 @@ describe('self-service shipping workbench', () => {
     let ledgerLoads = 0
     const createdOrder: ShipmentOrder = { ...fixtureOrders[0], id: 'new-sandbox-order', orderNo: 'SO-NEW-INTAKE', status: 'awaiting_confirmation', waybill: null }
     fetcher.mockImplementation(async (url: string) => {
-      if (url === '/api/shipping/ledger?limit=50') {
+      if (url === '/api/shipping/ledger?limit=50&page=0') {
         ledgerLoads += 1
         return new Response(JSON.stringify({ records: ledgerLoads === 1 ? [] : [createdOrder] }), { status: 200 })
       }
@@ -766,7 +849,10 @@ describe('self-service shipping workbench', () => {
     fireEvent.click(screen.getByRole('button', { name: '解析为寄件行' }))
     fireEvent.click(screen.getByRole('button', { name: '提交工单（1票）' }))
     expect(await screen.findByText(/已提报 1 票/)).toBeTruthy()
-    expect(screen.getAllByText('SO-NEW-INTAKE').length).toBeGreaterThanOrEqual(2)
+    const record = screen.getByRole('button', { name: '查看单据 SO-NEW-INTAKE' })
+    expect(record.getAttribute('aria-pressed')).toBe('true')
+    expect(within(record).getByText('尚未出单')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '复制单号' })).toBeNull()
     expect(ledgerLoads).toBe(2)
   })
 

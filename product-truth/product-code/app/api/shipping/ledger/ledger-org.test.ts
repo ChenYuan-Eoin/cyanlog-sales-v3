@@ -12,6 +12,23 @@ describe('ledger route uses the authorized organization', () => {
     expect((await GET(new NextRequest('https://example.test/api/shipping/ledger?limit=50'))).status).toBe(200)
     expect(mocks.list).toHaveBeenCalledWith('org-authorized', { limit: 50 })
   })
+  it('filters authorized pages by both time bounds and returns only the requested page size', async () => {
+    mocks.list.mockResolvedValue([{ id: 'first' }, { id: 'lookahead' }])
+    const result = await GET(new NextRequest(
+      'https://example.test/api/shipping/ledger?limit=1&page=0&submittedFrom=2026-11-17T16:00:00Z&submittedBefore=2026-11-18T16:00:00Z',
+    ))
+    expect(await result.json()).toEqual({ records: [{ id: 'first' }], nextPage: 1 })
+    expect(mocks.list).toHaveBeenCalledWith('org-authorized', {
+      limit: 1, page: 0, submittedFrom: '2026-11-17T16:00:00Z', submittedBefore: '2026-11-18T16:00:00Z',
+    })
+  })
+  it('rejects backwards time bounds without querying orders', async () => {
+    const result = await GET(new NextRequest(
+      'https://example.test/api/shipping/ledger?submittedFrom=2026-11-18T16:00:00Z&submittedBefore=2026-11-17T16:00:00Z',
+    ))
+    expect(result.status).toBe(400)
+    expect(mocks.list).not.toHaveBeenCalled()
+  })
   it('rejects an organization injected in the query string', async () => {
     expect((await GET(new NextRequest('https://example.test/api/shipping/ledger?orgId=org-foreign'))).status).toBe(400)
     expect(mocks.list).not.toHaveBeenCalled()

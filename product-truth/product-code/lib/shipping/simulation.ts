@@ -1,7 +1,7 @@
 // Explicit demo adapter: browser memory only. No fetch, provider call or persistence.
 import type { Contact, ShipmentOrder, ShipmentOrderStatus, ShippingInput, ShippingSettings, TrackingResult } from './types'
 import type { ShippingWorkbenchRequest } from './workbench-client'
-import { orderSelectionSchema } from './validation'
+import { orderSelectionSchema, shipmentLedgerQuerySchema } from './validation'
 
 export const shippingExampleText = [
   '演示张三 13800000001 广东省深圳市南山区示例路88号A座',
@@ -57,7 +57,21 @@ export function createShippingSimulation(now = Date.now()): ShippingWorkbenchReq
 
   function dispatch(url: string, init?: RequestInit): unknown {
     const method = init?.method || 'GET'
-    if (method === 'GET' && url === '/api/shipping/ledger?limit=50') return { records }
+    if (method === 'GET' && url.startsWith('/api/shipping/ledger?')) {
+      const query = shipmentLedgerQuerySchema.parse(Object.fromEntries(new URLSearchParams(url.split('?')[1])))
+      const from = query.submittedFrom ? Date.parse(query.submittedFrom) : -Infinity
+      const before = query.submittedBefore ? Date.parse(query.submittedBefore) : Infinity
+      const matching = records.filter(order => {
+        const submitted = Date.parse(order.createdAt)
+        return submitted >= from && submitted < before
+      }).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id))
+      const page = query.page ?? 0
+      const start = page * query.limit
+      return {
+        records: matching.slice(start, start + query.limit),
+        nextPage: matching.length > start + query.limit && page < 1000 ? page + 1 : null,
+      }
+    }
     if (method !== 'POST') throw new Error('模拟体验不支持此操作。')
     const body = JSON.parse(String(init?.body || '{}')) as { key?: string; input?: ShippingInput; waybill?: string; reason?: string; payment?: unknown; serviceId?: unknown }
     if (url === '/api/shipping/owner/orders') {

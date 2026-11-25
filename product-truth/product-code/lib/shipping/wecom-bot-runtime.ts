@@ -14,6 +14,7 @@ const statusLabels: Record<ShipmentOrderStatus, string> = {
   accepted: '已受理',
   awaiting_confirmation: '待操作员审核',
   returned: '已退回',
+  resubmitted: '已重提',
   confirmed: '已确认待下单',
   ordering: '下单处理中',
   order_unknown: '下单结果待确认',

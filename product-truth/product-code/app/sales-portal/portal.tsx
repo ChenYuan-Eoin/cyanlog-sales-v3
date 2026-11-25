@@ -10,12 +10,12 @@ import { normalizeDomesticShippingPhone } from '@/lib/shipping/phone'
 import { emptyContact, type Contact, type ShipmentReceipt, type ShipmentOrderStatus } from '@/lib/shipping/types'
 import styles from './sales-portal.module.css'
 import MyWorkorders, { type ReturnedShipment, type RestoreOwnerRecord } from './my-workorders'
-import EmployeeAccess, { type EmployeeProfile } from './employee-access'
+import EmployeeAccess, { type EmployeeProfile, type SaveCommonSender } from './employee-access'
 import SalesBatchProposal, { type BatchReviewSummary } from './sales-batch'
 
 import type { ShippingServiceOption } from '@/lib/shipping/sf-service-catalog'
 
-const receiptLabels: Record<ShipmentOrderStatus, string> = { accepted: '工单已受理', awaiting_confirmation: '待操作员审核确认', returned: '工单已退回', confirmed: '工单已确认', ordering: '正式下单中', order_unknown: '下单结果待确认', waybill_created: '运单已生成', in_transit: '运输中', delivered: '已签收', cancelled: '运单已取消', order_failed: '下单未成功' }
+const receiptLabels: Record<ShipmentOrderStatus, string> = { accepted: '工单已受理', awaiting_confirmation: '待操作员审核确认', returned: '工单已退回', resubmitted: '已重提', confirmed: '工单已确认', ordering: '正式下单中', order_unknown: '下单结果待确认', waybill_created: '运单已生成', in_transit: '运输中', delivered: '已签收', cancelled: '运单已取消', order_failed: '下单未成功' }
 
 type PortalOptions = { companySender?: Contact | null; services: ShippingServiceOption[]; requireVerification: boolean; emailAvailable: boolean; rules?: IntakeRules }
 export function AuthenticatedReceiptRoute({ children }: { children: ReactNode }) {
@@ -42,10 +42,10 @@ export default function SalesPortal({ initialEmployee = null, initialOptions = n
 }
 export function FxiaokeShippingProposal({ profile, rules, services, connectionStatus }: { profile: EmployeeProfile; rules: IntakeRules; services: ShippingServiceOption[]; connectionStatus?: string }) {
   return <EmployeeAccess key={profile.id} mode="fxiaoke" requireVerification initialEmployee={profile} companySender={profile.senderChoices?.company} rules={rules}>
-    {({ employee, controls, identityControls, canSubmit, unavailableReason, sessionKey, sender, team, departmentId }) =>
+    {({ employee, controls, identityControls, canSubmit, unavailableReason, sessionKey, sender, team, departmentId, saveCommonSender }) =>
       <SalesRequestForm key={sessionKey} mode="fxiaoke" employee={employee} draftSender={sender} draftTeam={team} departmentId={departmentId} departments={employee?.departments || []} rules={rules} services={services}
         accessReady={canSubmit} accessHint={unavailableReason} identityControls={identityControls}
-        accessControls={controls} connectionStatus={connectionStatus}/>}
+        accessControls={controls} connectionStatus={connectionStatus} saveCommonSender={saveCommonSender}/>}
   </EmployeeAccess>
 }
 
@@ -54,13 +54,16 @@ type ReturnEdit = {
   finish: RestoreOwnerRecord
   close: () => void
 }
-type SalesFormProps = { departmentId?: string; departments?: Array<{ id: string; name: string; path: string }>; employee: EmployeeProfile | null; accessControls?: ReactNode; identityControls?: ReactNode; accessReady?: boolean; accessHint?: string; rules?: IntakeRules; draftSender?: Contact; draftTeam?: string; services?: ShippingServiceOption[]; mode?: 'public' | 'fxiaoke'; connectionStatus?: string; editing?: ReturnEdit }
+type SalesFormProps = { departmentId?: string; departments?: Array<{ id: string; name: string; path: string }>; employee: EmployeeProfile | null; accessControls?: ReactNode; identityControls?: ReactNode; accessReady?: boolean; accessHint?: string; rules?: IntakeRules; draftSender?: Contact; draftTeam?: string; services?: ShippingServiceOption[]; mode?: 'public' | 'fxiaoke'; connectionStatus?: string; editing?: ReturnEdit; saveCommonSender?: SaveCommonSender }
 
 export function SalesRequestForm(props: SalesFormProps) {
   const { employee, accessControls, accessReady = Boolean(employee?.sender), draftSender, draftTeam, services, accessHint, rules = DEFAULT_INTAKE_RULES, mode = 'public', departments, editing } = props
   const original = editing?.order.input
   const [selectedReturn, setSelectedReturn] = useState<{ order: ReturnedShipment; restore: RestoreOwnerRecord } | null>(null)
   const [returnedSender, setReturnedSender] = useState<Contact>(() => original?.sender || draftSender || employee?.sender || emptyContact())
+  const [savingCommonSender, setSavingCommonSender] = useState(false)
+  const [commonSenderFeedback, setCommonSenderFeedback] = useState<{ error: boolean; text: string } | null>(null)
+  const commonSender = employee?.senderChoices?.personal
   const [returnDepartment, setReturnDepartment] = useState(() => {
     const previous = original?.submittedBy?.departmentId
     return departments?.some(item => item.id === previous) ? previous : props.departmentId
@@ -106,6 +109,20 @@ export function SalesRequestForm(props: SalesFormProps) {
   const [receiptStatus, setReceiptStatus] = useState('')
   const [receipt, setReceipt] = useState<(ShipmentReceipt & { receiptToken?: string }) | null>(null)
 
+  async function saveReturnedSender() {
+    if (!props.saveCommonSender || savingCommonSender) return
+    setSavingCommonSender(true)
+    setCommonSenderFeedback(null)
+    try {
+      await props.saveCommonSender(senderContact, departmentId)
+      setCommonSenderFeedback({ error: false, text: '揽收地址已保存为我的常用地址，下次可以直接选用。' })
+    } catch (error) {
+      setCommonSenderFeedback({ error: true, text: error instanceof Error ? error.message : '保存常用地址失败。' })
+    } finally {
+      setSavingCommonSender(false)
+    }
+  }
+
   function setRecipientField(key: keyof Contact, value: string) { setRecipient(current => ({ ...current, [key]: value })) }
   function recognize() {
     if (batchLocked) return
@@ -133,7 +150,7 @@ export function SalesRequestForm(props: SalesFormProps) {
   const recipientProblem = (field: keyof Contact) => (!attempted && !rawAddress.trim()) || draftResult.success ? '' : draftResult.error.issues.filter(issue => issue.path.join('.') === `recipient.${field}`).map(issue => issue.message).join('；')
   async function submit(event: FormEvent) {
     event.preventDefault()
-    if (submissionRunning.current || batchText) return
+    if (submissionRunning.current || savingCommonSender || batchText) return
     setError('')
     setAttempted(true)
     if (!accessReady) { setError('请补齐寄件资料并核对提报要求，已填信息会保留。'); return }
@@ -171,10 +188,22 @@ export function SalesRequestForm(props: SalesFormProps) {
       if (!response.ok && ([400, 401, 403, 422, 429].includes(response.status) || (editing && [404, 409].includes(response.status)))) { pendingSubmission.current = null; setUncertain(false); setPreview(false); setError(data.error || '请核对工单资料'); return }
       if (!response.ok || typeof data.orderNo !== 'string' || !data.orderNo || data.orderNo.length > 80 || typeof data.status !== 'string' || !Object.hasOwn(receiptLabels, data.status) || (data.waybill != null && (typeof data.waybill !== 'string' || data.waybill.length > 80))) throw new Error('暂未确认工单提交结果，请使用原请求重取回执。')
       if (editing) {
-        if (data.orderNo !== editing.order.orderNo || !(Number.isInteger(data.revision) && data.revision > editing.order.revision)) throw new Error('请重取原工单回执')
+        const originalOrderNo = editing.order.orderNo
+        const revisionValid = Number.isInteger(data.revision) && data.revision > 0
+        if (data.orderNo === originalOrderNo) {
+          if (!revisionValid || data.revision <= editing.order.revision || data.resubmittedFrom != null) {
+            throw new Error('请重取原工单回执')
+          }
+          editing.finish({ orderNo: data.orderNo, status: data.status, revision: data.revision,
+            ...(data.revision === editing.order.revision + 1 ? { customerName } : {}) })
+          return
+        }
+        if (data.resubmittedFrom !== originalOrderNo || !revisionValid || typeof data.createdAt !== 'string'
+          || !Number.isFinite(Date.parse(data.createdAt))) throw new Error('请重取重提回执')
         editing.finish({
-          orderNo: data.orderNo, status: data.status, revision: data.revision,
-          ...(data.revision === editing.order.revision + 1 ? { customerName } : {}),
+          orderNo: data.orderNo, status: data.status, revision: data.revision, createdAt: data.createdAt,
+          nextReviewAt: typeof data.nextReviewAt === 'string' ? data.nextReviewAt : null,
+          waybill: data.waybill || null, customerName, resubmittedFrom: originalOrderNo,
         })
         return
       }
@@ -217,18 +246,29 @@ export function SalesRequestForm(props: SalesFormProps) {
     {!selectedReturn && <div className={mobilePane === 'records' ? styles.mobileHidden : undefined}>
     {accessControls && <div className={`${styles.form} ${styles.accessControls}`}>{accessControls}</div>}
     <form ref={formRef} noValidate className={styles.form} onSubmit={submit} onChange={() => setPreview(false)}>
-      <fieldset className={styles.fields} disabled={busy || uncertain}>
+      <fieldset className={styles.fields} disabled={busy || uncertain || savingCommonSender}>
       {editing && <section className={styles.card} aria-label="重提原单">
-        <div className={styles.recordToolbar}><strong>{editing.order.orderNo}</strong>
-          <button type="button" disabled={busy || uncertain} onClick={editing.close}>返回提报记录</button>
+        <div className={styles.returnEditToolbar}><strong>{editing.order.orderNo}</strong>
+          <button type="button" className={styles.secondaryButton} onClick={editing.close}>返回提报记录</button>
         </div>
         {editing.order.returnedReason
           ? <p className={styles.returnReason}>退回原因：{editing.order.returnedReason}</p>
           : <p className={styles.hint}>未记录退回原因</p>}
-        <details><summary>原单寄件人 · {sender.name} · {senderAddress}</summary>
+        <details className={styles.returnSenderDetails}><summary>寄件人 · {sender.name} · {senderAddress}</summary>
           <div className={styles.grid2}>{Object.entries({ name: '寄件人姓名', phone: '寄件联系电话', province: '寄件省份', city: '寄件城市', county: '寄件区县', address: '寄件详细地址' }).map(([field, label]) => (
-            <label key={field}>{label}<input value={senderContact[field as keyof Contact]} onChange={event => setReturnedSender(current => ({ ...current, [field]: event.target.value }))}/></label>
+            <label key={field}>{label}<input value={senderContact[field as keyof Contact]} onChange={event => { setReturnedSender(current => ({ ...current, [field]: event.target.value })); setCommonSenderFeedback(null) }}/></label>
           ))}</div>
+          {(commonSender || props.saveCommonSender) && <div className={styles.addressActions}>
+            {commonSender && <button type="button" className={styles.secondaryButton} onClick={() => {
+              setReturnedSender(commonSender)
+              setCommonSenderFeedback(null)
+            }}>使用我的常用地址</button>}
+            {props.saveCommonSender && <button type="button" className={styles.secondaryButton} onClick={() => void saveReturnedSender()}>
+              {savingCommonSender ? '保存中…' : '保存为我的常用地址'}
+            </button>}
+          </div>}
+          {commonSenderFeedback && <p className={commonSenderFeedback.error ? styles.error : styles.notice}
+            role={commonSenderFeedback.error ? 'alert' : 'status'}>{commonSenderFeedback.text}</p>}
         </details>
         {departments && departments.length > 1 && <label>所属部门<select value={departmentId || ''} onChange={event => setReturnDepartment(event.target.value)}>
           <option value="">请选择本人所属部门</option>{departments.map(dept => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
@@ -252,10 +292,10 @@ export function SalesRequestForm(props: SalesFormProps) {
         {!batchText && <><div className={styles.grid2}><label>收件人<input name="recipient.name" required value={recipient.name} aria-invalid={Boolean(recipientProblem('name'))} onChange={event => setRecipientField('name', event.target.value)}/>{recipientProblem('name') && <small className={styles.fieldError}>{recipientProblem('name')}</small>}</label><label>联系电话<input name="recipient.phone" required value={recipient.phone} aria-invalid={Boolean(recipientProblem('phone'))} onChange={event => setRecipientField('phone', event.target.value)}/>{recipientProblem('phone') && <small className={styles.fieldError}>{recipientProblem('phone')}</small>}</label></div><div className={styles.grid3}><label>省份<input name="recipient.province" required value={recipient.province} aria-invalid={Boolean(recipientProblem('province'))} onChange={event => setRecipientField('province', event.target.value)}/>{recipientProblem('province') && <small className={styles.fieldError}>{recipientProblem('province')}</small>}</label><label>城市<input name="recipient.city" required value={recipient.city} aria-invalid={Boolean(recipientProblem('city'))} onChange={event => setRecipientField('city', event.target.value)}/>{recipientProblem('city') && <small className={styles.fieldError}>{recipientProblem('city')}</small>}</label><label>区县<input name="recipient.county" required value={recipient.county} aria-invalid={Boolean(recipientProblem('county'))} onChange={event => setRecipientField('county', event.target.value)}/>{recipientProblem('county') && <small className={styles.fieldError}>{recipientProblem('county')}</small>}</label></div><label>详细地址<input name="recipient.address" required value={recipient.address} aria-invalid={Boolean(recipientProblem('address'))} onChange={event => setRecipientField('address', event.target.value)}/>{recipientProblem('address') && <small className={styles.fieldError}>{recipientProblem('address')}</small>}</label></>} {batchText && <p role="status">已识别 {batchCount} 票，请在下方逐票填写物品、重量、服务和特殊需求。</p>}</section>
       {!batchText && <section className={styles.card}><div className={styles.cardTitle}><Package size={18}/><div><h2><span className={styles.sectionNumber}>03</span>物品与特殊需求</h2><p>特殊要求会醒目标记给前台确认</p></div></div><div className={styles.grid3}><label>托寄物<select value={cargo} onChange={event => setCargo(event.target.value)}>{!['发票','合同','样品','礼品','其他'].includes(cargo) && <option>{cargo}</option>}<option>发票</option><option>合同</option><option>样品</option><option>礼品</option><option>其他</option></select></label><label>预估重量（kg）<input name="weight" type="number" min="0.01" max="20" step="0.01" value={weight} onChange={event => setWeight(event.target.value)}/></label><label>顺丰服务产品{services ? <select required value={serviceId || String(services[0]?.id || '')} onChange={event => setServiceId(event.target.value)}>{services.length ? services.map(item => <option key={item.id} value={item.id}>{item.name}</option>) : <option value="">暂无开放的服务，请联系操作员</option>}</select> : <select value={servicePreference} onChange={event => setServicePreference(event.target.value as typeof servicePreference)}><option value="standard">标准</option><option value="urgent">加急</option></select>}</label></div><label>我的特殊需求（选填）<textarea rows={3} maxLength={500} value={specialRequirements} onChange={event => setSpecialRequirements(event.target.value)} placeholder="例如：周五前送达、样品易碎、上门前联系、随件附带某份资料……"/><span className={styles.counter}>{specialRequirements.length}/500</span></label></section>}
       </fieldset>
-      {!batchText && previewCurrent && <section className={styles.card} aria-label="寄出预览"><h2>寄出预览</h2><p>寄件人：{submitter.name} · {normalizeDomesticShippingPhone(submitter.phone)} · {senderAddress}</p><p>收件人：{recipient.name} · {recipient.phone} · {recipient.province}{recipient.city}{recipient.county}{recipient.address}</p><p>{customerName} · {cargo} · {weight} kg · {services?.find(item => item.id === Number(serviceId || services[0]?.id))?.name || (servicePreference === 'urgent' ? '加急偏好' : '标准偏好')}</p>{specialRequirements && <p>{specialRequirements}</p>}<small>{editing ? '请核对后点击“确认重提”，变更将保存到原工单。' : '这是预览，工单尚未提交。核对后请再次点击“确认提交工单”；正式下单和叫件由操作员完成。'}</small></section>}
+      {!batchText && previewCurrent && <section className={styles.card} aria-label="寄出预览"><h2>寄出预览</h2><p>寄件人：{submitter.name} · {normalizeDomesticShippingPhone(submitter.phone)} · {senderAddress}</p><p>收件人：{recipient.name} · {recipient.phone} · {recipient.province}{recipient.city}{recipient.county}{recipient.address}</p><p>{customerName} · {cargo} · {weight} kg · {services?.find(item => item.id === Number(serviceId || services[0]?.id))?.name || (servicePreference === 'urgent' ? '加急偏好' : '标准偏好')}</p>{specialRequirements && <p>{specialRequirements}</p>}<small>{editing ? '确认重提后会生成新的待审核工单，原记录保留。' : '这是预览，工单尚未提交。核对后请再次点击“确认提交工单”；正式下单和叫件由操作员完成。'}</small></section>}
       {error && <p className={styles.error} role="alert">{error}</p>}
       {!accessReady && accessHint && <p role="status" className={styles.error}>{accessHint}</p>}{!batchText && attempted && accessReady && !draftComplete && !uncertain && <p role="status" className={styles.error}>{draftResult.success ? '' : [...new Set(draftProblems)].join('；')}</p>}
-      {!batchText && <footer className={styles.submit} aria-label="寄件提报操作"><div className={styles.submitGuidance}><strong>{busy ? '正在提交' : uncertain ? '提交结果待确认' : previewCurrent ? '第 2 步：确认提交' : '第 1 步：预览工单'}</strong><span id={submissionHintId} role="status" aria-live="polite" aria-atomic="true">{busy ? '正在提交，请勿重复操作。' : uncertain ? '请重取原工单回执，避免重复提报。' : previewCurrent ? (editing ? '请核对预览后确认重提。' : '尚未提交。请核对预览，再次点击“确认提交工单”。') : '共 2 步：先预览，再次点击同一按钮确认提交。修改资料后需重新预览。'}</span><small>提交只会进入前台待确认池，不会直接产生运费。</small></div><button aria-describedby={submissionHintId} disabled={busy || !accessReady}>{busy ? '提交中…' : uncertain ? '重取工单回执' : previewCurrent ? (editing ? '确认重提' : '确认提交工单') : '预览工单'}<ArrowRight size={16}/></button></footer>}
+      {!batchText && <footer className={styles.submit} aria-label="寄件提报操作"><div className={styles.submitGuidance}><strong>{busy ? '正在提交' : uncertain ? '提交结果待确认' : previewCurrent ? '第 2 步：确认提交' : '第 1 步：预览工单'}</strong><span id={submissionHintId} role="status" aria-live="polite" aria-atomic="true">{busy ? '正在提交，请勿重复操作。' : uncertain ? '请重取原工单回执，避免重复提报。' : previewCurrent ? (editing ? '请核对预览后确认重提。' : '尚未提交。请核对预览，再次点击“确认提交工单”。') : '共 2 步：先预览，再次点击同一按钮确认提交。修改资料后需重新预览。'}</span><small>提交只会进入前台待确认池，不会直接产生运费。</small></div><button aria-describedby={submissionHintId} disabled={busy || savingCommonSender || !accessReady}>{busy ? '提交中…' : uncertain ? '重取工单回执' : previewCurrent ? (editing ? '确认重提' : '确认提交工单') : '预览工单'}<ArrowRight size={16}/></button></footer>}
     </form>
     {batchText && <SalesBatchProposal key={batchText} embedded initialText={batchText} sender={sender} team={draftTeam || employee?.team || ''} departmentId={departmentId} departments={departments} rules={rules} services={services} accessReady={accessReady} accessHint={accessHint}
       onSuccess={()=>setRecordRefresh(value=>value+1)} onLockedChange={setBatchLocked} onReviewChange={setBatchReview} onClear={()=>{setBatchText('');setBatchLocked(false);setRawAddress('');setPreview(false);setBatchReview(null)}}/>}

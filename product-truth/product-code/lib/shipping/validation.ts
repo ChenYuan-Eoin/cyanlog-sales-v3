@@ -44,10 +44,19 @@ export const shipmentLedgerQuerySchema = z.object({
   salesRef: z.string().trim().max(120).optional(),
   customerRef: z.string().trim().max(120).optional(),
   contact: z.string().trim().max(60).optional(),
-  status: z.enum(['accepted','awaiting_confirmation','returned','confirmed','ordering','order_unknown','waybill_created','in_transit','delivered','cancelled','order_failed']).optional(),
+  status: z.enum(['accepted','awaiting_confirmation','returned','resubmitted','confirmed','ordering','order_unknown','waybill_created','in_transit','delivered','cancelled','order_failed']).optional(),
   cursor: z.string().datetime().optional(),
+  page: z.coerce.number().int().min(0).max(1000).optional(),
+  submittedFrom: z.string().datetime().optional(),
+  submittedBefore: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
-}).strict()
+}).strict().refine(
+  query => query.cursor === undefined || query.page === undefined,
+  { message: '请选择一种台账分页方式。' },
+).refine(
+  query => !query.submittedFrom || !query.submittedBefore || Date.parse(query.submittedFrom) < Date.parse(query.submittedBefore),
+  { message: '结束时间应晚于开始时间。' },
+)
 export const returnShipmentSchema = z.object({ reason: z.string().trim().min(2, '请填写退回原因').max(300) }).strict()
 export const amendShipmentSchema = z.object({
   expected_revision: z.number().int().min(1),
