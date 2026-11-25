@@ -101,18 +101,43 @@ describe('self-service shipping workbench', () => {
     expect(within(screen.getByRole('region',{name:'下单异常处理'})).getByRole('alert').textContent).toContain('明确拒绝')
   })
 
+  it('keeps three date controls visible and uses the month and week shortcuts directly', async () => {
+    fetcher.mockImplementation(async () => Response.json({ records: [] }))
+    render(<ShippingWorkbench settings={settings}/>)
+    const controls = within(screen.getByRole('group', { name: '提报日期筛选' }))
+    expect(controls.getAllByRole('button').map(button => button.textContent)).toEqual(['筛选', '本月', '本周'])
+    expect(screen.queryByRole('button', { name: '今天' })).toBeNull()
+
+    const toggle = controls.getByRole('button', { name: '筛选' })
+    fireEvent.click(toggle)
+    const more = within(screen.getByRole('group', { name: '更多日期筛选' }))
+    expect(more.getByRole('button', { name: '全部日期' })).toBeTruthy()
+    expect(more.getByRole('button', { name: '今天' })).toBeTruthy()
+
+    for (const name of ['本月', '本周']) {
+      const shortcut = controls.getByRole('button', { name })
+      fireEvent.click(shortcut)
+      expect(shortcut.getAttribute('aria-pressed')).toBe('true')
+      expect(toggle.getAttribute('aria-expanded')).toBe('false')
+      expect(screen.queryByRole('button', { name: '今天' })).toBeNull()
+    }
+    await waitFor(() => expect(fetcher.mock.calls.filter(([url]) => String(url).includes('submittedFrom'))).toHaveLength(2))
+  })
+
   it('applies a custom Shanghai time range to the server and retains it on the next page', async () => {
     fetcher.mockImplementation(async (url: string) => {
       const query = new URL(url, 'https://example.test').searchParams
       return Response.json({ records: [], nextPage: query.has('submittedFrom') && query.get('page') === '0' ? 1 : null })
     })
     render(<ShippingWorkbench settings={settings}/>)
+    fireEvent.click(screen.getByRole('button', { name: '筛选' }))
     fireEvent.click(screen.getByRole('button', { name: '自定义时间' }))
     fireEvent.change(screen.getByLabelText('开始日期'), { target: { value: '2026-11-18' } })
     fireEvent.change(screen.getByLabelText('结束日期'), { target: { value: '2026-11-18' } })
     fireEvent.change(screen.getByLabelText('开始时间（可选）'), { target: { value: '16:15' } })
     fireEvent.change(screen.getByLabelText('结束时间（可选）'), { target: { value: '17:00' } })
     fireEvent.click(screen.getByRole('button', { name: '应用' }))
+    expect(screen.getByRole('button', { name: '筛选' }).getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(await screen.findByRole('button', { name: '下一页' }))
     expect(await screen.findByText('第 2 页')).toBeTruthy()
     const requests = fetcher.mock.calls.map(([url]) => new URL(String(url), 'https://example.test').searchParams)

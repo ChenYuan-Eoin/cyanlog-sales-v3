@@ -114,6 +114,8 @@
 .returnForm input{box-sizing:border-box;width:100%;min-width:0;max-width:100%;border:1px solid #c7ced9;border-radius:6px;padding:8px;font:inherit;line-height:1.6}.returnForm,.workorderReview{min-width:0}.cardCore{grid-template-columns:repeat(2,minmax(0,1fr))}.cardCore>div{min-width:0;overflow-wrap:anywhere}.cardMeta{gap:8px;flex-wrap:wrap;overflow-wrap:anywhere}
 
 .quickDates{flex-wrap:wrap}
+.quickDates .dateFilterToggle:is([aria-expanded=true],[data-filtered=true]){border-color:#3677df;background:#edf4ff;color:#2867c7}
+.moreLedgerDates:not([hidden]){display:grid;gap:8px}
 .customLedgerDates:not([hidden]){display:grid;gap:8px}
 .customLedgerDates>div:first-child{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .customLedgerDates>div:nth-child(2),.ledgerPages{display:flex;align-items:center;justify-content:space-between;gap:8px}
