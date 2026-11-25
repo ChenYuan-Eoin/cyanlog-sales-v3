@@ -341,6 +341,18 @@ function clearOrgAccessBrowserCache(token: string | null) {
   deleteBrowserCache(scopedCacheKey(token, 'configs:role-access'))
 }
 
+function preserveUnchangedRolePermissions(roles: ConfigRoleRecord[], currentRoles: ConfigRoleRecord[]): ConfigRoleRecord[] {
+  const currentById = new Map(currentRoles.map(role => [role.id, role]))
+  return roles.map(role => {
+    const current = currentById.get(role.id)
+    const previous = current?.permissions
+    const next = role.permissions
+    if (!previous || !next || current?.permissions_edit_block_reason !== role.permissions_edit_block_reason
+      || previous.length !== next.length || !next.every(key => previous.includes(key))) return role
+    return { ...role, permissions: previous }
+  })
+}
+
 function aiRuntimeCacheKey(token: string | null) {
   return scopedCacheKey(token, 'configs:ai-runtime:v1')
 }
@@ -490,6 +502,7 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null)
   const roleSaveRef = useRef(false)
   const roleRequestEpochRef = useRef(0)
+  const roleViewRef = useRef<{ orgId: string; token: string | null } | null>(null)
   const orgRequestEpochRef = useRef(0)
   const [orgSummary, setOrgSummary] = useState<OrgSummaryPayload | null>(null)
   const [roleAuthority, setRoleAuthority] = useState<Omit<OrgRolePermissionSnapshot, 'roles'> | null>(null)
@@ -505,9 +518,17 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
   // 保持 ref 与 state 同步
   useEffect(() => { loadedTabsRef.current = loadedTabs }, [loadedTabs])
 
-  const applyRoleSnapshot = useCallback((snapshot: OrgRolePermissionSnapshot) => {
+  const clearRoleView = useCallback(() => {
+    roleViewRef.current = null
+    setRoleAuthority(null)
+    setRoles([])
+  }, [])
+
+  const applyRoleSnapshot = useCallback((snapshot: OrgRolePermissionSnapshot, token: string | null, preserveRoleDraft: boolean) => {
     const { roles: nextRoles, ...authority } = snapshot
-    setRoles(nextRoles)
+    const keepBaseline = preserveRoleDraft && roleViewRef.current?.orgId === snapshot.orgId && snapshot.permissionsEditable
+    roleViewRef.current = { orgId: snapshot.orgId, token }
+    setRoles(current => keepBaseline ? preserveUnchangedRolePermissions(nextRoles, current) : nextRoles)
     setRoleAuthority(authority)
     setRoleLoadError(null)
     setOrgSummary(current => current && current.organization?.id !== snapshot.orgId ? null : current)
@@ -518,10 +539,9 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
   }, [])
 
   const handleRoleReadFailure = useCallback((reason: unknown) => {
-    setRoleAuthority(null)
+    clearRoleView()
     setRoleLoadError(requestMessage(reason, '角色权限加载失败，请刷新后重试。'))
-    setRoles([])
-  }, [])
+  }, [clearRoleView])
 
   const readOrgSummary = useCallback(async (headers: HeadersInit) => {
     const summary = await fetchJsonOrThrow<OrgSummaryPayload>(
@@ -536,12 +556,16 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
   // 按需加载指定 tab 的数据
   const loadTabData = useCallback(async (
     tab: ConfigTabId,
-    options?: { force?: boolean; background?: boolean },
+    options?: { force?: boolean; background?: boolean; preserveRoleDraft?: boolean },
   ) => {
     // 防重复请求：如果已经在加载该 tab，则跳过
     if (loadingTabRef.current === tab && !options?.force) return
     // 如果已经加载过，则跳过
     if (loadedTabsRef.current.has(tab) && !options?.force) return
+    // A save already reads its result with fresh authority. Do not replace that
+    // readback with an earlier snapshot when the same window regains focus.
+    if (options?.preserveRoleDraft && roleSaveRef.current
+      && roleViewRef.current?.token === localStorage.getItem('token')) return
 
     loadingTabRef.current = tab
     if (!options?.background) {
@@ -740,18 +764,29 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
         case 'role-access': {
           const roleEpoch = ++roleRequestEpochRef.current
           const orgEpoch = ++orgRequestEpochRef.current
-          setRoleAuthority(null)
-          setRoleLoadError(null)
-          setRoles([])
-          setOrgSummary(null)
+          const preserveRoleDraft = options?.preserveRoleDraft === true
+            && token !== null && roleViewRef.current?.token === token
+          if (!preserveRoleDraft) {
+            clearRoleView()
+            setRoleLoadError(null)
+            handleOrgReadFailure()
+          }
           const [roleResult, orgResult] = await Promise.allSettled([readRoleSnapshot(headers), readOrgSummary(headers)])
           if (roleEpoch !== roleRequestEpochRef.current || orgEpoch !== orgRequestEpochRef.current) break
-          if (roleResult.status === 'fulfilled' && orgResult.status === 'fulfilled'
-              && roleResult.value.orgId !== orgResult.value.organization?.id) {
-            throw new ConfigsRequestError('当前组织已切换，请刷新后重试。', 409)
+          const sessionChanged = token !== localStorage.getItem('token')
+          const organizationMismatch = roleResult.status === 'fulfilled' && orgResult.status === 'fulfilled'
+            && roleResult.value.orgId !== orgResult.value.organization?.id
+          if (sessionChanged || organizationMismatch) {
+            const reason = new ConfigsRequestError(sessionChanged
+              ? '当前登录会话已变化，请重新载入角色权限。'
+              : '当前组织已切换，请刷新后重试。', 409)
+            handleRoleReadFailure(reason)
+            handleOrgReadFailure()
+            setError(reason.message)
+            break
           }
           if (roleResult.status === 'fulfilled') {
-            applyRoleSnapshot(roleResult.value)
+            applyRoleSnapshot(roleResult.value, token, preserveRoleDraft)
             didLoad = true
           } else {
             handleRoleReadFailure(roleResult.reason)
@@ -760,7 +795,10 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
           if (orgResult.status === 'fulfilled') {
             setOrgSummary(orgResult.value)
             setLoadedTabs(prev => new Set(prev).add('org-structure'))
-          } else if (didLoad) setError(requestMessage(orgResult.reason, '组织架构加载失败'))
+          } else {
+            handleOrgReadFailure()
+            if (didLoad) setError(requestMessage(orgResult.reason, '组织架构加载失败'))
+          }
           break
         }
 
@@ -775,6 +813,11 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
           try {
             const summary = await readOrgSummary(headers)
             if (orgEpoch !== orgRequestEpochRef.current) break
+            const roleView = roleViewRef.current
+            if (roleView && (roleView.orgId !== summary.organization?.id || roleView.token !== token)) {
+              roleRequestEpochRef.current += 1
+              clearRoleView()
+            }
             setOrgSummary(summary)
             setRoleAuthority(current => current?.orgId === summary.organization?.id ? current : null)
             didLoad = true
@@ -804,7 +847,7 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
         loadingTabRef.current = null
       }
     }
-  }, [applyRoleSnapshot, handleOrgReadFailure, handleRoleReadFailure, readOrgSummary, readRoleSnapshot])
+  }, [applyRoleSnapshot, clearRoleView, handleOrgReadFailure, handleRoleReadFailure, readOrgSummary, readRoleSnapshot])
 
   const refreshTabData = useCallback(async (tab: ConfigTabId) => {
     const token = localStorage.getItem('token')
@@ -877,9 +920,12 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
 
   useEffect(() => {
     if (activeTab !== 'role-access' && activeTab !== 'org-structure') return
-    const revalidate = () => { void loadTabData(activeTab, { force: true }) }
+    const revalidate = () => {
+      const revalidateRoleDraft = activeTab === 'role-access'
+      void loadTabData(activeTab, { force: true, background: revalidateRoleDraft, preserveRoleDraft: revalidateRoleDraft })
+    }
     const onStorage = (event: StorageEvent) => {
-      if (event.key === null || event.key === 'token') revalidate()
+      if (event.key === null || event.key === 'token') void loadTabData(activeTab, { force: true })
     }
     window.addEventListener('focus', revalidate)
     window.addEventListener('storage', onStorage)
@@ -1015,8 +1061,18 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
       return
     }
     const token = localStorage.getItem('token')
+    if (roleViewRef.current?.token !== token) {
+      void loadTabData('role-access', { force: true })
+      return
+    }
     const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
     const roleRequestEpoch = ++roleRequestEpochRef.current
+    const isCurrentSave = () => {
+      if (roleRequestEpoch !== roleRequestEpochRef.current) return false
+      if (token === localStorage.getItem('token')) return true
+      void loadTabData('role-access', { force: true })
+      return false
+    }
     roleSaveRef.current = true
     setSavingRoleId(roleId)
     setError('')
@@ -1024,7 +1080,7 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
       const { role: verifiedRole, snapshot } = await saveAndReadOrgRolePermissions(headers, {
         orgId: roleAuthority.orgId, roleId, expectedPermissions: role.permissions, permissions: newPerms,
       })
-      if (roleRequestEpoch !== roleRequestEpochRef.current) return
+      if (!isCurrentSave()) return
       setRoles(current => current.map(candidate => candidate.id === roleId ? verifiedRole : candidate))
       setRoleAuthority({
         orgId: snapshot.orgId,
@@ -1035,7 +1091,7 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
       })
       clearOrgAccessBrowserCache(token)
     } catch (error) {
-      if (roleRequestEpoch !== roleRequestEpochRef.current) return
+      if (!isCurrentSave()) return
       if (accessDenied(error)) handleRoleReadFailure(error)
       if (error instanceof RolePermissionRequestError && (error.requiresRefresh || error.status === 409)) {
         setRoleAuthority(null)
