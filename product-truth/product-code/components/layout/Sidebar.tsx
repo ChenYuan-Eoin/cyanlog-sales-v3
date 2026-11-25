@@ -37,9 +37,11 @@ const navItems = [
 const configNavigationCache = new Map<string, { access: boolean; expiresAt: number }>()
 const configNavigationInflight = new Map<string, Promise<boolean>>()
 
-function loadConfigNavigation(token: string | null): Promise<boolean> {
+function loadConfigNavigation(token: string | null, refreshSignal?: AbortSignal): Promise<boolean> {
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined
-  const readProfile = () => fetch('/api/auth/me', { cache: 'no-store', headers })
+  const readProfile = () => fetch(refreshSignal ? '/api/auth/me?fresh=1' : '/api/auth/me', {
+    cache: 'no-store', headers, signal: refreshSignal,
+  })
     .then(async response => {
       const body = response.ok ? await response.json() : null
       const roles = Array.isArray(body?.user?.roles) ? body.user.roles : []
@@ -48,13 +50,17 @@ function loadConfigNavigation(token: string | null): Promise<boolean> {
     })
     .catch(() => false)
   if (!token) return readProfile()
-  const cached = configNavigationCache.get(token)
-  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.access)
-  const inflight = configNavigationInflight.get(token)
-  if (inflight) return inflight
+  if (refreshSignal) {
+    configNavigationCache.delete(token)
+  } else {
+    const cached = configNavigationCache.get(token)
+    if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.access)
+    const inflight = configNavigationInflight.get(token)
+    if (inflight) return inflight
+  }
   const request = readProfile()
     .then(access => {
-      if (configNavigationInflight.get(token) === request) {
+      if (!refreshSignal?.aborted && configNavigationInflight.get(token) === request) {
         configNavigationCache.set(token, { access, expiresAt: Date.now() + (access ? 60_000 : 15_000) })
       }
       return access
@@ -78,11 +84,18 @@ export function Sidebar() {
   useEffect(() => {
     let live = true
     let profileGeneration = 0
+    let configFocusRequest: AbortController | null = null
 
-    function refreshConfig() {
+    function refreshConfig(fresh = false) {
+      if (signingOut.current) return
+      configFocusRequest?.abort()
+      configFocusRequest = fresh ? new AbortController() : null
+      const token = localStorage.getItem('token')
       const generation = ++profileGeneration
-      void loadConfigNavigation(localStorage.getItem('token')).then(access => {
-        if (live && !signingOut.current && generation === profileGeneration) setConfigAccess(access)
+      void loadConfigNavigation(token, configFocusRequest?.signal).then(access => {
+        if (live && !signingOut.current && generation === profileGeneration && localStorage.getItem('token') === token) {
+          setConfigAccess(access)
+        }
       })
     }
 
@@ -111,14 +124,20 @@ export function Sidebar() {
       refreshShipping()
     }
 
+    function refreshOnFocus() {
+      refreshConfig(true)
+      refreshShipping()
+    }
+
     refreshConfig()
     refreshShipping()
-    window.addEventListener('focus', refreshShipping)
+    window.addEventListener('focus', refreshOnFocus)
     window.addEventListener('storage', refreshSession)
     return () => {
       live = false
+      configFocusRequest?.abort()
       shippingRequest.current?.abort()
-      window.removeEventListener('focus', refreshShipping)
+      window.removeEventListener('focus', refreshOnFocus)
       window.removeEventListener('storage', refreshSession)
     }
   }, [])

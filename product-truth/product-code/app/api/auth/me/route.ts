@@ -5,6 +5,8 @@ import { getRequestAuthToken } from '@/lib/auth-token'
 import {
   canManageOrg,
   getDefaultOrgId,
+  getFreshDefaultOrgId,
+  getFreshUserScopedRoleAssignments,
   getOrgScopedAssignments,
   getUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
@@ -19,9 +21,10 @@ export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
     const token = getRequestAuthToken(req)
+    const fresh = req.nextUrl.searchParams.get('fresh') === '1'
     const [scopedAssignments, orgId, userResult, sessionResult] = await Promise.all([
-      getUserScopedRoleAssignments(user.id),
-      getDefaultOrgId(user.id),
+      (fresh ? getFreshUserScopedRoleAssignments : getUserScopedRoleAssignments)(user.id),
+      (fresh ? getFreshDefaultOrgId : getDefaultOrgId)(user.id),
       supabaseAdmin
         .from('users')
         .select('id, email, phone, display_name, avatar_url, title, employee_id, last_login_at, primary_dept_id, org_id')

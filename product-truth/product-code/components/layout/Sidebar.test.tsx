@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { Sidebar } from './Sidebar'
 
@@ -110,5 +110,57 @@ describe('Sidebar shipping navigation lookup', () => {
     await waitFor(() => expect(screen.queryByRole('link', { name: '自助收寄' })).toBeNull())
     expect(screen.getByRole('link', { name: '配置中心' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '合同审核' })).toBeInTheDocument()
+  })
+
+  it('shows and hides configuration after same-session authority changes on focus', async () => {
+    const token = localStorage.getItem('token')
+    let canManage = false
+    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
+      if (url === '/api/navigation') return Response.json({ paths: ['/shipping'] })
+      if (url === '/api/auth/me?fresh=1') return Response.json({
+        user: { roles: [{ code: canManage ? 'ORG_SUPER_ADMIN' : 'READONLY' }], canManageOrg: canManage },
+      })
+      return Response.json({ user: { roles: [{ code: 'READONLY' }], canManageOrg: false } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<Sidebar />)
+    await screen.findByRole('link', { name: '自助收寄' })
+    expect(screen.queryByRole('link', { name: '配置中心' })).toBeNull()
+
+    canManage = true
+    fireEvent(window, new Event('focus'))
+    expect(await screen.findByRole('link', { name: '配置中心' })).toHaveAttribute('href', '/configs')
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/me?fresh=1', expect.objectContaining({
+      cache: 'no-store', headers: { Authorization: `Bearer ${token}` },
+    }))
+
+    canManage = false
+    fireEvent(window, new Event('focus'))
+    await waitFor(() => expect(screen.queryByRole('link', { name: '配置中心' })).toBeNull())
+    expect(localStorage.getItem('token')).toBe(token)
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/auth/me')).toHaveLength(1)
+  })
+
+  it('keeps a denied focus result after an older authority response arrives', async () => {
+    let completeProfile: (response: Response) => void = () => {}
+    const pendingProfile = new Promise<Response>(resolve => { completeProfile = resolve })
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/api/navigation') return Response.json({ paths: ['/shipping'] })
+      if (url === '/api/auth/me?fresh=1') return Response.json({ user: { roles: [{ code: 'READONLY' }], canManageOrg: false } })
+      return pendingProfile
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const current = render(<Sidebar />)
+    await screen.findByRole('link', { name: '自助收寄' })
+    fireEvent(window, new Event('focus'))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/auth/me?fresh=1', expect.anything()))
+    await act(async () => completeProfile(Response.json({ user: { roles: [{ code: 'ORG_SUPER_ADMIN' }], canManageOrg: true } })))
+    expect(screen.queryByRole('link', { name: '配置中心' })).toBeNull()
+
+    current.unmount()
+    render(<Sidebar />)
+    await screen.findByRole('link', { name: '自助收寄' })
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/auth/me')).toHaveLength(1)
+    expect(screen.queryByRole('link', { name: '配置中心' })).toBeNull()
   })
 })
