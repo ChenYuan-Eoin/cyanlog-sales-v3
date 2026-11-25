@@ -1,0 +1,60 @@
+.panel {
+  --sf-red: var(--red, #d7384a);
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.panel button {
+  min-height: 30px;
+  border: 1px solid #cfd8e5;
+  border-radius: 7px;
+  background: #fff;
+  color: #26364d;
+  padding: 4px 11px;
+  cursor: pointer;
+}
+
+.panel button[data-carrier-action="modify_recipient"], .panel button[type="submit"] {
+  border-color: #2563cf;
+  background: #2563d4;
+  color: #fff;
+}
+
+.panel button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.form, .pasteField {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.form textarea, .form input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d8e0ea;
+  border-radius: 6px;
+  background: #fff;
+  color: #26364d;
+  padding: 6px 8px;
+}
+
+.form textarea {
+  resize: vertical;
+}
+
+.panel p, .panel dd {
+  overflow-wrap: anywhere;
+}

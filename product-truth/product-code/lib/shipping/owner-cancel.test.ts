@@ -10,7 +10,7 @@ import { ShippingError } from './config'
 let cancelOrderRow: Record<string,unknown>
 beforeEach(()=>{
  vi.resetAllMocks()
- m.connect.mockResolvedValue({cancel:m.cancel,track:m.track})
+ m.connect.mockResolvedValue({cancel:m.cancel,trackOrder:m.track})
  m.track.mockResolvedValue({source:'carrier',waybill:'SF001',queriedAt:'2026-11-24T08:00:00Z',events:[{time:'2026-11-24 16:00:00',location:'北京',description:'待揽收',status:'waybill_created'}]})
  m.recordTracking.mockResolvedValue({recorded:1,shipmentStatus:'waybill_created'})
  cancelOrderRow={id:'own',org_id:'org',created_by:'employee',intake_source:'owner_web',order_no:'ref',status:'waybill_created',revision:2,provider_key:'sf',provider_order_id:'original-request',carrier_connection_id:'original',billing_account_id:'billing',connection_environment:'sandbox',shipping_waybills:{waybill_no:'SF001',carrier_key:'sf',provider_order_id:'original-request',latest_status:'waybill_created'}}
@@ -35,6 +35,16 @@ it('requires the complete displayed snapshot and returns 409 without contacting 
  await expect(cancelOriginalShipment('ref','me','org',true,issuedSnapshot)).rejects.toMatchObject({status:409})
  expect(m.connect).not.toHaveBeenCalled()
 })
+it('uses the operator’s displayed revision for local cancellation',async()=>{
+ m.rpc.mockResolvedValueOnce({data:{id:'own',result:'cancelled'}})
+ await expect(cancelOriginalShipment('own','operator','org',false,localSnapshot)).resolves.toEqual({id:'own',status:'cancelled'})
+ expect(m.rpc).toHaveBeenCalledWith('claim_shipping_cancellation_v1',expect.objectContaining({
+   p_org:'org',p_actor:'operator',p_owner:false,p_reference:'own',p_expected:localSnapshot,
+ }))
+ expect(m.connect).not.toHaveBeenCalled()
+ await expect(cancelOriginalShipment('own','operator','org',false,{...localSnapshot,revision:0})).rejects.toMatchObject({status:409})
+ expect(m.rpc).toHaveBeenCalledTimes(1)
+})
 it('a lost carrier response cannot become success or a second carrier action on retry',async()=>{
  const dispatch={id:'id',result:'dispatch',provider:'sf',connectionId:'original',billingAccountId:'billing',environment:'sandbox',providerOrderId:'original-request'}
  m.rpc.mockResolvedValueOnce({data:dispatch}).mockResolvedValueOnce({data:'unknown'}).mockResolvedValueOnce({data:{id:'id',result:'pending'}})
@@ -50,7 +60,7 @@ it('refreshes a cached uncollected waybill before cancellation and refuses a way
  m.recordTracking.mockResolvedValueOnce({recorded:1,shipmentStatus:'delivered'})
  m.rpc.mockResolvedValueOnce({data:{id:'own',result:'dispatch',provider:'sf',connectionId:'original',billingAccountId:'billing',environment:'production',providerOrderId:'original-request'}}).mockResolvedValue({data:'not_sent'})
  await expect(cancelOriginalShipment('ref','employee','org',true,issuedSnapshot)).rejects.toMatchObject({status:409})
- expect(m.track).toHaveBeenCalledWith('SF001')
+ expect(m.track).toHaveBeenCalledWith('original-request','SF001')
  expect(m.recordTracking).toHaveBeenCalledWith('org',expect.objectContaining({waybill:'SF001',source:'carrier'}),'sf')
  expect(m.cancel).not.toHaveBeenCalled()
  expect(m.rpc).toHaveBeenLastCalledWith('finish_shipping_cancellation_v1',expect.objectContaining({p_outcome:'not_sent'}))
@@ -81,7 +91,7 @@ it('cancels an actually uncollected production order once using the original req
  m.rpc.mockResolvedValueOnce({data:{id:'own',result:'dispatch',provider:'sf',connectionId:'original',billingAccountId:'billing',environment:'production',providerOrderId:'original-request'}}).mockResolvedValueOnce({data:'accepted'})
  await expect(cancelOriginalShipment('ref','employee','org',true,issuedSnapshot)).resolves.toEqual({id:'own',status:'cancelled'})
  expect(m.connect).toHaveBeenCalledWith(expect.objectContaining({orgId:'org',connectionId:'original',billingAccountId:'billing',expectedEnvironment:'production'}))
- expect(m.track).toHaveBeenCalledExactlyOnceWith('SF001')
+ expect(m.track).toHaveBeenCalledExactlyOnceWith('original-request','SF001')
  expect(m.cancel).toHaveBeenCalledExactlyOnceWith('original-request')
  expect(m.rpc.mock.calls[1][1]).toMatchObject({p_order:'own',p_outcome:'accepted'})
 })

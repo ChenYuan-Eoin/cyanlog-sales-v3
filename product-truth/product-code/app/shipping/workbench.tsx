@@ -11,7 +11,7 @@ import { parseAddress } from '@/lib/shipping/address'
 import { normalizeTrackingTime } from '@/lib/shipping/tracking-status'
 import { DEFAULT_INTAKE_RULES, intakeFieldSchema } from '@/lib/shipping/intake-rules'
 import type { LedgerDateRange } from '@/lib/shipping/ledger-date-range'
-import { OperatorCarrierChangeHistory } from './carrier-change-history'
+import { CarrierChanges } from './carrier-changes'
 import { LedgerDateFilter } from './ledger-date-filter'
 import styles from './workbench.module.css'
 
@@ -147,6 +147,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   const [reviewIds, setReviewIds] = useState<string[]>([])
   const [confirmationBusy, setConfirmationBusy] = useState(false)
   const confirmationRunning = useRef(false)
+  const cancellationRunning = useRef(false)
   const [ledgerLoading, setLedgerLoading] = useState(true)
   const [trackingBusy, setTrackingBusy] = useState(false)
   const [trackingTarget, setTrackingTarget] = useState('')
@@ -230,7 +231,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
             const fresh = latest.get(order.id)
             if (!fresh || !order.waybill || fresh.waybill !== order.waybill || !outcomes.has(order.waybill) || !needsTracking(order)) return order
             const status = order.status === 'in_transit' && fresh.status === 'waybill_created' ? order.status : fresh.status
-            return { ...order, status, trackingEvents: fresh.trackingEvents, trackingStatus: fresh.trackingStatus, trackingUpdatedAt: fresh.trackingUpdatedAt }
+            return { ...order, status, canCancel: fresh.canCancel, cancellationState: fresh.cancellationState, trackingEvents: fresh.trackingEvents, trackingStatus: fresh.trackingStatus, trackingUpdatedAt: fresh.trackingUpdatedAt }
           }))
           const readWaybills = new Set(records.map(order => order.waybill))
           for (const number of numbers) if (!readWaybills.has(number)) outcomes.set(number, null)
@@ -269,7 +270,10 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
   }
   const selectedTracking = selected ? trackingFor(selected) : tracking
   const trackingEvents = selectedTracking?.events.length ? selectedTracking.events : selected?.trackingEvents || []
-  const canCancelSelected = selected?.status === 'waybill_created' && (isSimulation || Boolean(selected.waybill && trackingChecks.get(selected.waybill)?.shipmentStatus === 'waybill_created'))
+  function canCancelWaybill(order: ShipmentOrder) {
+    return !settings.guest && order.status === 'waybill_created' && order.canCancel !== false
+      && (isSimulation || Boolean(order.waybill && trackingChecks.get(order.waybill)?.shipmentStatus === 'waybill_created'))
+  }
   function orderHasDispatch(order: ShipmentOrder) {
     return Boolean(order.waybill) || ['ordering', 'order_unknown', 'waybill_created', 'in_transit', 'delivered', 'cancelled'].includes(order.status)
   }
@@ -685,10 +689,34 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     } finally { if (currentRequest === trackingRequest.current) setTrackingBusy(false) }
   }
 
-  async function cancelSelected() {
-    if (!selected || !canCancelSelected || trackingBusy || confirmationRunning.current || busy) return
-    setBusy(selected.id)
-    try { await request(`/api/shipping/ledger/${selected.id}/cancel`, { method: 'POST', body: '{}' }); setOrders(items => items.map(item => item.id === selected.id ? { ...item, status: 'cancelled' } : item)); setTracking(null); trackingRequest.current += 1; setTrackingBusy(false); setMessage(isSimulation ? '模拟运单已取消，没有操作真实运单。' : '顺丰运单已取消。') } catch (error) { setMessage((error as Error).message) } finally { setBusy('') }
+  async function cancelOrder(order: ShipmentOrder) {
+    const allowed = order.waybill ? canCancelWaybill(order) : !isSimulation && !settings.guest && order.canCancel === true
+    if (!allowed || trackingBusy || confirmationRunning.current || cancellationRunning.current || busy || batchBusy) return
+    cancellationRunning.current = true
+    setBusy(order.id)
+    setMessage('')
+    try {
+      const result = await request<{ id?: string; status: ShipmentOrderStatus }>(`/api/shipping/ledger/${encodeURIComponent(order.id)}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ revision: order.revision ?? 1, status: order.status, waybill: order.waybill }),
+      })
+      if (result.status !== 'cancelled' || (result.id && result.id !== order.id)) throw new Error('取消结果尚未核实，请刷新单据。')
+      setOrders(items => items.map(item => item.id === order.id ? { ...item, status: 'cancelled', canCancel: false, cancellationState: null } : item))
+      setReviewIds(items => items.filter(id => id !== order.id))
+      setReturnDraft(draft => draft?.orderId === order.id ? null : draft)
+      setAmendmentDraft(draft => draft?.orderId === order.id ? null : draft)
+      setMessage(isSimulation ? '模拟运单已取消，没有操作真实运单。' : order.waybill ? '顺丰运单已取消。' : '提报工单已取消。')
+    } catch (error) {
+      setMessage((error as Error).message)
+      try {
+        const { records } = await request<LedgerPage>(ledgerUrl)
+        const fresh = records.find(item => item.id === order.id)
+        if (fresh) setOrders(items => items.map(item => item.id === fresh.id ? fresh : item))
+      } catch { /* Keep the last observed order and the cancellation error. */ }
+    } finally {
+      cancellationRunning.current = false
+      setBusy('')
+    }
   }
 
   return <main className={styles.shell}>
@@ -770,7 +798,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
         <div className={styles.filters}>
           <div className={styles.segmented}><button className={type === 'all' ? styles.active : ''} onClick={() => setType('all')}>全部</button><button className={type === 'outbound' ? styles.active : ''} onClick={() => setType('outbound')}>寄出件</button><button className={type === 'inbound' ? styles.active : ''} onClick={() => setType('inbound')}>收到件</button></div>
           <LedgerDateFilter disabled={ledgerNavigationLocked} onChange={range => goToLedgerPage(0, range)} />
-          <select aria-label="状态筛选" value={status} onChange={event => setStatus(event.target.value as typeof status)}><option value="all">全部状态</option><option value="awaiting_confirmation">待审核工单</option><option value="returned">已退回工单</option><option value="resubmitted">已重提</option><option value="order_unknown">下单结果待确认</option><option value="ordering">下单中</option><option value="waybill_created">已出单/待揽收</option><option value="in_transit">运输中</option><option value="delivered">已签收</option><option value="order_failed">异常件</option></select>
+          <select aria-label="状态筛选" value={status} onChange={event => setStatus(event.target.value as typeof status)}><option value="all">全部状态</option><option value="awaiting_confirmation">待审核工单</option><option value="returned">已退回工单</option><option value="resubmitted">已重提</option><option value="order_unknown">下单结果待确认</option><option value="ordering">下单中</option><option value="waybill_created">已出单/待揽收</option><option value="in_transit">运输中</option><option value="delivered">已签收</option><option value="cancelled">已取消</option><option value="order_failed">异常件</option></select>
           <label className={styles.search}><Search size={14}/><input aria-label="搜索台账" value={search} onChange={event => setSearch(event.target.value)} placeholder="提报人、客户、收件人、运单号"/></label>
         </div>
         <div className={styles.orderList}>
@@ -812,6 +840,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
             const orderTrackingNotice = trackingNotice(order)
             const senderReview = senderForReview(order, settings.sender)
             const reviewService = serviceForReview(order, serviceOverrides[order.id], selectedServices)
+            const carrierActions = order.status === 'in_transit' && order.trackingStatus !== 'out_for_delivery'
             return <article key={order.id} className={`${styles.orderCard} ${order.id === selected?.id ? styles.selectedCard : ''}`}>
             <div
               className={styles.orderSelect}
@@ -854,6 +883,12 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
             {order.input.specialRequirements && <p className={styles.special}><AlertTriangle size={13}/>特殊需求：{order.input.specialRequirements}</p>}
             <div className={styles.cardMeta}><span>{order.waybill || '尚未出单'}</span><time>{new Date(order.createdAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</time></div>
             </div>
+            {!isSimulation && !settings.guest && !order.waybill && order.canCancel === true &&
+              <div className={styles.cardActions}>
+                <button type="button" className={styles.reject} aria-label={`取消 ${order.orderNo}`}
+                  disabled={!!busy || trackingBusy || confirmationBusy || batchBusy}
+                  onClick={() => void cancelOrder(order)}>取消</button>
+              </div>}
             {order.status === 'awaiting_confirmation' && <>
               <div className={styles.cardActions} onClick={event => event.stopPropagation()}>
                 <label className={styles.reviewSelection}><input type="checkbox" aria-label={`核对并选择工单 ${order.orderNo}`} disabled={confirmationBusy || !!busy} checked={reviewIds.includes(order.id)} onChange={() => toggleReview(order)}/>核对工单</label>
@@ -900,10 +935,18 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                   <div><small>收件人</small><strong>{order.input.recipient.name}</strong><span>{cityOf(order)}</span></div>
                   <div><small>最近物流事件</small><strong>{order.trackingUpdatedAt ? new Date(order.trackingUpdatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '暂无记录'}</strong><span>{orderEvents.length ? `${orderEvents.length} 个节点` : orderTrackingNotice}</span></div>
                 </div>
-                {!isSimulation && !settings.guest && order.intakeSource === 'owner_web' && order.waybill &&
-                  <OperatorCarrierChangeHistory key={order.id} orderId={order.id} />}
+                {!isSimulation && !settings.guest && order.direction !== 'inbound' && order.waybill &&
+                  <CarrierChanges orderNo={order.orderNo} endpoint={`/api/shipping/ledger/${encodeURIComponent(order.id)}/carrier-changes`}
+                    allowActions={carrierActions} showUnavailable={carrierActions} disabled={!!busy || confirmationBusy || batchBusy}
+                    refreshKey={`${order.status}:${order.trackingStatus ?? ''}:${order.trackingUpdatedAt ?? ''}`} />}
                 {orderEvents.length > 0 ? <ol className={styles.compactTimeline}>{orderEvents.slice(0, 3).map((event, index) => <li key={`${event.time}-${index}`}><time>{displayTrackingTime(event.time)}</time><span>{event.description}</span><small>{event.location}</small></li>)}</ol> : <p className={styles.intakeHint}>{order.waybill ? (trackingBusy && trackingTarget === order.waybill ? '正在查询这票运单…' : orderTrackingNotice || '暂无物流轨迹。') : '尚未生成运单，不能展示递送轨迹。'}</p>}
                 {order.waybill && <button type="button" className={styles.secondaryButton} disabled={trackingBusy} onClick={() => void refreshTracking(order.waybill || '')}>{trackingBusy ? '刷新中…' : '刷新递送信息'}</button>}
+                {order.status === 'waybill_created' && !settings.guest && <button type="button" className={styles.cancelButton}
+                  aria-label={`取消 ${order.waybill || order.orderNo}`}
+                  disabled={!canCancelWaybill(order) || trackingBusy || !!busy || confirmationBusy || batchBusy}
+                  onClick={() => void cancelOrder(order)}>{isSimulation ? '模拟取消运单' : '取消'}</button>}
+                {order.status !== 'cancelled' && ['calling', 'unknown', 'manual_review', 'rejected'].includes(order.cancellationState || '')
+                  && <p role="status">{order.cancellationState === 'rejected' ? '顺丰拒绝取消，请核对原单。' : '取消结果待核实，请勿重复操作。'}</p>}
               </section>
             )}
             {order.status === 'returned' && (
@@ -964,7 +1007,10 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                 <div><span>{selected.waybill ? isSimulation ? '模拟单号' : '承运商运单' : '工单状态'}</span><strong>{selected.waybill || statusForDisplay(selected)}</strong></div>
                 <div className={styles.detailActions}>
                   {selected.waybill && <button aria-label="复制单号" onClick={() => void copySelectedNumber()}><Clipboard size={15} aria-hidden="true"/>复制单号</button>}
-                  {(selected.status === 'order_unknown' || selected.status === 'ordering') && <button className={styles.secondaryButton} aria-label="查回所选单据下单结果" disabled={batchBusy || confirmationBusy || !!busy} onClick={() => void reconcileOrder(selected.id)}>{busy === selected.id ? '查回中…' : '查回下单结果'}</button>}{selected.status === 'waybill_created' && <button className={styles.cancelButton} disabled={!canCancelSelected || trackingBusy || confirmationBusy || !!busy} onClick={() => void cancelSelected()}>{isSimulation ? '模拟取消运单' : '取消运单'}</button>}
+                  {(selected.status === 'order_unknown' || selected.status === 'ordering') && <button className={styles.secondaryButton} aria-label="查回所选单据下单结果" disabled={batchBusy || confirmationBusy || !!busy} onClick={() => void reconcileOrder(selected.id)}>{busy === selected.id ? '查回中…' : '查回下单结果'}</button>}
+                  {selected.status === 'waybill_created' && expandedOrderId !== selected.id && !settings.guest &&
+                    <button className={styles.cancelButton} disabled={!canCancelWaybill(selected) || trackingBusy || confirmationBusy || batchBusy || !!busy}
+                      onClick={() => void cancelOrder(selected)}>{isSimulation ? '模拟取消运单' : '取消'}</button>}
                 </div>
               </div>
               {(selected.status === 'order_failed' || selected.status === 'order_unknown' || (selected.status === 'awaiting_confirmation' && selected.failure)) && <section className={styles.workorderReview} aria-label="下单异常处理">

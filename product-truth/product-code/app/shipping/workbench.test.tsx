@@ -619,11 +619,57 @@ describe('self-service shipping workbench', () => {
     })
     render(<ShippingWorkbench settings={settings}/>)
     expect((await screen.findAllByText('远景能源')).length).toBeGreaterThan(0)
-    await waitFor(() => expect(screen.getByRole('button', { name: '取消运单' })).toHaveProperty('disabled', false))
-    fireEvent.click(screen.getByRole('button', { name: '取消运单' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '取消' })).toHaveProperty('disabled', false))
+    fireEvent.click(screen.getByRole('button', { name: `展开递送信息 ${uncollected.waybill}` }))
+    fireEvent.click(screen.getByRole('button', { name: `取消 ${uncollected.waybill}` }))
     expect(await screen.findByText('顺丰运单已取消。')).toBeTruthy()
-    expect(fetcher).toHaveBeenCalledWith('/api/shipping/ledger/real-order-1/cancel', expect.objectContaining({ method: 'POST' }))
-    expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
+    expect(fetcher).toHaveBeenCalledWith('/api/shipping/ledger/real-order-1/cancel', expect.objectContaining({
+      method: 'POST', body: JSON.stringify({ revision: uncollected.revision ?? 1, status: 'waybill_created', waybill: uncollected.waybill }),
+    }))
+    expect(screen.queryByRole('button', { name: '取消' })).toBeNull()
+  })
+
+  it('cancels the selected ledger card before it generates a waybill and removes it from review', async () => {
+    const order = { ...fixtureOrders[0], canCancel: true, revision: 4 }
+    fetcher.mockImplementation(async (url: string) => Response.json(
+      url.endsWith('/cancel') ? { id: order.id, status: 'cancelled' } : { records: [order] },
+    ))
+    render(<ShippingWorkbench settings={settings}/>)
+    fireEvent.click(await screen.findByRole('checkbox', { name: `核对并选择工单 ${order.orderNo}` }))
+    fireEvent.click(screen.getByRole('button', { name: `取消 ${order.orderNo}` }))
+    await screen.findByText('提报工单已取消。')
+    expect(screen.queryByRole('checkbox', { name: `核对并选择工单 ${order.orderNo}` })).toBeNull()
+    expect(fetcher).toHaveBeenCalledWith(`/api/shipping/ledger/${order.id}/cancel`, expect.objectContaining({
+      method: 'POST', body: JSON.stringify({ revision: 4, status: 'awaiting_confirmation', waybill: null }),
+    }))
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
+  })
+
+  it('posts a parsed forwarding address from an expanded operator ledger order', async () => {
+    const order = { ...fixtureOrders[2], status: 'in_transit' as const }
+    const endpoint = `/api/shipping/ledger/${order.id}/carrier-changes`
+    fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url !== endpoint) return Response.json({ records: [order] })
+      if (init?.method === 'POST') {
+        const recipient = JSON.parse(String(init.body)).recipient
+        return Response.json({
+          action: 'modify_recipient', status: 'accepted', originalRecipient: order.input.recipient, destination: recipient,
+          requestedAt: '2026-11-25T08:00:00Z', instructionId: 'receipt', amount: null,
+        })
+      }
+      return Response.json({ orderNo: order.orderNo, actions: ['modify_recipient'], currentRecipient: order.input.recipient, returnDestination: order.input.sender, latest: null })
+    })
+    render(<ShippingWorkbench settings={settings}/>)
+    fireEvent.click(await screen.findByRole('button', { name: `展开递送信息 ${order.waybill}` }))
+    fireEvent.click(await screen.findByRole('button', { name: '转寄 / 改派' }))
+    fireEvent.change(screen.getByLabelText('粘贴新收件地址'), { target: { value: '李四 13800000000 上海市浦东新区张江路88号' } })
+    fireEvent.click(screen.getByRole('button', { name: '识别并填写' }))
+    fireEvent.click(screen.getByRole('button', { name: '确认提交转寄 / 改派' }))
+    expect((await screen.findByRole('region', { name: '顺丰指令记录' })).textContent).toContain('顺丰已受理指令，实际处理结果待确认')
+    const post = fetcher.mock.calls.find(([url, init]) => url === endpoint && init?.method === 'POST')
+    expect(JSON.parse(String(post?.[1].body))).toMatchObject({
+      action: 'modify_recipient', recipient: { name: '李四', phone: '13800000000', county: '浦东新区', address: '张江路88号' },
+    })
   })
 
   it('shows the stored SF instruction only in the expanded owner delivery details', async () => {
@@ -635,7 +681,7 @@ describe('self-service shipping workbench', () => {
       amount: null, instructionId: null,
     }
     fetcher.mockImplementation(async (url: string) =>
-      Response.json(url === endpoint ? { latest } : { records: [order] }))
+      Response.json(url === endpoint ? { orderNo: order.orderNo, actions: [], latest } : { records: [order] }))
     render(<ShippingWorkbench settings={settings}/>)
     const expand = await screen.findByRole('button', { name: `展开递送信息 ${order.waybill}` })
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/shipping/ledger?limit=50&page=0'])
@@ -679,7 +725,7 @@ describe('self-service shipping workbench', () => {
     expect(screen.getByRole('button', { name: '展开递送信息 SF5169741550975' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '展开递送信息 SF5169741550975' }))
     expect(await screen.findByRole('heading', { name: '已签收' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '取消' })).toBeNull()
   })
 
   it('periodically refreshes active waybills only while the workbench is visible', async () => {
@@ -714,7 +760,7 @@ describe('self-service shipping workbench', () => {
     await screen.findByRole('button', { name: `展开递送信息 ${order.waybill}` })
     await waitFor(() => expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith('/tracking'))).toHaveLength(1))
     expect((await screen.findAllByText(/状态尚未核实/)).length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: '取消运单' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: '取消' })).toHaveProperty('disabled', true)
   })
 
   it('can retry a failed automatic lookup from the selected waybill', async () => {
@@ -733,7 +779,7 @@ describe('self-service shipping workbench', () => {
     fireEvent.click(screen.getByRole('button', { name: '刷新' }))
     expect(await screen.findByText('顺丰速运 已收取快件')).toBeTruthy()
     expect(screen.getByRole('heading', { name: '运输中' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '取消' })).toBeNull()
     expect(calls).toBe(2)
   })
 
@@ -745,7 +791,7 @@ describe('self-service shipping workbench', () => {
     fireEvent.click(screen.getByRole('button', { name: '刷新' }))
     await screen.findByText('旧的待揽收事件')
     expect(screen.getByRole('heading', { name: status === 'cancelled' ? '已取消' : '已签收' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '取消运单' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '取消' })).toBeNull()
   })
 
   it('switches the same expanded card from pre-dispatch service review to post-dispatch delivery information', async () => {
@@ -829,7 +875,7 @@ describe('self-service shipping workbench', () => {
     fireEvent.click(screen.getByRole('button', { name: '刷新' }))
     expect(await screen.findByRole('note')).toHaveProperty('textContent', '顺丰沙盒返回的是模拟轨迹，不用于判断实际揽收、签收或取消状态。')
     expect(screen.getByRole('heading', { name: '等待揽收' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '取消运单' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '取消' })).toBeTruthy()
   })
 
   it('reloads and selects a newly created order in the ledger after batch success', async () => {

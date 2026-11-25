@@ -15,6 +15,7 @@ const order = (orderNo: string, extra: Record<string, unknown> = {}) => ({
   ...extra,
 })
 const response = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status })
+const noCarrierChanges = (orderNo: string) => response({ orderNo, actions: [], latest: null, currentRecipient: null, returnDestination: null })
 const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
 
 beforeEach(() => {
@@ -62,13 +63,15 @@ it('refreshes current waybill status from SF and reloads the owner list before s
   fetcher.mockResolvedValueOnce(response({ orders: [order('LIVE', { waybill: 'SF1234567890123' })], nextPage: null }))
     .mockResolvedValueOnce(response({ verified: true, waybill: 'SF1234567890123', source: 'carrier', shipmentStatus: 'delivered', events: [{time:'2026-11-20 18:41:00',location:'北京',description:'已签收',status:'delivered'}] }))
     .mockResolvedValueOnce(response({ orders: [fresh], nextPage: null }))
+    .mockResolvedValueOnce(noCarrierChanges('LIVE'))
   render(<MyWorkorders scope="owner" />)
   const card = await screen.findByRole('listitem', { name: '提报 LIVE' })
   expect(await within(card).findByText('已签收')).toBeInTheDocument()
   expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
     '/api/shipping/owner/orders?page=0', '/api/shipping/owner/orders/LIVE/tracking', '/api/shipping/owner/orders?page=0',
+    '/api/shipping/owner/orders/LIVE/carrier-changes',
   ])
-  expect(within(card).queryByRole('button', { name: '取消寄件' })).toBeNull()
+  expect(within(card).queryByRole('button', { name: '取消' })).toBeNull()
 })
 
 it('refreshes newly exposed owner records and keeps the expanded window on manual refresh', async () => {
@@ -95,7 +98,9 @@ it('does not lock returned-record resubmission when a different waybill refresh 
   const returned = await screen.findByRole('listitem', { name: '提报 RETURNED' })
   await waitFor(() => expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeEnabled())
   expect(within(returned).getByRole('button', { name: '修改并重提' })).toBeEnabled()
-  expect(within(screen.getByRole('listitem', { name: '提报 FAILED' })).getByRole('button', { name: '取消寄件' })).toBeDisabled()
+  const failed = screen.getByRole('listitem', { name: '提报 FAILED' })
+  expect(failed).toHaveTextContent('顺丰最新状态尚未核实')
+  expect(within(failed).getByRole('button', { name: '取消' })).toBeDisabled()
 })
 
 it('rereads earlier owner pages when appending records after a carrier refresh', async () => {
@@ -117,7 +122,7 @@ it('rereads earlier owner pages when appending records after a carrier refresh',
   await waitFor(() => expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeEnabled())
   const card = screen.getByRole('listitem', { name: '提报 PAGE-ZERO' })
   expect(card).toHaveTextContent('已签收')
-  expect(within(card).queryByRole('button', { name: '取消寄件' })).toBeNull()
+  expect(within(card).queryByRole('button', { name: '取消' })).toBeNull()
 })
 
 it('keeps a replacement filtered record locked until its carrier status has been checked', async () => {
@@ -141,7 +146,7 @@ it('keeps a replacement filtered record locked until its carrier status has been
   fireEvent.click(screen.getByRole('button', { name: '待揽收' }))
   const replacement = await screen.findByRole('listitem', { name: '提报 FILTER-5' })
   await waitFor(() => expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeEnabled())
-  expect(within(replacement).getByRole('button', { name: '取消寄件' })).toBeDisabled()
+  expect(within(replacement).getByRole('button', { name: '取消' })).toBeDisabled()
 })
 
 it('shows the real returned reason and labels a missing reason without reusing stale data', async () => {
@@ -206,25 +211,46 @@ it('loads in-transit forwarding and return actions directly on the card', async 
   const card = await screen.findByRole('listitem', { name: '提报 SHIPPED' })
   expect(card).toHaveTextContent('运输中')
   expect(await within(card).findByRole('button', { name: '转寄 / 改派' })).toBeInTheDocument()
-  expect(within(card).getByRole('button', { name: '申请退回' })).toBeInTheDocument()
-  expect(card).toHaveTextContent('已揽收且未派件出仓，可发起拦截')
+  expect(within(card).getByRole('button', { name: '取消' })).toBeInTheDocument()
   expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/shipping/owner/orders?page=0', endpoint])
   fireEvent.click(within(card).getByRole('button', { name: '转寄 / 改派' }))
   expect(screen.getByRole('form', { name: '转寄或改派快件收件地址' })).toBeInTheDocument()
 })
 
-it('closes every carrier-change channel once a parcel leaves for delivery', async () => {
-  fetcher.mockResolvedValue(response({ orders: [order('DELIVERING', {
+it('shows the forwarding history and closes actions once a parcel leaves for delivery', async () => {
+  const originalRecipient = { name: '客户', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '旧街1号' }
+  fetcher.mockResolvedValueOnce(response({ orders: [order('DELIVERING', {
     status: 'in_transit', trackingStatus: 'out_for_delivery', customerName: '派送客户',
-  })], nextPage: null }))
+  })], nextPage: null })).mockResolvedValueOnce(response({
+    orderNo: 'DELIVERING', actions: [], latest: {
+      action: 'modify_recipient', status: 'accepted', requestedAt: '2026-11-18T10:03:00Z', originalRecipient,
+      destination: { ...originalRecipient, address: '新街6号' }, instructionId: 'INSTRUCTION', amount: null,
+    },
+  }))
   render(<MyWorkorders scope="owner" />)
 
   const card = await screen.findByRole('listitem', { name: '提报 DELIVERING' })
   expect(card).toHaveTextContent('派送中')
   expect(card).toHaveTextContent('快件已派件出仓，取消 / 转寄 / 退回通道已关闭。')
   expect(within(card).queryByRole('button', { name: '转寄 / 改派' })).toBeNull()
-  expect(within(card).queryByRole('button', { name: '申请退回' })).toBeNull()
-  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
+  expect(within(card).queryByRole('button', { name: '取消' })).toBeNull()
+  expect(await within(card).findByRole('region', { name: '顺丰指令记录' })).toHaveTextContent('新街6号')
+  expect(fetcher).toHaveBeenCalledTimes(2)
+})
+
+it('cancels an unsent owner submission without a waybill or an approval step', async () => {
+  fetcher.mockResolvedValueOnce(response({ orders: [order('PENDING', {
+    status: 'awaiting_confirmation', revision: 3, waybill: null, canCancel: true,
+  })], nextPage: null })).mockResolvedValueOnce(response({ status: 'cancelled' }))
+  render(<MyWorkorders scope="owner" />)
+  const card = await screen.findByRole('listitem', { name: '提报 PENDING' })
+  fireEvent.click(within(card).getByRole('button', { name: '取消' }))
+  fireEvent.click(within(card).getByRole('button', { name: '确认取消' }))
+  expect(await within(card).findByText('提报已取消。')).toBeInTheDocument()
+  expect(fetcher).toHaveBeenLastCalledWith('/api/shipping/owner/orders/PENDING/cancel', expect.objectContaining({
+    method: 'POST', body: JSON.stringify({ revision: 3, status: 'awaiting_confirmation', waybill: null }),
+  }))
+  expect(within(card).queryByRole('button', { name: '取消' })).toBeNull()
 })
 
 it('locks other record actions while a pre-pickup cancellation waits for the carrier', async () => {
@@ -237,10 +263,10 @@ it('locks other record actions while a pre-pickup cancellation waits for the car
 
   const original = await screen.findByRole('listitem', { name: '提报 ORIGINAL' })
   const other = screen.getByRole('listitem', { name: '提报 OTHER' })
-  fireEvent.click(within(original).getByRole('button', { name: '取消寄件' }))
+  fireEvent.click(within(original).getByRole('button', { name: '取消' }))
   fireEvent.click(within(original).getByRole('button', { name: '确认取消' }))
   expect(await within(original).findByRole('button', { name: '正在取消…' })).toBeDisabled()
-  expect(within(other).getByRole('button', { name: '取消寄件' })).toBeDisabled()
+  expect(within(other).getByRole('button', { name: '取消' })).toBeDisabled()
   expect(screen.getByRole('button', { name: '刷新提报记录' })).toBeDisabled()
   expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
     '/api/shipping/owner/orders?page=0', '/api/shipping/owner/orders/ORIGINAL/cancel',
@@ -249,7 +275,7 @@ it('locks other record actions while a pre-pickup cancellation waits for the car
   finish(response({ status: 'cancelled' }))
   await waitFor(() => expect(original).toHaveTextContent('已取消'))
   expect(other).toHaveTextContent('待揽收')
-  expect(within(original).queryByRole('button', { name: '取消寄件' })).toBeNull()
+  expect(within(original).queryByRole('button', { name: '取消' })).toBeNull()
 })
 
 it('disables resubmission while loading the original and restores it after a read failure', async () => {
@@ -283,7 +309,7 @@ it('does not display a private return reason or owner actions in a shared receip
   expect(card).not.toHaveTextContent('私有备注')
   expect(card).not.toHaveTextContent('退回原因')
   expect(within(card).queryByRole('button', { name: '修改并重提' })).toBeNull()
-  expect(within(card).queryByRole('button', { name: '取消寄件' })).toBeNull()
+  expect(within(card).queryByRole('button', { name: '取消' })).toBeNull()
 })
 
 it('keeps existing records when another page fails and lets the visitor retry that page', async () => {

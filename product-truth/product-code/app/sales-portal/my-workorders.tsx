@@ -11,6 +11,7 @@ const labels: Record<string, string> = {
   ordering: '下单中', order_unknown: '结果待确认', waybill_created: '待揽收', in_transit: '运输中',
   delivered: '已签收', cancelled: '已取消', order_failed: '下单未成功',
 }
+const cancellableBeforeDispatch = ['accepted', 'awaiting_confirmation', 'confirmed', 'returned', 'order_failed']
 const dateFormat = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'long', day: 'numeric' })
 const timeFormat = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 const dateTimeFormat = new Intl.DateTimeFormat('zh-CN', {
@@ -76,10 +77,11 @@ function CopyControl({ value, label, onCopy }: { value: string; label: string; o
   </button>
 }
 
-function ReceiptCard({ order, scope, locked, opening, onResubmit, onCancelled, onCancelPending, onCarrierPending }: {
+function ReceiptCard({ order, scope, locked, statusUnverified, opening, onResubmit, onCancelled, onCancelPending, onCarrierPending }: {
   order: ShipmentReceipt
   scope: 'public' | 'owner'
   locked: boolean
+  statusUnverified: boolean
   opening: boolean
   onResubmit?: () => void
   onCancelled: () => void
@@ -91,6 +93,8 @@ function ReceiptCard({ order, scope, locked, opening, onResubmit, onCancelled, o
   const customer = order.customerName || '未填客户'
   const reason = scope === 'owner' && order.status === 'returned' ? order.returnedReason?.trim() : undefined
   const changes = Math.max(0, (order.revision ?? 1) - 1)
+  const showCancellation = stage === 'waiting' || (!order.waybill && cancellableBeforeDispatch.includes(order.status))
+  const showCarrierChanges = Boolean(order.waybill) && ['in_transit', 'out_for_delivery', 'delivered', 'cancelled'].includes(stage)
   async function copy(value: string, label: string) {
     const copied = await copyValue(value)
     setCopyFeedback(copied ? `已复制${label}` : `复制失败，请手动选择${label}`)
@@ -114,7 +118,9 @@ function ReceiptCard({ order, scope, locked, opening, onResubmit, onCancelled, o
     </div>
     {copyFeedback && <span className={styles.copyFeedback} role="status">{copyFeedback}</span>}
 
-    {stage === 'waiting' && <p className={styles.stateInfo}>尚未揽收，如需更改地址请先取消后重新提报。</p>}
+    {stage === 'waiting' && <p className={styles.stateInfo}>{statusUnverified
+      ? '顺丰最新状态尚未核实，请刷新后再操作。'
+      : scope === 'owner' && order.canCancel !== false ? '如需在揽收前更改地址，可取消后重新提报。' : '待顺丰更新揽收状态。'}</p>}
     {stage === 'out_for_delivery' && <p className={styles.stateInfo}>快件已派件出仓，取消 / 转寄 / 退回通道已关闭。</p>}
     {stage === 'delivered' && <div className={styles.signedBox}>
       <strong>{order.deliveredAt ? `签收时间：${dateTimeFormat.format(new Date(order.deliveredAt))}` : '订单已签收'}</strong>
@@ -123,17 +129,15 @@ function ReceiptCard({ order, scope, locked, opening, onResubmit, onCancelled, o
     {scope === 'owner' && stage === 'returned' && <div className={styles.returnBox}>
       <strong>退回原因：</strong>{reason || '未记录退回原因'}
     </div>}
-    {stage === 'cancelled' && <p className={styles.stateInfo}>订单已于揽收前取消，运单已作废。</p>}
+    {stage === 'cancelled' && <p className={styles.stateInfo}>{order.waybill ? '寄件已取消，原运单已作废。' : '提报已取消。'}</p>}
 
-    {scope === 'owner' && stage === 'waiting' && <div className={styles.receiptActionBar}>
-      <span>揽收前：可取消</span>
-      <div className={styles.receiptActions}><OwnerCancelOrder order={order} label="取消寄件" disabled={locked} onPendingChange={onCancelPending} onCancelled={onCancelled} /></div>
+    {scope === 'owner' && showCancellation && <div className={styles.receiptActionBar}>
+      <span>{stage === 'waiting' ? '顺丰运单' : '提报操作'}</span>
+      <div className={styles.receiptActions}><OwnerCancelOrder order={order} disabled={locked} onPendingChange={onCancelPending} onCancelled={onCancelled} /></div>
     </div>}
-    {scope === 'owner' && stage === 'in_transit' && order.waybill && <div className={styles.receiptActionBar}>
-      <span>已揽收且未派件出仓，可发起拦截</span>
-      <div className={styles.carrierActions}>
-        <OwnerCarrierChanges orderNo={order.orderNo} disabled={locked} onPendingChange={onCarrierPending} />
-      </div>
+    {scope === 'owner' && showCarrierChanges && <div className={styles.carrierActions}>
+      <OwnerCarrierChanges orderNo={order.orderNo} disabled={locked} allowActions={stage === 'in_transit'}
+        refreshKey={stage} onPendingChange={onCarrierPending} />
     </div>}
     {scope === 'owner' && stage === 'returned' && (
       <div className={styles.receiptActionBar}>
@@ -336,9 +340,14 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
         {[...groups].map(([date, dayOrders]) => <section className={styles.recordGroup} key={date} aria-label={date}>
           <h3>{date}</h3>
           <ul>{dayOrders.map(order => <ReceiptCard key={order.orderNo} order={order} scope={scope}
-            locked={actionsLocked || busy || actionPending || statusFailures.has(order.orderNo)} opening={openingOrder === order.orderNo}
+            locked={actionsLocked || busy || actionPending || statusFailures.has(order.orderNo)} statusUnverified={statusFailures.has(order.orderNo)}
+            opening={openingOrder === order.orderNo}
             onResubmit={onResubmit ? () => void openReturnedOrder(order) : undefined}
-            onCancelled={() => setOrders(current => current?.map(item => item.orderNo === order.orderNo ? { ...item, status: 'cancelled' } : item) ?? null)}
+            onCancelled={() => {
+              receipts.current = receipts.current.map(item => item.orderNo === order.orderNo
+                ? { ...item, status: 'cancelled', canCancel: false } : item)
+              setOrders(receipts.current)
+            }}
             onCancelPending={setCancelling} onCarrierPending={setChangingCarrier} />)}</ul>
         </section>)}
       </div>

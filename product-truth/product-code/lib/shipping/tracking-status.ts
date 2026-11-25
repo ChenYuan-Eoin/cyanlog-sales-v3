@@ -1,31 +1,48 @@
 import type { TrackingEventStatus } from './types'
 
 type TrackingStatusInput = {
+  firstStatusCode?: string | null
   firstStatusName?: string | null
+  secondaryStatusCode?: string | null
   secondaryStatusName?: string | null
   opCode?: string | null
   description: string
 }
 
-// Verified in the current SF route query response example. Other operation
-// codes deliberately have no inferred meaning, including custom route codes.
-// https://open.sf-express.com/Api/ApiDetails?interName=路由查询接口-EXP_RECE_SEARCH_ROUTES&level3=397
-const operationStatuses: Record<string, TrackingEventStatus> = { '54': 'in_transit', '655': 'waybill_created' }
+// SF standard route status and operation codes.
+// https://open.sf-express.com/developSupport/734349?activeIndex=589678
+const operationStatuses: Record<string, TrackingEventStatus> = {
+  '44': 'out_for_delivery', '54': 'in_transit', '655': 'waybill_created',
+}
+const primaryStatuses: Record<string, TrackingEventStatus> = {
+  '2': 'in_transit', '3': 'out_for_delivery',
+}
+const secondaryStatuses: Record<string, TrackingEventStatus> = {
+  '201': 'in_transit', '301': 'out_for_delivery',
+}
 const namedStatuses: Record<string, TrackingEventStatus> = {
   待揽收: 'waybill_created', 未揽收: 'waybill_created', 尚未揽收: 'waybill_created',
-  已揽收: 'in_transit', 已收取: 'in_transit', 运输中: 'in_transit', 转运中: 'in_transit',
+  已揽收: 'in_transit', 已收取: 'in_transit', 运送中: 'in_transit', 运输中: 'in_transit', 转运中: 'in_transit',
   派送中: 'out_for_delivery', 派件中: 'out_for_delivery', 正在派送: 'out_for_delivery',
   已签收: 'delivered', 签收成功: 'delivered', 已妥投: 'delivered',
   签收失败: 'exception', 派送失败: 'exception', 拒收: 'exception', 异常: 'exception',
 }
 const negativeDelivery = /(?:尚未|未|没有|待|等待)(?:完成|成功)?签收|未妥投|尚未送达|(?:尚未|未|没有|待|等待)(?:完成)?派送成功|(?:如|若|如果)(?:已)?派送成功/
+const dispatchRemark = /派[件送](?:已)?出仓|出仓(?:开始)?派[件送]|正在(?:为您)?派[件送]|派[件送]中/
+const nonActualDispatchRemark = /(?:尚未|暂未|还未|未|没有|还没|等待|待|预计|即将|准备|如果|若).*(?:派[件送](?:已)?出仓|出仓(?:开始)?派[件送]|正在(?:为您)?派[件送]|派[件送]中)/
+
+export function hasSfDispatchRemark(description: string): boolean {
+  return description.split(/[，。；、！？,;!?.]|但是?|不过/).some(clause =>
+    dispatchRemark.test(clause) && !nonActualDispatchRemark.test(clause),
+  )
+}
 
 function descriptionStatus(description: string): TrackingEventStatus {
   if (/(?:签收|派送|配送|揽收)失败|拒收|拒签|已退回|退运中|快件异常|滞留|丢失|破损/.test(description)) return 'exception'
   if (/(?:尚未|未|没有|待)(?:被)?(?:成功)?(?:揽收|收取|取件)/.test(description)) return 'waybill_created'
   if (!negativeDelivery.test(description) && /已签收|签收成功|已妥投|本人签收|收件人已收件|已派送成功/.test(description)) return 'delivered'
-  if (/正在派送|派送中|派件中|正在派件|正在为您派/.test(description)) return 'out_for_delivery'
-  if (/已揽收|已收取|已取件|运输中|转运中|已发出|已到达|已装车|已发车/.test(description)) return 'in_transit'
+  if (hasSfDispatchRemark(description)) return 'out_for_delivery'
+  if (/已揽收|已收取|已取件|运送中|运输中|转运中|已发出|已到达|已装车|已发车/.test(description)) return 'in_transit'
   return 'unknown'
 }
 
@@ -34,7 +51,13 @@ export function normalizeTrackingStatus(input: TrackingStatusInput): TrackingEve
   const secondary = input.secondaryStatusName?.trim() || ''
   const code = input.opCode?.trim() || ''
   const lookup = (values: Record<string, TrackingEventStatus>, key: string) => Object.hasOwn(values, key) ? values[key] : undefined
-  const structured = new Set([lookup(namedStatuses, first), lookup(namedStatuses, secondary), lookup(operationStatuses, code)].filter((status): status is TrackingEventStatus => Boolean(status)))
+  const structured = new Set([
+    lookup(primaryStatuses, input.firstStatusCode?.trim() || ''),
+    lookup(secondaryStatuses, input.secondaryStatusCode?.trim() || ''),
+    lookup(namedStatuses, first),
+    lookup(namedStatuses, secondary),
+    lookup(operationStatuses, code),
+  ].filter((status): status is TrackingEventStatus => Boolean(status)))
   const description = descriptionStatus(input.description)
   const transitStatus = (status: TrackingEventStatus) => status === 'in_transit' || status === 'out_for_delivery'
   let status = [...structured][0]

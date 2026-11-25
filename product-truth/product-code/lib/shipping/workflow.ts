@@ -154,6 +154,6 @@ export async function reconcileShipmentOrder(id: string, orgId: string) {
   return { id, status: 'waybill_created' as const, waybill }
 }
 
-export function cancelShipmentOrder(id: string, userId: string, orgId: string) {
-  return cancelOriginalShipment(id, userId, orgId, false)
+export function cancelShipmentOrder(id: string, userId: string, orgId: string, expected?: unknown) {
+  return cancelOriginalShipment(id, userId, orgId, false, expected)
 }

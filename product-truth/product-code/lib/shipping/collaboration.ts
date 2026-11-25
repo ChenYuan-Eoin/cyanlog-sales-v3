@@ -8,10 +8,12 @@ import type { Contact, ShipmentOrder, ShipmentOrderStatus, ShipmentReceipt, Ship
 const orderColumns = 'id,employee_profile_id,order_no,intake_source,confirmation_policy,status,sales_ref,customer_ref,assignment_status,shipment_payload,payload_hash,revision,amended_at,next_review_at,created_at,org_id,carrier_connection_id,billing_account_id,sender_profile_id,connection_environment,billing_account_tail,shipping_config_snapshot'
 const waybillColumns = 'waybill_no,latest_status,latest_event_at'
 const select = `${orderColumns},shipping_waybills(${waybillColumns})`
-const ledgerSelect = `${orderColumns},shipping_waybills(${waybillColumns},shipping_tracking_events(event_at,location,description,status))`
+const ledgerSelect = `${orderColumns},cancel_phase:cancellation->>phase,provider_key,provider_order_id,shipping_waybills(${waybillColumns},provider_order_id,carrier_key,shipping_tracking_events(event_at,location,description,status))`
 const ledgerEvents = 'shipping_waybills.shipping_tracking_events'
 type ShipmentWaybill = {
   waybill_no: string
+  provider_order_id?: string | null
+  carrier_key?: string | null
   latest_status?: TrackingEventStatus | null
   latest_event_at?: string | null
   shipping_tracking_events?: Array<{ event_at: string; location: string | null; description: string; status: TrackingEventStatus }>
@@ -34,6 +36,9 @@ type ShipmentRow = {
   created_at: string
   employee_profile_id?: string | null
   org_id?: string | null
+  provider_key?: string | null
+  provider_order_id?: string | null
+  cancel_phase?: string | null
   carrier_connection_id?: string | null
   billing_account_id?: string | null
   sender_profile_id?: string | null
@@ -80,6 +85,30 @@ function map(row: ShipmentRow): ShipmentOrder {
 
 export function publicShipmentReceipt(order: ShipmentOrder): ShipmentReceipt {
   return { orderNo: order.orderNo, status: order.status, waybill: order.waybill, nextReviewAt: order.nextReviewAt, createdAt: order.createdAt }
+}
+
+function canCancelShipment(
+  row: {
+    status: string
+    provider_order_id?: string | null
+    carrier_connection_id?: string | null
+    connection_environment?: string | null
+    provider_key?: string | null
+    cancel_phase?: string | null
+  },
+  effectiveStatus: string,
+  waybills: ShipmentWaybill[],
+  failureStage: unknown,
+) {
+  if (row.cancel_phase && row.cancel_phase !== 'not_sent') return false
+  if (effectiveStatus !== 'waybill_created') {
+    return waybills.length === 0 && ['accepted', 'awaiting_confirmation', 'confirmed', 'returned', 'order_failed'].includes(row.status)
+      && (!row.provider_order_id || (row.status === 'order_failed' && failureStage === 'provider_not_sent'))
+  }
+  const wb = waybills[0]
+  return waybills.length === 1 && Boolean(row.provider_order_id && row.carrier_connection_id && row.connection_environment
+    && wb.waybill_no && wb.latest_status === 'waybill_created'
+    && wb.provider_order_id === row.provider_order_id && wb.carrier_key === row.provider_key)
 }
 
 export async function createAnonymousShipment(args: { orgId: string; key: string; rawInput?: string; input: ShippingInput; contextToken?: string; businessCode?: string; employee?: { id: string; identity?: { provider: 'wecom'; userId: string; corpId?: string; botConnectionId?: string; phoneSource: 'wecom' | 'preset' }; sender?: Contact; team?: string } }) {
@@ -215,7 +244,17 @@ export async function listShipmentLedger(orgId: string, filters: { salesRef?: st
   }
   const { data, error } = await query
   if (error) throw new ShippingError(503, '收寄件台账暂不可用。')
-  return (data || []).map(row => map(row as unknown as ShipmentRow))
+  return (data || []).map(raw => {
+    const row = raw as unknown as ShipmentRow
+    const order = map(row)
+    const waybills = Array.isArray(row.shipping_waybills) ? row.shipping_waybills : row.shipping_waybills ? [row.shipping_waybills] : []
+    const failure = row.shipping_config_snapshot?.orderFailure as { stage?: unknown } | undefined
+    return {
+      ...order,
+      canCancel: canCancelShipment(row, order.status, waybills, failure?.stage),
+      cancellationState: row.cancel_phase ?? null,
+    }
+  })
 }
 
 export async function assignShipmentRelation(id: string, orgId: string, salesRef: string, customerRef?: string) {
@@ -255,15 +294,19 @@ export async function createDueShipmentReviewReminders(now = new Date()) {
 
 export async function getOrganizationShipmentProviderSnapshot(orgId: string, waybill: string) {
   requireOrganization(orgId)
-  const { data: waybillRow, error: waybillError } = await supabaseAdmin.from('shipping_waybills').select('shipping_order_id,carrier_key,shipping_orders!inner(org_id)').eq('shipping_orders.org_id', orgId).eq('waybill_no', waybill).maybeSingle()
+  const { data: waybillRow, error: waybillError } = await supabaseAdmin.from('shipping_waybills').select('shipping_order_id,carrier_key,provider_order_id,shipping_orders!inner(org_id)').eq('shipping_orders.org_id', orgId).eq('waybill_no', waybill).maybeSingle()
   if (waybillError) throw new ShippingError(503, '运单归属核对暂不可用。')
   if (!waybillRow) return null
   const { data, error } = await supabaseAdmin.from('shipping_orders')
-    .select('org_id,provider_key,carrier_connection_id,billing_account_id,connection_environment')
+    .select('org_id,provider_key,provider_order_id,carrier_connection_id,billing_account_id,connection_environment')
     .eq('id', waybillRow.shipping_order_id).eq('org_id', orgId).maybeSingle()
   if (error) throw new ShippingError(503, '运单配置快照读取失败。')
   if (data && (data.org_id !== orgId || data.provider_key !== waybillRow.carrier_key)) throw new ShippingError(409, '运单归属或承运商快照不一致，无法查询。')
-  return data || null
+  if (!data) return null
+  if (data.provider_order_id && waybillRow.provider_order_id && data.provider_order_id !== waybillRow.provider_order_id) {
+    throw new ShippingError(409, '原订单号与运单关联不一致，无法查询。')
+  }
+  return { ...data, provider_order_id: data.provider_order_id === waybillRow.provider_order_id ? data.provider_order_id : null }
 }
 
 export async function listEmployeeShipmentReceipts(orgId: string, employeeId: string) {
@@ -296,11 +339,7 @@ export async function listOwnerShipmentReceipts(orgId: string, userId: string, p
     const effectiveStatus = ['waybill_created', 'in_transit'].includes(row.status) && ['in_transit', 'out_for_delivery', 'delivered'].includes(wb?.latest_status)
       ? wb.latest_status === 'delivered' ? 'delivered' : 'in_transit'
       : row.status
-    const canCancel = revision !== undefined && (!row.cancel_phase || row.cancel_phase === 'not_sent') && (effectiveStatus === 'waybill_created'
-      ? Boolean(row.provider_order_id && row.carrier_connection_id && row.connection_environment && wb?.waybill_no && wb.latest_status === 'waybill_created' &&
-        wb.provider_order_id === row.provider_order_id && wb.carrier_key === row.provider_key)
-      : !wb && ['accepted','awaiting_confirmation','confirmed','returned','order_failed'].includes(row.status) &&
-        (!row.provider_order_id || (row.status === 'order_failed' && row.failure_stage === 'provider_not_sent')))
+    const canCancel = revision !== undefined && canCancelShipment(row, effectiveStatus, waybills, row.failure_stage)
     return { canCancel, revision, orderNo: row.order_no, status: effectiveStatus, ...(row.cancel_phase ? { cancellationState:row.cancel_phase } : {}), waybill: wb?.waybill_no || null,
       nextReviewAt: row.next_review_at, createdAt: row.created_at,
       ...(wb?.latest_status ? { trackingStatus: wb.latest_status } : {}),

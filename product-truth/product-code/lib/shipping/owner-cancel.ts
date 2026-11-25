@@ -16,7 +16,7 @@ const staleMessage = '这张寄件单已变化或页面版本过旧，请刷新�
 
 export async function cancelOriginalShipment(reference: string, actor: string, org: string, owner: boolean, expected?: unknown) {
   if (!org || !actor) throw new ShippingError(403, '当前账号没有组织寄件权限。')
-  const snapshot = owner ? observedState.safeParse(expected) : null
+  const snapshot = owner || expected !== undefined ? observedState.safeParse(expected) : null
   if (snapshot && !snapshot.success) throw new ShippingError(409, staleMessage)
   const attempt = randomUUID()
   const { data: claim, error } = await supabaseAdmin.rpc('claim_shipping_cancellation_v1', {
@@ -57,7 +57,7 @@ export async function cancelOriginalShipment(reference: string, actor: string, o
         || row.provider_key !== claim.provider || row.provider_order_id !== claim.providerOrderId
         || wb.provider_order_id !== claim.providerOrderId || wb.carrier_key !== claim.provider
         || (snapshot?.success && wb.waybill_no !== snapshot.data.waybill)) throw new ShippingError(409, staleMessage)
-      const latest = await carrier.track(wb.waybill_no)
+      const latest = await carrier.trackOrder(claim.providerOrderId, wb.waybill_no)
       const latestEvent = latestVerifiedTrackingEvent(latest, wb.waybill_no)
       if (!latestEvent) throw new ShippingError(503, '顺丰没有返回可信的最新状态；没有发送取消请求。')
       const saved = await recordTrackingResult(org, latest, claim.provider)

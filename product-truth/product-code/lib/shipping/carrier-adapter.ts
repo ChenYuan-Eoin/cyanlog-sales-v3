@@ -1,7 +1,7 @@
 import { ShippingError } from './config'
 import type { Contact, ShippingInput, ShippingPayment, TrackingResult } from './types'
 import { getShippingRuntimeConfig, selectAuthorizedShippingService } from './runtime-config'
-import { cancelSfOrder, checkSfBeforeDispatch, createSfOrder, lookupSfOrder, querySfTracking, sendSfRecipientInstruction, type SfRecipientAction } from './sf-client'
+import { cancelSfOrder, checkSfBeforeDispatch, createSfOrder, lookupSfOrder, querySfOrderTracking, querySfTracking, sendSfRecipientInstruction, type SfRecipientAction } from './sf-client'
 
 // Business metadata may cross into the workflow/store; provider secrets may not.
 export type CarrierOrderContext = {
@@ -38,6 +38,7 @@ export type ConnectedCarrier = {
   beforeDispatch(providerOrderId: string, waybill: string): Promise<boolean>
   changeRecipient(waybill: string, action: SfRecipientAction, destination: Contact): Promise<{ instructionId: string | null; amount: string | null }>
   track(waybill: string, phoneSuffix?: string): Promise<TrackingResult & { source: 'carrier' | 'sandbox_mock' }>
+  trackOrder(providerOrderId: string, waybill: string): Promise<TrackingResult & { source: 'carrier' | 'sandbox_mock' }>
 }
 
 export interface CarrierAdapter {
@@ -58,6 +59,8 @@ const sfAdapter: CarrierAdapter = {
       billingAccountTail: config.billingAccountTail, senderProfileId: config.senderProfileId,
       sender: config.sender, services: config.services, snapshot: config.snapshot,
     }
+    // SF sandbox routes are MOCK; the core must never persist them as fact.
+    const source = config.environment === 'production' ? 'carrier' : 'sandbox_mock'
     return {
       key: 'sf', context,
       selectService: (preference, serviceId) => selectAuthorizedShippingService(config.services, preference, serviceId),
@@ -68,8 +71,11 @@ const sfAdapter: CarrierAdapter = {
       cancel: async requestId => { await cancelSfOrder(requestId, config) },
       track: async (waybill, phoneSuffix) => ({
         ...await querySfTracking(waybill, phoneSuffix, config),
-        // SF sandbox routes are MOCK; the core must never persist them as fact.
-        source: config.environment === 'production' ? 'carrier' : 'sandbox_mock',
+        source,
+      }),
+      trackOrder: async (providerOrderId, waybill) => ({
+        ...await querySfOrderTracking(providerOrderId, waybill, config),
+        source,
       }),
     }
   },

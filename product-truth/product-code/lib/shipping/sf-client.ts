@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { ShippingError } from './config'
 import type { ShippingInput, TrackingResult } from './types'
 import type { ShippingRuntimeConfig } from './runtime-config'
-import { normalizeTrackingStatus, normalizeTrackingTime } from './tracking-status'
+import { hasSfDispatchRemark, normalizeTrackingStatus, normalizeTrackingTime } from './tracking-status'
 const envelope = z.object({ apiResultCode: z.string(), apiResultData: z.union([z.string(), z.record(z.string(), z.unknown())]).optional() })
 const business = z.object({ success: z.union([z.boolean(), z.enum(['true', 'false'])]), errorCode: z.string().optional(), msgData: z.unknown().optional(), obj: z.unknown().optional() })
 const tokenResponse = z.object({ apiResultCode: z.string(), accessToken: z.string().min(1).nullable().optional(), expiresIn: z.number().int().positive().max(86400).nullable().optional() })
@@ -279,7 +279,8 @@ export async function cancelSfOrder(orderId: string, config: ShippingRuntimeConf
 }
 const routeData = z.object({ routeResps: z.array(z.object({ mailNo: z.string().nullable().optional(), routes: z.array(z.object({
   acceptTime: z.string(), acceptAddress: z.string().nullish(), remark: z.string(),
-  firstStatusName: z.string().nullish(), secondaryStatusName: z.string().nullish(), opCode: z.string().nullish(),
+  firstStatusCode: z.string().nullish(), firstStatusName: z.string().nullish(),
+  secondaryStatusCode: z.string().nullish(), secondaryStatusName: z.string().nullish(), opCode: z.string().nullish(),
 })) })) })
 export function extractTracking(raw: unknown, waybill: string): TrackingResult {
   const data = routeData.parse(raw)
@@ -302,18 +303,29 @@ export async function querySfTracking(waybill: string, phoneSuffix: string | und
   return extractTracking(await sfCall('EXP_RECE_SEARCH_ROUTES', { language: 'zh-CN', trackingType: '1', trackingNumber: [waybill], methodType: '1', ...(phoneSuffix ? { checkPhoneNo: phoneSuffix } : {}) }, config), waybill)
 }
 
+function querySfOrderRoutes(providerOrderId: string, config: ShippingRuntimeConfig) {
+  return sfCall('EXP_RECE_SEARCH_ROUTES', { language: 'zh-CN', trackingType: '2', trackingNumber: [providerOrderId], methodType: '1' }, config)
+}
+
+export async function querySfOrderTracking(providerOrderId: string, waybill: string, config: ShippingRuntimeConfig) {
+  const data = routeData.parse(await querySfOrderRoutes(providerOrderId, config))
+  if (data.routeResps.length && data.routeResps.filter(row => row.mailNo === waybill).length !== 1) {
+    throw new ShippingError(502, '顺丰未返回唯一匹配的原运单。')
+  }
+  return extractTracking(data, waybill)
+}
+
 // Order-level "in_transit" includes last-mile delivery. Use the structured
 // latest events of the original waybill and fail closed on ambiguous traces.
 export async function checkSfBeforeDispatch(providerOrderId: string, waybill: string, config: ShippingRuntimeConfig) {
-  const raw = await sfCall('EXP_RECE_SEARCH_ROUTES', { language: 'zh-CN', trackingType: '2',
-    trackingNumber: [providerOrderId], methodType: '1' }, config)
-  const data = routeData.parse(raw)
+  const data = routeData.parse(await querySfOrderRoutes(providerOrderId, config))
   const matches = data.routeResps.filter(row => row.mailNo === waybill)
   if (matches.length !== 1 || !matches[0].routes.length) return false
   const events = matches[0].routes.map(route => ({
     at: normalizeTrackingTime(route.acceptTime), status: normalizeTrackingStatus({ ...route, description: route.remark }),
-    explicit: route.opCode === '54' || [route.firstStatusName, route.secondaryStatusName].some(name => ['已揽收','已收取','运输中','转运中'].includes(name || '')),
-    leftDepot: [route.firstStatusName,route.secondaryStatusName,route.remark].some(text => /派[送件].*出仓|出仓派[送件]|派送中|派件中|正在派[件送]|已签收|已转寄|已退回/.test(text || '')),
+    explicit: normalizeTrackingStatus({ ...route, description: '' }) === 'in_transit',
+    leftDepot: hasSfDispatchRemark(route.remark) ||
+      [route.firstStatusName, route.secondaryStatusName, route.remark].some(text => /已签收|已转寄|已退回/.test(text || '')),
   }))
   if (events.some(event => !event.at || event.leftDepot || event.status === 'out_for_delivery' || event.status === 'delivered')) return false
   const last = events.map(event => event.at!).sort().at(-1)

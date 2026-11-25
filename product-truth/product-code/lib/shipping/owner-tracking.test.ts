@@ -15,7 +15,7 @@ beforeEach(() => {
   const q = { select: vi.fn(() => q), eq: vi.fn((key, value) => { filters[key] = value; return q }),
     maybeSingle: vi.fn(async () => ({ data: row && Object.entries(filters).every(([key, value]) => row![key] === value) ? row : null, error: null })) }
   m.from.mockReturnValue(q)
-  m.connect.mockResolvedValue({ track: m.track })
+  m.connect.mockResolvedValue({ trackOrder: m.track })
   m.track.mockResolvedValue({ source: 'carrier', waybill: 'SF5169741550975', events: [{ time: '2026-11-20 18:41:00', status: 'delivered', description: '您的快件已派送成功（公司前台）', location: '北京' }] })
   m.record.mockResolvedValue({ recorded: 1, shipmentStatus: 'delivered' })
 })
@@ -23,6 +23,7 @@ it('refreshes only the employee original order and persists confirmed delivery',
   expect(await refreshOwnerTracking('org', 'me', 'SO-20261118-87431B2C')).toMatchObject({ verified: true, shipmentStatus: 'delivered', waybill: 'SF5169741550975' })
   expect(filters).toEqual({ org_id: 'org', created_by: 'me', intake_source: 'owner_web', order_no: 'SO-20261118-87431B2C' })
   expect(m.connect).toHaveBeenCalledWith(expect.objectContaining({ connectionId: 'original', billingAccountId: 'billing', expectedEnvironment: 'production', orgId: 'org' }))
+  expect(m.track).toHaveBeenCalledWith('request', 'SF5169741550975')
   expect(m.record).toHaveBeenCalledWith('org', expect.objectContaining({ waybill: 'SF5169741550975' }), 'sf')
 })
 it.each([['other', 'me'], ['org', 'coworker']])('rejects foreign scope %s/%s without contacting SF', async (org, actor) => {

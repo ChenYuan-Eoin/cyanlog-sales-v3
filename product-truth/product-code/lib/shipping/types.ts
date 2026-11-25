@@ -25,6 +25,8 @@ export type ShipmentOrder = {
   relation: ShipmentRelation
   input: ShippingInput
   waybill: string | null
+  canCancel?: boolean
+  cancellationState?: string | null
   trackingUpdatedAt?: string | null
   trackingStatus?: TrackingEventStatus | null
   trackingEvents?: RouteEvent[]

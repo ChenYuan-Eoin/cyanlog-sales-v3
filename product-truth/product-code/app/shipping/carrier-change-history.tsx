@@ -1,5 +1,3 @@
-'use client'
-import { useEffect, useState } from 'react'
 import type { CarrierChangeReceipt } from '@/lib/shipping/owner-carrier-change'
 import type { Contact } from '@/lib/shipping/types'
 
@@ -35,31 +33,4 @@ export function CarrierChangeHistory({ receipt }: { receipt: CarrierChangeReceip
 export function hasReceipt(value: Partial<CarrierChangeReceipt> | null): value is CarrierChangeReceipt {
   return Boolean(value && value.status && Object.hasOwn(descriptions, value.status)
     && value.originalRecipient && value.destination && value.requestedAt && Number.isFinite(Date.parse(value.requestedAt)))
-}
-
-export function OperatorCarrierChangeHistory({ orderId }: { orderId: string }) {
-  const [receipt, setReceipt] = useState<CarrierChangeReceipt | null>(null)
-  const [failed, setFailed] = useState(false)
-  useEffect(() => {
-    const controller = new AbortController()
-    async function load() {
-      try {
-        const response = await fetch('/api/shipping/ledger/' + encodeURIComponent(orderId) + '/carrier-changes', {
-          cache: 'no-store', credentials: 'same-origin', signal: controller.signal,
-        })
-        if (controller.signal.aborted || response.status === 403 || response.status === 404) return
-        if (!response.ok) throw Error()
-        const { latest } = await response.json()
-        if (controller.signal.aborted || latest === null) return
-        if (!hasReceipt(latest)) throw Error()
-        setReceipt(latest)
-      } catch {
-        if (!controller.signal.aborted) setFailed(true)
-      }
-    }
-    void load()
-    return () => controller.abort()
-  }, [orderId])
-  if (failed) return <p role="status">顺丰指令记录暂不可用，收起后重新展开可重试。</p>
-  return receipt && <CarrierChangeHistory receipt={receipt} />
 }

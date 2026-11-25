@@ -19,7 +19,9 @@ const eventResult = (description: string, time = '2026-09-27T09:30:00.000Z', sta
 
 function builder(table: string) {
   const query: Query = { table, action: 'select', filters: [] }; queries.push(query)
-  const matches = (row: Record<string, unknown>) => query.filters.every(([key, value]) => (key === 'shipping_orders.org_id' ? order.org_id : row[key]) === value)
+  const matches = (row: Record<string, unknown>) => query.filters.every(([key, value]) => Array.isArray(value)
+    ? value.includes(row[key])
+    : (key === 'shipping_orders.org_id' ? order.org_id : row[key]) === value)
   const resolve = () => {
     if (table === failTable && query.action !== 'select') return { data: null, error: { message: 'synthetic write failure' } }
     if (query.action === 'upsert') {
@@ -30,6 +32,12 @@ function builder(table: string) {
       return { data: null, error: null }
     }
     if (query.action === 'update') {
+      if (table === 'shipping_tracking_events') {
+        for (const event of events.values()) {
+          if (matches(event)) Object.assign(event, query.values)
+        }
+        return { data: null, error: null }
+      }
       const hook = table === 'shipping_waybills' ? beforeWaybillUpdate : beforeOrderUpdate
       if (table === 'shipping_waybills') beforeWaybillUpdate = undefined
       else beforeOrderUpdate = undefined
@@ -49,6 +57,7 @@ function builder(table: string) {
     select: (fields: string) => { query.fields = fields; return api },
     eq: (key: string, value: unknown) => { query.filters.push([key, value]); return api },
     is: (key: string, value: unknown) => { query.filters.push([key, value]); return api },
+    in: (key: string, values: unknown[]) => { query.filters.push([key, values]); return api },
     upsert: (values: Array<Record<string, unknown>>) => { query.action = 'upsert'; query.values = values; return api },
     update: (values: Record<string, unknown>) => { query.action = 'update'; query.values = values; return api },
     maybeSingle: async () => resolve(),
@@ -186,6 +195,30 @@ describe('persisted shipment tracking progression', () => {
     waybill.latest_status = 'in_transit'; waybill.latest_event_at = '2026-09-27T09:30:00.000Z'
     expect(await recordTrackingResult('org-A', eventResult('已揽收', undefined, 'in_transit'))).toMatchObject({ shipmentStatus: 'in_transit' })
     expect(queries.some(query => query.table === 'shipping_waybills' && query.action === 'update')).toBe(false)
+  })
+
+  it('reclassifies only newest unknown events replayed by the live carrier', async () => {
+    const older = eventResult('快件发出', '2026-09-27T09:00:00.000Z', 'unknown')
+    const newest = eventResult('快件到达', undefined, 'unknown')
+    await recordTrackingResult('org-A', { ...newest, events: [...older.events, ...newest.events] })
+    const refreshed = {
+      ...newest, source: 'carrier' as const,
+      events: [...older.events, ...newest.events].map(event => ({ ...event, status: 'in_transit' as const })),
+    }
+    await recordTrackingResult('org-A', { ...refreshed, source: 'sandbox_mock' })
+    expect([...events.values()].map(event => event.status)).toEqual(['unknown', 'unknown'])
+    await recordTrackingResult('org-A', refreshed)
+    expect([...events.values()].map(event => [event.description, event.status])).toEqual([
+      ['快件到达', 'in_transit'], ['快件发出', 'unknown'],
+    ])
+  })
+
+  it.each(['out_for_delivery', 'delivered'] as const)('never overwrites an existing %s event with transit', async status => {
+    const original = eventResult('原路由事件', undefined, status)
+    await recordTrackingResult('org-A', original)
+    await recordTrackingResult('org-A', { ...original, source: 'carrier', events: [{ ...original.events[0], status: 'in_transit' }] })
+    expect([...events.values()][0].status).toBe(status)
+    expect(waybill.latest_status).toBe(status)
   })
 
   it.each(['shipping_tracking_events', 'shipping_waybills', 'shipping_orders'])('surfaces failed writes to %s instead of reporting unsaved status', async table => {

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from 'vitest'
-import { checkSfBeforeDispatch, sendSfRecipientInstruction } from './sf-client'
+import { checkSfBeforeDispatch, querySfOrderTracking, sendSfRecipientInstruction } from './sf-client'
 import type { ShippingRuntimeConfig } from './runtime-config'
 const dest = { name: '收件样例', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '科技路1号' }
 const config: ShippingRuntimeConfig = { orgId:'org',connectionId:'c',connectionKey:'c',environment:'sandbox',partnerId:'sample',checkWord:'synthetic',billingAccount:'mock-monthly',billingAccountId:'account',billingAccountTail:'0000',senderProfileId:null,sender:dest,services:[],snapshot:{} }
@@ -35,8 +35,24 @@ it('preserves SF sandbox S0000 with a nested generic response and no detailed re
     .resolves.toEqual({instructionId:null,amount:null})
 })
 const route={acceptTime:'2026-11-18 10:01:00',remark:'顺丰已收取快件',opCode:'54',firstStatusName:'已揽收'}
+it('queries the linked original order rather than relying on monthly-card waybill access', async () => {
+  const sent = transport({ success: true, msgData: { routeResps: [{ mailNo: waybill, routes: [{ ...route, opCode: '655', firstStatusName: '待揽收', remark: '待揽收' }] }] } })
+  expect(await querySfOrderTracking('original-id', waybill, config)).toMatchObject({ waybill, events: [{ status: 'waybill_created' }] })
+  expect(JSON.parse(sent[0].get('msgData')!)).toEqual({ language: 'zh-CN', trackingType: '2', trackingNumber: ['original-id'], methodType: '1' })
+})
+it('does not treat empty routes or a mismatched response as the original order’s pickup status', async () => {
+  transport({ success: true, msgData: { routeResps: [] } })
+  expect(await querySfOrderTracking('original-id', waybill, config)).toMatchObject({ waybill, events: [] })
+  transport({ success: true, msgData: { routeResps: [{ mailNo: 'SF9999999999999', routes: [] }] } })
+  await expect(querySfOrderTracking('original-id', waybill, config)).rejects.toMatchObject({ status: 502 })
+})
 it.each([
   [[route],true],[[{...route,remark:'等待揽收',opCode:'655',firstStatusName:'待揽收'}],false],
+  [[{...route,remark:'快件到达',opCode:'231',firstStatusName:'运送中'}],true],
+  [[{...route,remark:'快件尚未派件出仓',opCode:'231',firstStatusName:'',firstStatusCode:'2',secondaryStatusCode:'201'}],true],
+  [[{...route,remark:'节点更新',opCode:'231',firstStatusName:'',firstStatusCode:'3',secondaryStatusCode:'301'}],false],
+  [[{...route,remark:'节点更新',opCode:'44',firstStatusName:''}],false],
+  [[{...route,remark:'快递员正在为您派送',opCode:'231',firstStatusName:'运送中'}],false],
   [[route,{...route,acceptTime:'2026-11-18 10:02:00',opCode:'',firstStatusName:'',remark:'已到达'}],false],
   [[route,{...route,firstStatusName:'派送中',remark:'派件出仓'}],false],
   [[{...route,acceptTime:'not-a-time'}],false],

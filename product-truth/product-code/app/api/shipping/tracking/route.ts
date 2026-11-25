@@ -39,7 +39,10 @@ export async function POST(req: NextRequest) { return shippingHandler(req, async
     carrier = await getHistoricalCarrierAdapter(undefined).connect({ orgId, connectionId: settings.connectionId, ...(external ? { expectedEnvironment: 'production' as const } : {}), requireOrderCapability: false })
   }
   const config = carrier.context
-  const result = await carrier.track(input.waybill, importedSuffix || input.phoneSuffix)
+  const providerOrderId = !ownedLegacy ? ownedCollaborative?.provider_order_id?.trim() : null
+  const result = providerOrderId
+    ? await carrier.trackOrder(providerOrderId, input.waybill)
+    : await carrier.track(input.waybill, importedSuffix || input.phoneSuffix)
   if (external && (result.source !== 'carrier' || result.waybill !== input.waybill || !result.events.length)) throw new ShippingError(422, '顺丰未返回可验证的轨迹。请核对收寄手机号后四位；也可能无查询权限、暂无轨迹或已超过3个月查询期限。未将此运单认定为平台工单。')
   if (external) console.info('shipping.tracking.verified', { provider: carrier.key, runtimeRegion: process.env.VERCEL_REGION, eventCount: result.events.length })
   // Only actual carrier observations may advance persisted shipment state.

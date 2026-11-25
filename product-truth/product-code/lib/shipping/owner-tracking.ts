@@ -23,14 +23,14 @@ export async function refreshOwnerTracking(orgId: string, userId: string, orderN
   if (!data) throw new ShippingError(404, '本人提报记录中没有这张工单。')
   const waybills = Array.isArray(data.shipping_waybills) ? data.shipping_waybills : data.shipping_waybills ? [data.shipping_waybills] : []
   const wb = waybills[0]
-  if (waybills.length !== 1 || !wb?.waybill_no || !data.carrier_connection_id
+  if (waybills.length !== 1 || !wb?.waybill_no || !data.carrier_connection_id || !data.provider_order_id?.trim()
     || !['production', 'sandbox'].includes(data.connection_environment)
     || wb.provider_order_id !== data.provider_order_id || wb.carrier_key !== data.provider_key) {
     throw new ShippingError(409, '原运单或顺丰连接快照不完整，暂不能核实物流状态。')
   }
   const carrier = await getCarrierAdapter(data.provider_key).connect({ orgId, connectionId: data.carrier_connection_id,
     billingAccountId: data.billing_account_id, expectedEnvironment: data.connection_environment, allowHistorical: true, requireOrderCapability: false })
-  const result = await carrier.track(wb.waybill_no)
+  const result = await carrier.trackOrder(data.provider_order_id, wb.waybill_no)
   if (!latestVerifiedTrackingEvent(result, wb.waybill_no)) throw new ShippingError(503, '顺丰未返回可信的最新状态，请稍后刷新。')
   const saved = await recordTrackingResult(orgId, result, data.provider_key)
   if (!saved.recorded || !saved.shipmentStatus) throw new ShippingError(503, '顺丰状态尚未保存，请稍后刷新。')

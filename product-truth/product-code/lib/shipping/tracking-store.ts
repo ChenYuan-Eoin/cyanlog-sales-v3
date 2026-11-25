@@ -61,6 +61,23 @@ export async function recordTrackingResult(orgId: string, result: TrackingResult
     .upsert(rows, { onConflict: 'waybill_id,provider_key,provider_event_id', ignoreDuplicates: true })
   if (insertError) throw new ShippingError(503, '物流事件保存失败。')
 
+  const savedEventAt = current.waybill.latest_event_at ? normalizeTrackingTime(current.waybill.latest_event_at) : null
+  if (providerKey === 'sf' && result.source === 'carrier'
+    && ['waybill_created', 'in_transit'].includes(current.order.status)
+    && ['waybill_created', 'in_transit'].includes(current.waybill.latest_status || 'waybill_created')
+    && (!savedEventAt || rows[0].event_at >= savedEventAt)) {
+    const latest = rows.filter(event => event.event_at === rows[0].event_at)
+    if (latest.every(event => event.status === 'in_transit')) {
+      // A replay has the same event ID even when a previously unknown SF status
+      // can now be recognized. Never overwrite a classification already saved.
+      const { error: refreshError } = await supabaseAdmin.from('shipping_tracking_events')
+        .update({ status: 'in_transit' })
+        .eq('waybill_id', current.waybill.id).eq('provider_key', providerKey).eq('status', 'unknown')
+        .in('provider_event_id', latest.map(event => event.provider_event_id))
+      if (refreshError) throw new ShippingError(503, '物流事件状态更新失败。')
+    }
+  }
+
   // Compare-and-set both timestamp and state. A concurrent cancellation may
   // change state without changing the last provider event timestamp.
   for (let attempt = 0; attempt < 2; attempt += 1) {

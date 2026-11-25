@@ -26,4 +26,12 @@ describe('shipment ledger actions', () => {
   it('assigns an unowned shipment to sales and customer server-side', async () => { const response = await assignRoute(new NextRequest('http://localhost/api/shipping/ledger/id/assign', { method: 'POST', body: JSON.stringify({ salesRef: 'sales-1', customerRef: 'customer-1' }) }), ctx); expect(response.status).toBe(200); expect(assign).toHaveBeenCalledWith('91b36e00-31f0-4612-9bd8-f15742a0bb64', 'org-1', 'sales-1', 'customer-1') })
   it('takes the organization from authorization when a different organization is supplied in the URL', async () => { requireOperator.mockResolvedValue('org-A'); const response = await cancelRoute(new NextRequest('http://localhost/api/shipping/ledger/id/cancel?orgId=org-B', { method: 'POST' }), ctx); expect(response.status).toBe(200); expect(cancel).toHaveBeenCalledWith('91b36e00-31f0-4612-9bd8-f15742a0bb64', 'owner', 'org-A') })
   it('cancels through the authenticated server workflow', async () => { const response = await cancelRoute(new NextRequest('http://localhost/api/shipping/ledger/id/cancel', { method: 'POST' }), ctx); expect(response.status).toBe(200); expect(cancel).toHaveBeenCalledWith('91b36e00-31f0-4612-9bd8-f15742a0bb64', 'owner', 'org-1') })
+  it('passes the displayed order snapshot to the cancellation workflow', async () => {
+    const snapshot={revision:2,status:'awaiting_confirmation',waybill:null}
+    const response=await cancelRoute(new NextRequest('http://localhost/api/shipping/ledger/id/cancel', {
+      method:'POST', body:JSON.stringify(snapshot),
+    }),ctx)
+    expect(response.status).toBe(200)
+    expect(cancel).toHaveBeenCalledWith('91b36e00-31f0-4612-9bd8-f15742a0bb64','owner','org-1',snapshot)
+  })
 })

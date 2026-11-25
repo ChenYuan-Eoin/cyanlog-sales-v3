@@ -2,14 +2,15 @@
 import { NextRequest } from 'next/server'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { ShippingError } from './config'
-const m = vi.hoisted(()=>({rpc:vi.fn(),from:vi.fn(),connect:vi.fn(),route:vi.fn(),send:vi.fn(),auth:vi.fn(),operator:vi.fn()}))
-vi.mock('@/lib/supabase',()=>({supabaseAdmin:{rpc:m.rpc,from:m.from}}))
+const m = vi.hoisted(()=>({rpc:vi.fn(),connect:vi.fn(),route:vi.fn(),send:vi.fn(),auth:vi.fn(),operator:vi.fn()}))
+vi.mock('@/lib/supabase',()=>({supabaseAdmin:{rpc:m.rpc}}))
 vi.mock('./carrier-adapter',()=>({ getCarrierAdapter:()=>({connect:m.connect}) }))
 vi.mock('@/lib/auth',()=>({requireAuth:m.auth, AuthError:class extends Error{}}))
 vi.mock('./operator-access',()=>({requireShippingOperator:m.operator}))
 import { GET, POST } from '@/app/api/shipping/owner/orders/[orderNo]/carrier-changes/route'
-import { GET as ledgerGet } from '@/app/api/shipping/ledger/[id]/carrier-changes/route'
+import { GET as ledgerGet, POST as ledgerPost } from '@/app/api/shipping/ledger/[id]/carrier-changes/route'
 const owner='6f321e6a-2240-4074-ab2a-659b07af0aac',org='09367238-10fd-45cb-8501-96ec7778185d',key='a6215cc6-142b-4de8-8e6b-e22dce66346d'
+const operator='82bee2dd-7de8-45a2-afd3-ca0408526f42'
 const orderNo='SO-20261118-AB128539'
 const contact={name:'样例',phone:'13800000000',province:'广东省',city:'深圳市',county:'南山区',address:'测试路1号'}
 const target={...contact,address:'测试路2号'}
@@ -76,13 +77,42 @@ it('does not show a worker ledger snapshot to an employee without a shipping ope
   m.operator.mockRejectedValue(new ShippingError(403,'未授权'))
   const response=await ledgerGet(req(),{params:Promise.resolve({id:owner})})
   expect(response.status).toBe(403)
-  expect(m.from).not.toHaveBeenCalled()
+  expect((await ledgerPost(req(submission),{params:Promise.resolve({id:owner})})).status).toBe(403)
+  expect(m.rpc).not.toHaveBeenCalled()
+  expect(m.send).not.toHaveBeenCalled()
 })
 it('reads only the requested work order from the operator organization and passes no carrier connection to the browser',async()=>{
-  const builder={select:vi.fn(()=>builder),eq:vi.fn(()=>builder),order:vi.fn(()=>builder),limit:vi.fn(()=>builder),maybeSingle:vi.fn().mockResolvedValue(resolves({...latest,shipping_orders:{org_id:org}}))}
-  m.from.mockReturnValue(builder)
-  const response=await ledgerGet(req(),{params:Promise.resolve({id:owner})})
-  expect(await response.json()).toEqual({latest})
-  expect(builder.eq.mock.calls).toEqual([['shipping_orders.org_id',org],['order_id',owner]])
+  const ledgerCtx={params:Promise.resolve({id:key})}
+  m.rpc.mockResolvedValueOnce(resolves({...detail, context:null, latest, unavailableReason:'intercept_disabled'}))
+    .mockResolvedValueOnce(resolves(null))
+  const response=await ledgerGet(req(),ledgerCtx)
+  expect(await response.json()).toEqual({orderNo,latest,actions:[],returnDestination:contact,currentRecipient:target,unavailableReason:'intercept_disabled'})
+  expect(m.rpc).toHaveBeenCalledWith('shipping_carrier_change_v1', {
+    p_org:org, p_actor:owner, p_order_id:key, p_order_no:null, p_key:null, p_action:null, p_recipient:null, p_binding:null,
+  })
+  expect((await ledgerGet(req(),ledgerCtx)).status).toBe(404)
   expect(m.connect).not.toHaveBeenCalled()
+})
+it('submits operator forwarding under the authenticated actor and saves the original shipment receipt',async()=>{
+  const accepted={...latest,action:'modify_recipient',status:'accepted',destination:target,instructionId:'CUS1',amount:'2.55'}
+  m.auth.mockResolvedValueOnce({id:operator})
+  m.rpc.mockResolvedValueOnce(resolves(detail)).mockResolvedValueOnce(resolves({result:'dispatch'}))
+    .mockResolvedValueOnce(resolves(true)).mockResolvedValueOnce(resolves({result:'replay',latest:accepted}))
+  const response=await ledgerPost(req({action:'modify_recipient',key,recipient:target}),{params:Promise.resolve({id:key})})
+  expect(await response.json()).toEqual(accepted)
+  expect(m.send).toHaveBeenCalledExactlyOnceWith(context.waybill,'modify_recipient',target)
+  expect(m.rpc).toHaveBeenCalledWith('finish_shipping_carrier_change_v1',expect.objectContaining({
+    p_org:org,p_actor:operator,p_order_id:key,p_order_no:null,p_key:key,p_status:'accepted',
+  }))
+})
+it('returns an in-transit order only to the original sender and rechecks its exact carrier route',async()=>{
+  const ledgerCtx={params:Promise.resolve({id:key})}
+  expect((await ledgerPost(req({...submission,recipient:target}),ledgerCtx)).status).toBe(400)
+  expect(m.rpc).not.toHaveBeenCalled()
+  const accepted={...latest,status:'accepted',instructionId:'CUS1',amount:'2.55'}
+  m.rpc.mockResolvedValueOnce(resolves(detail)).mockResolvedValueOnce(resolves({result:'dispatch'}))
+    .mockResolvedValueOnce(resolves(true)).mockResolvedValueOnce(resolves({result:'replay',latest:accepted}))
+  expect(await (await ledgerPost(req(submission),ledgerCtx)).json()).toEqual(accepted)
+  expect(m.route).toHaveBeenCalledExactlyOnceWith('original',context.waybill)
+  expect(m.send).toHaveBeenCalledExactlyOnceWith(context.waybill,'return_to_sender',contact)
 })

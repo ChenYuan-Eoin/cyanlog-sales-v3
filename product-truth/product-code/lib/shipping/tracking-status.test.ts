@@ -5,7 +5,7 @@ import { normalizeTrackingStatus, normalizeTrackingTime } from './tracking-statu
 const status = (description: string) => normalizeTrackingStatus({ description })
 
 describe('conservative SF route status normalization', () => {
-  it.each(['顺丰速运 已收取快件', '快件已揽收', '运输中', '快件已到达转运场'])('treats %s as transit, not delivery', (description) => {
+  it.each(['顺丰速运 已收取快件', '快件已揽收', '运输中', '运送中', '快件已到达转运场'])('treats %s as transit, not delivery', (description) => {
     expect(status(description)).toBe('in_transit')
   })
   it.each(['快件已签收', '本人签收', '签收成功', '快件已派送成功（公司前台）'])('recognizes explicit successful delivery: %s', (description) => {
@@ -18,6 +18,10 @@ describe('conservative SF route status normalization', () => {
     ['尚未揽收', 'waybill_created'],
     ['待揽收', 'waybill_created'],
     ['快件正在派送', 'out_for_delivery'],
+    ['快递员正在为您派送', 'out_for_delivery'],
+    ['快件尚未派件出仓', 'unknown'],
+    ['快件预计稍后派件出仓', 'unknown'],
+    ['快件尚未派件出仓，但此时已派件出仓', 'out_for_delivery'],
     ['签收后请评价', 'unknown'],
     ['快件未派送成功', 'unknown'],
     ['快件尚未派送成功', 'unknown'],
@@ -30,6 +34,10 @@ describe('conservative SF route status normalization', () => {
     expect(normalizeTrackingStatus({ firstStatusName: '已揽收', secondaryStatusName: '已揽收', opCode: '54', description: '顺丰速运 已收取快件' })).toBe('in_transit')
     expect(normalizeTrackingStatus({ firstStatusName: '待揽收', secondaryStatusName: '待揽收', opCode: '655', description: '合作点已代收' })).toBe('waybill_created')
     expect(normalizeTrackingStatus({ firstStatusName: '已签收', description: '已放至指定位置' })).toBe('delivered')
+    expect(normalizeTrackingStatus({ firstStatusName: '运送中', opCode: '231', description: '快件到达' })).toBe('in_transit')
+    expect(normalizeTrackingStatus({ firstStatusCode: '2', secondaryStatusCode: '201', description: '节点更新' })).toBe('in_transit')
+    expect(normalizeTrackingStatus({ firstStatusCode: '3', secondaryStatusCode: '301', description: '节点更新' })).toBe('out_for_delivery')
+    expect(normalizeTrackingStatus({ opCode: '44', description: '节点更新' })).toBe('out_for_delivery')
   })
   it('does not invent a meaning for an unknown operation code or future status name', () => {
     expect(normalizeTrackingStatus({ opCode: '99999', description: '节点更新' })).toBe('unknown')
