@@ -1,7 +1,7 @@
 import type { DashboardPayload } from '@/lib/dashboard-data'
 import { attachHistoricalSpaceIds, buildDepartmentOptions, resolveDepartmentSpaceIds, type DepartmentOption, type DepartmentSpace } from '@/lib/department-spaces'
 import { hasPermission } from '@/lib/permissions'
-import { ORG_SUPER_ADMIN_ROLE_CODE, resolveRolePermissions } from '@/lib/role-permission-resolution'
+import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, resolveRolePermissions } from '@/lib/role-permission-resolution'
 import { supabaseAdmin } from '@/lib/supabase'
 
 type ScopeType = 'org' | 'department' | 'space'
@@ -77,6 +77,7 @@ async function getCurrentGrants(userId: string, orgId: string): Promise<ActiveGr
     if (!role?.id || !role.code || assignment.user_id !== userId || assignment.org_id !== orgId || !assignment.scope_id) return []
     if (assignment.scope_type === 'org' && assignment.scope_id !== orgId) return []
     if (assignment.scope_type !== 'org' && (role.code === 'SUPER_ADMIN' || role.code === ORG_SUPER_ADMIN_ROLE_CODE)) return []
+    if (!isRoleAssignableInScope(role.code, assignment.scope_type)) return []
     const { permissions } = resolveRolePermissions(activeOrganization.settings, role)
     return [{ scopeType: assignment.scope_type, scopeId: assignment.scope_id, code: role.code, permissions }]
   })

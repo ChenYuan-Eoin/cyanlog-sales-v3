@@ -158,6 +158,20 @@ describe('organization super administrator migration', () => {
     await expect(read(peer)).rejects.toMatchObject({ code: '42501' })
   })
 
+  it('blocks new assignments to a disabled department while allowing an existing binding to be revoked', async () => {
+    const changeRole = 'select public.admin_set_role_scope_assignment_v1($1, $2, $3, $4, $5, $6, $7) as saved'
+    const scope = [root, org, peer, salesRole, 'department', department]
+    const bindings = "select user_id from public.user_roles where scope_type = 'department' and org_id = $1 and scope_id = $2"
+    expect((await db.query(changeRole, [...scope, 'assign'])).rows).toEqual([{ saved: true }])
+    await db.query("update public.departments set status = 'inactive' where org_id = $1 and id = $2", [org, department])
+
+    await expect(db.query(changeRole, [root, org, candidate, salesRole, 'department', department, 'assign']))
+      .rejects.toMatchObject({ code: '23514', detail: 'DEPARTMENT_SCOPE_UNAVAILABLE' })
+    expect((await db.query(bindings, [org, department])).rows).toEqual([{ user_id: peer }])
+    expect((await db.query(changeRole, [...scope, 'revoke'])).rows).toEqual([{ saved: true }])
+    expect((await db.query(bindings, [org, department])).rows).toEqual([])
+  })
+
   it('preserves dedicated assignment during generic active-role edits and blocks generic privilege changes', async () => {
     const replace = 'select public.admin_replace_org_roles_v1($1, $2, $3, $4) as saved'
     const replaceIfCurrent = 'select public.admin_replace_org_roles_if_current_v1($1, $2, $3, $4, $5) as result'

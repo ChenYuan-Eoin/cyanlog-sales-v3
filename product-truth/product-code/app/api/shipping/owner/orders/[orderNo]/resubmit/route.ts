@@ -8,7 +8,10 @@ type Context = { params: Promise<{ orderNo: string }> }
 
 export async function GET(req: NextRequest, { params }: Context) {
   return shippingHandler(req, async (user, orgId) =>
-    loadReturnedOwnerShipment(orgId, user.id, (await params).orderNo), { allowFxiaokeSelfSubmit: true })
+    loadReturnedOwnerShipment(orgId, user.id, (await params).orderNo), {
+    allowFxiaokeSelfSubmit: true,
+    requiresOwnerWrite: true,
+  })
 }
 
 export async function POST(req: NextRequest, { params }: Context) {

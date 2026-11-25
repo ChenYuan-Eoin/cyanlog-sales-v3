@@ -65,6 +65,26 @@ it('loads the editable fields and return reason through the employee route', asy
   expect(receipt.input.recipient).not.toHaveProperty('legacyExtra')
 })
 
+it('denies a read-only employee before reading returned order details', async () => {
+  mock.operator.mockResolvedValue({ orgId: 'org-A', canOperate: false, roleCodes: ['READONLY'] })
+
+  const response = await read()
+
+  expect(response.status).toBe(403)
+  expect(await response.json()).toEqual({ error: '当前账号仅可查看本人寄件记录。' })
+  expect(mock.from).not.toHaveBeenCalledWith('shipping_orders')
+})
+
+it('opens an owned returned order for an authorized operator', async () => {
+  mock.operator.mockResolvedValue({ orgId: 'org-A', canOperate: true, roleCodes: ['SHIPPING_OPERATOR'] })
+
+  const response = await read()
+
+  expect(response.status).toBe(200)
+  expect(await response.json()).toMatchObject({ orderNo: number, input: { recipient: contact } })
+  expect(mock.from).not.toHaveBeenCalledWith('auth_tokens')
+})
+
 it.each([{ org_id: 'org-B' }, { created_by: 'user-B' }, { intake_source: 'anonymous_web' }, { order_no: 'other' }])('conceals out-of-scope drafts %j', async patch => {
   Object.assign(order, patch)
   expect((await read()).status).toBe(404)

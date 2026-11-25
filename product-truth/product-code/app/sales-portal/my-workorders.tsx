@@ -149,6 +149,8 @@ function ReceiptCard({ order, scope, canManage, locked, statusUnverified, openin
   </li>
 }
 
+class OwnerRecordsAccessError extends Error {}
+
 export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResubmit, actionsLocked = false, readOnly = false }: {
   scope?: 'public' | 'owner'
   refreshKey?: number
@@ -202,6 +204,9 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
         const response = await fetch(`/api/shipping/${scope === 'owner' ? 'owner' : 'public'}/orders?page=${index}`, {
           cache: 'no-store', credentials: scope === 'owner' ? 'same-origin' : 'omit', signal: controller.signal,
         })
+        if (scope === 'owner' && (response.status === 401 || response.status === 403)) {
+          throw new OwnerRecordsAccessError(response.status === 401 ? '请重新登录后查看本人寄件记录。' : '当前账号无权查看本人寄件记录。')
+        }
         const data = await response.json()
         if (!response.ok || !Array.isArray(data.orders)) throw new Error(data.error || '读取失败')
         return { orders: data.orders, nextPage: Number.isSafeInteger(data.nextPage) && data.nextPage > index ? data.nextPage : null }
@@ -218,7 +223,10 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
         if (candidates.some(order => ['waybill_created', 'in_transit'].includes(order.status) && /^(?:SF)?\d{10,15}$/.test(order.waybill || ''))) {
           for (const index of pages.keys()) {
             try { pages.set(index, await readPage(index)) }
-            catch { candidates.forEach(order => { if (order.waybill && ['waybill_created', 'in_transit'].includes(order.status)) failed.add(order.orderNo) }) }
+            catch (error) {
+              if (error instanceof OwnerRecordsAccessError) throw error
+              candidates.forEach(order => { if (order.waybill && ['waybill_created', 'in_transit'].includes(order.status)) failed.add(order.orderNo) })
+            }
           }
           merged = mergePages()
         }
@@ -246,7 +254,18 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
     } catch (e) {
       if (!controller.signal.aborted) {
         setError(e instanceof Error ? e.message : '读取失败')
-        if (canManage) setStatusFailures(new Set(receipts.current.filter(order => ['waybill_created', 'in_transit'].includes(order.status)).map(order => order.orderNo)))
+        if (e instanceof OwnerRecordsAccessError) {
+          opening.current?.abort()
+          opening.current = null
+          receipts.current = []
+          lastPage.current = 0
+          setOpeningOrder('')
+          setOrders(null)
+          setNextPage(null)
+          setStatusFailures(new Set())
+        } else if (canManage) {
+          setStatusFailures(new Set(receipts.current.filter(order => ['waybill_created', 'in_transit'].includes(order.status)).map(order => order.orderNo)))
+        }
       }
     } finally {
       if (reading.current === controller) { reading.current = null; setBusy(false) }
@@ -300,8 +319,10 @@ export default function MyWorkorders({ scope = 'public', refreshKey = 0, onResub
     } catch (e) {
       if (!controller.signal.aborted) setError(e instanceof Error ? e.message : '读取原提报失败')
     } finally {
-      opening.current = null
-      if (!controller.signal.aborted) setOpeningOrder('')
+      if (opening.current === controller) {
+        opening.current = null
+        setOpeningOrder('')
+      }
     }
   }
 

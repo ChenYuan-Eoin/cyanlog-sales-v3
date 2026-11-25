@@ -271,6 +271,17 @@ begin
     raise exception 'shipping operator is only assignable at organization scope'
       using errcode = '23514', detail = 'ROLE_SCOPE_NOT_SUPPORTED';
   end if;
+  if p_action = 'assign' and p_scope_type = 'department' then
+    -- Keep the department active through the assignment even when another
+    -- transaction changes its status without taking the personnel lock.
+    perform 1 from public.departments
+    where id = p_scope_id and org_id = p_org_id and status = 'active'
+    for share;
+    if not found then
+      raise exception 'department scope is not available'
+        using errcode = '23514', detail = 'DEPARTMENT_SCOPE_UNAVAILABLE';
+    end if;
+  end if;
   return private.admin_set_role_scope_assignment_v1(
     p_actor_id, p_org_id, p_user_id, p_role_id, p_scope_type, p_scope_id, p_action, p_reason, p_request_id
   );

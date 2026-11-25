@@ -78,6 +78,16 @@ describe('scoped role assignment route', () => {
     expect(rpc).not.toHaveBeenCalled()
   })
 
+  it('reports a department that became unavailable during assignment without claiming success', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: '23514', details: 'DEPARTMENT_SCOPE_UNAVAILABLE' } })
+    const response = await POST(request('POST'), context())
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({
+      code: 'DEPARTMENT_SCOPE_UNAVAILABLE',
+      error: '所选部门未启用或已变化，请刷新后重新选择。',
+    })
+  })
+
   it('revokes an existing legacy space role through DELETE', async () => {
     const response = await DELETE(request('DELETE', {
       role_id: role, scope_type: 'space', scope_id: scope, reason: '  Updated roster  ',

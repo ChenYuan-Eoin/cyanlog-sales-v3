@@ -97,6 +97,49 @@ it('keeps read-only owner status and pagination without requesting live tracking
     && (!init?.method || init.method === 'GET'))).toBe(true)
 })
 
+it.each([401, 403])('clears previously loaded owner records when a list refresh returns %i', async (status) => {
+  fetcher.mockResolvedValueOnce(response({ orders: [order('OLD', { customerName: '原账号客户' })], nextPage: 1 }))
+    .mockResolvedValueOnce(response({ error: '本人记录访问权限已失效。' }, status))
+    .mockResolvedValueOnce(response({ orders: [order('NEW')], nextPage: null }))
+  render(<MyWorkorders scope="owner" readOnly />)
+
+  await screen.findByRole('listitem', { name: '提报 OLD' })
+  expect(screen.getByRole('button', { name: '显示更多记录' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '刷新提报记录' }))
+  expect(await screen.findByRole('alert')).toBeInTheDocument()
+  expect(screen.queryByText('原账号客户')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '显示更多记录' })).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: '刷新提报记录' }))
+  expect(await screen.findByRole('listitem', { name: '提报 NEW' })).toBeInTheDocument()
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual(Array(3).fill('/api/shipping/owner/orders?page=0'))
+})
+
+it('retains loaded owner records when the list has a temporary server error', async () => {
+  fetcher.mockResolvedValueOnce(response({ orders: [order('EXISTING')], nextPage: null }))
+    .mockResolvedValueOnce(response({ error: '暂时无法读取。' }, 503))
+  render(<MyWorkorders scope="owner" readOnly />)
+  await screen.findByRole('listitem', { name: '提报 EXISTING' })
+
+  fireEvent.click(screen.getByRole('button', { name: '刷新提报记录' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('暂时无法读取')
+  expect(screen.getByRole('listitem', { name: '提报 EXISTING' })).toBeInTheDocument()
+})
+
+it('clears the owner list if access is denied on the reread after carrier status refresh', async () => {
+  const waybill = 'SF1234567890123'
+  const saved = () => response({ orders: [order('STORED', { waybill })], nextPage: null })
+  const tracked = () => response({ verified: true, source: 'carrier', waybill })
+  fetcher.mockResolvedValueOnce(saved()).mockResolvedValueOnce(tracked()).mockResolvedValueOnce(saved())
+    .mockResolvedValueOnce(saved()).mockResolvedValueOnce(tracked()).mockResolvedValueOnce(response({}, 403))
+  render(<MyWorkorders scope="owner" />)
+  await screen.findByRole('listitem', { name: '提报 STORED' })
+
+  fireEvent.click(screen.getByRole('button', { name: '刷新提报记录' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('当前账号无权查看本人寄件记录。')
+  expect(screen.queryByRole('listitem', { name: '提报 STORED' })).not.toBeInTheDocument()
+})
+
 it('refreshes current waybill status from SF and reloads the owner list before showing action availability', async () => {
   const fresh = order('LIVE', { status: 'delivered', trackingStatus: 'delivered', waybill: 'SF1234567890123' })
   fetcher.mockResolvedValueOnce(response({ orders: [order('LIVE', { waybill: 'SF1234567890123' })], nextPage: null }))

@@ -67,6 +67,8 @@ export function RoleAssignmentDialog({
   const [revokingKey, setRevokingKey] = useState<string | null>(null)
   const assignableRoles = roles.filter(role => isRoleAssignableInScope(role.code, scopeType))
   const selectedScopedRole = assignableRoles.find(role => role.id === selectedScopedRoleId)
+  const assignableDepartments = departments.filter(department => department.status === 'active')
+  const selectedDepartment = assignableDepartments.find(department => department.id === scopeId)
 
   // 获取角色列表
   useEffect(() => {
@@ -116,14 +118,14 @@ export function RoleAssignmentDialog({
       if (scopeType === 'org') {
         await onSubmit(selectedOrgRoles)
       } else {
-        if (!onSubmitScoped || !scopeId || !selectedScopedRole) return
-        await onSubmitScoped(selectedScopedRole.id, scopeId)
+        if (!onSubmitScoped || !selectedDepartment || !selectedScopedRole) return
+        await onSubmitScoped(selectedScopedRole.id, selectedDepartment.id)
       }
       onOpenChange(false)
     } finally {
       setLoading(false)
     }
-  }, [scopeType, onSubmit, selectedOrgRoles, onSubmitScoped, selectedScopedRole, scopeId, onOpenChange])
+  }, [scopeType, onSubmit, selectedOrgRoles, onSubmitScoped, selectedScopedRole, selectedDepartment, onOpenChange])
 
   const nonOrgScopedRoles = scopedRoles.filter(
     assignment => (assignment.scopeType === 'department' || assignment.scopeType === 'space')
@@ -262,11 +264,11 @@ export function RoleAssignmentDialog({
                 <select
                   aria-label="选择部门角色作用域"
                   className="mt-2 h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
-                  value={scopeId}
+                  value={selectedDepartment?.id ?? ''}
                   onChange={(event) => setScopeId(event.target.value)}
                 >
                   <option value="">请选择部门</option>
-                  {departments.map((department) => (
+                  {assignableDepartments.map((department) => (
                     <option key={department.id} value={department.id}>{department.name}</option>
                   ))}
                 </select>
@@ -285,7 +287,7 @@ export function RoleAssignmentDialog({
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={loading || fetchingRoles || (scopeType !== 'org' && (!onSubmitScoped || !scopeId || !selectedScopedRole))}
+                disabled={loading || fetchingRoles || (scopeType !== 'org' && (!onSubmitScoped || !selectedDepartment || !selectedScopedRole))}
               >
                 {loading ? '保存中...' : '保存'}
               </Button>

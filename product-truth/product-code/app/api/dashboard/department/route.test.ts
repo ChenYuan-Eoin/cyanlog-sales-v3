@@ -289,6 +289,30 @@ describe('GET /api/dashboard/department', () => {
     expect(mocks.from).not.toHaveBeenCalledWith('opportunities')
   })
 
+  it('历史寄件操作员绑定不授予部门或商机权限，普通混合角色按部门继续生效', async () => {
+    const shippingOperator = role('shipping-operator', ['shipping:operate'], 'SHIPPING_OPERATOR')
+    const mixedRole = role('sales-team', ['dept:view', 'opportunity:own', 'shipping:operate'])
+    tables.organizations[0].settings = {
+      role_permission_overrides: { [shippingOperator.id]: ['shipping:operate', 'dept:view', 'opportunity:*'] },
+    }
+    tables.user_roles = [
+      grant('department', 'sales-a', mixedRole),
+      grant('department', 'sales-b', shippingOperator),
+      grant('space', 'space-a', shippingOperator),
+    ]
+    tables.opportunities.push(opportunity('a-owned', 'space-a'))
+
+    const outside = await request('?departmentId=sales-b')
+    expect.soft(outside.status).toBe(403)
+    expect.soft(await outside.json()).toMatchObject({ code: 'DEPARTMENT_SELECTION_FORBIDDEN' })
+
+    const inside = await request('?departmentId=sales-a&includeSubdepartments=false')
+    expect(inside.status).toBe(200)
+    const data = await inside.json()
+    expect(data.departmentSpaces.map((row: Row) => row.department_id)).toEqual(['sales-a', 'sales-a-child', 'new-department'])
+    expect(data.opportunities.map((row: Row) => row.id)).toEqual(['a-owned'])
+  })
+
   it('后续请求读取最新角色和权限覆盖', async () => {
     expect((await request('?departmentId=sales-a')).status).toBe(200)
     tables.organizations[0].settings = { role_permission_overrides: { 'lead-a': [] } }

@@ -26,7 +26,7 @@ describe('RoleAssignmentDialog scoped assignment', () => {
         userId="user-1"
         userName="测试成员"
         currentRoles={[]}
-        departments={[{ id: 'dept-1', name: '销售部' } as any]}
+        departments={[{ id: 'dept-1', name: '销售部', status: 'active' } as any]}
         onSubmit={onSubmit}
         onSubmitScoped={onSubmitScoped}
         open
@@ -91,6 +91,38 @@ describe('RoleAssignmentDialog scoped assignment', () => {
     await waitFor(() => expect(onRevokeScoped).toHaveBeenCalledWith('role-1', 'space', 'old-space'))
   })
 
+  it('offers only active departments for new roles and still revokes a disabled department binding', async () => {
+    const active = { id: 'active', name: '启用部门', parent_id: null, parent_name: null, member_count: 0, status: 'active' as const }
+    const inactive = { ...active, id: 'inactive', name: '已停用部门', status: 'inactive' as const }
+    const onSubmitScoped = vi.fn(async () => undefined)
+    const onRevokeScoped = vi.fn(async () => undefined)
+    const props = {
+      userId: 'member', userName: '测试成员', currentRoles: [], open: true, onOpenChange: vi.fn(),
+      scopedRoles: [{
+        roleId: 'role-1', roleCode: 'SALES', roleName: '销售', scopeType: 'department' as const,
+        scopeId: inactive.id, scopeName: inactive.name, grantedAt: null,
+      }],
+      onSubmit: vi.fn(async () => undefined), onSubmitScoped, onRevokeScoped,
+    }
+    const { rerender } = render(<RoleAssignmentDialog {...props} departments={[active, inactive]} />)
+    await screen.findByRole('checkbox', { name: /销售/ })
+    fireEvent.change(screen.getByLabelText('角色作用域类型'), { target: { value: 'department' } })
+
+    expect(screen.getByRole('option', { name: active.name })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: inactive.name })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('选择部门角色作用域'), { target: { value: active.id } })
+    fireEvent.click(screen.getByRole('checkbox', { name: /销售/ }))
+    expect(screen.getByRole('button', { name: '保存' })).toBeEnabled()
+
+    rerender(<RoleAssignmentDialog {...props} departments={[{ ...active, status: 'inactive' }, inactive]} />)
+    expect(screen.getByLabelText('选择部门角色作用域')).toHaveValue('')
+    expect(screen.getByRole('button', { name: '保存' })).toBeDisabled()
+    expect(onSubmitScoped).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /撤销 销售（已停用部门）/ }))
+    await waitFor(() => expect(onRevokeScoped).toHaveBeenCalledWith('role-1', 'department', inactive.id))
+  })
+
   it('limits the shipping operator to organization assignments and keeps its old scope binding revocable', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({
       success: true,
@@ -103,7 +135,7 @@ describe('RoleAssignmentDialog scoped assignment', () => {
     const onSubmitScoped = vi.fn(async () => undefined)
     const onRevokeScoped = vi.fn(async () => undefined)
     render(<RoleAssignmentDialog userId="test-user" userName="测试成员" currentRoles={['shipping-role']}
-      departments={[{ id: 'department', name: '部门甲' } as any]}
+      departments={[{ id: 'department', name: '部门甲', status: 'active' } as any]}
       scopedRoles={[{
         roleId: 'shipping-role', roleCode: 'SHIPPING_OPERATOR', roleName: '顺丰寄件操作员',
         scopeType: 'department', scopeId: 'department', scopeName: '部门甲', grantedAt: null,

@@ -68,6 +68,9 @@ async function changeScope(req: NextRequest, userId: string, action: 'assign' | 
     if (error?.code === '23514' && error.details === 'ROLE_SCOPE_NOT_SUPPORTED') {
       return failure(SHIPPING_OPERATOR_ORG_SCOPE_MESSAGE, error.details, 409)
     }
+    if (error?.code === '23514' && error.details === 'DEPARTMENT_SCOPE_UNAVAILABLE') {
+      return failure('所选部门未启用或已变化，请刷新后重新选择。', error.details, 409)
+    }
     if (error?.code === '23514') return failure('作用域与当前组织不匹配', 'INVALID_SCOPE', 409)
     if (error?.code === 'PGRST202' || error?.code === '42883') {
       return failure('作用域角色服务正在更新', 'SCOPE_ASSIGNMENT_UNAVAILABLE', 503)
