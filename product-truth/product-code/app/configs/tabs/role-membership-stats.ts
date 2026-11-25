@@ -1,4 +1,4 @@
-import { isRoleAssignableInScope } from '@/lib/role-permission-resolution'
+import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
 import type { OrgSummaryPayload, OrgSummaryUser } from '../types'
 import { userHasPendingOrgRole } from './role-assignment-policy'
 
@@ -59,8 +59,9 @@ export function getRoleMembershipStats(
     state.eligible &&= eligible
     if (effectiveAvailable) {
       for (const binding of bindings) {
-        const { scopeType, scopeId } = binding
-        if (scopeId && isRoleAssignableInScope(binding.roleCode, scopeType) && (
+        const { roleCode, scopeType, scopeId } = binding
+        if (scopeType !== 'org' && (roleCode === 'SUPER_ADMIN' || roleCode === ORG_SUPER_ADMIN_ROLE_CODE)) continue
+        if (scopeId && isRoleAssignableInScope(roleCode, scopeType) && (
           (scopeType === 'org' && scopeId === orgId)
           || (scopeType === 'department' && activeDepartmentIds.has(scopeId))
           || (scopeType === 'space' && activeSpaceIds.has(scopeId))

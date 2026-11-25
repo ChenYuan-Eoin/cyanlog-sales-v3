@@ -58,20 +58,23 @@ describe('role membership statistics', () => {
     expect(stats.members.every(member => member.effective === false)).toBe(true)
   })
 
-  it('counts only the exact organization shipping operator scope and keeps historical rows visible', () => {
-    const orgBinding = { ...binding('org', 'org', 'operator'), roleCode: 'SHIPPING_OPERATOR' }
+  it.each(['SUPER_ADMIN', 'ORG_SUPER_ADMIN', 'SHIPPING_OPERATOR'])('counts only an exact organization %s binding and keeps historical rows visible', roleCode => {
+    const roleId = 'exact-role'
+    const orgBinding = { ...binding('org', 'org', roleId), roleCode }
     const departmentBinding = { ...orgBinding, scopeType: 'department' as const, scopeId: 'open-department' }
     const spaceBinding = { ...orgBinding, scopeType: 'space' as const, scopeId: 'open-space' }
     const users = [
-      activeUser('operator', { scoped_roles: [orgBinding, departmentBinding, spaceBinding] }),
+      activeUser('organization-member', { scoped_roles: [orgBinding, departmentBinding, spaceBinding] }),
       activeUser('department-history', { scoped_roles: [departmentBinding] }),
       activeUser('space-history', { scoped_roles: [spaceBinding] }),
+      activeUser('foreign-organization', { scoped_roles: [{ ...orgBinding, scopeId: 'other-org' }] }),
+      activeUser('same-code-different-id', { scoped_roles: [{ ...orgBinding, roleId: 'different-role' }] }),
     ]
 
-    const stats = getRoleMembershipStats(users, 'operator', context)
+    const stats = getRoleMembershipStats(users, roleId, context)
     expect(stats).toMatchObject({ effectiveMemberCount: 1, effectiveBindingCount: 1 })
     expect(stats.members.map(({ user, effective }) => ({ id: user.id, effective }))).toEqual([
-      { id: 'operator', effective: true },
+      { id: 'organization-member', effective: true },
       { id: 'department-history', effective: false },
       { id: 'space-history', effective: false },
     ])
