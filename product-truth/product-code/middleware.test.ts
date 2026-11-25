@@ -38,10 +38,16 @@ afterEach(() => {
   }
 })
 
+type TestDepartment = { id: string; org_id: string; status: string; leader_id?: string }
+type TestDepartmentAccess = { org_id: string; user_id: string; department_id: string; department: TestDepartment }
+
 function mockExactOrgAuth(options: {
   token: string
   orgId: string
-  roles: Array<{ org_id?: string; scope_type?: string; scope_id?: string; roles: { id?: string; code: string; permissions: string[] } }>
+  roles: Array<{ org_id?: string; user_id?: string; scope_type?: string; scope_id?: string; roles: { id?: string; code: string; permissions: string[] } }>
+  departments?: TestDepartment[]
+  departmentLeads?: TestDepartmentAccess[]
+  departmentLeadsStatus?: number
   memberships?: Array<{ org_id: string; employment_status: string; left_at?: string | null }>
   settings?: unknown
   settingsError?: unknown
@@ -80,7 +86,23 @@ function mockExactOrgAuth(options: {
     }
     if (table === 'user_roles') {
       expect(url.searchParams.get('org_id')).toBe(`eq.${options.orgId}`)
-      return Response.json(options.roles.map(role => ({ org_id: options.orgId, scope_type: 'org', scope_id: options.orgId, ...role })))
+      expect(url.searchParams.get('user_id')).toBe('eq.user-1')
+      return Response.json(options.roles.map(role => ({ org_id: options.orgId, user_id: 'user-1', scope_type: 'org', scope_id: options.orgId, ...role })))
+    }
+    if (table === 'departments') {
+      expect(url.searchParams.get('org_id')).toBe(`eq.${options.orgId}`)
+      expect(url.searchParams.get('status')).toBe('eq.active')
+      return Response.json((options.departments ?? []).filter(department => url.searchParams.get('id') === `eq.${department.id}`))
+    }
+    if (table === 'department_lead_access') {
+      expect(url.searchParams.get('org_id')).toBe(`eq.${options.orgId}`)
+      expect(url.searchParams.get('user_id')).toBe('eq.user-1')
+      expect(url.searchParams.get('department.org_id')).toBe(`eq.${options.orgId}`)
+      expect(url.searchParams.get('department.status')).toBe('eq.active')
+      expect(url.searchParams.get('department.leader_id')).toBe('eq.user-1')
+      expect(url.searchParams.get('select')).toContain('department:departments!department_lead_access_department_id_fkey!inner(')
+      if (options.departmentLeadsStatus !== undefined) return new Response('department access unavailable', { status: options.departmentLeadsStatus })
+      return Response.json(options.departmentLeads ?? [])
     }
     if (table === 'organizations') {
       if (options.settingsError) {
@@ -403,6 +425,96 @@ describe('role-free federated session boundary', () => {
     req.cookies.get = vi.fn().mockReturnValue({ value: 'sso-token' })
     const response = await middleware(req)
     expect(response.status).toBe(401)
+  })
+})
+
+
+describe('department-scoped workspace admission', () => {
+  const department = { id: 'dept-a', org_id: 'org-a', status: 'active', leader_id: 'user-1' }
+  const leaderGrant = { org_id: 'org-a', user_id: 'user-1', department_id: department.id, department }
+  const departmentRole = {
+    org_id: 'org-a', user_id: 'user-1', scope_type: 'department', scope_id: department.id,
+    roles: { id: 'dept-viewer', code: 'DEPARTMENT_VIEWER', permissions: ['dept:view', 'shipping:*', 'config:read'] },
+  }
+  const token = 'department-workspace-token'
+  function bind(overrides: Partial<Parameters<typeof mockExactOrgAuth>[0]> = {}) {
+    return mockExactOrgAuth({ token, orgId: 'org-a', roles: [], authMethod: 'fxiaoke', ...overrides })
+  }
+  const request = (path: string, method = 'GET') => middleware(makeRequest(
+    `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
+  ))
+
+  it.each([
+    { name: 'confirmed department leader', departmentLeads: [leaderGrant] },
+    { name: 'active department view role', roles: [departmentRole], departments: [department] },
+    {
+      name: 'active department report role even before the lead confirmation table is available',
+      roles: [{ ...departmentRole, roles: { ...departmentRole.roles, permissions: ['report:dept'] } }],
+      departments: [department],
+      departmentLeadsStatus: 404,
+    },
+  ])('allows the exact workspace reads for an authoritative session with a $name and no organization role', async ({ name: _name, ...proof }) => {
+    bind(proof)
+    for (const path of ['/', '/api/auth/me', '/api/navigation', '/api/dashboard?view=personal', '/api/dashboard/department', '/api/dashboard/department/roster']) {
+      const response = await request(path)
+      expect(response.status, path).toBe(200)
+      expect(response.headers.get('x-middleware-request-x-user-id')).toBe('user-1')
+      expect(response.headers.get('x-middleware-request-x-org-id')).toBe('org-a')
+      expect(response.headers.get('x-middleware-request-x-user-role-codes')).toBe('')
+      expect(response.headers.get('x-middleware-request-x-user-permissions')).toBe('')
+      expect((await request(path, 'HEAD')).status, path).toBe(200)
+    }
+    for (const path of [
+      '/api/quotes', '/api/configs', '/api/admin/users', '/api/shipping/ledger', '/api/shipping/owner/orders',
+      '/api/shipping/settings', '/api/dashboard/department/other',
+    ]) {
+      const response = await request(path)
+      expect(response.status, path).toBe(403)
+      expect((await response.json()).code).toBe('ROLE_REQUIRED')
+    }
+    for (const path of ['/api/dashboard/department', '/api/shipping/owner/orders', '/api/auth/me']) {
+      expect((await request(path, 'POST')).status, path).toBe(403)
+    }
+    for (const path of ['/shipping', '/shipping/settings', '/configs']) {
+      expect((await request(path)).headers.get('location'), path).toBe('https://sales.cyanlog.icu/pending-access')
+    }
+  })
+
+  it.each([
+    { name: 'actual roleless member' },
+    { name: 'roleless member before the lead migration', departmentLeadsStatus: 404 },
+    { name: 'unconfirmed department leader', departments: [department] },
+    { name: 'revoked department role', roles: [departmentRole], settings: { role_permission_overrides: { 'dept-viewer': [] } }, departments: [department] },
+    { name: 'foreign department role binding', roles: [{ ...departmentRole, org_id: 'org-b' }], departments: [department] },
+    { name: 'foreign department', roles: [departmentRole], departments: [{ ...department, org_id: 'org-b' }] },
+    { name: 'disabled department role scope', roles: [departmentRole], departments: [{ ...department, status: 'inactive' }] },
+    { name: 'invalid department role', roles: [{ ...departmentRole, roles: { ...departmentRole.roles, code: 'SHIPPING_OPERATOR' } }], departments: [department] },
+    { name: 'inactive leader department', departmentLeads: [{ ...leaderGrant, department: { ...department, status: 'inactive' } }] },
+    { name: 'no longer the leader', departmentLeads: [{ ...leaderGrant, department: { ...department, leader_id: 'user-2' } }] },
+    { name: 'foreign leader department', departmentLeads: [{ ...leaderGrant, department: { ...department, org_id: 'org-b' } }] },
+    { name: 'ended membership', departmentLeads: [leaderGrant], memberships: [{ org_id: 'org-a', employment_status: 'active', left_at: '2026-11-01T00:00:00Z' }] },
+    { name: 'disabled organization', departmentLeads: [leaderGrant], organizationStatus: 'inactive' },
+  ])('keeps the pending-access boundary for a $name', async ({ name: _name, ...proof }) => {
+    bind(proof)
+    expect((await request('/')).headers.get('location')).toBe('https://sales.cyanlog.icu/pending-access')
+    const response = await request('/api/dashboard/department')
+    expect(response.status).toBe(403)
+    expect((await response.json()).code).toBe('ROLE_REQUIRED')
+  })
+
+  it('fails closed when checking confirmed department access is unavailable', async () => {
+    bind({ departmentLeadsStatus: 503 })
+    expect((await request('/api/dashboard/department')).status).toBe(503)
+  })
+
+  it.each([
+    { loginEnabled: false },
+    { status: 'inactive' },
+    { employmentStatus: 'suspended' },
+    { sourceIdentity: 'evidence' as const },
+  ])('keeps invalid sessions out even with department access (%j)', async session => {
+    bind({ ...session, departmentLeads: [leaderGrant] })
+    expect((await request('/api/dashboard/department')).status).toBe(401)
   })
 })
 

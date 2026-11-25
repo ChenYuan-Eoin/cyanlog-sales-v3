@@ -31,9 +31,9 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getRequestAuthToken } from '@/lib/auth-token'
-import { createMiddlewareRestClient } from '@/lib/middleware-rest-client'
+import { createMiddlewareRestClient, type MiddlewareRestClient } from '@/lib/middleware-rest-client'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
-import { ORG_SUPER_ADMIN_ROLE_CODE, resolveRolePermissions, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
+import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, resolveRolePermissions, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
 import {
   canWriteFxiaokeOwnerShipping,
   getPublishedModulePermissionKeys,
@@ -99,6 +99,7 @@ type MiddlewareAuthContext = {
   authorizationRoleCodes: string[]
   allPermissions: string[]
   shippingPermissions: string[]
+  departmentWorkspaceAccess: boolean
 }
 
 type FxiaokeSourceRow = {
@@ -133,6 +134,10 @@ function getRequiredPermission(pathname: string): string | null {
   }
   return null
 }
+
+const DEPARTMENT_WORKSPACE_READ_PATHS = new Set([
+  '/', '/api/auth/me', '/api/navigation', '/api/dashboard', '/api/dashboard/department', '/api/dashboard/department/roster',
+])
 
 const BASELINE_READ_PATHS = new Set([
   '/api/auth/me', '/api/auth/context', '/api/dashboard', '/api/navigation',
@@ -182,7 +187,56 @@ function roleRecordOf(value: unknown): { id: string; code: string; permissions: 
   return value as { id: string; code: string; permissions: string[] | null }
 }
 
-async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthContext | null> {
+type DepartmentScopeRow = { id: string; org_id: string; status: string; leader_id?: string }
+
+async function canEnterDepartmentWorkspace(
+  rest: MiddlewareRestClient,
+  userId: string,
+  orgId: string,
+  organizationSettings: unknown,
+): Promise<boolean> {
+  const assignments = await rest.selectRows<{
+    org_id: string; user_id: string; scope_type: string; scope_id: string | null; roles: unknown
+  }>(
+    'user_roles', { user_id: userId, org_id: orgId, scope_type: 'department' },
+    'org_id,user_id,scope_type,scope_id,roles:roles(id,code,permissions)', 1000,
+  )
+  const departmentIds = new Set<string>()
+  for (const assignment of assignments) {
+    if (assignment.org_id !== orgId || assignment.user_id !== userId || assignment.scope_type !== 'department' || !assignment.scope_id) continue
+    if (Array.isArray(assignment.roles) && assignment.roles.length !== 1) continue
+    const role = roleRecordOf(assignment.roles)
+    if (!role?.id || !role.code || ['SUPER_ADMIN', ORG_SUPER_ADMIN_ROLE_CODE].includes(role.code)
+      || !isRoleAssignableInScope(role.code, 'department')) continue
+    const { permissions } = resolveRolePermissions(organizationSettings, role)
+    if (permissions.includes('dept:view') || permissions.includes('report:dept')) departmentIds.add(assignment.scope_id)
+  }
+  for (const departmentId of departmentIds) {
+    const [department] = await rest.selectRows<DepartmentScopeRow>(
+      'departments', { id: departmentId, org_id: orgId, status: 'active' }, 'id,org_id,status',
+    )
+    if (department?.id === departmentId && department.org_id === orgId && department.status === 'active') return true
+  }
+
+  try {
+    const [access] = await rest.selectRows<{
+      org_id: string; user_id: string; department_id: string; department: DepartmentScopeRow | null
+    }>(
+      'department_lead_access',
+      { org_id: orgId, user_id: userId, 'department.org_id': orgId, 'department.status': 'active', 'department.leader_id': userId },
+      'org_id,user_id,department_id,department:departments!department_lead_access_department_id_fkey!inner(id,org_id,status,leader_id)',
+    )
+    return !!access?.department && access.org_id === orgId && access.user_id === userId
+      && access.department.id === access.department_id && access.department.org_id === orgId
+      && access.department.status === 'active' && access.department.leader_id === userId
+  } catch (error) {
+    // The table may be absent before the department lead migration reaches this environment.
+    if (error instanceof Error && error.message === 'auth middleware query failed: department_lead_access returned 404') return false
+    throw error
+  }
+}
+
+async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace: boolean): Promise<MiddlewareAuthContext | null> {
   const rest = createMiddlewareRestClient()
   const tokenRows = await rest.selectRows<{
     user_id: string
@@ -258,6 +312,9 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
     allPermissions.push('*')
   }
 
+  const departmentWorkspaceAccess = checkDepartmentWorkspace && activeMembership && roleCodes.length === 0
+    && await canEnterDepartmentWorkspace(rest, userId, orgId, organization.settings)
+
   return {
     userId,
     orgId,
@@ -266,13 +323,14 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
     authorizationRoleCodes,
     allPermissions,
     shippingPermissions: activeMembership ? allPermissions : [],
+    departmentWorkspaceAccess,
   }
 }
 
-async function getMiddlewareAuthContext(token: string): Promise<MiddlewareAuthContext | null> {
+async function getMiddlewareAuthContext(token: string, checkDepartmentWorkspace: boolean): Promise<MiddlewareAuthContext | null> {
   // A disabled user or revoked token must stop working on the next request;
   // an isolate-local cache cannot provide that guarantee.
-  return loadMiddlewareAuthContext(token)
+  return loadMiddlewareAuthContext(token, checkDepartmentWorkspace)
 }
 
 async function isPublishedShippingPermission(permission: string): Promise<boolean> {
@@ -318,7 +376,8 @@ export async function middleware(request: NextRequest) {
     // Authorization always comes from the exact current-org database context.
     // The signed cookie remains a login warmup artifact, but is not a permission
     // source until default-org changes can invalidate it atomically.
-    const authContext = await getMiddlewareAuthContext(token)
+    const checkDepartmentWorkspace = ['GET', 'HEAD'].includes(request.method) && DEPARTMENT_WORKSPACE_READ_PATHS.has(pathname)
+    const authContext = await getMiddlewareAuthContext(token, checkDepartmentWorkspace)
 
     if (!authContext) {
       if (pathname.startsWith('/api/')) {
@@ -333,7 +392,7 @@ export async function middleware(request: NextRequest) {
     // Some legacy business APIs check only authentication. A role-free SSO
     // member may view only the waiting page and sign out; no business route
     // can be reached through a guessed URL or direct API request.
-    if (authContext.roleCodes.length === 0) {
+    if (authContext.roleCodes.length === 0 && !authContext.departmentWorkspaceAccess) {
       if (pathname === '/pending-access' || pathname === '/api/auth/logout') return NextResponse.next()
       if (pathname.startsWith('/api/')) {
         return NextResponse.json({ error: '尚未分配业务权限', code: 'ROLE_REQUIRED' }, { status: 403 })
