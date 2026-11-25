@@ -101,10 +101,6 @@ function ReceiptCard({ order, scope, locked, opening, onResubmit, onCancelled, o
       <div className={styles.receiptTitleGroup}>
         <time dateTime={order.createdAt ?? undefined}>{order.createdAt ? timeFormat.format(new Date(order.createdAt)) : '—'}</time>
         <strong title={customer}>{customer}</strong>
-        <span className={styles.receiptOrderGroup}>
-          <span className={styles.receiptOrderNo} title={order.orderNo}>{order.orderNo}</span>
-          <CopyControl value={order.orderNo} label="提报单号" onCopy={(value, label) => void copy(value, label)} />
-        </span>
         {changes > 0 && <span className={styles.changeCount}>第 {changes} 次更改</span>}
       </div>
       <span className={`${styles.receiptBadge} ${statusBadgeClass(stage)}`}>{stageLabel(order, stage)}</span>

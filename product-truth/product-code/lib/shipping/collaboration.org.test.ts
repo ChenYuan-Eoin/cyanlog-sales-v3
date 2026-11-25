@@ -37,6 +37,8 @@ function query(table: string) {
     is: (key: string, value: unknown) => { filters.push(item => item[key] === value); return builder },
     in: (key: string, values: unknown[]) => { filters.push(item => values.includes(item[key])); return builder },
     lte: (key: string, value: string) => { filters.push(item => String(item[key]) <= value); return builder },
+    gte: (key: string, value: string) => { filters.push(item => String(item[key]) >= value); return builder },
+    lt: (key: string, value: string) => { filters.push(item => String(item[key]) < value); return builder },
     order: (key:string,{ascending}:{ascending:boolean}) => {ordering.push({key,ascending});return builder}, limit: () => builder,
     range: (from:number,to:number) => {bounds=[from,to];return builder},
     update: (value: Row) => { patch = value; return builder },
@@ -70,6 +72,19 @@ describe('shipping collaboration organization boundary', () => {
     expect(records).toHaveLength(1)
     expect(records[0]).toMatchObject({ status: 'delivered', trackingStatus: 'delivered', trackingUpdatedAt: at,
       trackingEvents: [{ time: at, status: 'delivered', description: '已签收', location: '' }] })
+  })
+  it('filters by submission time before paginating and breaks equal-time ties by ID', async () => {
+    tables.shipping_orders = [
+      { ...row('C-order', 'org-A'), created_at: '2026-11-18T08:00:00.000Z' },
+      { ...row('B-order', 'org-A'), created_at: '2026-11-18T08:00:00.000Z' },
+      { ...row('A-order', 'org-A'), created_at: '2026-11-17T16:00:00.000Z' },
+      { ...row('future', 'org-A'), created_at: '2026-11-18T16:00:00.000Z' },
+      { ...row('past', 'org-A'), created_at: '2026-11-17T15:59:59.999Z' },
+      { ...row('foreign', 'org-B'), created_at: '2026-11-18T08:30:00.000Z' },
+    ]
+    const filters = { limit: 2, submittedFrom: '2026-11-17T16:00:00.000Z', submittedBefore: '2026-11-18T16:00:00.000Z' }
+    expect((await listShipmentLedger('org-A', { ...filters, page: 0 })).map(item => item.id)).toEqual(['C-order', 'B-order', 'A-order'])
+    expect((await listShipmentLedger('org-A', { ...filters, page: 1 })).map(item => item.id)).toEqual(['A-order'])
   })
   it('does not assign a foreign or unassigned order to the caller', async () => {
     await expect(assignShipmentRelation('B-order', 'org-A', 'new-sales')).rejects.toThrow()

@@ -54,7 +54,7 @@ function renderForm(owner = true) {
 
 async function openReturnedOrder() {
   const row = await screen.findByRole('listitem', { name: `提报 ${orderNo}` })
-  expect(within(row).getByText(orderNo)).toBeInTheDocument()
+  expect(row).not.toHaveTextContent(orderNo)
   fireEvent.click(within(row).getByRole('button', { name: '修改并重提' }))
   await waitFor(() => expect(screen.getByLabelText('收件人')).toHaveValue(recipient.name))
 }
@@ -212,8 +212,7 @@ it('loads later pages, refreshes page zero and can reopen the updated older reco
   await waitFor(() => expect(updated).toHaveTextContent('重提后公司'))
   expect(updated).toHaveTextContent('待审核')
   expect(updated).toHaveTextContent('第 1 次更改')
-  expect(within(updated).getByText(orderNo)).toBeInTheDocument()
-  expect(screen.getAllByText(orderNo)).toHaveLength(1)
+  expect(screen.getAllByRole('listitem', { name: `提报 ${orderNo}` })).toHaveLength(1)
   const afterEdit = screen.getByRole('region', { name: '按日期分组的提报记录' })
   expect(within(afterEdit).getAllByRole('listitem')).toHaveLength(7)
   expect(send.mock.calls.filter(([url]) => url.endsWith('orders?page=1')).length).toBeGreaterThanOrEqual(1)
@@ -243,7 +242,7 @@ it('keeps returned-order edits single-ticket when the pasted text contains multi
 it('offers no resubmission or separate address change for issued waybills or anonymous records', async () => {
   const owner = renderForm()
   const issuedRow = await screen.findByRole('listitem', { name: `提报 ${issuedOrderNo}` })
-  expect(within(issuedRow).getByText(issuedOrderNo)).toBeInTheDocument()
+  expect(issuedRow).not.toHaveTextContent(issuedOrderNo)
   expect(within(issuedRow).queryByRole('button', { name: /^(重提|改址|修改地址|修改并重提)$/ })).not.toBeInTheDocument()
   owner.unmount()
   renderForm(false)

@@ -194,7 +194,7 @@ function requireOrganization(orgId: string) {
   if (!orgId) throw new ShippingError(403, '当前账号没有可用的组织寄件授权。')
 }
 
-export async function listShipmentLedger(orgId: string, filters: { salesRef?: string; customerRef?: string; contact?: string; status?: ShipmentOrderStatus; cursor?: string; limit: number }) {
+export async function listShipmentLedger(orgId: string, filters: { salesRef?: string; customerRef?: string; contact?: string; status?: ShipmentOrderStatus; cursor?: string; page?: number; submittedFrom?: string; submittedBefore?: string; limit: number }) {
   requireOrganization(orgId)
   let query = supabaseAdmin.from('shipping_orders').select(ledgerSelect).eq('org_id', orgId)
     .order('created_at', { ascending: false }).limit(filters.limit)
@@ -203,7 +203,16 @@ export async function listShipmentLedger(orgId: string, filters: { salesRef?: st
   if (filters.customerRef) query = query.eq('customer_ref', filters.customerRef)
   if (filters.status) query = query.eq('status', filters.status)
   if (filters.cursor) query = query.lt('created_at', filters.cursor)
+  if (filters.submittedFrom) query = query.gte('created_at', filters.submittedFrom)
+  if (filters.submittedBefore) query = query.lt('created_at', filters.submittedBefore)
   if (filters.contact) { const term = filters.contact.replace(/[%_,]/g, ''); query = query.or(`shipment_payload->sender->>name.ilike.%${term}%,shipment_payload->sender->>phone.ilike.%${term}%,shipment_payload->recipient->>name.ilike.%${term}%,shipment_payload->recipient->>phone.ilike.%${term}%`) }
+  query = query.order('created_at', { ascending: false }).order('id', { ascending: false })
+  if (filters.page === undefined) {
+    query = query.limit(filters.limit)
+  } else {
+    const start = filters.page * filters.limit
+    query = query.range(start, start + filters.limit)
+  }
   const { data, error } = await query
   if (error) throw new ShippingError(503, '收寄件台账暂不可用。')
   return (data || []).map(row => map(row as unknown as ShipmentRow))
