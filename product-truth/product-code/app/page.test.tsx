@@ -143,6 +143,46 @@ describe('department views in the sales dashboard', () => {
     ])
   })
 
+  it('keeps the monthly signed card and counts only this month’s closed wins in the confirmed department', async () => {
+    const now = new Date()
+    const month = (monthOffset = 0, yearOffset = 0) =>
+      new Date(now.getFullYear() + yearOffset, now.getMonth() + monthOffset, 15, 12).toISOString()
+    const opportunity = (name: string, status: string, expectedCloseDate: string | null) =>
+      ({ id: name, name, status, expected_close_date: expectedCloseDate })
+    const east = [
+      opportunity('华东本月已签约', 'WON', month()),
+      opportunity('华东上月已签约', 'WON', month(-1)),
+      opportunity('华东去年同月已签约', 'WON', month(0, -1)),
+      opportunity('华东未填日期已签约', 'WON', null),
+      opportunity('华东本月尚未签约', 'CONTRACTING', month()),
+    ]
+    const north = opportunity('华北本月已签约', 'WON', month())
+    const respond = (departmentId: string | null, opportunities: typeof east) => Response.json({
+      organizationId: 'org', departmentSpaces: departments,
+      selection: { departmentId, includeSubdepartments: true }, opportunities, milestones: [],
+    })
+    mocks.load.mockResolvedValue({
+      profile, dashboard: { ...personalDashboard, opportunities: [opportunity('个人面板旧机会', 'WON', month())] },
+    })
+    request.mockResolvedValueOnce(respond(null, [...east, north]))
+      .mockResolvedValueOnce(respond('east', east))
+      .mockResolvedValueOnce(Response.json({ code: 'DEPARTMENT_SELECTION_FORBIDDEN' }, { status: 403 }))
+      .mockResolvedValueOnce(Response.json({ code: 'DEPARTMENT_SCOPE_REQUIRED' }, { status: 403 }))
+    render(<HomePage />)
+
+    const selection = await screen.findByLabelText('当前部门')
+    const count = () => screen.getByText('本月已签约').closest('.stat-card')?.querySelector('.stat-card-value')
+    expect(count()).toHaveTextContent(/^2$/)
+
+    fireEvent.change(selection, { target: { value: 'east' } })
+    await waitFor(() => expect(count()).toHaveTextContent(/^1$/))
+    expect(request.mock.calls[1][0]).toBe('/api/dashboard/department?departmentId=east&includeSubdepartments=true')
+
+    fireEvent.focus(window)
+    expect(await screen.findByRole('alert')).toHaveTextContent('该部门已不可访问')
+    expect(screen.queryByText('本月已签约')).not.toBeInTheDocument()
+  })
+
   it('keeps the last confirmed data until a switch succeeds and ignores an older response', async () => {
     const east = deferredResponse()
     const north = deferredResponse()

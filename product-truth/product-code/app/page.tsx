@@ -579,6 +579,12 @@ export default function HomePage() {
       return d.toDateString() === today.toDateString()
     }).length,
     pendingApproval: milestones.filter(m => m.type === 'REVIEW' && m.status === 'PENDING').length,
+    monthlyContracts: opportunities.filter(o => {
+      if (o.status !== 'WON' || !o.expected_close_date) return false
+      const d = new Date(o.expected_close_date)
+      const now = new Date()
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+    }).length,
   }
 
   const formatTime = (iso: string) => {
@@ -749,6 +755,16 @@ export default function HomePage() {
           <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>当前列表</div>
         </div>
 
+        <div className="stat-card">
+          <div className="stat-card-header">
+            <span className="stat-card-label">本月已签约</span>
+            <span className="stat-tag success">{stats.monthlyContracts}</span>
+          </div>
+          {loading ? <div className="skeleton" style={{ width: 60, height: 32 }} /> : (
+            <div className="stat-card-value">{stats.monthlyContracts}</div>
+          )}
+          <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>单</div>
+        </div>
       </div>}
 
       <div className={departmentDashboard ? 'content-grid' : undefined}>
