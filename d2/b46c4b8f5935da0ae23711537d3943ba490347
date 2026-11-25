@@ -4,13 +4,87 @@
   "tested_commit": "d7d0b373ad555b9a369b638e8d2e73c6abbf8bff",
   "shared_tree": "ee84cf856a00f6ef9c619848043686468d0da68b",
   "pull_request": 12,
-  "local_tests": {"target_passed": 266, "full_passed": 3654, "skipped": 5, "lint": true, "typecheck": true, "build": true},
-  "preview": {"deployment_id": "dpl_qxVD4DWLeqdTt8wo7g8QsW43njtX", "ready": true, "browser_acceptance": false},
+  "local_tests": {
+    "target_passed": 266,
+    "full_passed": 3654,
+    "skipped": 5,
+    "lint": true,
+    "typecheck": true,
+    "build": true
+  },
+  "preview": {
+    "deployment_id": "dpl_qxVD4DWLeqdTt8wo7g8QsW43njtX",
+    "ready": true,
+    "browser_acceptance": false
+  },
   "database": {
-    "applied_version": "20261125033920", "target": "production", "release_only_schema": true,
-    "counts_unchanged": {"orders": 101, "waybills": 83, "revisions": 2},
-    "rpc_service_role_only": true, "old_rpc_retained": true, "rls": true,
+    "applied_version": "20261125033920",
+    "target": "production",
+    "release_only_schema": true,
+    "counts_unchanged": {
+      "orders": 101,
+      "waybills": 83,
+      "revisions": 2
+    },
+    "rpc_service_role_only": true,
+    "old_rpc_retained": true,
+    "rls": true,
     "encrypted_recovery_sha256": "0e54fff1e0ad1c17eb02d72464e6a671e790c8af834cab10c95cc5f3af26f20b"
   },
-  "operator_browser_acceptance": "pending production promotion"
+  "operator_browser_acceptance": {
+    "browser": "existing Safari operator session",
+    "origin": "https://sales.cyanlog.icu",
+    "route": "/shipping",
+    "tracking_without_manual_refresh": true,
+    "matching_signed_status": true,
+    "cancel_action_for_signed_record": false,
+    "all_date_presets_present": true,
+    "today_count": 1,
+    "custom_date": "2026-11-18",
+    "custom_day_count": 5,
+    "page_two_loaded": true,
+    "visible_internal_order_number": false,
+    "existing_chrome_operator_attestation": false
+  },
+  "recorded_at": "2026-11-25T04:13:57.934762+00:00",
+  "main": {
+    "commit": "6560923966ee21be6fccc103425a855c9b5da1ec",
+    "contains_release_commit": true,
+    "same_tree": true
+  },
+  "production": {
+    "branch_commit": "d2b46c4b8f5935da0ae23711537d3943ba490347",
+    "deployment_id": "dpl_CBYxEefGbjebFYuiNjK42raXw9AV",
+    "state": "READY",
+    "alias": "sales.cyanlog.icu",
+    "error_or_fatal_log_groups_observed": 0
+  },
+  "pull_request_checks": {
+    "lint": true,
+    "test": true,
+    "build": true,
+    "database_gate": true,
+    "vercel_preview": true,
+    "isolated_e2e": "skipped"
+  },
+  "employee_browser_acceptance": {
+    "browser": "existing Chrome",
+    "origin": "https://sales.cyanlog.icu",
+    "route": "/shipping",
+    "visible_full_waybill_and_copy": true,
+    "visible_internal_order_number": false,
+    "matching_signed_status": true,
+    "save_address_entry_after_using_custom": true,
+    "returned_order_available": false,
+    "profile_write_performed": false,
+    "resubmission_write_performed": false
+  },
+  "historical_legacy_order": {
+    "submitted_date": "2026-11-18",
+    "legacy_resubmitted_date": "2026-11-25",
+    "status": "awaiting_confirmation",
+    "has_waybill": false,
+    "seen_in_operator_custom_range": true,
+    "read_only": true
+  }
 }
