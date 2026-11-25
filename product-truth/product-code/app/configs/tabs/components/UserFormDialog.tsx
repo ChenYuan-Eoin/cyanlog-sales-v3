@@ -31,6 +31,7 @@ import * as z from 'zod'
 import { Checkbox } from '@/components/ui/checkbox'
 import { PlusIcon, UserIcon, EditIcon } from 'lucide-react'
 import type { OrgSummaryUser, OrgSummaryDepartment } from '../../types'
+import { editableOrgRoleIds, isGenericallyAssignableRole } from '../role-assignment-policy'
 
 const userSchema = z.object({
   email: z.string().email('请输入有效的邮箱地址'),
@@ -62,7 +63,7 @@ export function UserFormDialog({
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: UserFormDialogProps) {
-  const assignableRoles = roles.filter((role) => role.code !== 'SUPER_ADMIN')
+  const assignableRoles = roles.filter((role) => isGenericallyAssignableRole(role.code))
   const [internalOpen, setInternalOpen] = useState(false)
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen
   const onOpenChange = controlledOnOpenChange ?? setInternalOpen
@@ -76,7 +77,9 @@ export function UserFormDialog({
       display_name: editingUser?.display_name ?? '',
       title: editingUser?.title ?? '',
       primary_dept_id: editingUser?.primary_dept_id ?? null,
-      role_ids: editingUser?.role_ids ?? [],
+      role_ids: editingUser
+        ? editableOrgRoleIds(editingUser).filter(id => assignableRoles.some(role => role.id === id))
+        : [],
     },
   })
 

@@ -1,0 +1,95 @@
+import { isRoleAssignableInScope } from '@/lib/role-permission-resolution'
+import type { OrgSummaryPayload, OrgSummaryUser } from '../types'
+import { userHasPendingOrgRole } from './role-assignment-policy'
+
+export interface RoleMember {
+  user: OrgSummaryUser
+  hasOrgAssignment: boolean
+  pending: boolean
+  effective: boolean | null
+}
+
+export interface RoleMembershipStats {
+  members: RoleMember[]
+  effectiveMemberCount: number | null
+  pendingMemberCount: number | null
+  effectiveBindingCount: number | null
+}
+
+type RoleMembershipContext = Pick<OrgSummaryPayload, 'organization' | 'departments' | 'role_membership_stats'>
+
+export function getRoleMembershipStats(
+  users: readonly OrgSummaryUser[],
+  roleId: string,
+  context?: RoleMembershipContext | null,
+): RoleMembershipStats {
+  const orgId = context?.organization?.id
+  const basis = context?.role_membership_stats
+  const effectiveAvailable = Boolean(orgId && basis?.effectiveAvailable)
+  const activeDepartmentIds = new Set(context?.departments.filter(department => department.status === 'active').map(department => department.id))
+  const activeSpaceIds = new Set(basis?.activeSpaceIds)
+  const activeMemberIds = basis?.activeMemberIds ? new Set(basis.activeMemberIds) : null
+  const rows = new Map<string, {
+    member: RoleMember
+    eligible: boolean
+    bindings: Set<string>
+  }>()
+
+  for (const user of users) {
+    const bindings = (user.scoped_roles ?? []).filter(binding => binding.roleId === roleId
+      && (binding.scopeType !== 'org' || !orgId || !binding.scopeId || binding.scopeId === orgId))
+    const hasOrgAssignment = Boolean(user.role_ids?.includes(roleId) || bindings.some(binding => binding.scopeType === 'org'))
+    const pending = user.membership_status === 'invited'
+      && user.status === 'inactive'
+      && (!user.employment_status || user.employment_status === 'active')
+      && user.can_preassign_org_roles === true
+      && userHasPendingOrgRole(user, roleId)
+    if (!hasOrgAssignment && !pending && bindings.length === 0) continue
+
+    const eligible = user.status === 'active' && user.login_enabled === true
+      && user.membership_status === 'active' && user.employment_status === 'active'
+      && (activeMemberIds === null || activeMemberIds.has(user.id))
+    const state = rows.get(user.id) ?? {
+      member: { user, hasOrgAssignment: false, pending: false, effective: null },
+      eligible: true,
+      bindings: new Set<string>(),
+    }
+    state.member.hasOrgAssignment ||= hasOrgAssignment
+    state.member.pending ||= pending
+    state.eligible &&= eligible
+    if (effectiveAvailable) {
+      for (const binding of bindings) {
+        const { scopeType, scopeId } = binding
+        if (scopeId && isRoleAssignableInScope(binding.roleCode, scopeType) && (
+          (scopeType === 'org' && scopeId === orgId)
+          || (scopeType === 'department' && activeDepartmentIds.has(scopeId))
+          || (scopeType === 'space' && activeSpaceIds.has(scopeId))
+        )) {
+          state.bindings.add(`${scopeType}:${scopeId}`)
+        }
+      }
+    }
+    rows.set(user.id, state)
+  }
+
+  let effectiveMemberCount = 0
+  let effectiveBindingCount = 0
+  let pendingMemberCount = 0
+  const members: RoleMember[] = []
+  for (const { member, eligible, bindings } of rows.values()) {
+    member.effective = effectiveAvailable ? eligible && bindings.size > 0 : null
+    if (member.effective) {
+      effectiveMemberCount += 1
+      effectiveBindingCount += bindings.size
+    }
+    if (member.pending) pendingMemberCount += 1
+    members.push(member)
+  }
+
+  return {
+    members,
+    effectiveMemberCount: effectiveAvailable ? effectiveMemberCount : null,
+    pendingMemberCount: orgId && basis?.pendingAvailable ? pendingMemberCount : null,
+    effectiveBindingCount: effectiveAvailable ? effectiveBindingCount : null,
+  }
+}

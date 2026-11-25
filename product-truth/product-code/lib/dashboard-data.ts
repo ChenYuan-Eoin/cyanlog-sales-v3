@@ -60,7 +60,14 @@ type AgendaRow = {
   end_time: string | null
   start_at: string | null
   end_at: string | null
+  org_id: string
+  user_id: string
+  created_by: string | null
+  assignee_id: string | null
 }
+
+type PersonalReminderRow = ReminderRow & { org_id: string; user_id: string }
+type PersonalDashboardData = Pick<DashboardPayload, 'reminders' | 'agenda'>
 
 type DashboardSpace = {
   id: string
@@ -68,8 +75,8 @@ type DashboardSpace = {
   description: string | null
   department_id: string
   owner_id: string | null
-  active_opportunities: number
-  pending_milestones: number
+  active_opportunities: number | null
+  pending_milestones: number | null
 }
 
 export type DashboardPayload = {
@@ -121,8 +128,8 @@ function normalizeDashboardPayload(value: unknown): DashboardPayload {
     activeSpace: payload.activeSpace || null,
     opportunities: Array.isArray(payload.opportunities) ? payload.opportunities : [],
     milestones: Array.isArray(payload.milestones) ? payload.milestones : [],
-    reminders: Array.isArray(payload.reminders) ? payload.reminders : [],
-    agenda: Array.isArray(payload.agenda) ? payload.agenda : [],
+    reminders: [],
+    agenda: [],
   }
 }
 
@@ -140,10 +147,53 @@ async function loadDashboardPayloadFromRpc(user: AuthUser, requestedSpaceId?: st
   return normalizeDashboardPayload(data)
 }
 
-async function loadDashboardPayloadViaQueries(user: AuthUser, requestedSpaceId?: string | null): Promise<DashboardPayload> {
+export async function getPersonalDashboardData(userId: string, orgId: string): Promise<PersonalDashboardData> {
+  const today = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
+  const [reminders, agenda] = await Promise.all([
+    supabaseAdmin.from('reminders')
+      .select('id,type,title,description,priority,read_at,org_id,user_id')
+      .eq('org_id', orgId).eq('user_id', userId).is('dismissed_at', null)
+      .order('created_at', { ascending: false }).limit(5),
+    supabaseAdmin.from('agenda_items')
+      .select('id,title,description,start_time,end_time,start_at,end_at,org_id,user_id,assignee_id,created_by')
+      .eq('org_id', orgId)
+      .or(`user_id.eq.${userId},assignee_id.eq.${userId},created_by.eq.${userId}`)
+      .eq('agenda_date', today).order('start_at', { ascending: true }).limit(6),
+  ])
+  if (reminders.error) throw new DashboardDataError('读取提醒失败', 'REMINDER_FETCH_FAILED')
+  if (agenda.error) throw new DashboardDataError('读取日程失败', 'AGENDA_FETCH_FAILED')
+
+  return {
+    reminders: ((reminders.data ?? []) as PersonalReminderRow[])
+      .filter(row => row.org_id === orgId && row.user_id === userId)
+      .map(({ id, type, title, description, priority, read_at }) => ({ id, type, title, description, priority, read_at })),
+    agenda: ((agenda.data ?? []) as AgendaRow[])
+      .filter(row => row.org_id === orgId && [row.user_id, row.assignee_id, row.created_by].includes(userId))
+      .map(row => ({
+        id: row.id, title: row.title, description: row.description,
+        start_time: row.start_at || row.start_time || '', end_time: row.end_at || row.end_time,
+      })),
+  }
+}
+
+async function loadDashboardPayloadViaQueries(
+  user: AuthUser,
+  requestedSpaceId?: string | null,
+  requireAvailableSpace = false,
+): Promise<DashboardPayload> {
   const orgId = user.org_id || await getFreshDefaultOrgId(user.id)
   const { spaces } = await listAccessibleSalesSpaces(user.id, orgId)
-  const normalizedSpaces = spaces
+  let availableSpaces = spaces
+  if (requireAvailableSpace && spaces.length > 0) {
+    const result = await supabaseAdmin.from('sales_spaces').select('id')
+      .eq('org_id', orgId).eq('status', 'active').in('id', spaces.map(space => space.id))
+    if (result.error) throw result.error
+    const liveIds = new Set((result.data ?? []).map(space => space.id))
+    availableSpaces = spaces.filter(space => liveIds.has(space.id))
+  }
+  const normalizedSpaces = availableSpaces
     .map((space) => ({
       id: space.id,
       name: space.name,
@@ -154,53 +204,33 @@ async function loadDashboardPayloadViaQueries(user: AuthUser, requestedSpaceId?:
       pending_milestones: space.pending_milestones || 0,
     }))
 
+  const requestedSpace = normalizedSpaces.find(space => space.id === requestedSpaceId)
+  if (requireAvailableSpace && requestedSpaceId != null && !requestedSpace) {
+    throw new DashboardDataError('无权查看所选销售空间', 'DASHBOARD_SPACE_FORBIDDEN', 403)
+  }
   if (normalizedSpaces.length === 0) {
     return {
       spaces: [],
       activeSpace: null,
       opportunities: [],
       milestones: [],
-      reminders: [],
-      agenda: [],
+      reminders: [], agenda: [],
     }
   }
 
-  const activeSpace = normalizedSpaces.find((space) => space.id === requestedSpaceId) || normalizedSpaces[0]
-  const today = new Date()
-  const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const todayStr = today.toISOString().slice(0, 10)
+  const activeSpace = requestedSpace ?? normalizedSpaces[0]
+  const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
-  const [oppsResult, remindersResult, agendaResult] = await Promise.all([
-    supabaseAdmin
+  const oppsResult = await supabaseAdmin
       .from('opportunities')
-      .select('id, space_id, customer_id, name, amount, status, stage, probability, owner_id, expected_close_date, customer:customers(id, name, short_name)')
+      .select('id, space_id, customer_id, name, amount, status, stage, probability, owner_id, expected_close_date, customer:customers!inner(id, name, short_name)')
+      .eq('org_id', orgId).eq('customer.org_id', orgId)
       .eq('space_id', activeSpace.id)
       .order('expected_close_date', { ascending: true })
-      .limit(20),
-    supabaseAdmin
-      .from('reminders')
-      .select('id, type, title, description, priority, read_at')
-      .eq('user_id', user.id)
-      .is('dismissed_at', null)
-      .order('created_at', { ascending: false })
-      .limit(5),
-    supabaseAdmin
-      .from('agenda_items')
-      .select('id, title, description, start_time, end_time, start_at, end_at')
-      .or(`user_id.eq.${user.id},assignee_id.eq.${user.id},created_by.eq.${user.id}`)
-      .eq('agenda_date', todayStr)
-      .order('start_at', { ascending: true })
-      .limit(6),
-  ])
+      .limit(20)
 
   if (oppsResult.error) {
     throw new DashboardDataError('读取机会失败', 'OPPORTUNITY_FETCH_FAILED')
-  }
-  if (remindersResult.error) {
-    throw new DashboardDataError('读取提醒失败', 'REMINDER_FETCH_FAILED')
-  }
-  if (agendaResult.error) {
-    throw new DashboardDataError('读取日程失败', 'AGENDA_FETCH_FAILED')
   }
 
   const opportunities = ((oppsResult.data || []) as OpportunityRow[]).map((row) => ({
@@ -213,7 +243,8 @@ async function loadDashboardPayloadViaQueries(user: AuthUser, requestedSpaceId?:
   if (opportunityIds.length > 0) {
     const { data: milestoneRows, error: milestoneError } = await supabaseAdmin
       .from('milestones')
-      .select('id, opportunity_id, name, type, status, priority, due_date, opportunity:opportunities(name, customer_id)')
+      .select('id, opportunity_id, name, type, status, priority, due_date, opportunity:opportunities!inner(name, customer_id)')
+      .eq('org_id', orgId).eq('opportunity.org_id', orgId)
       .in('opportunity_id', opportunityIds)
       .in('status', ['PENDING', 'IN_PROGRESS'])
       .lte('due_date', nextWeek.toISOString())
@@ -230,22 +261,22 @@ async function loadDashboardPayloadViaQueries(user: AuthUser, requestedSpaceId?:
     }))
   }
 
-  const agenda = ((agendaResult.data || []) as AgendaRow[]).map((row) => ({
-    id: row.id,
-    title: row.title,
-    description: row.description,
-    start_time: row.start_at || row.start_time || '',
-    end_time: row.end_at || row.end_time,
-  }))
-
   return {
     spaces: normalizedSpaces,
     activeSpace,
     opportunities,
     milestones,
-    reminders: (remindersResult.data || []) as ReminderRow[],
-    agenda,
+    reminders: [], agenda: [],
   }
+}
+
+export async function getVerifiedLegacyDashboardPayload(user: AuthUser, orgId: string, requestedSpaceId: string | null): Promise<DashboardPayload> {
+  // The historical payload RPC resolves role rows across all of the account's organizations.
+  const [workspace, personal] = await Promise.all([
+    loadDashboardPayloadViaQueries({ ...user, org_id: orgId }, requestedSpaceId, true),
+    getPersonalDashboardData(user.id, orgId),
+  ])
+  return { ...workspace, ...personal }
 }
 
 async function loadDashboardPayload(user: AuthUser, requestedSpaceId?: string | null): Promise<DashboardPayload> {
@@ -271,18 +302,24 @@ export async function getDashboardPayload(user: AuthUser, requestedSpaceId?: str
   if (overrides !== undefined) {
     // Malformed overrides must also avoid the legacy template-based RPC.
     dashboardCache.delete(key)
-    return loadDashboardPayloadViaQueries(scopedUser, requestedSpaceId)
+    const [workspace, personal] = await Promise.all([
+      loadDashboardPayloadViaQueries(scopedUser, requestedSpaceId), getPersonalDashboardData(user.id, orgId),
+    ])
+    return { ...workspace, ...personal }
   }
   const cached = dashboardCache.get(key)
   if (cached && cached.expiresAt >= Date.now()) {
-    return cached.value
+    return { ...cached.value, ...await getPersonalDashboardData(user.id, orgId) }
   }
   if (cached) {
     dashboardCache.delete(key)
   }
 
   const inflight = dashboardInflight.get(key)
-  if (inflight) return inflight
+  if (inflight) {
+    const [workspace, personal] = await Promise.all([inflight, getPersonalDashboardData(user.id, orgId)])
+    return { ...workspace, ...personal }
+  }
 
   const request = loadDashboardPayload(scopedUser, requestedSpaceId)
     .then((value) => {
@@ -297,7 +334,8 @@ export async function getDashboardPayload(user: AuthUser, requestedSpaceId?: str
     })
 
   dashboardInflight.set(key, request)
-  return request
+  const [workspace, personal] = await Promise.all([request, getPersonalDashboardData(user.id, orgId)])
+  return { ...workspace, ...personal }
 }
 
 export function getCachedDashboardPayload(user: AuthUser, requestedSpaceId?: string | null): DashboardPayload | null {
@@ -315,7 +353,7 @@ export function cacheDashboardPayload(
 ) {
   const key = cacheKey(user, requestedSpaceId)
   dashboardCache.set(key, {
-    value,
+    value: { ...value, reminders: [], agenda: [] },
     expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
   })
 }

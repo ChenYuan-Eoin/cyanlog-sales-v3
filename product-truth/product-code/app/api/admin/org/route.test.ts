@@ -13,7 +13,7 @@ vi.mock('@/lib/scoped-access', () => ({
   canManageOrg: vi.fn(),
   getDefaultOrgId: vi.fn(),
   getOrgRoleCodes: vi.fn(),
-  getUserScopedRoleAssignments: vi.fn(),
+  getFreshUserScopedRoleAssignments: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -28,11 +28,11 @@ import { getDefaultOrgId } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import { GET, POST } from './route'
 
-function makeRequest(): any {
+function makeRequest(orgId = 'org-1'): any {
   return new Request('https://example.test/api/admin/org', {
     headers: {
       'x-user-id': 'u-1',
-      'x-org-id': 'org-1',
+      'x-org-id': orgId,
       'x-user-role-codes': 'ADMIN',
       'x-user-permissions': 'admin:access',
     },
@@ -41,10 +41,11 @@ function makeRequest(): any {
 
 function makeQuery(result: any) {
   const chain: any = {}
-  ;['select', 'eq', 'in', 'neq', 'order', 'limit'].forEach((method) => {
+  ;['select', 'eq', 'in', 'neq', 'is', 'order', 'limit'].forEach((method) => {
     chain[method] = vi.fn().mockReturnValue(chain)
   })
   chain.single = vi.fn().mockResolvedValue(result)
+  chain.maybeSingle = vi.fn().mockResolvedValue(result)
   chain.then = (onFulfilled: any, onRejected: any) => Promise.resolve(result).then(onFulfilled, onRejected)
   return chain
 }
@@ -53,6 +54,9 @@ describe('GET /api/admin/org', () => {
   afterEach(() => vi.unstubAllGlobals())
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(supabaseAdmin.from).mockImplementation(table => table === 'organizations'
+      ? makeQuery({ data: { id: 'org-1', status: 'active' }, error: null })
+      : makeQuery({ data: [], error: null, count: 0 }))
     ;(canAccessOrgAdmin as any).mockReturnValue(true)
     ;(getDefaultOrgId as any).mockResolvedValue('org-1')
   })
@@ -63,9 +67,13 @@ describe('GET /api/admin/org', () => {
     const payload = {
       organization: { id: 'org-1', name: 'Org', slug: 'org' },
       users: [{ id: 'u-1', display_name: 'Admin' }],
-      departments: [{ id: 'd-1', name: '信息技术部' }],
+      departments: [
+        { id: 'd-1', name: '信息技术部' },
+        { id: 'd-2', name: '基础平台组', parent_id: 'd-1', status: 'active' },
+        { id: 'd-3', name: '停用小组', parent_id: 'd-1', status: 'inactive' },
+      ],
       roles: [{ id: 'r-1', code: 'ADMIN', name: '管理员' }],
-      spaces: [],
+      spaces: [{ id: 'existing-space', department_id: 'd-2' }],
     }
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: payload, error: null })
 
@@ -73,7 +81,17 @@ describe('GET /api/admin/org', () => {
     const body = await res.json()
 
     expect(res.status).toBe(200)
-    expect(body).toEqual(payload)
+    expect(body).toEqual({
+      ...payload,
+      department_spaces: [
+        { department_id: 'd-1', parent_department_id: null, name: '信息技术部', sales_space_ids: [] },
+        { department_id: 'd-2', parent_department_id: 'd-1', name: '基础平台组', sales_space_ids: ['existing-space'] },
+      ],
+      directory_roster: { status: 'unavailable', reason: 'DIRECTORY_UNCONFIRMED' },
+      role_membership_stats: {
+        effectiveAvailable: true, pendingAvailable: true, activeSpaceIds: [], activeMemberIds: [], orgSuperAdminAssignableMemberIds: [],
+      },
+    })
     expect(res.headers.get('Cache-Control')).toBe('no-store')
     expect(res.headers.get('X-Org-Payload-Source')).toBe('rpc')
     expect(res.headers.get('X-Org-Timing')).toContain('auth;dur=')
@@ -83,7 +101,9 @@ describe('GET /api/admin/org', () => {
       p_org_id: 'org-1',
     })
     expect(getDefaultOrgId).not.toHaveBeenCalled()
-    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(vi.mocked(supabaseAdmin.from).mock.calls.map(call => call[0])).toEqual([
+      'organization_sources', 'organizations', 'sales_spaces', 'user_organizations',
+    ])
     expect(offlineProvider).not.toHaveBeenCalled()
   })
 
@@ -91,7 +111,7 @@ describe('GET /api/admin/org', () => {
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: null, error: { code: '08006', message: 'connection failed' } })
     const res = await GET(makeRequest())
     expect(res.status).toBe(500)
-    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(vi.mocked(supabaseAdmin.from).mock.calls.map(call => call[0])).toEqual(['organization_sources'])
   })
 
   it('only falls back to v1 when v2 is missing', async () => {
@@ -100,10 +120,67 @@ describe('GET /api/admin/org', () => {
       .mockResolvedValueOnce({ data: null, error: { code: 'PGRST202' } } as never)
       .mockResolvedValueOnce({ data: payload, error: null } as never)
     const res = await GET(makeRequest())
-    expect(await res.json()).toEqual(payload)
+    expect(await res.json()).toEqual({
+      ...payload, department_spaces: [],
+      directory_roster: { status: 'unavailable', reason: 'DIRECTORY_UNCONFIRMED' },
+      role_membership_stats: {
+        effectiveAvailable: false, pendingAvailable: false, activeSpaceIds: [], activeMemberIds: [], orgSuperAdminAssignableMemberIds: [],
+      },
+    })
     expect(vi.mocked(supabaseAdmin.rpc).mock.calls.map(call => call[0])).toEqual([
       'get_org_admin_directory_payload_v2', 'get_org_admin_directory_payload_v1',
     ])
+  })
+
+  it('attaches verified current directory members without counting local accounts or a duplicate directory ID', async () => {
+    const orgId = '20000000-0000-4000-8000-000000000001'
+    const syncedId = '20000000-0000-4000-8000-000000000002'
+    const localId = '20000000-0000-4000-8000-000000000003'
+    const identityId = '20000000-0000-4000-8000-000000000004'
+    const sourceId = '20000000-0000-4000-8000-000000000005'
+    const deptId = '20000000-0000-4000-8000-000000000006'
+    const asOf = '2026-11-09T07:54:14Z'
+    const synced = {
+      id: syncedId,
+      display_name: '同步待登录员工',
+      primary_dept_id: deptId,
+      department_ids: [deptId],
+      directory_identity_id: identityId,
+      directory_external_id: 'employee-a',
+      directory_source: 'fxiaoke',
+      directory_status: 'active',
+      membership_status: 'invited',
+      login_enabled: false,
+    }
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: {
+      organization: { id: orgId },
+      departments: [{ id: deptId, name: '业务部' }],
+      users: [synced, synced, {
+        ...synced, id: localId, directory_identity_id: null, directory_external_id: null, display_name: '本地账号',
+      }],
+      roles: [], spaces: [],
+    }, error: null } as never)
+    vi.mocked(supabaseAdmin.from).mockImplementation(table => {
+      if (table === 'organization_sources') return makeQuery({ data: [{
+        id: sourceId, system_org_id: orgId, provider: 'fxiaoke', status: 'active', last_successful_sync_at: asOf,
+      }], error: null })
+      if (table === 'organization_directory_cutover_runs') return makeQuery({ data: [{ id: 'confirmed-run' }], error: null })
+      if (table === 'organizations') return makeQuery({ data: { id: orgId, status: 'active' }, error: null })
+      if (table === 'user_organizations') return makeQuery({
+        data: [{ user_id: localId, is_default: true }, { user_id: 'member-of-another-default-org', is_default: false }],
+        count: 2, error: null,
+      })
+      return makeQuery({ data: [{ id: 'active-space' }], count: 1, error: null })
+    })
+    const res = await GET(makeRequest(orgId))
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body.directory_roster).toEqual({ status: 'ready', asOf, members: [{ id: syncedId, departmentIds: [deptId] }] })
+    expect(body.users).toHaveLength(3)
+    expect(body.role_membership_stats).toEqual({
+      effectiveAvailable: true, pendingAvailable: true, activeSpaceIds: ['active-space'],
+      activeMemberIds: [localId, 'member-of-another-default-org'], orgSuperAdminAssignableMemberIds: [localId],
+    })
   })
 
   it('RPC 失败时回退到查询 fan-out 并标记来源', async () => {

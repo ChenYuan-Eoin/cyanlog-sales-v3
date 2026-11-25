@@ -6,7 +6,10 @@ const m = vi.hoisted(()=>({rpc:vi.fn(),connect:vi.fn(),route:vi.fn(),send:vi.fn(
 vi.mock('@/lib/supabase',()=>({supabaseAdmin:{rpc:m.rpc}}))
 vi.mock('./carrier-adapter',()=>({ getCarrierAdapter:()=>({connect:m.connect}) }))
 vi.mock('@/lib/auth',()=>({requireAuth:m.auth, AuthError:class extends Error{}}))
-vi.mock('./operator-access',()=>({requireShippingOperator:m.operator}))
+vi.mock('./operator-access',()=>({
+  requireShippingOperator:m.operator,
+  loadShippingOperatorDecision:async ()=>({orgId:await m.operator(),canOperate:true}),
+}))
 import { GET, POST } from '@/app/api/shipping/owner/orders/[orderNo]/carrier-changes/route'
 import { GET as ledgerGet, POST as ledgerPost } from '@/app/api/shipping/ledger/[id]/carrier-changes/route'
 const owner='6f321e6a-2240-4074-ab2a-659b07af0aac',org='09367238-10fd-45cb-8501-96ec7778185d',key='a6215cc6-142b-4de8-8e6b-e22dce66346d'

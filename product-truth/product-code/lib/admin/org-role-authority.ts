@@ -1,4 +1,4 @@
-import { hasPermission } from '@/lib/permissions'
+import { hasPermission, isOrgDelegationSensitivePermission } from '@/lib/permissions'
 import {
   getOrgPermissions,
   type ScopedRoleAssignment,
@@ -6,6 +6,7 @@ import {
 import { supabaseAdmin } from '@/lib/supabase'
 import { loadOrgRolePermissionSettings } from '@/lib/org-role-permissions'
 import { resolveRolePermissions } from '@/lib/role-permission-policy'
+import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
 
 type AssignableRoleRow = {
   id: string
@@ -14,7 +15,7 @@ type AssignableRoleRow = {
 }
 
 function roleCodeOf(value: unknown): string | null {
-  const role = Array.isArray(value) ? value[0] : value
+  const role = Array.isArray(value) ? (value.length === 1 ? value[0] : null) : value
   if (!role || typeof role !== 'object') return null
   const code = (role as { code?: unknown }).code
   return typeof code === 'string' ? code : null
@@ -29,6 +30,7 @@ export async function userHasOrgRoleCode(
     .from('user_roles')
     .select('role:roles(code)')
     .eq('user_id', userId)
+    .eq('org_id', orgId)
     .eq('scope_type', 'org')
     .eq('scope_id', orgId)
 
@@ -38,40 +40,23 @@ export async function userHasOrgRoleCode(
 
 export type OrgRoleAssignmentValidation =
   | { ok: true; roleIds: string[] }
-  | { ok: false; reason: 'ROLE_NOT_FOUND' | 'ROLE_ESCALATION_FORBIDDEN' }
+  | { ok: false; reason: 'ROLE_NOT_FOUND' | 'ROLE_ESCALATION_FORBIDDEN' | 'ROLE_SCOPE_NOT_SUPPORTED' }
 
-const DELEGATION_SENSITIVE_RESOURCES = new Set([
-  'admin',
-  'org',
-  'user',
-  'dept',
-  'config',
-  'role',
-  'permission',
-  'platform',
-  'report',
-  'feishu',
-])
-
-function isDelegationSensitivePermission(permission: string): boolean {
-  if (permission === '*') return true
-  const [resource] = permission.split(':')
-  return DELEGATION_SENSITIVE_RESOURCES.has(resource)
-}
+type ScopedRoleMutation = { scopeType: 'department' | 'space'; action: 'assign' | 'revoke' }
 
 /**
  * Validate tenant-side role assignment without allowing the caller to create a
  * stronger administrative principal than themselves. Organization managers may
  * still assign ordinary sales/legal/finance roles even when they do not perform
- * those business actions personally. SUPER_ADMIN and wildcard roles remain a
- * platform/offline operation until the product has a non-self-assignable trust root.
+ * those business actions personally. Administrative trust roles have separate assignment flows.
  */
 export async function validateOrgRoleAssignment(
   actorAssignments: ScopedRoleAssignment[],
   orgId: string,
-  roleIds: string[]
+  roleIds: string[],
+  scopedMutation?: ScopedRoleMutation,
 ): Promise<OrgRoleAssignmentValidation> {
-  const uniqueRoleIds = Array.from(new Set(roleIds.filter(Boolean)))
+  const uniqueRoleIds = Array.from(new Set(roleIds.filter(Boolean).map(id => id.toLowerCase())))
   if (uniqueRoleIds.length === 0) {
     return { ok: true, roleIds: [] }
   }
@@ -81,25 +66,38 @@ export async function validateOrgRoleAssignment(
     .select('id, code, permissions')
     .in('id', uniqueRoleIds)
 
-  const roles = (data || []) as AssignableRoleRow[]
-  if (error || roles.length !== uniqueRoleIds.length) {
+  if (error || !Array.isArray(data) || data.length !== uniqueRoleIds.length) {
+    return { ok: false, reason: 'ROLE_NOT_FOUND' }
+  }
+  const roles = data as AssignableRoleRow[]
+  const returnedRoleIds = new Set(roles.map(role => role?.id))
+  if (uniqueRoleIds.some(id => !returnedRoleIds.has(id))
+    || roles.some(role => typeof role?.code !== 'string' || !role.code)) {
     return { ok: false, reason: 'ROLE_NOT_FOUND' }
   }
 
+  if (scopedMutation?.action === 'assign' && roles.some(role => !isRoleAssignableInScope(role.code, scopedMutation.scopeType))) {
+    return { ok: false, reason: 'ROLE_SCOPE_NOT_SUPPORTED' }
+  }
+  // An existing department or space binding may be removed without delegating its permissions.
+  const rolesToAuthorize = scopedMutation?.action === 'revoke'
+    ? roles.filter(role => role.code !== SHIPPING_OPERATOR_ROLE_CODE)
+    : roles
+  if (rolesToAuthorize.length === 0) return { ok: true, roleIds: uniqueRoleIds }
+
   const actorPermissions = getOrgPermissions(actorAssignments, orgId)
   const settings = await loadOrgRolePermissionSettings(orgId)
-  const exceedsActorAuthority = roles.some((role) => {
-    const { permissions } = resolveRolePermissions(settings, role)
+  const effectiveRoles = rolesToAuthorize.map(role => ({
+    code: role.code, permissions: resolveRolePermissions(settings, role).permissions,
+  }))
+  const escalation = { ok: false, reason: 'ROLE_ESCALATION_FORBIDDEN' } as const
+  const exceedsActorAuthority = effectiveRoles.some(({ code, permissions }) => (
+    code === 'SUPER_ADMIN'
+    || code === ORG_SUPER_ADMIN_ROLE_CODE
+    || permissions.includes('*')
+    || permissions.some(permission => isOrgDelegationSensitivePermission(permission) && !hasPermission(actorPermissions, permission))
+  ))
+  if (exceedsActorAuthority) return escalation
 
-    return role.code === 'SUPER_ADMIN'
-      || permissions.includes('*')
-      || permissions.some((permission) => (
-        isDelegationSensitivePermission(permission)
-        && !hasPermission(actorPermissions, permission)
-      ))
-  })
-
-  return exceedsActorAuthority
-    ? { ok: false, reason: 'ROLE_ESCALATION_FORBIDDEN' }
-    : { ok: true, roleIds: uniqueRoleIds }
+  return { ok: true, roleIds: uniqueRoleIds }
 }

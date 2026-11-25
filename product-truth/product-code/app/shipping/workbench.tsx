@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Box, CheckCircle2, ChevronRight, Clipboard, PackageCheck, RefreshCw, Search, SlidersHorizontal, Truck, UploadCloud } from 'lucide-react'
 import type { Contact, ShippingPayment, ShipmentOrder, ShipmentOrderStatus, ShippingInput, ShippingSettings, TrackingResult } from '@/lib/shipping/types'
 import { buildShippingTemplate, parseShippingFile, type BatchDraftRow } from '@/lib/shipping/import-parser'
 import { parseShippingText, prepareBatchRecipient } from '@/lib/shipping/batch-text'
-import { shippingWorkbenchRequest, ShippingWorkbenchRequestError, isDefinitiveShippingRejection, type ShippingSimulation } from '@/lib/shipping/workbench-client'
+import { shippingWorkbenchRequest, ShippingWorkbenchRequestError, isDefinitiveShippingRejection, type ShippingSimulation, type ShippingWorkbenchRequest } from '@/lib/shipping/workbench-client'
 import { contactSchema } from '@/lib/shipping/validation'
 import { parseAddress } from '@/lib/shipping/address'
 import { normalizeTrackingTime } from '@/lib/shipping/tracking-status'
@@ -55,6 +55,7 @@ function withTrackingStatus(order: ShipmentOrder, result: TrackingResult): Shipm
 
 const sfWaybillPattern = /^(?:SF)?\d{10,15}$/
 type LedgerPage = { records: ShipmentOrder[]; nextPage?: number | null }
+const workspaceSettingsUrl = '/api/shipping/settings?workspace=1'
 
 function ledgerPageUrl(page: number, range: LedgerDateRange) {
   const query = new URLSearchParams({ limit: '50', page: String(page) })
@@ -86,10 +87,43 @@ function verifiedTrackingStatus(result: TrackingResult, waybill: string) {
 }
 
 export default function ShippingWorkbench({ settings: initialSettings, simulation }: { settings: ShippingSettings; simulation?: ShippingSimulation }) {
+  const [accessDenied, setAccessDenied] = useState(false)
+  const deniedRequest = useRef<ShippingWorkbenchRequestError | null>(null)
+  const request: ShippingWorkbenchRequest = useCallback(async <T,>(url: string, init?: RequestInit) => {
+    if (deniedRequest.current) throw deniedRequest.current
+    try {
+      return await shippingWorkbenchRequest<T>(url, init)
+    } catch (error) {
+      const isProtectedRead = (!init?.method || init.method === 'GET')
+        && (url === workspaceSettingsUrl || url.split('?')[0] === '/api/shipping/ledger')
+      if (isProtectedRead && error instanceof ShippingWorkbenchRequestError && (error.status === 401 || error.status === 403)) {
+        deniedRequest.current = error
+        setAccessDenied(true)
+      }
+      throw error
+    }
+  }, [])
+
+  if (accessDenied) {
+    return <main className={styles.shell}>
+      <header className={styles.topbar}><h1>自助收寄</h1></header>
+      <p className={styles.notice} role="alert">当前会话无法继续使用收寄工作台。</p>
+      <a className={styles.configButton} href="/shipping">重新进入自助收寄</a>
+    </main>
+  }
+
+  return <ShippingWorkbenchContent settings={initialSettings} simulation={simulation} request={simulation?.request ?? request} />
+}
+
+function ShippingWorkbenchContent({ settings: initialSettings, simulation, request }: {
+  settings: ShippingSettings
+  simulation?: ShippingSimulation
+  request: ShippingWorkbenchRequest
+}) {
   const [settings, setSettings] = useState(initialSettings)
   useEffect(() => { setSettings(initialSettings) }, [initialSettings])
-  const request = simulation ? simulation.request : shippingWorkbenchRequest
   const isSimulation = Boolean(simulation)
+  const canManageConnections = !isSimulation && settings.canManageConnections === true
   const [orders, setOrders] = useState<ShipmentOrder[]>([])
   const [selectedId, setSelectedId] = useState('')
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null)
@@ -386,8 +420,10 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     if (busy || confirmationBusy || batchBusy) return
     setBusy('configuration'); setMessage('')
     try {
-      const result = await request<{ settings: ShippingSettings }>('/api/shipping/settings?workspace=1')
-      setSettings(current => ({ ...current, ...result.settings })); setConnectionId(result.settings.connectionId || ''); setBillingAccountId(result.settings.defaultBillingAccountId || ''); setBatchServiceId(''); setServiceOverrides({}); setReviewIds([])
+      const result = await request<{ settings: ShippingSettings }>(workspaceSettingsUrl)
+      setSettings(current => ({
+        ...current, ...result.settings, canManageConnections: result.settings.canManageConnections === true,
+      })); setConnectionId(result.settings.connectionId || ''); setBillingAccountId(result.settings.defaultBillingAccountId || ''); setBatchServiceId(''); setServiceOverrides({}); setReviewIds([])
       setMessage('寄件配置已刷新，草稿保留；请重新核对下单参数。')
     } catch (error) { setMessage((error as Error).message) } finally { setBusy('') }
   }
@@ -725,6 +761,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
       <div className={styles.topbarActions}>
         <button type="button" className={`${styles.configButton} ${styles.intakeToggle}`} aria-expanded={intakeOpen} aria-controls="shipping-intake-column" onClick={() => setIntakeOpen(open => !open)}>{intakeOpen ? '收起寄件录入' : '寄件录入'}</button>
         {simulation ? <><button className={styles.configButton} disabled={inputLocked || !!busy} onClick={simulation.onReset}>重置演示</button><a className={styles.configButton} href="/shipping">返回真实工作台</a></> : <button className={styles.configButton} disabled={!!busy || confirmationBusy || batchBusy} onClick={() => void refreshConfiguration()}>刷新寄件配置</button>}
+        {canManageConnections && <a className={styles.configButton} href="/shipping/settings">寄件设置</a>}
         <div className={styles.connection}><span />{isSimulation ? '模拟体验' : selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : settings.configurationWarning ? '配置暂不可用' : '未配置快递连接'}<small>{payment === 'sender_cash' ? '寄方现结' : payment === 'recipient' ? '收方到付' : selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '月结账号待选择'}</small></div>
       </div>
     </header>
@@ -922,7 +959,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
                     <div className={styles.inlineCheckoutStatus}><span>当前</span><b>{canSubmitCurrent ? '参数可用' : '需补全配置'}</b><small>{order.input.recipient.province}{order.input.recipient.city}{order.input.recipient.county}</small></div>
                   </div>
                 </div>}
-                {!senderReview.contact && <p className={styles.bad} role="alert">{senderReview.source === '公司寄件资料待补齐' ? <>此工单缺少寄件人、联系电话或揽收地址。请在<a href="/configs?tab=shipping">配置中心</a>补齐后重新核对工单。</> : '工单寄件资料不完整。请退回工单，由提报人补齐实际寄件资料后重新提报。'}</p>}
+                {!senderReview.contact && <p className={styles.bad} role="alert">{senderReview.source === '公司寄件资料待补齐' ? <>此工单缺少寄件人、联系电话或揽收地址。{canManageConnections ? <>请在<a href="/shipping/settings">寄件设置</a>补齐后重新核对工单。</> : '请联系寄件设置管理员补齐后重新核对工单。'}</> : '工单寄件资料不完整。请退回工单，由提报人补齐实际寄件资料后重新提报。'}</p>}
                 <details className={styles.reviewDetails}><summary>收寄地址与寄件人</summary>{senderReview.contact ? <p><b>实际寄件人（{senderReview.source}）</b><br/>{senderReview.contact.name} · {senderReview.contact.phone}<br/>{senderReview.contact.province}{senderReview.contact.city}{senderReview.contact.county}{senderReview.contact.address}</p> : null}<p><b>收件地址</b><br/>{order.input.recipient.province}{order.input.recipient.city}{order.input.recipient.county}{order.input.recipient.address}</p></details>
                 <details className={styles.reviewDetails}><summary>身份与备注</summary><p>提报身份：{order.intakeSource === 'anonymous_web' ? order.identityVerified ? '身份已验证' : '匿名自报，待核对' : order.intakeSource === 'owner_web' ? '登录用户提报' : order.intakeSource === 'crm' ? 'CRM 提报' : '企微机器人提报'}{order.input.remark && <><br/>备注：{order.input.remark}</>}</p>{order.input.submittedBy && <p>提报人：{order.input.submittedBy.name} · {order.input.submittedBy.phone} · {order.input.submittedBy.team || '未填写团队'}</p>}</details>
               </section>}

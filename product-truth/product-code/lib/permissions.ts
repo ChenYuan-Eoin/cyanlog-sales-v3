@@ -1,3 +1,11 @@
+const ORG_DELEGATION_SENSITIVE_RESOURCES = new Set([
+  'admin', 'org', 'user', 'dept', 'config', 'role', 'permission', 'platform', 'report', 'feishu',
+])
+
+export function isOrgDelegationSensitivePermission(permission: string): boolean {
+  return permission === '*' || ORG_DELEGATION_SENSITIVE_RESOURCES.has(permission.split(':')[0])
+}
+
 export function hasPermission(allPermissions: string[], required: string): boolean {
   if (allPermissions.includes('*') || allPermissions.includes(required)) {
     return true

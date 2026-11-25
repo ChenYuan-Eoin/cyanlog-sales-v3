@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { SearchIcon, UsersIcon, ShieldIcon, ChevronRightIcon } from 'lucide-react'
-import { userHasPendingOrgRole } from './role-assignment-policy'
+import { getRoleMembershipStats, type RoleMembershipStats } from './role-membership-stats'
 import { RoleDetailPanel } from './RoleDetailPanel'
 import { PermissionRegistryPanel } from './PermissionRegistryPanel'
 import type { OrgSummaryPayload } from '../types'
+import type { RoleModulePermissionCatalog } from '@/lib/org-role-permission-readback'
+import { ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
 
 interface RoleAccessTabProps {
   roles: Array<{
@@ -16,12 +18,15 @@ interface RoleAccessTabProps {
     name: string
     description: string | null
     permissions: string[] | null
+    permissions_edit_block_reason?: string | null
     sort_order: number | null
   }>
   currentUserId: string | null
   savingRoleId: string | null
   permissionsEditable?: boolean
+  modulePermissionCatalog?: RoleModulePermissionCatalog
   permissionsEditBlockReason?: string | null
+  orgSuperAdminAuthority?: { orgId: string }
   orgSummary: OrgSummaryPayload | null
   onSaveRole: (roleId: string, newPerms: string[]) => void
   onRefresh: () => void | Promise<void>
@@ -33,9 +38,11 @@ interface RoleWithStats {
   name: string
   description: string | null
   permissions: string[] | null
+  permissions_edit_block_reason?: string | null
   sort_order: number | null
-  memberCount: number
+  membershipStats: RoleMembershipStats
   isSuperAdmin: boolean
+  isOrgSuperAdmin: boolean
 }
 
 export default function RoleAccessTab({
@@ -43,7 +50,9 @@ export default function RoleAccessTab({
   currentUserId,
   savingRoleId,
   permissionsEditable = false,
+  modulePermissionCatalog,
   permissionsEditBlockReason,
+  orgSuperAdminAuthority,
   orgSummary,
   onSaveRole,
   onRefresh,
@@ -51,6 +60,12 @@ export default function RoleAccessTab({
   const users = orgSummary?.users ?? []
   const departments = orgSummary?.departments ?? []
   const spaces = orgSummary?.spaces ?? []
+  const orgId = orgSummary?.organization?.id
+  const memberBasis = orgSummary?.role_membership_stats
+  const orgSuperAdminEditor = orgSuperAdminAuthority && orgSuperAdminAuthority.orgId === orgId
+    && memberBasis?.effectiveAvailable && memberBasis.orgSuperAdminAssignableMemberIds
+    ? { orgId, memberIds: memberBasis.orgSuperAdminAssignableMemberIds }
+    : undefined
 
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
   const [roleSearchQuery, setRoleSearchQuery] = useState('')
@@ -58,29 +73,18 @@ export default function RoleAccessTab({
   const rolesWithStats: RoleWithStats[] = useMemo(() => {
     const users = orgSummary?.users ?? []
     return roles.map(role => {
-      const memberCount = users.filter(u => {
-        if (userHasPendingOrgRole(u, role.id)) return true
-        // Try role_ids first (UUID matching)
-        if (u.role_ids?.includes(role.id)) return true
-        // Then try role_codes (code matching)
-        if (u.role_codes?.includes(role.code)) return true
-        // Fallback to role_names (name matching for comma-separated string)
-        if (u.role_names?.includes(role.name)) return true
-        return false
-      }).length
       return {
         ...role,
-        memberCount,
+        membershipStats: getRoleMembershipStats(users, role.id, orgSummary),
         isSuperAdmin: role.code === 'SUPER_ADMIN',
+        isOrgSuperAdmin: role.code === ORG_SUPER_ADMIN_ROLE_CODE,
       }
     }).sort((a, b) => {
-      // SUPER_ADMIN 始终排第一，其他按 sort_order
-      if (a.isSuperAdmin) return -1
-      if (b.isSuperAdmin) return 1
+      if (a.isSuperAdmin !== b.isSuperAdmin) return a.isSuperAdmin ? -1 : 1
+      if (a.isOrgSuperAdmin !== b.isOrgSuperAdmin) return a.isOrgSuperAdmin ? -1 : 1
       return (a.sort_order ?? 999) - (b.sort_order ?? 999)
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roles, users])
+  }, [roles, orgSummary])
 
   // 过滤角色列表
   const filteredRoles = useMemo(() => {
@@ -143,6 +147,9 @@ export default function RoleAccessTab({
             {filteredRoles.map(role => (
               <button
                 key={role.id}
+                type="button"
+                aria-pressed={selectedRole?.id === role.id}
+                aria-label={`${role.name} ${role.code}，已生效 ${role.membershipStats.effectiveMemberCount ?? '待核对'}，待生效 ${role.membershipStats.pendingMemberCount ?? '待核对'}，生效作用域绑定 ${role.membershipStats.effectiveBindingCount ?? '待核对'}`}
                 onClick={() => setSelectedRoleId(role.id)}
                 className={`w-full flex items-center gap-3 rounded-lg px-3 py-3 text-left transition ${
                   selectedRoleId === role.id
@@ -152,26 +159,28 @@ export default function RoleAccessTab({
               >
                 <div
                   className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                    role.isSuperAdmin ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                    role.isSuperAdmin || role.isOrgSuperAdmin ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
                   }`}
                 >
-                  {role.isSuperAdmin ? <ShieldIcon size={20} /> : <UsersIcon size={20} />}
+                  {role.isSuperAdmin || role.isOrgSuperAdmin ? <ShieldIcon size={20} /> : <UsersIcon size={20} />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-slate-900 truncate">{role.name}</span>
                     {role.isSuperAdmin && (
                       <Badge variant="outline" className="text-xs shrink-0 text-amber-600 border-amber-200">
-                        超级管理员
+                        平台根角色
                       </Badge>
                     )}
                   </div>
                   <div className="text-xs text-slate-500 mt-0.5">{role.code}</div>
+                  <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-slate-600">
+                    <span>已生效 {role.membershipStats.effectiveMemberCount ?? '待核对'}</span>
+                    <span>待生效 {role.membershipStats.pendingMemberCount ?? '待核对'}</span>
+                    <span>生效绑定 {role.membershipStats.effectiveBindingCount ?? '待核对'}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 text-slate-400">
-                  <span className="text-sm">{role.memberCount}</span>
-                  <ChevronRightIcon size={16} />
-                </div>
+                <ChevronRightIcon size={16} className="shrink-0 text-slate-400" aria-hidden="true" />
               </button>
             ))}
             {filteredRoles.length === 0 && (
@@ -187,13 +196,18 @@ export default function RoleAccessTab({
       <div className="min-w-0 overflow-hidden">
         {selectedRole ? (
           <RoleDetailPanel
+            key={orgId}
             role={selectedRole}
+            orgSuperAdminAuthority={orgSuperAdminEditor}
+            orgSuperAdminRosterUnavailable={Boolean(orgSuperAdminAuthority && !orgSuperAdminEditor)}
             permissionsEditable={permissionsEditable}
+            modulePermissionCatalog={modulePermissionCatalog}
             permissionsEditBlockReason={permissionsEditBlockReason}
             currentUserId={currentUserId}
             saving={savingRoleId === selectedRole.id}
             onSave={(perms) => onSaveRole(selectedRole.id, perms)}
             users={users}
+            membershipStats={selectedRole.membershipStats}
             departments={departments}
             _spaces={spaces}
             onRefresh={onRefresh}
@@ -217,8 +231,16 @@ export default function RoleAccessTab({
                 <span className="font-mono text-xs text-slate-700">{selectedRole.code}</span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                <span className="text-slate-500">直接成员</span>
-                <span className="font-semibold text-slate-900">{selectedRole.memberCount}</span>
+                <span className="text-slate-500">已生效成员</span>
+                <span className="font-semibold text-slate-900">{selectedRole.membershipStats.effectiveMemberCount ?? '待核对'}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-slate-500">待生效成员</span>
+                <span className="font-semibold text-slate-900">{selectedRole.membershipStats.pendingMemberCount ?? '待核对'}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-slate-500">生效作用域绑定</span>
+                <span className="font-semibold text-slate-900">{selectedRole.membershipStats.effectiveBindingCount ?? '待核对'}</span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                 <span className="text-slate-500">权限点</span>

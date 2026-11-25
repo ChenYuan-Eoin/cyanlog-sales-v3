@@ -1,4 +1,7 @@
 import { hasPermission } from '@/lib/permissions'
+import { REGISTERED_MODULE_PERMISSION_KEYS } from '@/lib/module-access'
+
+const registeredModuleKeys = new Set<string>(REGISTERED_MODULE_PERMISSION_KEYS)
 
 export { resolveRolePermissions } from '@/lib/role-permission-resolution'
 
@@ -122,34 +125,30 @@ export function grantExplicitRolePermissions(
 function revokeEffectiveRolePermission(
   permissions: string[],
   key: string,
-  protectedPermissions: string[] = [],
+  protectedPermissions: string[],
+  canExpand: (key: string) => boolean,
 ): string[] {
   if (protectedPermissions.includes(key)) return permissions
-  const wasEnabled = isRolePermissionEnabled(permissions, key)
   let next = [...permissions]
-  if (!wasEnabled) {
-    next.push(key)
-  } else {
-    // Keep other currently effective leaves when revoking their broader grant.
-    for (const implied of Object.keys(IMPLIED_PERMISSION_SOURCES)) {
-      if (isRolePermissionEnabled(permissions, implied)) next.push(implied)
+  // Keep other currently effective leaves when revoking their broader grant.
+  for (const implied of Object.keys(IMPLIED_PERMISSION_SOURCES)) {
+    if (isRolePermissionEnabled(permissions, implied)) next.push(implied)
+  }
+  const allKnown = PERMISSION_KEYS.filter(candidate => candidate !== '*' && canExpand(candidate))
+  if (next.includes('*')) next = [...next.filter(candidate => candidate !== '*'), ...allKnown]
+  const revoked = key.endsWith(':*')
+    ? resourceLeaves(key).flatMap(permissionSources)
+    : permissionSources(key)
+  for (const capability of revoked) {
+    const wildcard = `${capability.split(':')[0]}:*`
+    if (next.includes(wildcard)) {
+      next = [...next.filter(candidate => candidate !== wildcard), ...resourceLeaves(wildcard).filter(canExpand)]
     }
-    const allKnown = PERMISSION_KEYS.filter(candidate => candidate !== '*')
-    if (next.includes('*')) next = [...next.filter(candidate => candidate !== '*'), ...allKnown]
-    const revoked = key.endsWith(':*')
-      ? resourceLeaves(key).flatMap(permissionSources)
-      : permissionSources(key)
-    for (const capability of revoked) {
-      const wildcard = `${capability.split(':')[0]}:*`
-      if (next.includes(wildcard)) {
-        next = [...next.filter(candidate => candidate !== wildcard), ...resourceLeaves(wildcard)]
-      }
-      next = next.filter(candidate => candidate !== capability)
-    }
-    if (key.endsWith(':*')) {
-      const prefix = key.slice(0, -1)
-      next = next.filter(candidate => !candidate.startsWith(prefix))
-    }
+    next = next.filter(candidate => candidate !== capability)
+  }
+  if (key.endsWith(':*')) {
+    const prefix = key.slice(0, -1)
+    next = next.filter(candidate => !candidate.startsWith(prefix))
   }
   return Array.from(new Set([...next, ...protectedPermissions]))
 }
@@ -159,9 +158,13 @@ export function revokeRolePermissions(
   permissions: string[],
   keys: string[],
   protectedPermissions: string[] = [],
+  availableModuleKeys?: ReadonlySet<string>,
 ): string[] {
-  return Array.from(new Set(keys)).reduce((next, key) => {
-    if (protectedPermissions.includes(key) || !isRolePermissionEnabled(next, key)) return next
-    return revokeEffectiveRolePermission(next, key, protectedPermissions)
+  const canExpand = (key: string) => !availableModuleKeys || !registeredModuleKeys.has(key) || availableModuleKeys.has(key)
+  const next = Array.from(new Set(keys)).reduce((draft, key) => {
+    if (protectedPermissions.includes(key) || (!isRolePermissionEnabled(draft, key) && !draft.includes(key))) return draft
+    return revokeEffectiveRolePermission(draft, key, protectedPermissions, canExpand)
   }, permissions)
+  return next.filter(key => permissions.includes(key) || !registeredModuleKeys.has(key)
+    || isRolePermissionEnabled(next, key))
 }

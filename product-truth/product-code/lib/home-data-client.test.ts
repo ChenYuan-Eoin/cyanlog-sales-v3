@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { loadHomeInitialData, primeHomeAuthContext } from './home-data-client'
+import { scopedCacheKey } from './browser-cache'
 
 const store = new Map<string, string>()
 
@@ -78,5 +79,37 @@ describe('home-data-client', () => {
     await Promise.resolve()
 
     expect(fetchMock).toHaveBeenCalledWith('/api/auth/context', { method: 'POST' })
+  })
+
+  it('revalidates personal workspace data each time and removes previously cached personal data', async () => {
+    const token = 'legacy-cache'
+    const legacy = scopedCacheKey(token, 'home:initial')
+    const legacyPersonal = scopedCacheKey(token, 'home:initial:personal')
+    store.set(legacy, 'old private data')
+    store.set(legacyPersonal, 'old private data')
+    const personal = [
+      { agenda: [{ id: 'private-agenda' }] },
+      { agenda: [] },
+    ]
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/api/auth/me') return Promise.resolve(jsonResponse({ user: { id: 'u3' } }))
+      if (url === '/api/dashboard?view=personal') return Promise.resolve(jsonResponse(personal.shift()))
+      return Promise.resolve(jsonResponse({
+        opportunities: [{ id: 'legacy' }], agenda: [{ id: 'private-agenda' }],
+        reminders: [{ id: 'private-reminder' }],
+      }))
+    })
+    await loadHomeInitialData(token)
+    const scoped = await loadHomeInitialData(token, { view: 'personal' })
+    const afterRevocation = await loadHomeInitialData(token, { view: 'personal' })
+    expect(scoped.dashboard).toEqual({ agenda: [{ id: 'private-agenda' }] })
+    expect(afterRevocation.dashboard).toEqual({ agenda: [] })
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/dashboard?view=personal')).toHaveLength(2)
+    expect(fetchMock).toHaveBeenCalledWith('/api/dashboard?view=personal', expect.objectContaining({ cache: 'no-store' }))
+    expect(store.has(legacy)).toBe(false)
+    expect(store.has(legacyPersonal)).toBe(false)
+    const workspace = store.get(scopedCacheKey(token, 'home:initial:v2'))
+    expect(workspace).toContain('legacy')
+    expect(workspace).not.toMatch(/private-agenda|private-reminder/)
   })
 })

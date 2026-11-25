@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import {
   useReactTable,
   getCoreRowModel,
@@ -24,6 +24,7 @@ import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon,
 import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment } from '../types'
 import Fuse from 'fuse.js'
 import { success, error, confirmAction } from '@/lib/toast'
+import { buildDepartmentSpaces, resolveDepartmentSpaceIds } from '@/lib/department-spaces'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
@@ -44,6 +45,113 @@ interface OrgStructureTabProps {
   onOpenIntegrations?: () => void
 }
 
+type LeaderAccess = { userId: string | null; leaderId: string | null }
+
+function DepartmentLeaderAccess({ department }: { department: OrgSummaryDepartment }) {
+  const [approval, setApproval] = useState<LeaderAccess | null>(null)
+  const [feedback, setFeedback] = useState('')
+  const [busy, setBusy] = useState(false)
+  const { id: departmentId, leader_id: leaderId } = department
+  const url = '/api/admin/departments/leader-access'
+  const leaderMatchesDepartment = approval?.leaderId === (leaderId ?? null)
+  const leaderLabel = department.leader_name || '当前负责人'
+
+  const readApproval = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const response = await fetch(`${url}?departmentId=${encodeURIComponent(departmentId)}`, {
+        headers: buildAuthHeaders(),
+        cache: 'no-store',
+        signal,
+      })
+      if (signal?.aborted) return
+      if (!response.ok) {
+        setApproval(null)
+        setFeedback(response.status === 401 || response.status === 403 ? '' : '暂时无法读取负责人数据权限。')
+        return
+      }
+      const data: LeaderAccess = await response.json()
+      if (signal?.aborted) return
+      setApproval(data)
+      setFeedback('')
+    } catch {
+      if (signal?.aborted) return
+      setApproval(null)
+      setFeedback('暂时无法读取负责人数据权限。')
+    }
+  }, [departmentId])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void readApproval(controller.signal)
+    return () => controller.abort()
+  }, [readApproval, leaderId])
+
+  async function updateApproval() {
+    if (!approval || !leaderMatchesDepartment || busy) return
+    const granting = !approval.userId
+    const nextUserId = granting ? approval.leaderId : null
+    if (granting && !nextUserId) return
+    setBusy(true)
+    try {
+      const confirmed = await confirmAction(granting
+        ? `允许${leaderLabel}查看${department.name}及下级部门。商机等业务仍按角色权限校验。`
+        : `撤销${leaderLabel}在${department.name}的这项部门授权。`, {
+        title: granting ? '确认负责人数据权限' : '撤销负责人数据权限',
+        confirmText: granting ? '确认授权' : '确认撤销',
+      })
+      if (!confirmed) return
+
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: buildAuthHeaders(true),
+        body: JSON.stringify({ departmentId, userId: nextUserId, expectedUserId: approval.userId }),
+      })
+      if (!response.ok) {
+        if (response.status === 409) {
+          await readApproval()
+          setFeedback('负责人或权限已变更，请核对最新状态后重试。')
+        } else if (response.status === 401 || response.status === 403) {
+          setApproval(null)
+          setFeedback('当前账号无权确认负责人数据权限。')
+        } else {
+          setFeedback('无法更新负责人数据权限，请重试。')
+        }
+        return
+      }
+      await readApproval()
+    } catch {
+      setFeedback('暂时无法确认保存结果，请重新读取。')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!approval && !feedback) return null
+
+  return (
+    <div className="mt-3 border-t border-slate-100 pt-3">
+      <h4 className="text-sm font-medium text-slate-800">负责人数据权限</h4>
+      {approval && (
+        <>
+          <p className="mt-1 text-xs text-slate-500">
+            {approval.userId ? '已授权' : approval.leaderId ? '负责人待授权' : '尚未设置负责人'}
+          </p>
+          {!leaderMatchesDepartment && (
+            <p className="mt-1 text-xs text-amber-800">部门负责人已更新，请刷新组织架构后再确认。</p>
+          )}
+          {leaderMatchesDepartment && (approval.leaderId || approval.userId) && (
+            <Button type="button" variant="outline" size="sm" className="mt-2" disabled={busy}
+              onClick={() => void updateApproval()}>
+              {approval.userId ? '撤销负责人权限' : '确认负责人权限'}
+            </Button>
+          )}
+        </>
+      )}
+      {feedback && <p role="status" className="mt-1 text-xs text-amber-800">{feedback}</p>}
+    </div>
+  )
+}
+
 function buildAuthHeaders(includeJson = false): HeadersInit {
   const token = localStorage.getItem('token')
   return {
@@ -54,17 +162,8 @@ function buildAuthHeaders(includeJson = false): HeadersInit {
 
 // ============ 工具函数 ============
 
-function getAllChildDeptIds(departments: OrgSummaryDepartment[], parentId: string): Set<string> {
-  const result = new Set<string>([parentId])
-  const children = departments.filter(d => d.parent_id === parentId)
-  for (const child of children) {
-    const childIds = getAllChildDeptIds(departments, child.id)
-    childIds.forEach(id => result.add(id))
-  }
-  return result
-}
-
 type MemberEmployment = 'active' | 'departed' | 'suspended' | 'unknown'
+type MemberFilter = MemberEmployment | 'synced' | 'all'
 
 function memberEmployment(user: OrgSummaryUser): MemberEmployment {
   if (user.directory_identity_id) {
@@ -85,6 +184,9 @@ function memberEmployment(user: OrgSummaryUser): MemberEmployment {
 const EMPLOYMENT_LABELS: Record<MemberEmployment, string> = {
   active: '在职', departed: '已离职', suspended: '已停用', unknown: '待核对',
 }
+const MEMBER_FILTER_LABELS: Record<MemberFilter, string> = {
+  synced: '同步在职', ...EMPLOYMENT_LABELS, active: '在职（含本地）', all: '全部',
+}
 
 function memberDepartmentIds(user: OrgSummaryUser): Set<string> {
   return new Set([...(user.department_ids ?? []), ...(user.primary_dept_id ? [user.primary_dept_id] : [])])
@@ -95,14 +197,14 @@ function memberDepartmentIds(user: OrgSummaryUser): Set<string> {
 interface DepartmentTreeProps {
   departments: OrgSummaryDepartment[]
   users: OrgSummaryUser[]
-  countUsers?: OrgSummaryUser[]
+  memberCounts: Map<string, number> | null
   selectedDeptId: string | null
   onSelectDept: (id: string | null) => void
   onRefresh?: () => void | Promise<void>
   className?: string
 }
 
-function DepartmentTree({ departments, users, countUsers = users, selectedDeptId, onSelectDept, onRefresh, className }: DepartmentTreeProps) {
+function DepartmentTree({ departments, users, memberCounts, selectedDeptId, onSelectDept, onRefresh, className }: DepartmentTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [editDept, setEditDept] = useState<OrgSummaryDepartment | null>(null)
   const [deletingDept, setDeletingDept] = useState<OrgSummaryDepartment | null>(null)
@@ -251,7 +353,7 @@ function DepartmentTree({ departments, users, countUsers = users, selectedDeptId
 
           {/* Member count */}
           <Badge variant={isSelected ? 'default' : 'outline'} className="shrink-0 text-xs">
-            {countUsers.filter(user => memberDepartmentIds(user).has(dept.id)).length}
+            {memberCounts ? memberCounts.get(dept.id) ?? 0 : '—'}
           </Badge>
         </div>
 
@@ -838,16 +940,55 @@ export default function OrgStructureTab({
 }: OrgStructureTabProps) {
   const departments = useMemo(() => orgSummary?.departments ?? [], [orgSummary?.departments])
   const users = useMemo(() => orgSummary?.users ?? [], [orgSummary?.users])
+  const departmentSpaces = useMemo(() => (
+    orgSummary?.department_spaces ?? buildDepartmentSpaces(departments, orgSummary?.spaces ?? [])
+  ), [departments, orgSummary?.department_spaces, orgSummary?.spaces])
+  const orgDepartmentIds = useMemo(() => departmentSpaces.map(space => space.department_id), [departmentSpaces])
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null)
-  const [employmentFilter, setEmploymentFilter] = useState<MemberEmployment | 'all'>('active')
-  const statusUsers = useMemo(() => users.filter(user => employmentFilter === 'all' || memberEmployment(user) === employmentFilter), [users, employmentFilter])
+  const [includeSubdepartments, setIncludeSubdepartments] = useState(true)
+  const [employmentFilter, setEmploymentFilter] = useState<MemberFilter>('synced')
+  const directoryRoster = orgSummary?.directory_roster
+  const synchronizedView = employmentFilter === 'synced'
+  const allMembersLabel = synchronizedView ? '全部同步在职成员' : '全部成员'
+  const countsUnavailable = synchronizedView && directoryRoster?.status !== 'ready'
+  const statusUsers = useMemo(() => {
+    if (!synchronizedView) {
+      return users.filter(user => employmentFilter === 'all' || memberEmployment(user) === employmentFilter)
+    }
+    if (directoryRoster?.status !== 'ready') return []
+    const usersById = new Map(users.map(user => [user.id, user]))
+    return directoryRoster.members.flatMap(member => {
+      const user = usersById.get(member.id)
+      return user ? [{ ...user, department_ids: member.departmentIds }] : []
+    })
+  }, [directoryRoster, users, employmentFilter, synchronizedView])
+
+  const departmentMemberCounts = useMemo(() => {
+    if (countsUnavailable) return null
+    const parents = new Map(departmentSpaces.map(space => [space.department_id, space.parent_department_id]))
+    const counts = new Map<string, number>()
+    for (const user of statusUsers) {
+      const seen = new Set<string>()
+      for (const departmentId of memberDepartmentIds(user)) {
+        let id: string | null = departmentId
+        while (id && parents.has(id) && !seen.has(id)) {
+          seen.add(id)
+          counts.set(id, (counts.get(id) ?? 0) + 1)
+          id = parents.get(id) ?? null
+        }
+      }
+    }
+    return counts
+  }, [countsUnavailable, departmentSpaces, statusUsers])
 
   // 根据选中部门过滤成员
   const filteredUsers = useMemo(() => {
     if (!selectedDeptId) return statusUsers
-    const allowedDeptIds = getAllChildDeptIds(departments, selectedDeptId)
+    const allowedDeptIds = resolveDepartmentSpaceIds(departmentSpaces, orgDepartmentIds, {
+      departmentId: selectedDeptId, includeSubdepartments,
+    })
     return statusUsers.filter(user => [...memberDepartmentIds(user)].some(id => allowedDeptIds.has(id)))
-  }, [statusUsers, departments, selectedDeptId])
+  }, [statusUsers, departmentSpaces, orgDepartmentIds, selectedDeptId, includeSubdepartments])
 
   // 统计信息
   const stats = useMemo(() => ({
@@ -861,6 +1002,7 @@ export default function OrgStructureTab({
     const departments = orgSummary?.departments ?? []
     return departments.find(d => d.id === selectedDeptId) ?? null
   }, [orgSummary, selectedDeptId])
+  const selectedDepartmentSpace = departmentSpaces.find(space => space.department_id === selectedDeptId)
 
   // 编辑用户状态
   const [editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)
@@ -876,21 +1018,27 @@ export default function OrgStructureTab({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-wrap gap-2">
           <StatCard icon={<BuildingIcon size={18} />} label="部门" value={stats.deptCount} />
-          <StatCard icon={<UsersIcon size={18} />} label={employmentFilter === 'all' ? '全部成员' : EMPLOYMENT_LABELS[employmentFilter] + '成员'} value={stats.userCount} />
+          <StatCard icon={<UsersIcon size={18} />} label={`${MEMBER_FILTER_LABELS[employmentFilter]}成员`} value={countsUnavailable ? '—' : stats.userCount} />
           <StatCard icon={<BuildingIcon size={18} />} label="销售空间" value={stats.spaceCount} />
         </div>
         <div className="text-sm text-slate-500">
-          {selectedDept ? `当前筛选：${selectedDept.name}` : '当前筛选：全部成员'}
+          当前筛选：{selectedDept?.name || allMembersLabel}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-white px-4 py-3">
         <label htmlFor="member-employment-filter" className="text-sm font-medium text-slate-700">成员状态</label>
-        <select id="member-employment-filter" value={employmentFilter} onChange={event => setEmploymentFilter(event.target.value as MemberEmployment | 'all')}
+        <select id="member-employment-filter" value={employmentFilter} onChange={event => setEmploymentFilter(event.target.value as MemberFilter)}
           className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm">
-          <option value="active">在职</option><option value="departed">已离职</option><option value="suspended">已停用</option><option value="unknown">待核对</option><option value="all">全部</option>
+          {Object.entries(MEMBER_FILTER_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
         </select>
-        <span className="text-xs text-slate-500">默认显示在职成员；离职和历史记录可切换查询。</span>
+        {synchronizedView && directoryRoster?.status === 'ready' && (
+          <span className="text-xs text-slate-500">
+            最近生效同步 {new Intl.DateTimeFormat('zh-CN', {
+              timeZone: 'Asia/Shanghai', year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            }).format(new Date(directoryRoster.asOf))}
+          </span>
+        )}
       </div>
 
       {/* A3: 空数据状态提示 */}
@@ -910,7 +1058,7 @@ export default function OrgStructureTab({
           <div className="rounded-lg border bg-white">
             <div className="border-b px-4 py-3">
               <h3 className="font-medium text-slate-900">部门结构</h3>
-              <p className="text-xs text-slate-500 mt-1">点击选择部门</p>
+              <p className="text-xs text-slate-500 mt-1">部门人数含下级，同一成员只计一次</p>
             </div>
             <div className="p-2 max-h-[680px] overflow-y-auto">
               <button
@@ -922,9 +1070,9 @@ export default function OrgStructureTab({
                 }`}
               >
                 <UsersIcon size={16} className={selectedDeptId === null ? 'text-blue-500' : 'text-slate-400'} />
-                <span className="flex-1 text-sm font-medium">全部成员</span>
+                <span className="flex-1 text-sm font-medium">{allMembersLabel}</span>
                 <Badge variant={selectedDeptId === null ? 'default' : 'outline'} className="text-xs">
-                  {stats.userCount}
+                  {countsUnavailable ? '—' : stats.userCount}
                 </Badge>
               </button>
 
@@ -933,7 +1081,7 @@ export default function OrgStructureTab({
               <DepartmentTree
                 departments={departments}
                 users={users}
-                countUsers={statusUsers}
+                memberCounts={departmentMemberCounts}
                 selectedDeptId={selectedDeptId}
                 onSelectDept={setSelectedDeptId}
                 onRefresh={onRefresh}
@@ -949,28 +1097,39 @@ export default function OrgStructureTab({
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-medium text-slate-900">
-                    {selectedDept ? `${selectedDept.name} 的成员` : '全部成员'}
+                    {selectedDept ? `${selectedDept.name} 的成员` : allMembersLabel}
                   </h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    {selectedDept
-                      ? `共 ${stats.filteredCount} 人（含子部门）`
+                    {countsUnavailable ? '同步在职人数待核对' : selectedDept
+                      ? `共 ${stats.filteredCount} 人（${includeSubdepartments ? '含子部门' : '仅本部门'}）`
                       : `共 ${stats.userCount} 人`
                     }
                   </p>
                 </div>
                 {selectedDept && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedDeptId(null)}
-                  >
-                    查看全部
-                  </Button>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <label className="text-xs text-slate-600">
+                      <span className="sr-only">部门成员范围</span>
+                      <select
+                        value={includeSubdepartments ? 'subtree' : 'direct'}
+                        onChange={event => setIncludeSubdepartments(event.target.value === 'subtree')}
+                        className="rounded-md border border-slate-300 bg-white px-2 py-1.5"
+                      >
+                        <option value="direct">仅本部门</option>
+                        <option value="subtree">含下级部门</option>
+                      </select>
+                    </label>
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedDeptId(null)}>
+                      查看全部
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>
             <div className="p-6">
-              <MemberTable
+              {countsUnavailable ? (
+                <p role="status" className="text-sm text-slate-600">暂时无法核对同步名单。可以切换到「全部」查看成员记录。</p>
+              ) : <MemberTable
                 users={filteredUsers}
                 departments={departments}
                 currentUserId={currentUserId}
@@ -985,12 +1144,27 @@ export default function OrgStructureTab({
                 }}
                 onBindIdentity={setBindingUser}
                 onRefresh={onRefresh}
-              />
+              />}
             </div>
           </div>
         </div>
 
         <div className="min-w-0 space-y-4">
+          {selectedDepartmentSpace && (
+            <div className="rounded-lg border bg-white p-4">
+              <h3 className="font-medium text-slate-900">部门空间</h3>
+              <p className="mt-2 text-sm text-slate-700">{selectedDepartmentSpace.name}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                已关联 {selectedDepartmentSpace.sales_space_ids.length} 个销售空间
+              </p>
+              {currentUserId && selectedDept && (
+                <DepartmentLeaderAccess
+                  key={JSON.stringify([orgSummary?.organization?.id, currentUserId, selectedDept.id, selectedDept.leader_id])}
+                  department={selectedDept}
+                />
+              )}
+            </div>
+          )}
           <div className="rounded-lg border bg-white p-4">
             <h3 className="font-medium text-slate-900">员工登录</h3>
             <p className="mt-2 text-xs leading-5 text-slate-600">在职员工使用自己的纷享销客账号登录 ICU；尚未登录纷享时，登录流程会引导完成认证。无需逐人发邀请码。已离职人员不可登录。</p>
@@ -1054,7 +1228,15 @@ export default function OrgStructureTab({
                 error(result.error || '创建用户失败')
                 throw new Error(result.error)
               }
+              if (result.success !== true || typeof result.data?.id !== 'string') {
+                const message = '未能确认成员邀请，请刷新成员名单核对。'
+                error(message)
+                throw new Error(message)
+              }
               const activationCode = result.data?.activationCode
+              // A manual invitation is outside the synced roster until the directory matches it.
+              setEmploymentFilter('all')
+              setSelectedDeptId(null)
               success(activationCode
                 ? `成员邀请已创建，激活码：${activationCode}（7 天内有效）`
                 : '成员邀请已创建')
@@ -1075,11 +1257,11 @@ export default function OrgStructureTab({
             <div className="mt-4 space-y-3 text-sm">
               <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                 <span className="text-slate-500">部门</span>
-                <span className="font-medium text-slate-900">{selectedDept?.name || '全部成员'}</span>
+                <span className="font-medium text-slate-900">{selectedDept?.name || allMembersLabel}</span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                 <span className="text-slate-500">筛选成员</span>
-                <span className="font-semibold text-slate-900">{stats.filteredCount}</span>
+                <span className="font-semibold text-slate-900">{countsUnavailable ? '—' : stats.filteredCount}</span>
               </div>
               <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-500">
                 外部目录同步先检查读取范围并生成差异；冲突、范围不明或快照不完整时整批阻断。
@@ -1198,7 +1380,7 @@ export default function OrgStructureTab({
 
 // ============ 辅助组件 ============
 
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number | string }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border bg-white px-4 py-2">
       <div className="flex h-8 w-8 items-center justify-center rounded-md bg-slate-100 text-slate-600">

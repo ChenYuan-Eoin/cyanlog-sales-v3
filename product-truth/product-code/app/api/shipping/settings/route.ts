@@ -2,6 +2,8 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { loadShippingWorkspaceSettings } from '@/lib/shipping/workspace-settings'
 import { AuthError, requireAuth } from '@/lib/auth'
+import { getRequestAuthToken } from '@/lib/auth-token'
+import { resolveShippingEntry } from '@/lib/shipping/entry-access'
 import { shippingManagerHandler, shippingJson } from '@/lib/shipping/http'
 import {
   loadShippingConfiguration,
@@ -20,39 +22,32 @@ import { canImportLegacyShippingConfiguration } from '@/lib/shipping/legacy-conf
 import { probeSfConnection } from '@/lib/shipping/sf-client'
 import { ShippingError } from '@/lib/shipping/config'
 import { requireShippingConnectionManager } from '@/lib/shipping/connection-authorization'
-import { requireShippingOperator } from '@/lib/shipping/operator-access'
 export const runtime = 'nodejs'
 
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
     if (req.nextUrl.searchParams.get('workspace') === '1') {
-      const orgId = await requireShippingOperator(user.id)
-      return NextResponse.json({ settings: await loadShippingWorkspaceSettings(orgId) }, { headers: { 'Cache-Control': 'no-store' } })
-    }
-    try {
-      const orgId = await requireShippingConnectionManager(user.id)
-      const configuration = await loadShippingConfiguration(orgId)
-      const legacy = { sandbox: hasLegacyShippingConfiguration('sandbox', configuration), production: hasLegacyShippingConfiguration('production', configuration) }
-      const legacyAllowed = (legacy.sandbox || legacy.production) && await canImportLegacyShippingConfiguration(orgId)
+      const access = await resolveShippingEntry(user, getRequestAuthToken(req))
+      if (!access?.canOperate) throw new ShippingError(403, '当前账号没有自助收寄操作权限。')
+      const settings = await loadShippingWorkspaceSettings(access.orgId)
       return NextResponse.json({
-        deploymentEnvironment: ['production', 'preview', 'development'].includes(process.env.VERCEL_ENV || '') ? process.env.VERCEL_ENV : 'unknown',
-        credentialStorageReady: /^[a-fA-F0-9]{64}$/.test(process.env.SHIPPING_CREDENTIALS_ENCRYPTION_KEY || ''),
-        configuration,
-        legacyConfigurationAvailable: {
-          sandbox: Boolean(legacyAllowed && legacy.sandbox),
-          production: Boolean(legacyAllowed && legacy.production),
-        },
+        settings: { ...settings, canOperate: true, canManageConnections: access.canManageConnections },
       }, { headers: { 'Cache-Control': 'no-store' } })
-    } catch (error) {
-      // The sidebar uses this route as a navigation gate. An operator may see
-      // the /shipping entry without receiving any connection/account/sender settings.
-      if (error instanceof ShippingError && error.status === 403) {
-        await requireShippingOperator(user.id)
-        return NextResponse.json({ navigationAvailable: true }, { headers: { 'Cache-Control': 'no-store' } })
-      }
-      throw error
     }
+    const orgId = await requireShippingConnectionManager(user.id)
+    const configuration = await loadShippingConfiguration(orgId)
+    const legacy = { sandbox: hasLegacyShippingConfiguration('sandbox', configuration), production: hasLegacyShippingConfiguration('production', configuration) }
+    const legacyAllowed = (legacy.sandbox || legacy.production) && await canImportLegacyShippingConfiguration(orgId)
+    return NextResponse.json({
+      deploymentEnvironment: ['production', 'preview', 'development'].includes(process.env.VERCEL_ENV || '') ? process.env.VERCEL_ENV : 'unknown',
+      credentialStorageReady: /^[a-fA-F0-9]{64}$/.test(process.env.SHIPPING_CREDENTIALS_ENCRYPTION_KEY || ''),
+      configuration,
+      legacyConfigurationAvailable: {
+        sandbox: Boolean(legacyAllowed && legacy.sandbox),
+        production: Boolean(legacyAllowed && legacy.production),
+      },
+    }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     const status = error instanceof AuthError ? 401 : error instanceof ShippingError ? error.status : 500
     const message = error instanceof AuthError ? '请先登录。' : error instanceof ShippingError ? error.message : '寄件配置读取失败。'

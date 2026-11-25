@@ -7,6 +7,7 @@ import type { ContractPolicyRule } from '@/types/rules'
 import type { AIPlatformAssetKind } from '@/lib/configs/types'
 
 import { TableSkeleton, StatsSkeleton, CardSkeleton } from '@/components/ui/skeleton'
+import type { RoleModulePermissionCatalog } from '@/lib/org-role-permission-readback'
 
 const ShippingConfigDrawer = dynamic(() => import('@/app/shipping/config-drawer'), {
   loading: () => <CardSkeleton />,
@@ -101,7 +102,9 @@ export interface TabsContentProps {
   }>
   savingRoleId: string | null
   permissionsEditable?: boolean
+  modulePermissionCatalog?: RoleModulePermissionCatalog
   permissionsEditBlockReason?: string | null
+  orgSuperAdminAuthority?: { orgId: string }
   onSaveRole: (roleId: string, newPerms: string[]) => void
 }
 
@@ -136,7 +139,9 @@ export default function TabsContent({
   roles,
   savingRoleId,
   permissionsEditable,
+  modulePermissionCatalog,
   permissionsEditBlockReason,
+  orgSuperAdminAuthority,
   onSaveRole,
 }: TabsContentProps) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -317,7 +322,9 @@ export default function TabsContent({
           currentUserId={currentUserId}
           savingRoleId={savingRoleId}
           permissionsEditable={permissionsEditable}
+          modulePermissionCatalog={modulePermissionCatalog}
           permissionsEditBlockReason={permissionsEditBlockReason}
+          orgSuperAdminAuthority={orgSuperAdminAuthority}
           orgSummary={orgSummary}
           onSaveRole={onSaveRole}
           onRefresh={onRefreshOrg}

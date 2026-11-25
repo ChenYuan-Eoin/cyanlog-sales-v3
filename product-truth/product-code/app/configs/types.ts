@@ -1,6 +1,8 @@
 // configs/types.ts - 配置中心类型定义
 // 从 ConfigsClient.tsx 提取
 
+import type { DepartmentSpace } from '@/lib/department-spaces'
+
 export interface Config {
   id: string
   key: string
@@ -626,6 +628,10 @@ export interface OrgSummarySpace {
   owner_id?: string | null
 }
 
+export type OrgDirectoryRoster =
+  | { status: 'ready'; asOf: string; members: Array<{ id: string; departmentIds: string[] }> }
+  | { status: 'unavailable'; reason: string }
+
 export interface OrgSummaryPayload {
   organization?: {
     id: string
@@ -636,6 +642,15 @@ export interface OrgSummaryPayload {
   departments: OrgSummaryDepartment[]
   roles: OrgSummaryRole[]
   spaces: OrgSummarySpace[]
+  department_spaces?: DepartmentSpace[]
+  directory_roster?: OrgDirectoryRoster
+  role_membership_stats?: {
+    effectiveAvailable: boolean
+    pendingAvailable: boolean
+    activeSpaceIds: string[]
+    activeMemberIds?: string[]
+    orgSuperAdminAssignableMemberIds?: string[]
+  }
 }
 
 export type FeishuSyncFeedbackStatus = 'success' | 'warning' | 'error'

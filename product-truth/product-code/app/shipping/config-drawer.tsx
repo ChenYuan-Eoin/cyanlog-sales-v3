@@ -9,19 +9,12 @@ import { contactSchema } from '@/lib/shipping/validation'
 import { parseAddress } from '@/lib/shipping/address'
 import IntakeConfiguration from './intake-configuration'
 import { SF_SERVICE_CATALOG, DEFAULT_INTAKE_SERVICES } from '@/lib/shipping/sf-service-catalog'
-
-async function request<T>(init?: RequestInit): Promise<T> {
-  const response = await fetch('/api/shipping/settings', { ...init, cache: 'no-store', headers: init?.body ? { 'Content-Type': 'application/json', ...init.headers } : init?.headers })
-  const data = await response.json()
-  if (!response.ok) throw new Error(data.error || '配置暂未保存')
-  return data as T
-}
+import { shippingWorkbenchRequest, ShippingWorkbenchRequestError } from '@/lib/shipping/workbench-client'
 
 type ConfigurationReply = {
   credentialStorageReady?: boolean
   deploymentEnvironment?: 'production' | 'preview' | 'development' | 'unknown'
   configuration?: ShippingConfiguration
-  navigationAvailable?: boolean
   legacyConfigurationAvailable?: Record<'sandbox' | 'production', boolean>
   imported?: string[]
   needsAttention?: string[]
@@ -30,7 +23,12 @@ type ConfigurationReply = {
 type Environment = 'sandbox' | 'production'
 type Service = { id: number; name: string; preference: 'standard' | 'urgent' }
 
-export default function ShippingConfigDrawer({ open = true, onClose, embedded = false }: { open?: boolean; onClose?: () => void; embedded?: boolean }) {
+export default function ShippingConfigDrawer({ open = true, onClose, embedded = false, standaloneReturn }: {
+  open?: boolean
+  onClose?: () => void
+  embedded?: boolean
+  standaloneReturn?: '/' | '/shipping'
+}) {
   const [configuration, setConfiguration] = useState<ShippingConfiguration>({ connections: [], billingAccounts: [], sender: null })
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('production')
   const [deploymentEnvironment, setDeploymentEnvironment] = useState<NonNullable<ConfigurationReply['deploymentEnvironment']>>('unknown')
@@ -62,13 +60,21 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   const [legacyConfigurationAvailable, setLegacyConfigurationAvailable] = useState<Record<'sandbox' | 'production', boolean>>({ sandbox: false, production: false })
   const [legacyMigrationReport, setLegacyMigrationReport] = useState<{ imported: string[]; needsAttention: string[] } | null>(null)
 
+  function handleRevokedAccess(error: unknown) {
+    if (!(error instanceof ShippingWorkbenchRequestError) || (error.status !== 401 && error.status !== 403)) return false
+    setAccessState('unavailable')
+    setConfiguration({ connections: [], billingAccounts: [], sender: null })
+    setPartnerId(''); setCheckWord(''); setAccountNumber(''); setAccountName('')
+    setSender(emptyContact()); setSenderText(''); setServiceDrafts({})
+    setMessage(error.message)
+    return true
+  }
+
   async function refresh() {
-    const data = await request<ConfigurationReply>()
+    const data = await shippingWorkbenchRequest<ConfigurationReply>('/api/shipping/settings')
     if (!data.configuration) {
       setAccessState('unavailable')
-      setMessage(data.navigationAvailable
-        ? '当前账号可以办理寄件，但没有寄件配置管理权限。'
-        : '寄件配置暂不可用，请检查账号权限后重试。')
+      setMessage('寄件配置暂不可用，请检查账号权限后重试。')
       return
     }
     setConfiguration(data.configuration)
@@ -98,7 +104,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   async function mutate(label: string, action: string, values: Record<string, unknown> = {}) {
     setBusy(label); setMessage(''); setSaveFailed(false)
     try {
-      const data = await request<ConfigurationReply>({ method: 'POST', body: JSON.stringify({ action, ...values }) })
+      const data = await shippingWorkbenchRequest<ConfigurationReply>('/api/shipping/settings', { method: 'POST', body: JSON.stringify({ action, ...values }) })
       if (data.configuration) setConfiguration(data.configuration)
 
       if (data.legacyConfigurationAvailable) setLegacyConfigurationAvailable(data.legacyConfigurationAvailable)
@@ -106,7 +112,10 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       if (!data.configuration) throw new Error('配置更新成功，但服务器未返回最新配置。请刷新后检查。')
       setMessage(`${label === 'connection' ? '顺丰连接' : label === 'services' ? '可提报服务' : label === 'account' ? '月结账号' : label === 'sender' ? '默认寄件资料' : '配置'}已保存。`)
       return data
-    } catch (error) { setMessage((error as Error).message); setSaveFailed(true); return null } finally { setBusy('') }
+    } catch (error) {
+      if (!handleRevokedAccess(error)) { setMessage((error as Error).message); setSaveFailed(true) }
+      return null
+    } finally { setBusy('') }
   }
 
   async function saveConnection() {
@@ -137,9 +146,11 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
     const selectedEnvironment = environment
     setBusy('probe'); setProbeMessage(`正在请求顺丰${selectedEnvironment === 'sandbox' ? '沙盒' : '生产'}只读接口…`); setProbePassed(false); setMessage('')
     try {
-      const response = await request<{ configuration: ShippingConfiguration; probe: { connected: boolean; queryVerified: boolean; message: string } }>({ method: 'POST', body: JSON.stringify({ action: selectedEnvironment === 'sandbox' ? 'test_sandbox_connection' : 'test_production_connection' }) })
+      const response = await shippingWorkbenchRequest<{ configuration: ShippingConfiguration; probe: { connected: boolean; queryVerified: boolean; message: string } }>('/api/shipping/settings', { method: 'POST', body: JSON.stringify({ action: selectedEnvironment === 'sandbox' ? 'test_sandbox_connection' : 'test_production_connection' }) })
       setConfiguration(response.configuration); setProbeMessage(response.probe.message); setProbePassed(response.probe.connected)
-    } catch (error) { setProbeMessage((error as Error).message) } finally { setBusy('') }
+    } catch (error) {
+      if (!handleRevokedAccess(error)) setProbeMessage((error as Error).message)
+    } finally { setBusy('') }
   }
 
   async function enableInterceptAccess() {
@@ -178,7 +189,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       <div className={embedded ? styles.accessCard : styles.accessDialog}>
         <h2 id="shipping-config-access-title">{accessState === 'checking' ? '正在检查权限' : '寄件配置不可用'}</h2>
         <p role="status">{content}</p>
-        {accessState === 'unavailable' && <a href="/shipping">返回自助收寄工作台</a>}
+        {accessState === 'unavailable' && <a href={standaloneReturn ?? '/shipping'}>{standaloneReturn === '/' ? '返回工作台' : '返回自助收寄工作台'}</a>}
       </div>
     </section>
   }
@@ -194,8 +205,8 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       <div className={styles.content}>
         <div className={styles.siteBar} aria-label="站点部署环境">
           <span>{deploymentEnvironment === 'production' ? '当前站点：正式环境' : deploymentEnvironment === 'preview' ? '当前站点：预览环境' : deploymentEnvironment === 'development' ? '当前站点：开发环境' : '当前站点：部署环境未确认'}</span>
-          {deploymentEnvironment !== 'production' && <a href="https://sales.cyanlog.icu/configs?tab=shipping">前往正式站 →</a>}
-          <a href="/shipping">返回收寄工作台 →</a>
+          {deploymentEnvironment !== 'production' && <a href={standaloneReturn ? 'https://sales.cyanlog.icu/shipping/settings' : 'https://sales.cyanlog.icu/configs?tab=shipping'}>前往正式站 →</a>}
+          <a href={standaloneReturn ?? '/shipping'}>{standaloneReturn === '/' ? '返回工作台' : '返回收寄工作台'} →</a>
         </div>
         <section aria-label="顺丰接入内容">
           <div className={styles.panelHeading}><h3>顺丰接入</h3></div>
@@ -303,7 +314,11 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
           <details>
             <summary>审核与下单权限</summary>
             <IntakeConfiguration mode="departments"/>
-            <section className={styles.permissionCard} aria-label="审核与下单角色管理"><h3>操作与审核权限</h3><p className={styles.hint}>在“组织与权限”中为角色配置“寄件操作”权限，并将成员分配到对应角色。</p><a href="/configs?tab=role-access">前往组织与权限配置角色</a></section>
+            <section className={styles.permissionCard} aria-label="审核与下单角色管理">
+              <h3>操作与审核权限</h3>
+              <p className={styles.hint}>由组织管理员在“组织与权限”中为角色配置“寄件操作”权限，并将成员分配到对应角色。</p>
+              {!standaloneReturn && <a href="/configs?tab=role-access">前往组织与权限配置角色</a>}
+            </section>
           </details>
         </section>
       </div>

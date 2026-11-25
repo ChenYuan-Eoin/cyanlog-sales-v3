@@ -2,15 +2,13 @@
 import { NextRequest } from 'next/server'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { AuthError } from '@/lib/auth'
-import { ShippingError } from '@/lib/shipping/config'
 import { GET, POST } from './route'
 
 const mock = vi.hoisted(() => ({
-  auth: vi.fn(), operator: vi.fn(), from: vi.fn(), rpc: vi.fn(), dept: vi.fn(), org: vi.fn(), rules: vi.fn(),
+  auth: vi.fn(), operator: vi.fn(), from: vi.fn(), rpc: vi.fn(), dept: vi.fn(), rules: vi.fn(),
 }))
 vi.mock('@/lib/auth', () => ({ requireAuth: mock.auth, AuthError: class extends Error {} }))
-vi.mock('@/lib/shipping/operator-access', () => ({ requireShippingOperator: mock.operator }))
-vi.mock('@/lib/scoped-access', () => ({ getDefaultOrgId: mock.org }))
+vi.mock('@/lib/shipping/operator-access', () => ({ loadShippingOperatorDecision: mock.operator }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mock.from, rpc: mock.rpc } }))
 vi.mock('@/lib/shipping/intake-settings', () => ({ loadIntakeSettings: mock.rules }))
 vi.mock('@/lib/shipping/department-access', async importOriginal => ({
@@ -21,7 +19,7 @@ vi.mock('@/lib/shipping/department-access', async importOriginal => ({
 const number = 'SO-20261118-ABCD1618'
 const path = 'https://app.example/api/shipping/owner/orders/' + number + '/resubmit'
 const ctx = { params: Promise.resolve({ orderNo: number }) }
-const actor = { id: 'user-A', phone: '13700000000', display_name: '真实员工' }
+const actor = { id: 'user-A', org_id: 'org-A', phone: '13700000000', display_name: '真实员工' }
 const departmentId = '19377c6b-5ffb-458b-913f-76aeaf54d47b'
 const contact = { name: '公司前台', phone: '13800000000', province: '广东省', city: '深圳市', county: '南山区', address: '示例路18号' }
 const form = { sender: contact, recipient: contact, cargo: '文件', customerName: '客户公司', serviceId: 8,
@@ -41,8 +39,7 @@ beforeEach(() => {
   }
   vi.resetAllMocks()
   mock.auth.mockResolvedValue(actor)
-  mock.operator.mockRejectedValue(new ShippingError(403, '仅操作员'))
-  mock.org.mockResolvedValue('org-A')
+  mock.operator.mockResolvedValue({ orgId: 'org-A', canOperate: false })
   mock.dept.mockResolvedValue([{ id: departmentId, name: '销售部', path: '总部 / 销售部' }])
   mock.rules.mockResolvedValue({ companyName: { enabled: true, required: true, minLength: 2 }, team: { enabled: true, required: true, minLength: 1 } })
   mock.from.mockImplementation((table: string) => {

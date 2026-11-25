@@ -584,12 +584,62 @@ describe('self-service shipping workbench', () => {
     expect(await screen.findByText('已揽收')).toBeTruthy()
   })
 
-  it('keeps configuration controls out of the business workbench', async () => {
+  it('links managers to standalone settings without embedding configuration controls', async () => {
     render(<ShippingWorkbench settings={{ ...settings, canManageConnections: true }}/>)
     expect(await screen.findByText('暂无收寄记录')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '寄件设置' }).getAttribute('href')).toBe('/shipping/settings')
     expect(screen.queryByRole('button', { name: '寄件配置' })).toBeNull()
     expect(screen.queryByRole('dialog', { name: '寄件配置' })).toBeNull()
     expect(screen.getByRole('region', { name: '批量寄件操作台' })).toBeTruthy()
+  })
+
+  it('keeps an operator out of the settings entry until a fresh manager grant arrives', async () => {
+    fetcher.mockImplementation(async (url: string) => url === '/api/shipping/settings?workspace=1'
+      ? Response.json({ settings: { ...settings, canOperate: true, canManageConnections: true } })
+      : Response.json({ records: [] }))
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findByText('暂无收寄记录')
+    expect(screen.queryByRole('link', { name: '寄件设置' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '刷新寄件配置' }))
+    expect((await screen.findByRole('link', { name: '寄件设置' })).getAttribute('href')).toBe('/shipping/settings')
+  })
+
+  it('hides only the settings entry when the operator retains workbench access', async () => {
+    fetcher.mockImplementation(async (url: string) => url === '/api/shipping/settings?workspace=1'
+      ? Response.json({ settings: { ...settings, canOperate: true, canManageConnections: false } })
+      : Response.json({ records: [] }))
+    render(<ShippingWorkbench settings={{ ...settings, canManageConnections: true }}/>)
+    await screen.findByText('暂无收寄记录')
+    expect(screen.getByRole('link', { name: '寄件设置' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '刷新寄件配置' }))
+    await waitFor(() => expect(screen.queryByRole('link', { name: '寄件设置' })).toBeNull())
+    expect(screen.getByRole('region', { name: '批量寄件操作台' })).toBeTruthy()
+  })
+
+  it('removes previously loaded settings and shipment details when workspace access is denied', async () => {
+    const order = { ...fixtureOrders[0], status: 'delivered' as const, waybill: 'SF1234567890' }
+    fetcher.mockImplementation(async (url: string) => url === '/api/shipping/settings?workspace=1'
+      ? Response.json({ error: '当前账号没有自助收寄操作权限。' }, { status: 403 })
+      : Response.json({ records: [order] }))
+    render(<ShippingWorkbench settings={{ ...settings, canManageConnections: true }}/>)
+    expect((await screen.findAllByText('华东建筑设计院')).length).toBeGreaterThan(0)
+    expect(screen.getByText(/前台 · 13800000000/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '刷新寄件配置' }))
+    await screen.findByText('当前会话无法继续使用收寄工作台。')
+    expect(screen.queryByText('华东建筑设计院')).toBeNull()
+    expect(screen.queryByText(/前台 · 13800000000/)).toBeNull()
+    expect(screen.queryByRole('link', { name: '寄件设置' })).toBeNull()
+    expect(screen.queryByRole('region', { name: '批量寄件操作台' })).toBeNull()
+    expect(screen.getByRole('link', { name: '重新进入自助收寄' }).getAttribute('href')).toBe('/shipping')
+    expect(fetcher.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true)
+  })
+
+  it('offers re-entry when the ledger read reports that the session has expired', async () => {
+    fetcher.mockImplementation(async () => Response.json({ error: '请先登录。' }, { status: 401 }))
+    render(<ShippingWorkbench settings={settings}/>)
+    await screen.findByText('当前会话无法继续使用收寄工作台。')
+    expect(screen.queryByRole('region', { name: '批量寄件操作台' })).toBeNull()
+    expect(screen.getByRole('link', { name: '重新进入自助收寄' }).getAttribute('href')).toBe('/shipping')
   })
 
   it('shows database-backed orders in the ledger and links their real details', async () => {

@@ -1,3 +1,4 @@
+import { ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
 import type { OrgSummaryUser } from '../types'
 
 export type RoleMutationRestrictionCode =
@@ -30,8 +31,18 @@ const PROTECTED_ROLE_MUTATION_RESTRICTION: RoleMutationRestriction = {
   reason: 'SUPER_ADMIN 是平台根角色，不能通过组织管理界面变更。',
 }
 
+export function isGenericallyAssignableRole(code: string): boolean {
+  return code !== 'SUPER_ADMIN' && code !== ORG_SUPER_ADMIN_ROLE_CODE
+}
+
 export function editableOrgRoleIds(user: OrgSummaryUser): string[] {
-  return [...new Set([...(user.role_ids ?? []), ...(user.pending_org_roles ?? []).map(role => role.id)])]
+  const managedRoleIds = new Set((user.scoped_roles ?? [])
+    .filter(role => role.scopeType === 'org' && !isGenericallyAssignableRole(role.roleCode))
+    .map(role => role.roleId))
+  const pendingRoleIds = (user.pending_org_roles ?? [])
+    .filter(role => isGenericallyAssignableRole(role.code))
+    .map(role => role.id)
+  return [...new Set([...(user.role_ids ?? []).filter(id => !managedRoleIds.has(id)), ...pendingRoleIds])]
 }
 
 export function userHasPendingOrgRole(user: OrgSummaryUser, roleId: string): boolean {

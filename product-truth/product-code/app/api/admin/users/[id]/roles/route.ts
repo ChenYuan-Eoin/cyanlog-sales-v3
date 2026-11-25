@@ -7,8 +7,8 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import {
   canMutateOrgUsers,
-  getDefaultOrgId,
-  getUserScopedRoleAssignments,
+  getFreshDefaultOrgId,
+  getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
 import {
   userHasOrgRoleCode,
@@ -31,8 +31,8 @@ export async function POST(
   try {
     const { id: userId } = await params
     const currentUser = await requireAuth(req)
-    const orgId = await getDefaultOrgId(currentUser.id)
-    const actorAssignments = await getUserScopedRoleAssignments(currentUser.id)
+    const orgId = await getFreshDefaultOrgId(currentUser.id)
+    const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
 
     if (!canMutateOrgUsers(actorAssignments, orgId)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
@@ -103,6 +103,12 @@ export async function POST(
         p_expected_role_ids: [...new Set(expected_role_ids)],
       })
     if (replaceError) {
+      if (replaceError.code === '42501') {
+        return NextResponse.json({
+          error: '受保护的管理角色只能通过专用入口变更。',
+          code: 'PROTECTED_ROLE_MUTATION_FORBIDDEN',
+        }, { status: 403 })
+      }
       if (expected_role_ids !== undefined && replaceError.code === 'PGRST202') {
         return NextResponse.json({
           error: '角色分配服务正在更新，请稍后刷新页面重试。',

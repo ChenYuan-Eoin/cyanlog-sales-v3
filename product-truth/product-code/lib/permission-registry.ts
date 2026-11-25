@@ -1,6 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase'
-import { canEditRolePermissions } from '@/lib/org-role-permissions'
-import { getFreshUserScopedRoleAssignments } from '@/lib/scoped-access'
+import { getPublishedModulePermissionKeys, REGISTERED_MODULE_PERMISSION_KEYS } from '@/lib/module-access'
+import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
 import {
   BUILTIN_PERMISSION_DEFINITIONS,
   buildPermissionCatalog,
@@ -269,6 +269,31 @@ export async function loadPublishedPermissionCatalog(): Promise<{
   }
 }
 
+async function readLiveModulePermissionRows(): Promise<PermissionRow[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('permission_points')
+      .select(PERMISSION_COLUMNS)
+      .in('code', [...REGISTERED_MODULE_PERMISSION_KEYS])
+
+    if (error || !Array.isArray(data)) return []
+    const available = new Set(getPublishedModulePermissionKeys(data))
+    return (data as unknown as PermissionRow[]).filter(row => row && available.has(row.code))
+  } catch {
+    return []
+  }
+}
+
+export async function loadPublishedModulePermissionKeys(): Promise<string[]> {
+  const rows = await readLiveModulePermissionRows()
+  return rows.map(row => row.code).sort()
+}
+
+export async function loadRoleModulePermissionCatalog(): Promise<PermissionCatalogGroup[]> {
+  const rows = await readLiveModulePermissionRows()
+  return buildPermissionCatalog(rows.map(fromRow))
+}
+
 export async function loadPermissionDefinition(id: string): Promise<PermissionDefinition> {
   const { data, error } = await supabaseAdmin.from('permission_points')
     .select(PERMISSION_COLUMNS)
@@ -456,8 +481,8 @@ export async function restorePermissionDefinition(
 export async function canManagePlatformPermissionRegistry(userId: string, orgId: string): Promise<boolean> {
   const configuredOrgId = process.env.PERMISSION_REGISTRY_ADMIN_ORG_ID
   if (!configuredOrgId || configuredOrgId !== orgId) return false
-  const assignments = await getFreshUserScopedRoleAssignments(userId)
-  return canEditRolePermissions(assignments, orgId)
+  const context = await loadOrgRolePermissionContext(userId)
+  return context?.orgId === orgId && context.canEditPlatformRoot
 }
 
 export function permissionRegistryErrorResponse(error: unknown) {

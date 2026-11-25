@@ -41,8 +41,8 @@ afterEach(() => {
 function mockExactOrgAuth(options: {
   token: string
   orgId: string
-  roles: Array<{ roles: { id?: string; code: string; permissions: string[] } }>
-  memberships?: Array<{ org_id: string; employment_status: string }>
+  roles: Array<{ org_id?: string; scope_type?: string; scope_id?: string; roles: { id?: string; code: string; permissions: string[] } }>
+  memberships?: Array<{ org_id: string; employment_status: string; left_at?: string | null }>
   settings?: unknown
   settingsError?: unknown
   status?: string
@@ -51,7 +51,9 @@ function mockExactOrgAuth(options: {
   employmentStatus?: string
   sourceIdentity?: 'authoritative' | 'evidence'
   sourceConnectionState?: string
-  shippingDirectGrant?: boolean
+  shippingOperatorStatus?: string
+  shippingOperatorScopes?: string[]
+  organizationStatus?: string
   sessionCreatedAt?: string
   sessionExpiresAt?: string
 }) {
@@ -71,18 +73,20 @@ function mockExactOrgAuth(options: {
           id: 'user-1',
           status: options.status ?? 'active',
           login_enabled: options.loginEnabled ?? true,
-          memberships: options.memberships ?? [{ org_id: options.orgId, employment_status: options.employmentStatus ?? 'active' }],
+          memberships: (options.memberships ?? [{ org_id: options.orgId, employment_status: options.employmentStatus ?? 'active' }])
+            .map(member => ({ left_at: null, ...member })),
         },
       }])
     }
     if (table === 'user_roles') {
-      return Response.json(options.roles)
+      expect(url.searchParams.get('org_id')).toBe(`eq.${options.orgId}`)
+      return Response.json(options.roles.map(role => ({ org_id: options.orgId, scope_type: 'org', scope_id: options.orgId, ...role })))
     }
     if (table === 'organizations') {
       if (options.settingsError) {
         return new Response('settings unavailable', { status: 503 })
       }
-      return Response.json([{ settings: options.settings ?? {} }])
+      return Response.json([{ status: options.organizationStatus ?? 'active', settings: options.settings ?? {} }])
     }
     if (table === 'organization_sources') {
       return Response.json([{
@@ -90,8 +94,17 @@ function mockExactOrgAuth(options: {
         connection_state: options.sourceConnectionState ?? 'verified', effective_revision: 'revision-1',
       }])
     }
-    if (table === 'permission_points') return Response.json([{ id: 'shipping-point' }])
-    if (table === 'user_permission_assignments') return Response.json(options.shippingDirectGrant ? [{ id: 'shipping-grant' }] : [])
+    if (table === 'permission_points') {
+      const code = url.searchParams.get('code')?.slice(3)
+      if (code !== 'shipping:operate' && code !== 'shipping:manage_connections') return Response.json([])
+      const operator = code === 'shipping:operate'
+      return Response.json([{
+        code, kind: 'atomic', category: 'shipping', resource: 'shipping', dependencies: [],
+        action: operator ? 'operate' : 'manage_connections', status: operator ? options.shippingOperatorStatus ?? 'published' : 'published',
+        supported_scope_types: operator ? options.shippingOperatorScopes ?? ['org'] : ['org'],
+        enforcement_consumer: operator ? 'lib/shipping/operator-access.ts#requireShippingOperator' : 'lib/shipping/connection-authorization.ts',
+      }])
+    }
     return new Response(`unexpected table ${table}`, { status: 500 })
   })
 
@@ -219,12 +232,53 @@ describe('role-free federated session boundary', () => {
     expect((await middleware(request('/configs'))).status).toBe(307)
   })
 
-  it('respects a separate shipping operator grant on the batch API', async () => {
-    mockExactOrgAuth({ token: 'operator-token', orgId: 'org-a', authMethod: 'fxiaoke', shippingDirectGrant: true,
-      roles: [{ roles: { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view', 'contract:view', 'customer:view'] } }] })
-    const req = makeRequest('https://sales.cyanlog.icu/api/shipping/orders', { host: 'sales.cyanlog.icu' }, 'POST')
-    req.cookies.get = vi.fn().mockReturnValue({ value: 'operator-token' })
-    expect((await middleware(req)).status).toBe(200)
+  it('limits the live operator grant to the current organization and to actual shipping actions', async () => {
+    const token = 'operator-token'
+    const baseline = { roles: { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view'] } }
+    const operator = { roles: { id: 'operator', code: 'SHIPPING_OPERATOR', permissions: ['shipping:operate'] } }
+    const bind = (overrides: Partial<Parameters<typeof mockExactOrgAuth>[0]> = {}) => mockExactOrgAuth({
+      token, orgId: 'org-a', authMethod: 'fxiaoke', roles: [baseline, operator], ...overrides,
+    })
+    const request = (path: string, method = 'GET') => middleware(makeRequest(
+      `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
+    ))
+
+    bind()
+    expect((await request('/api/navigation')).status).toBe(200)
+    expect((await request('/api/shipping/settings?workspace=1')).status).toBe(200)
+    expect((await request('/api/shipping/ledger')).status).toBe(200)
+    expect((await request('/api/shipping/ledger/example/confirm', 'POST')).status).toBe(200)
+    expect((await request('/api/shipping/settings')).status).toBe(403)
+    expect((await request('/api/quotes', 'POST')).status).toBe(403)
+    expect((await request('/api/shipping/orders', 'POST')).status).toBe(403)
+
+    for (const state of [
+      { roles: [baseline] },
+      { roles: [baseline, { ...operator, org_id: 'other-org' }] },
+      { roles: [baseline, { ...operator, scope_type: 'department' }] },
+      { shippingOperatorStatus: 'disabled' },
+      { shippingOperatorScopes: ['org', 'department'] },
+    ]) {
+      bind(state)
+      expect((await request('/api/shipping/ledger')).status).toBe(403)
+      expect((await request('/api/shipping/ledger/example/confirm', 'POST')).status).toBe(403)
+      expect((await request('/api/shipping/owner/orders', 'POST')).status).toBe(200)
+    }
+  })
+
+  it('keeps the shipping connection manager separate from ledger operations', async () => {
+    const token = 'connection-manager'
+    mockExactOrgAuth({ token, orgId: 'org-a', roles: [
+      { roles: { id: 'manager-role', code: 'CONNECTION_MANAGER', permissions: ['shipping:manage_connections'] } },
+    ] })
+    const request = (path: string, method = 'GET') => middleware(makeRequest(
+      `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
+    ))
+    expect((await request('/shipping/settings')).status).toBe(200)
+    expect((await request('/api/shipping/settings')).status).toBe(200)
+    expect((await request('/api/shipping/intake-settings', 'POST')).status).toBe(200)
+    expect((await request('/api/shipping/settings?workspace=1')).status).toBe(403)
+    expect((await request('/api/shipping/ledger/example/confirm', 'POST')).status).toBe(403)
   })
 
   it.each([
@@ -425,6 +479,31 @@ describe('middleware public API routing', () => {
 })
 
 describe('middleware exact organization authorization', () => {
+  it('uses finite delegated admin authority only for the exact active organization', async () => {
+    const token = 'delegated-org-admin'
+    const role = { roles: { id: 'org-admin', code: 'ORG_SUPER_ADMIN', permissions: ['*'] } }
+    const request = () => middleware(makeRequest('https://sales.cyanlog.icu/configs', { authorization: `Bearer ${token}` }))
+
+    mockExactOrgAuth({ token, orgId: 'org-a', roles: [role] })
+    const granted = await request()
+    expect(granted.status).toBe(200)
+    const permissions = granted.headers.get('x-middleware-request-x-user-permissions')?.split(',')
+    expect(permissions).toContain('role:manage')
+    expect(permissions).not.toContain('*')
+
+    for (const state of [
+      { roles: [{ ...role, org_id: 'org-b' }] },
+      { roles: [{ ...role, scope_type: 'department' }] },
+      { organizationStatus: 'inactive' },
+      { memberships: [{ org_id: 'org-a', employment_status: 'active', left_at: '2026-11-01' }] },
+    ]) {
+      mockExactOrgAuth({ token, orgId: 'org-a', roles: [role], ...state })
+      const denied = await request()
+      expect(denied.headers.get('location')).toBe('https://sales.cyanlog.icu/pending-access')
+      expect(denied.headers.get('x-middleware-request-x-user-permissions')).toBeNull()
+    }
+  })
+
   it('只把 default org 的权限写入可信下游请求头', async () => {
     const { fetchMock } = mockExactOrgAuth({
       token: 'scope-token-a',

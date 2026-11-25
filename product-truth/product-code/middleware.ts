@@ -33,7 +33,8 @@ import type { NextRequest } from 'next/server'
 import { getRequestAuthToken } from '@/lib/auth-token'
 import { createMiddlewareRestClient } from '@/lib/middleware-rest-client'
 import { canAccessOrgAdmin, hasPermission } from '@/lib/permissions'
-import { resolveRolePermissions } from '@/lib/role-permission-resolution'
+import { ORG_SUPER_ADMIN_ROLE_CODE, resolveRolePermissions, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
+import { getPublishedModulePermissionKeys, MODULE_PERMISSION_ROW_FIELDS, shippingPermissionRequirement } from '@/lib/module-access'
 import { sessionDeadline } from '@/lib/auth/fxiaoke-session'
 
 const PUBLIC_PATHS = ['/login', '/accept-invitation']
@@ -90,6 +91,7 @@ type MiddlewareAuthContext = {
   roleCodes: string[]
   authorizationRoleCodes: string[]
   allPermissions: string[]
+  shippingPermissions: string[]
 }
 
 type FxiaokeSourceRow = {
@@ -126,7 +128,8 @@ function getRequiredPermission(pathname: string): string | null {
 }
 
 const BASELINE_READ_PATHS = new Set([
-  '/api/auth/me', '/api/auth/context', '/api/dashboard',
+  '/api/auth/me', '/api/auth/context', '/api/dashboard', '/api/navigation',
+  '/api/dashboard/department', '/api/dashboard/department/roster',
   '/api/quotes', '/api/contracts', '/api/contracts/drafts',
   '/api/tenders', '/api/knowledge/tree', '/api/knowledge/pages',
   '/api/agenda', '/api/opportunities', '/api/products',
@@ -183,13 +186,13 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
       id: string
       status: string
       login_enabled: boolean | null
-      memberships: Array<{ org_id: string; employment_status: string }>
+      memberships: Array<{ org_id: string; employment_status: string; left_at: string | null }>
     } | null
   }>(
     'auth_tokens',
     { token, 'user.memberships.status': 'active', 'user.memberships.is_default': 'true' },
     'user_id,created_at,expires_at,auth_method,user:users!auth_tokens_user_id_fkey('
-      + 'id,status,login_enabled,memberships:user_organizations!user_organizations_user_id_fkey(org_id,employment_status))',
+      + 'id,status,login_enabled,memberships:user_organizations!user_organizations_user_id_fkey(org_id,employment_status,left_at))',
   )
   const tokenRecord = tokenRows[0]
   if (!tokenRecord || (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date())) return null
@@ -206,13 +209,13 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
   if (!orgId || (usesFxiaoke && membership.employment_status !== 'active')) return null
 
   const [userRolesData, organizationRows, sources] = await Promise.all([
-    rest.selectRows<{ scope_type: string; scope_id: string | null; roles: unknown }>(
+    rest.selectRows<{ org_id: string; scope_type: string; scope_id: string | null; roles: unknown }>(
       'user_roles',
-      { user_id: userId, scope_type: 'org', scope_id: orgId },
-      'scope_type,scope_id,roles:roles(id,code,permissions)',
+      { user_id: userId, org_id: orgId, scope_type: 'org', scope_id: orgId },
+      'org_id,scope_type,scope_id,roles:roles(id,code,permissions)',
       100,
     ),
-    rest.selectRows<{ settings: unknown }>('organizations', { id: orgId }, 'settings'),
+    rest.selectRows<{ status: string; settings: unknown }>('organizations', { id: orgId }, 'status,settings'),
     usesFxiaoke ? rest.selectRows<FxiaokeSourceRow>(
       'organization_sources',
       { system_org_id: orgId, provider: 'fxiaoke', status: 'active' },
@@ -229,10 +232,14 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
   const allPermissions: string[] = []
   const roleCodes: string[] = []
   const authorizationRoleCodes: string[] = []
+  const activeMembership = organization.status === 'active'
+    && membership.employment_status === 'active' && membership.left_at === null
 
   for (const ur of userRolesData ?? []) {
+    if (ur.org_id !== orgId || ur.scope_type !== 'org' || ur.scope_id !== orgId) continue
     const r = roleRecordOf((ur as { roles?: unknown }).roles)
     if (r?.id && r.code) {
+      if (!activeMembership && [ORG_SUPER_ADMIN_ROLE_CODE, SHIPPING_OPERATOR_ROLE_CODE].includes(r.code)) continue
       roleCodes.push(r.code)
       const effective = resolveRolePermissions(organization.settings, r)
       allPermissions.push(...effective.permissions)
@@ -251,6 +258,7 @@ async function loadMiddlewareAuthContext(token: string): Promise<MiddlewareAuthC
     roleCodes,
     authorizationRoleCodes,
     allPermissions,
+    shippingPermissions: activeMembership ? allPermissions : [],
   }
 }
 
@@ -260,14 +268,10 @@ async function getMiddlewareAuthContext(token: string): Promise<MiddlewareAuthCo
   return loadMiddlewareAuthContext(token)
 }
 
-async function hasDirectShippingOperateGrant(userId: string, orgId: string): Promise<boolean> {
+async function isPublishedShippingPermission(permission: string): Promise<boolean> {
   const rest = createMiddlewareRestClient()
-  const points = await rest.selectRows<{ id: string }>('permission_points', { code: 'shipping:operate' }, 'id', 1)
-  if (!points[0]?.id) return false
-  const grants = await rest.selectRows<{ id: string }>('user_permission_assignments', {
-    user_id: userId, org_id: orgId, permission_point_id: points[0].id,
-  }, 'id', 1)
-  return Boolean(grants[0]?.id)
+  const rows = await rest.selectRows<unknown>('permission_points', { code: permission }, MODULE_PERMISSION_ROW_FIELDS, 2)
+  return getPublishedModulePermissionKeys(rows).includes(permission)
 }
 
 export async function middleware(request: NextRequest) {
@@ -330,37 +334,41 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(buildRedirectUrl(request, '/pending-access'))
     }
 
-    // A federated viewer can hold either read-only role, or both after a role
-    // change. Neither combination turns legacy login-only routes into writes.
-    // The one exception creates a pending work order owned by this member;
-    // carrier ordering remains behind the operator permission.
-    const federatedViewer = authContext.authMethod === 'fxiaoke'
-      && authContext.roleCodes.every(code => code === 'FXIAOKE_BASELINE' || code === 'READONLY')
-    if (federatedViewer && required && (required === 'config:read' || required === 'admin:access')) {
+    const shippingPermission = shippingPermissionRequirement(
+      pathname, request.method, request.nextUrl.searchParams.get('workspace') === '1',
+    )
+    if (shippingPermission && (!hasPermission(authContext.shippingPermissions, shippingPermission)
+      || !await isPublishedShippingPermission(shippingPermission))) {
+      return pathname.startsWith('/api/')
+        ? NextResponse.json({ error: 'Forbidden', required: shippingPermission }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } })
+        : NextResponse.redirect(buildRedirectUrl(request, '/', '?denied=shipping'))
+    }
+
+    // An operational shipping role adds only the matching shipping actions.
+    const restrictedMember = (authContext.authMethod === 'fxiaoke' || authContext.roleCodes.includes(SHIPPING_OPERATOR_ROLE_CODE))
+      && authContext.roleCodes.every(code => ['FXIAOKE_BASELINE', 'READONLY', SHIPPING_OPERATOR_ROLE_CODE].includes(code))
+    if (restrictedMember && required && (required === 'config:read' || required === 'admin:access')) {
       return pathname.startsWith('/api/')
         ? NextResponse.json({ error: 'Forbidden', required }, { status: 403 })
         : NextResponse.redirect(buildRedirectUrl(request, '/'))
     }
-    if (federatedViewer && pathname.startsWith('/api/') && ['GET', 'HEAD'].includes(request.method)
-      && !baselineReadAllowed(pathname)) {
+    if (restrictedMember && pathname.startsWith('/api/') && ['GET', 'HEAD'].includes(request.method)
+      && !shippingPermission && !baselineReadAllowed(pathname)) {
       return NextResponse.json({ error: '此数据尚未开放基础查看范围', code: 'READ_SCOPE_REQUIRED' }, { status: 403 })
     }
     const ownerAction = request.method === 'POST' && (returnedOwnerOrderPath.test(pathname)
       || ownerCarrierChanges.test(pathname)
       || /^\/api\/shipping\/owner\/orders\/SO-\d{8}-[A-Z0-9]{8}\/tracking$/.test(pathname)
       || /^\/api\/shipping\/owner\/orders\/SO-\d{8}-[A-Z0-9]{8}\/cancel$/.test(pathname))
-    const separatelyAuthorizedShipping = federatedViewer && pathname.startsWith('/api/shipping/')
-      && pathname !== '/api/shipping/owner/orders' && !ownerAction && !ownerCarrierChanges.test(pathname)
-      && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
-      && await hasDirectShippingOperateGrant(authContext.userId, authContext.orgId)
-    const baselineSelfSubmission = (ownerAction || pathname === '/api/shipping/owner/orders'
+    const baselineSelfSubmission = authContext.authMethod === 'fxiaoke'
+      && (ownerAction || pathname === '/api/shipping/owner/orders'
       || pathname === '/api/shipping/owner/profile')
       && authContext.roleCodes.includes('FXIAOKE_BASELINE')
-    if (federatedViewer
+    if (restrictedMember
       && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
       && pathname !== '/api/auth/logout'
       && !baselineSelfSubmission
-      && !separatelyAuthorizedShipping) {
+      && !shippingPermission) {
       return NextResponse.json({ error: '基础查看账号不能执行此操作', code: 'READ_ONLY' }, { status: 403 })
     }
 

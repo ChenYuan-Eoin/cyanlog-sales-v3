@@ -95,3 +95,19 @@ it('allows only server-verified invitees to edit pre-login roles and keeps prior
   expect(getRoleMutationRestriction({ ...employee, can_preassign_org_roles: undefined }, 'actor')?.code).toBe('MEMBER_NOT_ELIGIBLE')
   expect(getRoleMutationRestriction(employee, employee.id)?.code).toBe('SELF_ROLE_MUTATION_FORBIDDEN')
 })
+
+it('keeps exact organization administrator bindings out of ordinary replacements', () => {
+  const employee = makeUser({
+    role_ids: ['role-sales', 'org-super'],
+    scoped_roles: [{
+      roleId: 'org-super', roleCode: 'ORG_SUPER_ADMIN', roleName: '组织超级管理员',
+      scopeType: 'org', scopeId: 'org-1', scopeName: '组织', grantedAt: null,
+    }],
+    pending_org_roles: [
+      { id: 'pending-admin', code: 'ORG_SUPER_ADMIN', name: '组织超级管理员' },
+      { id: 'pending-sales', code: 'OTHER_SALES', name: '销售支持' },
+    ],
+  })
+  expect(editableOrgRoleIds(employee)).toEqual(['role-sales', 'pending-sales'])
+  expect(getRoleMutationRestriction(employee, 'actor')).toBeNull()
+})

@@ -6,8 +6,8 @@ vi.mock('@/lib/auth', () => ({
 }))
 
 vi.mock('@/lib/scoped-access', () => ({
-  getDefaultOrgId: vi.fn(),
-  getUserScopedRoleAssignments: vi.fn(),
+  getFreshDefaultOrgId: vi.fn(),
+  getFreshUserScopedRoleAssignments: vi.fn(),
   canMutateOrgUsers: vi.fn(),
 }))
 
@@ -26,8 +26,8 @@ vi.mock('@/lib/admin/org-role-authority', () => ({
 import { requireAuth } from '@/lib/auth'
 import {
   canMutateOrgUsers,
-  getDefaultOrgId,
-  getUserScopedRoleAssignments,
+  getFreshDefaultOrgId,
+  getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import {
@@ -81,8 +81,8 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: 'admin-user' })
-    ;(getDefaultOrgId as any).mockResolvedValue('org-1')
-    ;(getUserScopedRoleAssignments as any).mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1' }])
+    ;(getFreshDefaultOrgId as any).mockResolvedValue('org-1')
+    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1' }])
     ;(canMutateOrgUsers as any).mockReturnValue(true)
     ;(userHasOrgRoleCode as any).mockResolvedValue(false)
     ;(validateOrgRoleAssignment as any).mockResolvedValue({ ok: true, roleIds: [roleId] })

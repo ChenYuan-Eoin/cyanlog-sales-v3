@@ -49,6 +49,30 @@ describe('shipping configuration drawer', () => {
     expect(screen.getByRole('link', { name: /前往正式站/ }).getAttribute('href')).toBe('https://sales.cyanlog.icu/configs?tab=shipping')
   })
 
+  it('uses dedicated settings and a reachable home for a standalone manager', async () => {
+    render(<ShippingConfigDrawer embedded standaloneReturn="/" />)
+    await waitForConfiguration()
+    expect(screen.getByRole('link', { name: /前往正式站/ }).getAttribute('href')).toBe('https://sales.cyanlog.icu/shipping/settings')
+    expect(screen.getByRole('link', { name: /返回工作台/ }).getAttribute('href')).toBe('/')
+    fireEvent.click(screen.getByText('审核与下单权限'))
+    expect(screen.getByText(/由组织管理员在“组织与权限”中/)).toBeTruthy()
+    expect(screen.queryByRole('link', { name: '前往组织与权限配置角色' })).toBeNull()
+  })
+
+  it('discards visible configuration and form drafts when the live write gate denies access', async () => {
+    fetcher.mockImplementation(async (_url, init) => init?.method === 'POST'
+      ? Response.json({ error: '需要寄件连接管理权限。' }, { status: 403 })
+      : Response.json({ configuration: { connections: [], sender: null, billingAccounts: [{ id: 'p', environment: 'production', displayName: '原有月结', tail: '5616', status: 'active', isDefault: true }] } }))
+    render(<ShippingConfigDrawer embedded standaloneReturn="/" />)
+    await waitForConfiguration()
+    fireEvent.change(screen.getByLabelText('月结卡号'), { target: { value: '123456789' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存月结账号' }))
+    await screen.findByText('需要寄件连接管理权限。')
+    expect(screen.queryByText('原有月结')).toBeNull()
+    expect(screen.queryByLabelText('月结卡号')).toBeNull()
+    expect(screen.getByRole('link', { name: '返回工作台' }).getAttribute('href')).toBe('/')
+  })
+
   it('keeps the existing account and draft after a missing-key save failure', async () => {
     fetcher.mockImplementation(async (_url, init) => init?.method === 'POST'
       ? Response.json({ error: '寄件凭据加密密钥尚未配置。' }, { status: 503 })
@@ -267,9 +291,9 @@ describe('shipping configuration drawer', () => {
     expect(screen.getByText('生产已启用')).toBeTruthy()
   })
   it('shows a clear permission message instead of an editable blank form to operators', async () => {
-    fetcher.mockResolvedValue(new Response(JSON.stringify({ navigationAvailable: true }), { status: 200 }))
+    fetcher.mockResolvedValue(Response.json({ error: '需要寄件连接管理权限。' }, { status: 403 }))
     render(<ShippingConfigDrawer embedded />)
-    expect(await screen.findByText('当前账号可以办理寄件，但没有寄件配置管理权限。')).toBeTruthy()
+    expect(await screen.findByText('需要寄件连接管理权限。')).toBeTruthy()
     expect(screen.queryByLabelText('PartnerID')).toBeNull()
     expect(screen.getByRole('link', { name: '返回自助收寄工作台' }).getAttribute('href')).toBe('/shipping')
   })

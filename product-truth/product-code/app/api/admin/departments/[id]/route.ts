@@ -11,7 +11,8 @@ import {
   getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
 
-const uuidSchema = z.string().regex(/^[0-9a-f-]{36}$/i, 'ID 格式不正确')
+const uuidSchema = z.guid({ error: 'ID 格式不正确' }).transform(value => value.toLowerCase())
+const DEPARTMENT_FIELDS = 'id, name, code, depth, member_count, parent_id, leader_id, sort_order'
 const updateDepartmentSchema = z.object({
   name: z.string().trim().min(1, '部门名称不能为空').max(80, '部门名称不能超过 80 字').optional(),
   code: z.string().trim().min(1, '部门编码不能为空').max(50, '部门编码不能超过 50 字').optional(),
@@ -73,7 +74,7 @@ export async function PATCH(
     // 检查部门是否存在
     const { data: existing, error: checkError } = await supabaseAdmin
       .from('departments')
-      .select('id, depth, parent_id')
+      .select(DEPARTMENT_FIELDS)
       .eq('id', id)
       .eq('org_id', orgId)
       .single()
@@ -97,11 +98,35 @@ export async function PATCH(
       }
     }
 
-    // 计算新的 depth（如果 parent_id 改变）
-    let depth = existing.depth
-    if (parent_id !== undefined && parent_id !== existing.parent_id) {
+    const updateData: Record<string, unknown> = {}
+    const movingDepartment = parent_id !== undefined && parent_id !== existing.parent_id
+    if (movingDepartment) {
+      // Moving an existing branch changes which records are covered by
+      // confirmed department leaders. Require the same effective authority.
+      const authority = await supabaseAdmin.rpc('admin_get_department_lead_access_v1', {
+        p_actor_id: user.id,
+        p_org_id: orgId,
+        p_department_id: id,
+      })
+      if (authority.error || !authority.data) {
+        switch (authority.error?.code) {
+          case '42501':
+            return NextResponse.json({ error: '仅当前组织的有效超管可调整部门上级', code: 'NO_PERMISSION' }, { status: 403 })
+          case 'P0002':
+            return NextResponse.json({ error: '启用的部门不存在', code: 'DEPARTMENT_NOT_FOUND' }, { status: 404 })
+          case 'PGRST202':
+          case '42883':
+            return NextResponse.json({ error: '部门授权服务正在更新，请稍后重试', code: 'DEPARTMENT_LEAD_ACCESS_UNAVAILABLE' }, { status: 503 })
+          default:
+            return NextResponse.json({ error: '暂时无法核实部门改隶权限', code: 'DEPARTMENT_MOVE_AUTH_FAILED' }, { status: 500 })
+        }
+      }
+      if (parent_id === id.toLowerCase()) {
+        return NextResponse.json({ error: '不能将部门设置为自己的下级' }, { status: 400 })
+      }
+      updateData.parent_id = parent_id
       if (parent_id === null) {
-        depth = 0
+        updateData.depth = 0
       } else {
         // 检查新上级是否存在且不是当前部门或其子部门
         const { data: parent, error: parentError } = await supabaseAdmin
@@ -109,6 +134,7 @@ export async function PATCH(
           .select('depth, path')
           .eq('id', parent_id)
           .eq('org_id', orgId)
+          .eq('status', 'active')
           .single()
 
         if (parentError || !parent) {
@@ -116,11 +142,11 @@ export async function PATCH(
         }
 
         // 防止循环引用
-        if (parent.path?.includes(id)) {
+        if (parent.path?.includes(`/${id.toLowerCase()}/`)) {
           return NextResponse.json({ error: '不能将部门设置为其子部门的下级' }, { status: 400 })
         }
 
-        depth = (parent.depth || 0) + 1
+        updateData.depth = (parent.depth || 0) + 1
       }
     }
 
@@ -132,25 +158,34 @@ export async function PATCH(
     }
 
     // 更新数据
-    const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name
     if (code !== undefined) updateData.code = code
-    if (parent_id !== undefined) updateData.parent_id = parent_id
     if (leader_id !== undefined) updateData.leader_id = leader_id
-    if (depth !== undefined) updateData.depth = depth
     if (sort_order !== undefined) updateData.sort_order = sort_order
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ success: true, data: existing, message: '部门信息未变更' })
+    }
 
-    const { data, error } = await supabaseAdmin
+    let mutation = supabaseAdmin
       .from('departments')
       .update(updateData)
       .eq('id', id)
       .eq('org_id', orgId)
-      .select('id, name, code, depth, member_count, parent_id, leader_id, sort_order')
-      .single()
+    if (movingDepartment) {
+      mutation = mutation.eq('status', 'active')
+      mutation = existing.parent_id === null
+        ? mutation.is('parent_id', null)
+        : mutation.eq('parent_id', existing.parent_id)
+    }
+    const selection = mutation.select(DEPARTMENT_FIELDS)
+    const { data, error } = movingDepartment ? await selection.maybeSingle() : await selection.single()
 
     if (error) {
       console.error('Update department error:', error)
       return NextResponse.json({ error: '更新部门失败' }, { status: 500 })
+    }
+    if (movingDepartment && !data) {
+      return NextResponse.json({ error: '部门上级或状态已变更，请刷新后重试', code: 'DEPARTMENT_MOVE_CHANGED' }, { status: 409 })
     }
 
     return NextResponse.json({

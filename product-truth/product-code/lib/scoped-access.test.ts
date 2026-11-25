@@ -32,7 +32,7 @@ import { loadOrgRolePermissionSettings } from '@/lib/org-role-permissions'
 
 function makeDefaultOrgQuery(result: unknown | Promise<unknown>) {
   const query: any = {}
-  ;['select', 'eq'].forEach((method) => {
+  ;['select', 'eq', 'is'].forEach((method) => {
     query[method] = vi.fn().mockReturnValue(query)
   })
   query.maybeSingle = vi.fn().mockReturnValue(Promise.resolve(result))
@@ -297,6 +297,30 @@ describe('organization role permission overrides', () => {
     expect(canMutateOrgDepartments(overridden, 'org-a')).toBe(false)
     expect(canAccessContractAction(overridden, 'org-a', 'view')).toBe(false)
     expect(canAccessContractAction(overridden, 'org-a', 'review')).toBe(false)
+  })
+
+  it('validates the organization administrator binding and rereads it after revocation on ordinary read paths', async () => {
+    const orgId = 'org-with-delegation'
+    const role = { id: 'org-management', code: 'ORG_SUPER_ADMIN', name: '组织超级管理员', permissions: ['*'] }
+    const exact = { org_id: orgId, scope_type: 'org', scope_id: orgId, granted_at: null, role }
+    const foreign = { ...exact, org_id: 'other' }
+    const department = { ...exact, scope_type: 'department' }
+    const member = makeDefaultOrgQuery({ data: { org_id: orgId }, error: null })
+    let granted = true
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => table === 'user_organizations' ? member
+      : makeCollectionQuery({ data: [...(granted ? [exact] : []), foreign, department], error: null }))
+
+    const before = await getUserScopedRoleAssignments('org-delegated-user')
+    expect(before).toHaveLength(1)
+    expect(canManageOrg(before, orgId)).toBe(true)
+    expect(canReviewContracts(before, orgId)).toBe(false)
+    expect(getOrgAuthorizationRoleCodes(before, orgId)).toEqual([])
+    expect(getOrgPermissions(before, orgId)).not.toContain('*')
+    expect(member.eq).toHaveBeenCalledWith('organization.status', 'active')
+    expect(member.is).toHaveBeenCalledWith('left_at', null)
+
+    granted = false
+    expect(await getUserScopedRoleAssignments('org-delegated-user')).toEqual([])
   })
 
   it('角色模板被缓存时仍每次读取当前组织覆盖，并保留组织隔离', async () => {

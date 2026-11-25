@@ -6,12 +6,14 @@ export const preferredRegion = 'sin1'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { buildDepartmentSpaces } from '@/lib/department-spaces'
+import { readDirectoryRosterSource, verifyDirectoryRoster } from '@/lib/organization-directory-roster'
 import { canAccessOrgAdmin } from '@/lib/permissions'
 import {
   canManageOrg,
   getDefaultOrgId,
   getOrgRoleCodes,
-  getUserScopedRoleAssignments,
+  getFreshUserScopedRoleAssignments,
   type ScopeType,
 } from '@/lib/scoped-access'
 
@@ -54,9 +56,9 @@ type OrgContext = {
 type OrgAdminPayload = {
   organization: unknown
   users: unknown[]
-  departments: unknown[]
+  departments: Parameters<typeof buildDepartmentSpaces>[0]
   roles: unknown[]
-  spaces: unknown[]
+  spaces: Parameters<typeof buildDepartmentSpaces>[1]
 }
 
 type TimingEntry = {
@@ -100,13 +102,18 @@ function isOrgAdminPayload(value: unknown): value is OrgAdminPayload {
   )
 }
 
-async function listOrgPayloadFromRpc(orgId: string): Promise<OrgAdminPayload> {
+type OrgPayloadSource = 'directory-v2' | 'directory-v1' | 'legacy-rpc' | 'fallback'
+
+async function listOrgPayloadFromRpc(orgId: string): Promise<{ data: OrgAdminPayload; source: OrgPayloadSource }> {
+  let source: OrgPayloadSource = 'directory-v2'
   let result = await supabaseAdmin.rpc('get_org_admin_directory_payload_v2', { p_org_id: orgId })
   if (result.error && ['PGRST202', '42883'].includes(result.error.code || '')) {
+    source = 'directory-v1'
     result = await supabaseAdmin.rpc('get_org_admin_directory_payload_v1', { p_org_id: orgId })
   }
   let { data, error } = result
   if (error && ['PGRST202', '42883'].includes(error.code || '')) {
+    source = 'legacy-rpc'
     const legacy = await supabaseAdmin.rpc('get_org_admin_payload_v1', { p_org_id: orgId })
     data = legacy.data
     error = legacy.error
@@ -118,7 +125,45 @@ async function listOrgPayloadFromRpc(orgId: string): Promise<OrgAdminPayload> {
     throw new Error('ORG_PAYLOAD_RPC_FAILED')
   }
 
-  return data
+  return { data, source }
+}
+
+async function readRoleMembershipBasis(orgId: string, source: OrgPayloadSource, organization: unknown) {
+  const unavailable = {
+    effectiveAvailable: false, pendingAvailable: false, activeSpaceIds: [], activeMemberIds: [],
+    orgSuperAdminAssignableMemberIds: [],
+  }
+  if (!organization || typeof organization !== 'object' || !('id' in organization) || organization.id !== orgId) {
+    return unavailable
+  }
+  const pendingAvailable = source === 'directory-v2'
+  if (!pendingAvailable && source !== 'directory-v1') return unavailable
+
+  try {
+    const [organizationState, spaces, members] = await Promise.all([
+      supabaseAdmin.from('organizations').select('id,status').eq('id', orgId).maybeSingle(),
+      supabaseAdmin.from('sales_spaces').select('id', { count: 'exact' })
+        .eq('org_id', orgId).eq('status', 'active'),
+      supabaseAdmin.from('user_organizations')
+        .select('user_id,is_default,user:users!user_organizations_user_id_fkey!inner(status,login_enabled)', { count: 'exact' })
+        .eq('org_id', orgId).eq('status', 'active').eq('employment_status', 'active').is('left_at', null)
+        .eq('user.status', 'active').eq('user.login_enabled', true),
+    ])
+    if (organizationState.error || organizationState.data?.id !== orgId || organizationState.data.status !== 'active') {
+      return unavailable
+    }
+    if (spaces.error || !Array.isArray(spaces.data) || spaces.count !== spaces.data.length
+      || members.error || !Array.isArray(members.data) || members.count !== members.data.length) return { ...unavailable, pendingAvailable }
+    return {
+      effectiveAvailable: true,
+      pendingAvailable,
+      activeSpaceIds: spaces.data.map(space => space.id),
+      activeMemberIds: members.data.map(member => member.user_id),
+      orgSuperAdminAssignableMemberIds: members.data.filter(member => member.is_default === true).map(member => member.user_id),
+    }
+  } catch {
+    return { ...unavailable, pendingAvailable }
+  }
 }
 
 async function getOrgDepartments(orgId: string): Promise<OrgDepartmentRow[]> {
@@ -209,6 +254,7 @@ async function getOrgUserRoles(orgId: string, orgUserIds?: string[]) {
   const { data, error } = await supabaseAdmin
     .from('user_roles')
     .select('user_id, scope_type, scope_id, granted_at, role_id, role:roles(id, name, code)')
+    .eq('org_id', orgId)
     .in('user_id', ids)
 
   if (error) {
@@ -250,7 +296,7 @@ async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
 
   const user = await requireAuth(req)
   const [assignments, orgId] = await Promise.all([
-    getUserScopedRoleAssignments(user.id),
+    getFreshUserScopedRoleAssignments(user.id),
     getDefaultOrgId(user.id),
   ])
   const roleCodes = getOrgRoleCodes(assignments, orgId)
@@ -437,7 +483,7 @@ async function listOrgPayload(orgId: string) {
 export async function GET(req: NextRequest) {
   const totalStartedAt = performance.now()
   const timings: TimingEntry[] = []
-  let payloadSource = 'rpc'
+  let payloadSource: OrgPayloadSource = 'fallback'
 
   try {
     const auth = await withTiming(timings, 'auth', () => requireOrgAdmin(req))
@@ -445,20 +491,33 @@ export async function GET(req: NextRequest) {
       return errorResponse('无权限访问组织管理', 403, 'FORBIDDEN')
     }
 
+    const directorySource = await readDirectoryRosterSource(auth.orgId)
     let data: OrgAdminPayload
     try {
-      data = await withTiming(timings, 'rpc_payload', () => listOrgPayloadFromRpc(auth.orgId))
+      const result = await withTiming(timings, 'rpc_payload', () => listOrgPayloadFromRpc(auth.orgId))
+      data = result.data
+      payloadSource = result.source
     } catch (rpcError) {
       if (rpcError instanceof Error && rpcError.message === 'ORG_DIRECTORY_READ_FAILED') throw rpcError
       console.error('[admin/org] RPC payload failed; falling back to query fan-out:', rpcError)
-      payloadSource = 'fallback'
       data = await withTiming(timings, 'fallback_payload', () => listOrgPayload(auth.orgId))
     }
 
-    return NextResponse.json(data, {
+    const [directoryRoster, roleMembershipBasis] = await Promise.all([
+      verifyDirectoryRoster(auth.orgId, directorySource, data),
+      readRoleMembershipBasis(auth.orgId, payloadSource, data.organization),
+    ])
+    return NextResponse.json({
+      ...data,
+      department_spaces: buildDepartmentSpaces(data.departments, data.spaces),
+      directory_roster: directoryRoster.status === 'ready'
+        ? { ...directoryRoster, members: directoryRoster.members.map(({ id, departmentIds }) => ({ id, departmentIds })) }
+        : directoryRoster,
+      role_membership_stats: roleMembershipBasis,
+    }, {
       headers: {
         'Cache-Control': 'no-store',
-        'X-Org-Payload-Source': payloadSource,
+        'X-Org-Payload-Source': payloadSource === 'fallback' ? 'fallback' : 'rpc',
         'X-Org-Timing': formatTimingHeader(timings, totalStartedAt),
       },
     })

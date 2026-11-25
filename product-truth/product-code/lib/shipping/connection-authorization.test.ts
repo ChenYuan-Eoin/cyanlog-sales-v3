@@ -1,18 +1,40 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-vi.mock('@/lib/scoped-access', () => ({getDefaultOrgId:vi.fn(async()=> 'org-a'),
- getUserScopedRoleAssignments:vi.fn(async()=>[]),getOrgAuthorizationRoleCodes:vi.fn(()=>[]),getOrgPermissions:vi.fn(()=>[])}))
-import { getOrgPermissions, getOrgAuthorizationRoleCodes } from '@/lib/scoped-access'
+import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
+import { loadPublishedModulePermissionKeys } from '@/lib/permission-registry'
 import { requireShippingConnectionManager } from './connection-authorization'
 
-describe('shipping connection effective authority',()=>{
- beforeEach(()=>{vi.clearAllMocks();vi.mocked(getOrgPermissions).mockReturnValue([]);vi.mocked(getOrgAuthorizationRoleCodes).mockReturnValue([])})
- it('覆盖后的管理员必须拥有连接管理权限',async()=>{
-   await expect(requireShippingConnectionManager('root')).rejects.toThrow('需要寄件连接管理权限')
-   vi.mocked(getOrgPermissions).mockReturnValue(['shipping:manage_connections'])
-   await expect(requireShippingConnectionManager('root')).resolves.toBe('org-a')
- })
- it('未覆盖的系统管理员保留既有兼容授权',async()=>{
-   vi.mocked(getOrgAuthorizationRoleCodes).mockReturnValue(['ADMIN'])
-   await expect(requireShippingConnectionManager('admin')).resolves.toBe('org-a')
- })
+vi.mock('@/lib/org-role-permissions', () => ({ loadOrgRolePermissionContext: vi.fn() }))
+vi.mock('@/lib/permission-registry', () => ({ loadPublishedModulePermissionKeys: vi.fn() }))
+
+const context = { orgId: 'org-a', settings: {}, canRead: false, canEdit: false, canEditPlatformRoot: false }
+
+describe('shipping connection effective authority', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    vi.mocked(loadPublishedModulePermissionKeys).mockResolvedValue(['shipping:operate', 'shipping:manage_connections'])
+    vi.mocked(loadOrgRolePermissionContext).mockResolvedValue({ ...context, actorPermissions: [] })
+  })
+
+  it('requires the current effective connection permission and keeps operator access distinct', async () => {
+    await expect(requireShippingConnectionManager('manager')).rejects.toMatchObject({ status: 403 })
+    vi.mocked(loadOrgRolePermissionContext).mockResolvedValue({ ...context, actorPermissions: ['shipping:operate'] })
+    await expect(requireShippingConnectionManager('operator')).rejects.toMatchObject({ status: 403 })
+    vi.mocked(loadOrgRolePermissionContext).mockResolvedValue({ ...context, actorPermissions: ['shipping:manage_connections'] })
+    await expect(requireShippingConnectionManager('manager')).resolves.toBe('org-a')
+  })
+
+  it('allows a platform grant only with an exact active current org and a published definition', async () => {
+    vi.mocked(loadOrgRolePermissionContext).mockResolvedValue({ ...context, actorPermissions: ['*'] })
+    await expect(requireShippingConnectionManager('root')).resolves.toBe('org-a')
+    vi.mocked(loadPublishedModulePermissionKeys).mockResolvedValueOnce(['shipping:operate'])
+    await expect(requireShippingConnectionManager('root')).rejects.toMatchObject({ status: 403 })
+    vi.mocked(loadOrgRolePermissionContext).mockResolvedValueOnce(null)
+    await expect(requireShippingConnectionManager('root')).rejects.toMatchObject({ status: 403 })
+  })
+
+  it('returns unavailable for an unreadable authorization context', async () => {
+    vi.mocked(loadOrgRolePermissionContext).mockRejectedValueOnce(new Error('database unavailable'))
+    await expect(requireShippingConnectionManager('manager')).rejects.toMatchObject({ status: 503 })
+  })
 })

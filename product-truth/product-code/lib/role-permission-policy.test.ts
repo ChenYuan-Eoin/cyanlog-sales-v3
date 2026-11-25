@@ -48,7 +48,9 @@ describe('organization role permission policy', () => {
     expect(resolveRolePermissions({ role_permission_overrides: { admin: ['quote:view'] } }, admin))
       .toEqual({ permissions: ['quote:view'], overridden: true })
     expect(resolveRolePermissions({}, { ...role, permissions: [] }).permissions).toEqual(['*'])
-    expect(resolveRolePermissions({}, { id: 'legal', code: 'LEGAL', permissions: [] }).permissions).toEqual(['contract:review'])
+    expect(resolveRolePermissions({}, { id: 'legal', code: 'LEGAL', permissions: [] }).permissions).toEqual([
+      'contract:review',
+    ])
   })
   it('removes a leaf from global or resource wildcards without removing other reports', () => {
     for (const original of [['*'], ['report:*', 'future:read']]) {
@@ -148,4 +150,15 @@ describe('organization role permission policy', () => {
     expect(selected).toEqual(['config:publish', 'config:read', 'config:write'])
     expect(selected.every((key) => isRolePermissionExplicitlyGranted(selected, key))).toBe(true)
   })
+})
+
+
+it('only expands published shipping actions while preserving the original catalog when clearing a wildcard', () => {
+  const allowed = new Set(['shipping:operate'])
+  const next = revokeRolePermissions(['*'], ['report:finance'], [], allowed)
+  expect(next).toContain('shipping:operate')
+  expect(next).not.toContain('shipping:manage_connections')
+  expect(next).not.toContain('tender:view')
+  expect(next).not.toContain('knowledge:view')
+  expect(next).toContain('quote:create')
 })

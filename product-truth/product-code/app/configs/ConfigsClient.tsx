@@ -17,7 +17,6 @@ import {
 import { isAIRuntimeOverview } from './types'
 import type { AIRuntimeOverview, Config, ConfigPublishFeedback, ConfigsInitialData, EditableConfig, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup } from './types'
 import { deleteBrowserCache, readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
-import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
 import { getAIConfigKind } from '@/lib/configs/ai-config-kind'
 import type { AIPlatformAssetKind } from '@/lib/configs/types'
@@ -26,6 +25,14 @@ import { isMaskedApiKey } from '@/lib/configs/runtime'
 import { isResolvedRuleContractComplete } from '@/lib/rules/rule-contract'
 import TabsContent from './tabs/TabsContent'
 import { confirmAction } from '@/lib/toast'
+import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
+import {
+  loadOrgRolePermissionSnapshot,
+  RolePermissionRequestError,
+  saveAndReadOrgRolePermissions,
+  type ConfigRoleRecord,
+  type OrgRolePermissionSnapshot,
+} from '@/lib/org-role-permission-readback'
 
 const ProductDialog = dynamic(() => import('./dialogs/ProductDialog'), {
   loading: () => null,
@@ -334,37 +341,13 @@ function loadInflightTabValue<T>(cacheKey: string, loader: () => Promise<T | nul
   return request
 }
 
-function orgAccessCacheKeys(token: string | null) {
-  return {
-    org: scopedCacheKey(token, 'configs:org-structure'),
-    roles: scopedCacheKey(token, 'configs:role-access'),
-  }
-}
-
 function clearOrgAccessBrowserCache(token: string | null) {
-  const cacheKeys = orgAccessCacheKeys(token)
-  deleteBrowserCache(cacheKeys.org)
-  deleteBrowserCache(cacheKeys.roles)
-  return cacheKeys
+  deleteBrowserCache(scopedCacheKey(token, 'configs:org-structure'))
+  deleteBrowserCache(scopedCacheKey(token, 'configs:role-access'))
 }
 
 function aiRuntimeCacheKey(token: string | null) {
   return scopedCacheKey(token, 'configs:ai-runtime:v1')
-}
-
-type ConfigRoleRecord = {
-  id: string
-  code: string
-  name: string
-  description: string | null
-  permissions: string[] | null
-  sort_order: number | null
-}
-
-type RoleAccessPayload = {
-  roles?: ConfigRoleRecord[]
-  permissions_editable?: boolean
-  permissions_edit_block_reason?: string | null
 }
 
 type ConfigsRouteState = {
@@ -425,9 +408,22 @@ async function readResponseErrorMessage(response: Response, fallback: string): P
 async function fetchJsonOrThrow<T>(input: RequestInfo | URL, init: RequestInit | undefined, fallback: string): Promise<T> {
   const response = await fetch(input, init)
   if (!response.ok) {
-    throw new Error(await readResponseErrorMessage(response, fallback))
+    throw new ConfigsRequestError(await readResponseErrorMessage(response, fallback), response.status)
   }
   return response.json() as Promise<T>
+}
+
+class ConfigsRequestError extends Error {
+  constructor(message: string, readonly status: number) { super(message) }
+}
+
+function accessDenied(error: unknown): boolean {
+  return (error instanceof ConfigsRequestError || error instanceof RolePermissionRequestError)
+    && (error.status === 401 || error.status === 403)
+}
+
+function requestMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
 }
 
 function unwrapListResponse<T>(payload: unknown): T[] {
@@ -451,15 +447,13 @@ function mergeConfigsByType(current: Config[], type: Config['type'], nextConfigs
   ]
 }
 
-export default function ConfigsClient({
-  initialData,
-  orgId: _orgId,
-  routeState,
-}: {
+type ConfigsClientProps = {
   initialData?: ConfigsInitialData
   orgId?: string
   routeState?: ConfigsRouteState
-}) {
+}
+
+export default function ConfigsClient({ initialData, routeState }: ConfigsClientProps) {
   const [initialSearch] = useState(() => normalizeInitialRouteState(routeState))
   // 优先使用服务端预取的数据，避免客户端重复请求
   const [rules, setRules] = useState<ContractPolicyRule[]>(initialData?.rules || [])
@@ -499,15 +493,50 @@ export default function ConfigsClient({
   // 角色权限（Tab: roles）
   const [roles, setRoles] = useState<ConfigRoleRecord[]>((initialData?.roles as ConfigRoleRecord[] | undefined) || [])
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null)
+  const roleSaveRef = useRef(false)
+  const roleRequestEpochRef = useRef(0)
+  const orgRequestEpochRef = useRef(0)
   const [orgSummary, setOrgSummary] = useState<OrgSummaryPayload | null>(null)
-  const [permissionsEditable, setPermissionsEditable] = useState(false)
-  const [permissionsEditBlockReason, setPermissionsEditBlockReason] = useState<string | null>('正在确认当前组织的角色管理权限。')
+  const [roleAuthority, setRoleAuthority] = useState<Omit<OrgRolePermissionSnapshot, 'roles'> | null>(null)
+  const [roleLoadError, setRoleLoadError] = useState<string | null>(null)
+  const permissionsEditable = roleAuthority?.permissionsEditable === true
+  const permissionsEditBlockReason = roleLoadError ?? (roleAuthority
+    ? roleAuthority.permissionsEditBlockReason
+    : '正在确认当前组织的角色管理权限。')
   const [hasInitialData] = useState(() => Boolean(initialData))
   const [loadedTabs, setLoadedTabs] = useState<Set<ConfigTabId>>(new Set(hasInitialData ? ['price-list'] : []))
   const loadedTabsRef = useRef(loadedTabs)
   const loadingTabRef = useRef<ConfigTabId | null>(null) // 防重复请求锁
   // 保持 ref 与 state 同步
   useEffect(() => { loadedTabsRef.current = loadedTabs }, [loadedTabs])
+
+  const applyRoleSnapshot = useCallback((snapshot: OrgRolePermissionSnapshot) => {
+    const { roles: nextRoles, ...authority } = snapshot
+    setRoles(nextRoles)
+    setRoleAuthority(authority)
+    setRoleLoadError(null)
+    setOrgSummary(current => current && current.organization?.id !== snapshot.orgId ? null : current)
+  }, [])
+
+  const handleOrgReadFailure = useCallback(() => {
+    setOrgSummary(null)
+  }, [])
+
+  const handleRoleReadFailure = useCallback((reason: unknown) => {
+    setRoleAuthority(null)
+    setRoleLoadError(requestMessage(reason, '角色权限加载失败，请刷新后重试。'))
+    setRoles([])
+  }, [])
+
+  const readOrgSummary = useCallback(async (headers: HeadersInit) => {
+    const summary = await fetchJsonOrThrow<OrgSummaryPayload>(
+      '/api/admin/org', { headers, cache: 'no-store' }, '组织架构加载失败',
+    )
+    if (!summary.organization?.id) throw new ConfigsRequestError('无法确认当前组织，请重新载入配置中心。', 409)
+    return summary
+  }, [])
+
+  const readRoleSnapshot = useCallback(loadOrgRolePermissionSnapshot, [])
 
   // 按需加载指定 tab 的数据
   const loadTabData = useCallback(async (
@@ -527,7 +556,9 @@ export default function ConfigsClient({
       const token = localStorage.getItem('token')
       const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
       const cacheKey = scopedCacheKey(token, `configs:${tab}`)
-      const cachedEntry = options?.force ? null : readBrowserCacheEntry<unknown>(cacheKey)
+      const usesOrgAccess = tab === 'role-access' || tab === 'org-structure'
+      if (usesOrgAccess) clearOrgAccessBrowserCache(token)
+      const cachedEntry = options?.force || usesOrgAccess ? null : readBrowserCacheEntry<unknown>(cacheKey)
       const cacheAgeMs = cachedEntry ? Date.now() - cachedEntry.savedAt : Number.POSITIVE_INFINITY
       const cached = cacheAgeMs <= TAB_CACHE_TTL_MS ? cachedEntry?.value : null
       const runtimeCacheKey = aiRuntimeCacheKey(token)
@@ -569,12 +600,6 @@ export default function ConfigsClient({
             }
             break
           }
-          case 'role-access':
-            setRoles(cached as ConfigRoleRecord[])
-            break
-          case 'org-structure':
-            setOrgSummary(cached as OrgSummaryPayload)
-            break
         }
         setLoadedTabs(prev => new Set(prev).add(tab))
         if (!options?.background) {
@@ -718,39 +743,29 @@ export default function ConfigsClient({
         }
 
         case 'role-access': {
-          const orgCacheKey = scopedCacheKey(token, 'configs:org-structure')
-          setPermissionsEditable(false)
-          const [rolePayload, nextOrgSummary] = await Promise.all([
-            loadInflightTabValue<RoleAccessPayload>(cacheKey, async () => {
-              const rolesJson = await fetchJsonOrThrow<{ data?: RoleAccessPayload }>(
-                '/api/roles',
-                { headers, cache: 'no-store' },
-                '角色权限加载失败'
-              )
-              return rolesJson.data ?? {}
-            }),
-            loadInflightTabValue<OrgSummaryPayload>(orgCacheKey, async () => {
-              return fetchJsonOrThrow<OrgSummaryPayload>(
-                '/api/admin/org',
-                { headers, cache: 'no-store' },
-                '组织架构加载失败'
-              )
-            }),
-          ])
-          if (rolePayload) {
-            const nextRoles = rolePayload.roles ?? []
-            setRoles(nextRoles)
-            setPermissionsEditable(rolePayload.permissions_editable === true)
-            setPermissionsEditBlockReason(rolePayload.permissions_edit_block_reason ?? null)
-            writeBrowserCache(cacheKey, nextRoles)
-            didLoad = true
+          const roleEpoch = ++roleRequestEpochRef.current
+          const orgEpoch = ++orgRequestEpochRef.current
+          setRoleAuthority(null)
+          setRoleLoadError(null)
+          setRoles([])
+          setOrgSummary(null)
+          const [roleResult, orgResult] = await Promise.allSettled([readRoleSnapshot(headers), readOrgSummary(headers)])
+          if (roleEpoch !== roleRequestEpochRef.current || orgEpoch !== orgRequestEpochRef.current) break
+          if (roleResult.status === 'fulfilled' && orgResult.status === 'fulfilled'
+              && roleResult.value.orgId !== orgResult.value.organization?.id) {
+            throw new ConfigsRequestError('当前组织已切换，请刷新后重试。', 409)
           }
-          if (nextOrgSummary) {
-            setOrgSummary(nextOrgSummary)
-            writeBrowserCache(orgCacheKey, nextOrgSummary)
+          if (roleResult.status === 'fulfilled') {
+            applyRoleSnapshot(roleResult.value)
+            didLoad = true
+          } else {
+            handleRoleReadFailure(roleResult.reason)
+            setError(requestMessage(roleResult.reason, '角色权限加载失败'))
+          }
+          if (orgResult.status === 'fulfilled') {
+            setOrgSummary(orgResult.value)
             setLoadedTabs(prev => new Set(prev).add('org-structure'))
-            didLoad = true
-          }
+          } else if (didLoad) setError(requestMessage(orgResult.reason, '组织架构加载失败'))
           break
         }
 
@@ -760,18 +775,18 @@ export default function ConfigsClient({
         }
 
         case 'org-structure': {
-          // 只加载 org
-          const orgData = await loadInflightTabValue<OrgSummaryPayload>(cacheKey, async () => {
-            return fetchJsonOrThrow<OrgSummaryPayload>(
-              '/api/admin/org',
-              { headers, cache: 'no-store' },
-              '组织架构加载失败'
-            )
-          })
-          if (orgData) {
-            setOrgSummary(orgData)
-            writeBrowserCache(cacheKey, orgData)
+          const orgEpoch = ++orgRequestEpochRef.current
+          setOrgSummary(null)
+          try {
+            const summary = await readOrgSummary(headers)
+            if (orgEpoch !== orgRequestEpochRef.current) break
+            setOrgSummary(summary)
+            setRoleAuthority(current => current?.orgId === summary.organization?.id ? current : null)
             didLoad = true
+          } catch (error) {
+            if (orgEpoch !== orgRequestEpochRef.current) break
+            handleOrgReadFailure()
+            throw error
           }
           break
         }
@@ -794,7 +809,7 @@ export default function ConfigsClient({
         loadingTabRef.current = null
       }
     }
-  }, [])
+  }, [applyRoleSnapshot, handleOrgReadFailure, handleRoleReadFailure, readOrgSummary, readRoleSnapshot])
 
   const refreshTabData = useCallback(async (tab: ConfigTabId) => {
     const token = localStorage.getItem('token')
@@ -854,59 +869,30 @@ export default function ConfigsClient({
     }
     window.history.replaceState({}, '', url)
     // 按需加载：切换 tab 时加载对应数据（如果还没加载过，且不在加载中）
-    if (!loadedTabsRef.current.has(activeTab) && loadingTabRef.current !== activeTab) {
+    if ((activeTab === 'role-access' || activeTab === 'org-structure') && loadingTabRef.current !== activeTab) {
+      void loadTabData(activeTab, { force: true })
+    } else if (!loadedTabsRef.current.has(activeTab) && loadingTabRef.current !== activeTab) {
       void loadTabData(activeTab)
     }
   }, [activeTab, tabReady, loadTabData])
 
   const refreshOrgSummary = useCallback(async () => {
-    const token = localStorage.getItem('token')
-    const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
-    const cacheKeys = clearOrgAccessBrowserCache(token)
-    setPermissionsEditable(false)
-    setError('')
-    const [orgRes, rolesRes] = await Promise.all([
-      fetch('/api/admin/org', {
-        headers,
-        cache: 'no-store',
-      }),
-      fetch('/api/roles', {
-        headers,
-        cache: 'no-store',
-      }),
-    ])
+    await loadTabData('role-access', { force: true })
+  }, [loadTabData])
 
-    if (!orgRes.ok) {
-      const data = await orgRes.json().catch(() => ({}))
-      setError(getApiErrorMessage(data, '组织数据刷新失败'))
-      return
+  useEffect(() => {
+    if (activeTab !== 'role-access' && activeTab !== 'org-structure') return
+    const revalidate = () => { void loadTabData(activeTab, { force: true }) }
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === 'token') revalidate()
     }
-
-    const orgData = await orgRes.json()
-    setOrgSummary(orgData)
-    writeBrowserCache(cacheKeys.org, orgData)
-
-    if (rolesRes.ok) {
-      const rolesData = await rolesRes.json()
-      const nextRoles = (rolesData.data?.roles ?? []) as ConfigRoleRecord[]
-      setRoles(nextRoles)
-      setPermissionsEditable(rolesData.data?.permissions_editable === true)
-      setPermissionsEditBlockReason(rolesData.data?.permissions_edit_block_reason ?? null)
-      writeBrowserCache(cacheKeys.roles, nextRoles)
-    } else if (loadedTabsRef.current.has('role-access')) {
-      const data = await rolesRes.json().catch(() => ({}))
-      setError(`组织已刷新，角色列表刷新失败：${getApiErrorMessage(data, '角色列表刷新失败')}`)
+    window.addEventListener('focus', revalidate)
+    window.addEventListener('storage', onStorage)
+    return () => {
+      window.removeEventListener('focus', revalidate)
+      window.removeEventListener('storage', onStorage)
     }
-
-    setLoadedTabs(prev => {
-      const next = new Set(prev)
-      next.add('org-structure')
-      if (rolesRes.ok) {
-        next.add('role-access')
-      }
-      return next
-    })
-  }, [])
+  }, [activeTab, loadTabData])
 
   const getConfigsByType = useCallback((type: Config['type']) => (
     configs.filter((c) => c.type === type)
@@ -953,10 +939,10 @@ export default function ConfigsClient({
   }, [activeTab, activeTabLoading, error, loadedTabs, moduleCounts])
 
   const activeModuleMetrics = useMemo(() => {
-    const countValue = (count: number) => {
+    const countValue = (count: number | null) => {
       if (activeTabLoading) return '…'
       if (!loadedTabs.has(activeTab)) return error ? '加载失败' : '…'
-      return String(count)
+      return count === null ? '待核对' : String(count)
     }
 
     switch (activeTab) {
@@ -1005,7 +991,7 @@ export default function ConfigsClient({
       case 'org-structure':
         return [
           { label: '部门总数', value: countValue(orgSummary?.departments.length ?? 0) },
-          { label: '成员总数', value: countValue(orgSummary?.users.length ?? 0) },
+          { label: '同步在职', value: countValue(orgSummary?.directory_roster?.status === 'ready' ? orgSummary.directory_roster.members.length : null) },
           { label: '销售空间', value: countValue(orgSummary?.spaces.length ?? 0) },
         ]
       case 'role-access':
@@ -1017,7 +1003,7 @@ export default function ConfigsClient({
       default:
         return []
     }
-  }, [activeTab, activeTabLoading, error, getConfigsByType, loadedTabs, orgSummary?.departments.length, orgSummary?.spaces.length, orgSummary?.users.length, products, roles.length, rules])
+  }, [activeTab, activeTabLoading, error, getConfigsByType, loadedTabs, orgSummary?.departments.length, orgSummary?.spaces.length, orgSummary?.directory_roster, products, roles.length, rules])
 
   function switchSection(sectionId: ConfigSectionId) {
     const nextSection = CONFIG_SECTIONS.find((section) => section.id === sectionId)
@@ -1028,38 +1014,42 @@ export default function ConfigsClient({
 
   // 角色权限：保存单个角色的 permissions
   async function handleSaveRole(roleId: string, newPerms: string[]) {
+    if (roleSaveRef.current) return
+    const role = roles.find(candidate => candidate.id === roleId)
+    if (!roleAuthority?.permissionsEditable || !role || role.permissions_edit_block_reason || !Array.isArray(role.permissions)) {
+      setError('无法确认当前组织的角色编辑权限，请刷新后重试。')
+      return
+    }
+    const token = localStorage.getItem('token')
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+    const roleRequestEpoch = ++roleRequestEpochRef.current
+    roleSaveRef.current = true
     setSavingRoleId(roleId)
+    setError('')
     try {
-      const token = localStorage.getItem('token')
-      const res = await fetch(`/api/roles/${roleId}`, {
-        method: 'PATCH',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ permissions: newPerms, expected_permissions: roles.find(role => role.id === roleId)?.permissions ?? [] }),
+      const { role: verifiedRole, snapshot } = await saveAndReadOrgRolePermissions(headers, {
+        orgId: roleAuthority.orgId, roleId, expectedPermissions: role.permissions, permissions: newPerms,
       })
-      if (res.ok) {
-        const data = await res.json() as { data?: { role?: ConfigRoleRecord } }
-        const savedRole = data.data?.role
-        if (!savedRole || savedRole.id !== roleId || !Array.isArray(savedRole.permissions)) {
-          setError('保存响应不完整，请刷新角色列表核实。')
-          return
-        }
-        setError('')
-        setRoles((rs) => {
-          const nextRoles = rs.map((r) => r.id === roleId ? { ...r, ...savedRole } : r)
-          writeBrowserCache(scopedCacheKey(token, 'configs:role-access'), nextRoles)
-          return nextRoles
-        })
-        await refreshOrgSummary()
-      } else {
-        const data = await res.json().catch(() => ({}))
-        setError(getApiErrorMessage(data, '保存失败'))
+      if (roleRequestEpoch !== roleRequestEpochRef.current) return
+      setRoles(current => current.map(candidate => candidate.id === roleId ? verifiedRole : candidate))
+      setRoleAuthority({
+        orgId: snapshot.orgId,
+        permissionsEditable: snapshot.permissionsEditable,
+        modulePermissionCatalog: snapshot.modulePermissionCatalog,
+        canAssignOrgSuperAdmin: snapshot.canAssignOrgSuperAdmin,
+        permissionsEditBlockReason: snapshot.permissionsEditBlockReason,
+      })
+      clearOrgAccessBrowserCache(token)
+    } catch (error) {
+      if (roleRequestEpoch !== roleRequestEpochRef.current) return
+      if (accessDenied(error)) handleRoleReadFailure(error)
+      if (error instanceof RolePermissionRequestError && (error.requiresRefresh || error.status === 409)) {
+        setRoleAuthority(null)
+        setRoleLoadError(error.message)
       }
-    } catch {
-      setError('网络错误')
+      setError(requestMessage(error, '角色权限保存失败，请刷新后重试。'))
     } finally {
+      roleSaveRef.current = false
       setSavingRoleId(null)
     }
   }
@@ -1823,7 +1813,10 @@ export default function ConfigsClient({
                 roles={roles}
                 savingRoleId={savingRoleId}
                 permissionsEditable={permissionsEditable}
+                modulePermissionCatalog={roleAuthority?.modulePermissionCatalog}
                 permissionsEditBlockReason={permissionsEditBlockReason}
+                orgSuperAdminAuthority={roleAuthority?.canAssignOrgSuperAdmin && roleAuthority.orgId === orgSummary?.organization?.id
+                  ? { orgId: roleAuthority.orgId } : undefined}
                 onSaveRole={handleSaveRole}
               />
             </div>

@@ -2,9 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: vi.fn() } }))
-const scopedAccess = vi.hoisted(() => ({ getFreshUserScopedRoleAssignments: vi.fn() }))
-const rolePermissions = vi.hoisted(() => ({ canEditRolePermissions: vi.fn() }))
-vi.mock('@/lib/scoped-access', () => scopedAccess)
+const rolePermissions = vi.hoisted(() => ({ loadOrgRolePermissionContext: vi.fn() }))
 vi.mock('@/lib/org-role-permissions', () => rolePermissions)
 
 import { supabaseAdmin } from '@/lib/supabase'
@@ -12,6 +10,8 @@ import {
   canManagePlatformPermissionRegistry,
   listPermissionDefinitions,
   loadPublishedPermissionCatalog,
+  loadPublishedModulePermissionKeys,
+  loadRoleModulePermissionCatalog,
 } from './permission-registry'
 
 const originalAdminOrgId = process.env.PERMISSION_REGISTRY_ADMIN_ORG_ID
@@ -91,11 +91,52 @@ describe('permission registry repository', () => {
     expect(await canManagePlatformPermissionRegistry('admin-1', 'org-a')).toBe(false)
 
     process.env.PERMISSION_REGISTRY_ADMIN_ORG_ID = 'platform-org'
-    scopedAccess.getFreshUserScopedRoleAssignments.mockResolvedValue([])
-    rolePermissions.canEditRolePermissions.mockReturnValue(false)
     expect(await canManagePlatformPermissionRegistry('admin-1', 'org-a')).toBe(false)
+    expect(rolePermissions.loadOrgRolePermissionContext).not.toHaveBeenCalled()
 
-    rolePermissions.canEditRolePermissions.mockReturnValue(true)
+    rolePermissions.loadOrgRolePermissionContext.mockResolvedValue({ orgId: 'platform-org', canEdit: true, canEditPlatformRoot: false })
+    expect(await canManagePlatformPermissionRegistry('org-admin', 'platform-org')).toBe(false)
+    rolePermissions.loadOrgRolePermissionContext.mockResolvedValue({ orgId: 'org-a', canEdit: true, canEditPlatformRoot: true })
+    expect(await canManagePlatformPermissionRegistry('admin-1', 'platform-org')).toBe(false)
+    rolePermissions.loadOrgRolePermissionContext.mockResolvedValue({ orgId: 'platform-org', canEdit: true, canEditPlatformRoot: true })
     expect(await canManagePlatformPermissionRegistry('admin-1', 'platform-org')).toBe(true)
+  })
+})
+
+describe('shipping permissions from the executable registry', () => {
+  const operate = {
+    id: 'shipping-op-id', code: 'shipping:operate', name: '寄件操作', description: '当前组织寄件操作',
+    resource: 'shipping', action: 'operate', kind: 'atomic', status: 'published', category: 'shipping',
+    semantic_version: '1.0.0', lifecycle_version: 2, supported_scope_types: ['org'], dependencies: [],
+    conflicts: [], implied_by: [], enforcement_consumer: 'lib/shipping/operator-access.ts#requireShippingOperator',
+  }
+  const connections = {
+    ...operate, id: 'shipping-con-id', code: 'shipping:manage_connections', name: '寄件连接管理',
+    action: 'manage_connections', enforcement_consumer: 'lib/shipping/connection-authorization.ts',
+  }
+  function permissionQuery(data: unknown, error: unknown = null) {
+    const query = {
+      select: vi.fn(() => query),
+      in: vi.fn(async () => ({ data, error })),
+    }
+    vi.mocked(supabaseAdmin.from).mockReturnValue(query as any)
+    return query
+  }
+
+  it('selects just the exact shipping definitions and returns installed labels', async () => {
+    const query = permissionQuery([operate, connections])
+    const keys = await loadPublishedModulePermissionKeys()
+    expect(keys).toEqual(['shipping:manage_connections', 'shipping:operate'])
+    expect((await loadRoleModulePermissionCatalog()).flatMap(group => group.items).map(item => item.key).sort()).toEqual(keys)
+    expect(query.in).toHaveBeenCalledWith('code', ['shipping:operate', 'shipping:manage_connections'])
+  })
+
+  it('returns no executable actions for a stale, unverified or failed registry', async () => {
+    permissionQuery([{ ...operate, supported_scope_types: ['org', 'department'] }, { ...connections, status: 'disabled' }])
+    expect(await loadPublishedModulePermissionKeys()).toEqual([])
+    expect(await loadRoleModulePermissionCatalog()).toEqual([])
+    permissionQuery([operate, connections], new Error('database unavailable'))
+    expect(await loadPublishedModulePermissionKeys()).toEqual([])
+    expect(await loadRoleModulePermissionCatalog()).toEqual([])
   })
 })

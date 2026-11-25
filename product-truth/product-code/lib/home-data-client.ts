@@ -1,6 +1,6 @@
 'use client'
 
-import { readBrowserCache, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
+import { deleteBrowserCache, readBrowserCache, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
 
 type HomeInitialData = {
   profile: unknown
@@ -28,7 +28,16 @@ function toCachedProfile(user: LoginProfile) {
 }
 
 const HOME_INITIAL_CACHE_MS = 15_000
+const HOME_WORKSPACE_CACHE_KEY = 'home:initial:v2'
 const homeInitialInflight = new Map<string, Promise<HomeInitialData>>()
+
+function workspaceSnapshot(dashboard: unknown) {
+  if (!dashboard || typeof dashboard !== 'object' || Array.isArray(dashboard)) return dashboard
+  const snapshot = { ...dashboard } as Record<string, unknown>
+  delete snapshot.agenda
+  delete snapshot.reminders
+  return snapshot
+}
 
 export class HomeInitialAuthError extends Error {
   constructor() {
@@ -46,6 +55,7 @@ export class HomeInitialLoadError extends Error {
 
 type HomeInitialLoadOptions = {
   signal?: AbortSignal
+  view?: 'personal'
 }
 
 function throwIfAborted(signal: AbortSignal | undefined) {
@@ -59,7 +69,11 @@ export async function loadHomeInitialData(token: string | null | undefined, opti
   throwIfAborted(signal)
 
   const hasToken = Boolean(token)
-  const cacheKey = hasToken ? scopedCacheKey(token, 'home:initial') : null
+  if (hasToken) {
+    deleteBrowserCache(scopedCacheKey(token, 'home:initial'))
+    deleteBrowserCache(scopedCacheKey(token, 'home:initial:personal'))
+  }
+  const cacheKey = hasToken && !options.view ? scopedCacheKey(token, HOME_WORKSPACE_CACHE_KEY) : null
   const profileCacheKey = hasToken ? scopedCacheKey(token, 'home:profile') : null
   const cached = cacheKey ? readBrowserCache<HomeInitialData>(cacheKey, HOME_INITIAL_CACHE_MS) : null
   if (cached) return cached
@@ -71,9 +85,9 @@ export async function loadHomeInitialData(token: string | null | undefined, opti
 
   const request = (async () => {
     const requestInit: RequestInit = hasToken
-      ? { headers: { Authorization: `Bearer ${token}` }, signal }
-      : { signal }
-    const cachedProfile = profileCacheKey ? readBrowserCache<unknown>(profileCacheKey, HOME_INITIAL_CACHE_MS) : null
+      ? { headers: { Authorization: `Bearer ${token}` }, signal, cache: 'no-store' }
+      : { signal, cache: 'no-store' }
+    const cachedProfile = profileCacheKey && !options.view ? readBrowserCache<unknown>(profileCacheKey, HOME_INITIAL_CACHE_MS) : null
     const profileRequest = fetch('/api/auth/me', requestInit)
       .then(async (profileRes) => {
         if (profileRes.status === 401) throw new HomeInitialAuthError()
@@ -84,7 +98,8 @@ export async function loadHomeInitialData(token: string | null | undefined, opti
         if (profileCacheKey) writeBrowserCache(profileCacheKey, profilePayload.user)
         return profilePayload.user
       })
-    const dashboardRes = await fetch('/api/dashboard', requestInit)
+    void profileRequest.catch(() => undefined)
+    const dashboardRes = await fetch(options.view ? '/api/dashboard?view=personal' : '/api/dashboard', requestInit)
 
     if (dashboardRes.status === 401) {
       throw new HomeInitialAuthError()
@@ -95,15 +110,14 @@ export async function loadHomeInitialData(token: string | null | undefined, opti
 
     const dashboard = await dashboardRes.json()
     if (cachedProfile) {
-      void profileRequest.catch(() => undefined)
       const value = { profile: cachedProfile, dashboard }
-      if (cacheKey) writeBrowserCache(cacheKey, value)
+      if (cacheKey) writeBrowserCache(cacheKey, { ...value, dashboard: workspaceSnapshot(dashboard) })
       return value
     }
 
     const profile = await profileRequest
     const value = { profile, dashboard }
-    if (cacheKey) writeBrowserCache(cacheKey, value)
+    if (cacheKey) writeBrowserCache(cacheKey, { ...value, dashboard: workspaceSnapshot(dashboard) })
     return value
   })().finally(() => {
     if (!signal && cacheKey) {
@@ -148,5 +162,5 @@ export function primeHomeInitialSnapshot(
 
   const profile = toCachedProfile(user)
   writeBrowserCache(scopedCacheKey(token, 'home:profile'), profile)
-  writeBrowserCache(scopedCacheKey(token, 'home:initial'), { profile, dashboard })
+  writeBrowserCache(scopedCacheKey(token, HOME_WORKSPACE_CACHE_KEY), { profile, dashboard: workspaceSnapshot(dashboard) })
 }

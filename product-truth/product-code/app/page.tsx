@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { HomeInitialAuthError, loadHomeInitialData } from '@/lib/home-data-client'
 import { clearClientSession, logoutClientSession } from '@/lib/session-client'
 import { normalizeSalesSpaceName } from '@/lib/scoped-access'
+import type { DepartmentSpace } from '@/lib/department-spaces'
 
 // 类型定义（与数据库 schema 对应）
 interface SalesSpace {
@@ -86,6 +87,174 @@ interface DashboardPayload {
   agenda: AgendaItem[]
 }
 
+type DepartmentSelection = {
+  departmentId: string | null
+  includeSubdepartments: boolean
+}
+
+type DepartmentDashboardPayload = Pick<DashboardPayload, 'opportunities' | 'milestones'> & {
+  departmentSpaces: DepartmentSpace[]
+  selection: DepartmentSelection
+}
+
+type DepartmentRosterPayload = {
+  status: 'ready'
+  asOf: string
+  total: number
+  page: number
+  pageSize: number
+  members: Array<{ id: string; displayName: string; departmentIds: string[] }>
+}
+
+const DEPARTMENT_SUMMARY: DepartmentSelection = { departmentId: null, includeSubdepartments: true }
+
+class DepartmentMembershipError extends Error {}
+
+function departmentPreferenceKey(profile: Profile) {
+  return `dashboard:department:${profile.id}:${profile.org_id ?? ''}`
+}
+
+function readDepartmentPreference(profile: Profile): DepartmentSelection | null {
+  try {
+    const saved = sessionStorage.getItem(departmentPreferenceKey(profile))
+    if (!saved) return null
+    const [departmentId, scope] = saved.split(':')
+    return { departmentId: departmentId || null, includeSubdepartments: scope !== 'direct' }
+  } catch {
+    return null
+  }
+}
+
+function saveDepartmentPreference(profile: Profile, selection: DepartmentSelection) {
+  const key = departmentPreferenceKey(profile)
+  try {
+    sessionStorage.setItem(key, `${selection.departmentId ?? ''}:${selection.includeSubdepartments ? 'subtree' : 'direct'}`)
+  } catch {
+    // The current selection remains usable when the browser blocks storage.
+  }
+}
+
+async function fetchDepartmentDashboard(
+  selection: DepartmentSelection,
+  token: string | null,
+  signal: AbortSignal,
+): Promise<DepartmentDashboardPayload | null> {
+  const params = departmentQuery(selection)
+  const query = params.size ? `?${params}` : ''
+  const response = await fetch(`/api/dashboard/department${query}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    cache: 'no-store',
+    signal,
+  })
+  if (response.status === 401) throw new HomeInitialAuthError()
+  if (response.status === 403) {
+    const result = await response.json().catch(() => null)
+    if (result?.code === 'DEPARTMENT_SCOPE_REQUIRED' || result?.code === 'DEPARTMENT_SELECTION_FORBIDDEN') return null
+    throw new DepartmentMembershipError()
+  }
+  if (!response.ok) throw new Error('Unable to load department dashboard')
+  return response.json()
+}
+
+function departmentQuery(selection: DepartmentSelection) {
+  const params = new URLSearchParams()
+  if (selection.departmentId) {
+    params.set('departmentId', selection.departmentId)
+    params.set('includeSubdepartments', String(selection.includeSubdepartments))
+  }
+  return params
+}
+
+function departmentOptionLabel(space: DepartmentSpace, byId: Map<string, DepartmentSpace>) {
+  const names = [space.name]
+  const seen = new Set([space.department_id])
+  let parentId = space.parent_department_id
+  while (parentId && !seen.has(parentId)) {
+    const parent = byId.get(parentId)
+    if (!parent) break
+    names.unshift(parent.name)
+    seen.add(parentId)
+    parentId = parent.parent_department_id
+  }
+  return names.join(' / ')
+}
+
+function DepartmentRoster({
+  selection, departments,
+}: {
+  selection: DepartmentSelection
+  departments: Map<string, DepartmentSpace>
+}) {
+  const [page, setPage] = useState(1)
+  const [state, setState] = useState<'loading' | 'unavailable' | DepartmentRosterPayload>('loading')
+  const { departmentId, includeSubdepartments } = selection
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const { signal } = controller
+    const query = departmentQuery({ departmentId, includeSubdepartments })
+    query.set('page', String(page))
+    const token = localStorage.getItem('token')
+    void fetch(`/api/dashboard/department/roster?${query}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: 'no-store',
+      signal,
+    }).then(async response => {
+      const result = response.ok ? await response.json() : null
+      if (!signal.aborted) setState(result?.status === 'ready' ? result : 'unavailable')
+    }).catch(() => {
+      if (!signal.aborted) setState('unavailable')
+    })
+    return () => controller.abort()
+  }, [departmentId, includeSubdepartments, page])
+
+  function goToPage(nextPage: number) {
+    setState('loading')
+    setPage(nextPage)
+  }
+
+  return (
+    <section className="side-card mt-6" aria-label="同步在职名单" aria-busy={state === 'loading'}>
+      <div className="side-card-header">
+        同步在职
+        {typeof state !== 'string' && <span className="stat-tag">{state.total} 人</span>}
+      </div>
+      {state === 'loading' && <div className="empty-mini" role="status">正在读取同步在职名单</div>}
+      {state === 'unavailable' && <div className="empty-mini" role="status">暂时无法核对同步名单</div>}
+      {typeof state !== 'string' && (
+        <>
+          <p className="mb-2 text-xs text-slate-500">
+            {new Intl.DateTimeFormat('zh-CN', {
+              timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            }).format(new Date(state.asOf))} 同步
+          </p>
+          {state.members.length === 0 ? <div className="empty-mini">当前范围暂无同步在职成员</div> : (
+            <ul className="divide-y divide-slate-100">
+              {state.members.map(member => (
+                <li className="flex flex-wrap items-baseline justify-between gap-x-3 py-2 text-sm" key={member.id}>
+                  <span className="font-medium text-slate-900">{member.displayName}</span>
+                  <span className="text-xs text-slate-500">
+                    {member.departmentIds.map(id => departments.get(id)?.name).filter(Boolean).join('、')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {state.total > state.pageSize && (
+            <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
+              <button type="button" disabled={state.page <= 1} onClick={() => goToPage(state.page - 1)}
+                className="rounded border border-slate-200 px-2 py-1 disabled:opacity-50">上一页</button>
+              <span>第 {state.page} 页</span>
+              <button type="button" disabled={state.page * state.pageSize >= state.total} onClick={() => goToPage(state.page + 1)}
+                className="rounded border border-slate-200 px-2 py-1 disabled:opacity-50">下一页</button>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  )
+}
+
 const STATUS_MAP: Record<string, { label: string; pillClass: string }> = {
   LEAD: { label: '线索', pillClass: 'pill outline' },
   QUALIFIED: { label: '已验证', pillClass: 'pill info' },
@@ -116,12 +285,28 @@ export default function HomePage() {
   const router = useRouter()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [activeSpace, setActiveSpace] = useState<SalesSpace | null>(null)
-  const [opportunities, setOpportunities] = useState<(Opportunity & { customer?: Customer })[]>([])
-  const [milestones, setMilestones] = useState<Milestone[]>([])
+  const [legacyOpportunities, setLegacyOpportunities] = useState<DashboardPayload['opportunities']>([])
+  const [legacyMilestones, setLegacyMilestones] = useState<Milestone[]>([])
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [agenda, setAgenda] = useState<AgendaItem[]>([])
   const [loading, setLoading] = useState(true)
   const [todayLabel, setTodayLabel] = useState('今天')
+  const [departmentDashboard, setDepartmentDashboard] = useState<DepartmentDashboardPayload | null>(null)
+  const [departmentUnavailable, setDepartmentUnavailable] = useState(false)
+  const [pendingDepartment, setPendingDepartment] = useState<DepartmentSelection | null>(null)
+  const [scopeError, setScopeError] = useState('')
+  const departmentRequest = useRef<AbortController | null>(null)
+
+  const applyDepartmentDashboard = useCallback((payload: DepartmentDashboardPayload, currentProfile: Profile) => {
+    setDepartmentDashboard(payload)
+    setDepartmentUnavailable(false)
+    saveDepartmentPreference(currentProfile, payload.selection)
+  }, [])
+
+  const applyPersonalDashboard = useCallback((data?: Pick<DashboardPayload, 'reminders' | 'agenda'>) => {
+    setAgenda(data?.agenda || [])
+    setReminders(data?.reminders || [])
+  }, [])
 
   const applyDashboardPayload = useCallback((data: DashboardPayload, nextProfile?: Profile) => {
     const normalizedSpaces = (data.spaces || []).map((space) => ({
@@ -145,19 +330,19 @@ export default function HomePage() {
       setProfile(prev => prev ? { ...prev, spaces: normalizedSpaces } : null)
     }
     setActiveSpace(normalizedActiveSpace)
-    setOpportunities(data.opportunities || [])
-    setMilestones(data.milestones || [])
-    setReminders(data.reminders || [])
-    setAgenda(data.agenda || [])
-  }, [])
+    setLegacyOpportunities(data.opportunities || [])
+    setLegacyMilestones(data.milestones || [])
+    applyPersonalDashboard(data)
+  }, [applyPersonalDashboard])
 
   // 加载全部数据
-  const load = useCallback(async (spaceId?: string) => {
+  const switchSpace = useCallback(async (spaceId: string) => {
+    if (loading || spaceId === activeSpace?.id) return
+    setScopeError('')
     setLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const url = spaceId ? `/api/dashboard?spaceId=${encodeURIComponent(spaceId)}` : '/api/dashboard'
-      const res = await fetch(url, {
+      const res = await fetch(`/api/dashboard?spaceId=${encodeURIComponent(spaceId)}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
 
@@ -171,29 +356,64 @@ export default function HomePage() {
       }
 
       const data = await res.json() as DashboardPayload
+      if (data.activeSpace?.id !== spaceId) throw new Error('Sales space is no longer available')
       applyDashboardPayload(data)
     } catch (e) {
       console.error('[Dashboard] load error', e)
+      setScopeError('无法切换销售空间。请重试。')
     } finally {
       setLoading(false)
     }
-  }, [applyDashboardPayload, router])
+  }, [activeSpace?.id, applyDashboardPayload, loading, router])
 
   useEffect(() => {
     let mounted = true
     const controller = new AbortController()
     ;(async () => {
       const token = localStorage.getItem('token')
-      const initialData = await loadHomeInitialData(token, { signal: controller.signal })
+      const initialData = await loadHomeInitialData(token, { signal: controller.signal, view: 'personal' })
       const profileRow = initialData.profile as Profile | undefined
       const dashboardPayload = initialData.dashboard as DashboardPayload
 
-      if (mounted && profileRow) {
+      if (!mounted) return
+      if (profileRow) {
         applyDashboardPayload(dashboardPayload, profileRow)
-        setLoading(false)
-      } else {
-        setLoading(false)
+
+        const preferred = readDepartmentPreference(profileRow)
+        try {
+          let scoped = await fetchDepartmentDashboard(preferred ?? DEPARTMENT_SUMMARY, token, controller.signal)
+          if (!scoped && preferred?.departmentId) {
+            scoped = await fetchDepartmentDashboard(DEPARTMENT_SUMMARY, token, controller.signal)
+            if (mounted && scoped) setScopeError('上次查看的部门已不可用，已显示授权范围汇总。')
+          }
+          if (!mounted) return
+          if (scoped) {
+            applyDepartmentDashboard(scoped, profileRow)
+          } else if (preferred) {
+            setDepartmentUnavailable(true)
+            setScopeError('上次使用的部门空间已不可访问。')
+          } else {
+            const legacy = await fetch('/api/dashboard', {
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+              cache: 'no-store',
+              signal: controller.signal,
+            })
+            if (!mounted) return
+            if (legacy.status === 401) throw new HomeInitialAuthError()
+            if (!legacy.ok) throw new Error('Unable to load sales dashboard')
+            const legacyDashboard: DashboardPayload = await legacy.json()
+            if (mounted) applyDashboardPayload(legacyDashboard)
+          }
+        } catch (error) {
+          if (!mounted || isAbortError(error) || error instanceof HomeInitialAuthError) throw error
+          setDepartmentUnavailable(true)
+          if (error instanceof DepartmentMembershipError) applyPersonalDashboard()
+          setScopeError(error instanceof DepartmentMembershipError
+            ? '当前组织成员权限已变化，请重新加载。'
+            : '暂时无法验证部门空间。请重试。')
+        }
       }
+      setLoading(false)
     })().catch((error) => {
       if (!mounted || isAbortError(error)) {
         return
@@ -220,16 +440,64 @@ export default function HomePage() {
     return () => {
       mounted = false
       controller.abort()
+      departmentRequest.current?.abort()
     }
-  }, [applyDashboardPayload, router])
+  }, [applyDashboardPayload, applyDepartmentDashboard, applyPersonalDashboard, router])
 
-  // 切换销售空间
-  const switchSpace = useCallback(async (spaceId: string) => {
-    const sp = profile?.spaces.find(s => s.id === spaceId)
-    if (!sp || !profile) return
-    setActiveSpace(sp)
-    void load(spaceId)
-  }, [load, profile])
+  const switchDepartment = useCallback(async (selection: DepartmentSelection) => {
+    if (!profile) return
+    departmentRequest.current?.abort()
+    const controller = new AbortController()
+    departmentRequest.current = controller
+    setPendingDepartment(selection)
+    setScopeError('')
+    try {
+      const token = localStorage.getItem('token')
+      const payload = await fetchDepartmentDashboard(selection, token, controller.signal)
+      if (controller.signal.aborted) return
+      if (payload) {
+        applyDepartmentDashboard(payload, profile)
+        return
+      }
+      setDepartmentDashboard(null)
+      setDepartmentUnavailable(true)
+      setScopeError('该部门空间已不可访问，请重新加载授权范围。')
+    } catch (error) {
+      if (controller.signal.aborted) return
+      if (error instanceof HomeInitialAuthError) {
+        setDepartmentDashboard(null)
+        setDepartmentUnavailable(true)
+        clearClientSession()
+        router.push('/login')
+        return
+      }
+      if (error instanceof DepartmentMembershipError) {
+        applyPersonalDashboard()
+        setDepartmentDashboard(null)
+        setDepartmentUnavailable(true)
+        setScopeError('当前组织成员权限已变化，请重新加载。')
+        return
+      }
+      setScopeError('暂时无法切换部门空间。请重试。')
+    } finally {
+      if (departmentRequest.current === controller) {
+        departmentRequest.current = null
+        setPendingDepartment(null)
+      }
+    }
+  }, [applyDepartmentDashboard, applyPersonalDashboard, profile, router])
+
+  const departmentById = new Map((departmentDashboard?.departmentSpaces ?? []).map(space => [space.department_id, space]))
+  const selection = departmentDashboard?.selection
+  const shownSelection = pendingDepartment ?? selection
+  const selectedDepartment = selection?.departmentId ? departmentById.get(selection.departmentId) : undefined
+  const currentView = departmentDashboard
+    ? selectedDepartment
+      ? `${selectedDepartment.name}（${selection?.includeSubdepartments ? '含下级部门' : '仅本部门'}）`
+      : '授权范围汇总'
+    : departmentUnavailable ? '部门空间暂不可用' : loading ? undefined : activeSpace?.name
+  const opportunities = departmentDashboard?.opportunities ?? (departmentUnavailable ? [] : legacyOpportunities)
+  const milestones = departmentDashboard?.milestones ?? (departmentUnavailable ? [] : legacyMilestones)
 
   // 统计计算
   const stats = {
@@ -272,7 +540,7 @@ export default function HomePage() {
           <h1 className="text-3xl font-semibold tracking-tight text-slate-950">销售工作台</h1>
           <p className="subtitle max-w-3xl">
             {profile
-              ? `${profile.display_name}，${activeSpace?.name || '请选择一个销售空间'}。今天要处理的项目、待办和切换入口都在这里。`
+              ? `${profile.display_name}${currentView ? `，当前视图 ${currentView}` : ''}。`
               : '加载中...'}
           </p>
         </div>
@@ -297,15 +565,65 @@ export default function HomePage() {
                 <div className="mt-1 text-xs text-slate-500">
                   {profile?.roles?.[0]?.name || profile?.title || '销售'} · {todayLabel}
                 </div>
-                <div className="mt-2 text-xs text-slate-500">
-                  {activeSpace?.name || '尚未选定销售空间'}
-                </div>
+                {!departmentDashboard && currentView && <div className="mt-2 text-xs text-slate-500">{currentView}</div>}
               </div>
 
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
                 {(profile?.display_name || '?').charAt(0)}
               </div>
             </div>
+
+            {departmentDashboard && shownSelection && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]" aria-busy={Boolean(pendingDepartment)}>
+                <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-600">
+                  当前部门空间
+                  <select
+                    value={shownSelection.departmentId ?? ''}
+                    onChange={event => {
+                      const departmentId = event.target.value
+                      void switchDepartment(departmentId
+                        ? { departmentId, includeSubdepartments: shownSelection.includeSubdepartments }
+                        : DEPARTMENT_SUMMARY)
+                    }}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                  >
+                    <option value="">授权范围汇总</option>
+                    {departmentDashboard.departmentSpaces.map(space => (
+                      <option key={space.department_id} value={space.department_id}>
+                        {departmentOptionLabel(space, departmentById)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {shownSelection.departmentId && (
+                  <label className="grid gap-1 text-xs font-medium text-slate-600">
+                    部门数据范围
+                    <select
+                      value={shownSelection.includeSubdepartments ? 'subtree' : 'direct'}
+                      onChange={event => void switchDepartment({
+                        ...shownSelection, includeSubdepartments: event.target.value === 'subtree',
+                      })}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    >
+                      <option value="direct">仅本部门</option>
+                      <option value="subtree">含下级部门</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+            )}
+            {pendingDepartment && <p className="mt-2 text-xs text-slate-500" role="status">正在切换部门空间</p>}
+            {scopeError && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-amber-800">
+                <p role="alert">{scopeError}</p>
+                {departmentUnavailable && (
+                  <button type="button" className="underline" disabled={Boolean(pendingDepartment)}
+                    onClick={() => void switchDepartment(DEPARTMENT_SUMMARY)}>
+                    重新加载部门空间
+                  </button>
+                )}
+              </div>
+            )}
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {profile?.canManageOrg && (
@@ -331,7 +649,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {(activeSpace || (profile?.spaces?.length ?? 0) > 1) && (
+      {!departmentDashboard && !departmentUnavailable && !loading && (activeSpace || (profile?.spaces?.length ?? 0) > 1) && (
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -350,7 +668,8 @@ export default function HomePage() {
                   return (
                     <button
                       key={sp.id}
-                      onClick={() => switchSpace(sp.id)}
+                      aria-pressed={isActive}
+                      onClick={() => void switchSpace(sp.id)}
                       className={`inline-flex items-center rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
                         isActive
                           ? 'border-blue-200 bg-blue-50 text-blue-700'
@@ -371,7 +690,7 @@ export default function HomePage() {
         <div className="stat-card">
           <div className="stat-card-header">
             <span className="stat-card-label">活跃机会</span>
-            <span className="stat-tag">总览</span>
+            <span className="stat-tag">{departmentDashboard ? '当前列表' : '总览'}</span>
           </div>
           {loading ? <div className="skeleton" style={{ width: 60, height: 32 }} /> : (
             <div className="stat-card-value">{stats.activeOpportunities}</div>
@@ -387,7 +706,7 @@ export default function HomePage() {
           {loading ? <div className="skeleton" style={{ width: 60, height: 32 }} /> : (
             <div className="stat-card-value">{stats.todayNodes} <span style={{ fontSize: 'var(--text-h3)' }}>个</span></div>
           )}
-          <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>需跨角色协同</div>
+          <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>{departmentDashboard ? '当前列表' : '需跨角色协同'}</div>
         </div>
 
         <div className="stat-card">
@@ -398,10 +717,10 @@ export default function HomePage() {
           {loading ? <div className="skeleton" style={{ width: 80, height: 32 }} /> : (
             <div className="stat-card-value" style={{ fontSize: '28px' }}>{stats.pendingApproval} 项</div>
           )}
-          <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>在审</div>
+          <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>{departmentDashboard ? '当前列表' : '在审'}</div>
         </div>
 
-        <div className="stat-card">
+        {!departmentDashboard && !departmentUnavailable && <div className="stat-card">
           <div className="stat-card-header">
             <span className="stat-card-label">本月已签约</span>
             <span className="stat-tag success">{stats.monthlyContracts}</span>
@@ -410,12 +729,12 @@ export default function HomePage() {
             <div className="stat-card-value">{stats.monthlyContracts}</div>
           )}
           <div className="stat-card-change" style={{ color: 'var(--fg-3)' }}>单</div>
-        </div>
+        </div>}
       </div>
 
       <div className="content-grid">
         <div className="hero-card">
-          <div className="eyebrow">{activeSpace?.name || '销售空间'}</div>
+          <div className="eyebrow">{currentView || '销售空间'}</div>
           <h2>今日优先队列</h2>
           <p>优先处理下列项目与动作。每一项都还差一个明确节点。</p>
 
@@ -424,11 +743,11 @@ export default function HomePage() {
               <><div className="skeleton queue-card" /><div className="skeleton queue-card" /><div className="skeleton queue-card" /></>
             ) : opportunities.length === 0 ? (
               <div className="empty-state">
-                <p>本空间暂无活跃机会</p>
+                <p>{departmentUnavailable ? '部门范围待重新验证' : '本空间暂无活跃机会'}</p>
               </div>
             ) : (
               opportunities.slice(0, 3).map(o => (
-                <Link key={o.id} href={`/opportunities/${o.id}`} prefetch={false} className="queue-card">
+                <Link key={o.id} href={`/opportunities/${encodeURIComponent(o.id)}`} prefetch={false} className="queue-card">
                   <div className="queue-card-title">{o.name}</div>
                   <div className="queue-card-meta">
                     <span className={STATUS_MAP[o.status]?.pillClass || 'pill'}>
@@ -486,7 +805,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {milestones.length > 0 && (
+      {!loading && milestones.length > 0 && (
         <div className="side-card" style={{ marginTop: 24 }}>
           <div className="side-card-header">硬节点时间线（7 天内）</div>
           {milestones.map(m => (
@@ -511,6 +830,10 @@ export default function HomePage() {
             </div>
           ))}
         </div>
+      )}
+      {!loading && selection && (
+        <DepartmentRoster key={`${selection.departmentId ?? ''}:${selection.includeSubdepartments}`}
+          selection={selection} departments={departmentById} />
       )}
     </div>
   )

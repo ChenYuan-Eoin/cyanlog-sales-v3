@@ -1,6 +1,8 @@
 import { supabaseAdmin } from '@/lib/supabase'
+import { buildDepartmentSpaces, resolveDepartmentSpaceIds } from '@/lib/department-spaces'
 import { loadOrgRolePermissionSettings } from '@/lib/org-role-permissions'
 import { resolveRolePermissions } from '@/lib/role-permission-policy'
+import { ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
 import {
   canAccessOrgAdmin,
   canReviewContracts as canReviewContractsByPermission,
@@ -17,6 +19,7 @@ type RoleJoinRow = {
 }
 
 type UserRoleRow = {
+  org_id: string | null
   scope_type: ScopeType
   scope_id: string | null
   granted_at: string | null
@@ -66,6 +69,7 @@ type SalesSpaceOwnerRow = {
   id: string
   org_id: string
   owner_id: string | null
+  department_id?: string | null
 }
 
 export interface ScopedRoleAssignment {
@@ -274,10 +278,18 @@ async function loadDefaultOrgId(userId: string): Promise<string> {
   return userRow.org_id
 }
 
-async function listDepartmentSubtreeIds(orgId: string, rootDepartmentIds: string[]): Promise<string[]> {
+async function listDepartmentSubtreeIds(orgId: string, rootDepartmentIds: string[], activeOnly = false): Promise<string[]> {
   const roots = uniqueStrings(rootDepartmentIds)
   if (roots.length === 0) {
     return []
+  }
+
+  if (activeOnly) {
+    const { data, error } = await supabaseAdmin.from('departments').select('id,org_id,name,parent_id,status')
+      .eq('org_id', orgId).eq('status', 'active')
+    if (error) throw error
+    const departments = (data ?? []).filter(row => row.org_id === orgId && row.status === 'active')
+    return [...resolveDepartmentSpaceIds(buildDepartmentSpaces(departments, []), roots)]
   }
 
   const { data, error } = await supabaseAdmin
@@ -300,19 +312,35 @@ async function listDepartmentSubtreeIds(orgId: string, rootDepartmentIds: string
 async function loadUserScopedRoleAssignments(userId: string): Promise<ScopedRoleAssignment[]> {
   const { data, error } = await supabaseAdmin
     .from('user_roles')
-    .select('scope_type, scope_id, granted_at, role:roles(id, code, name, permissions)')
+    .select('org_id, scope_type, scope_id, granted_at, role:roles(id, code, name, permissions)')
     .eq('user_id', userId)
 
   if (error) {
     throw error
   }
 
-  return ((data || []) as UserRoleRow[])
+  const rows = (data || []) as UserRoleRow[]
+  const hasOrgSuperAdmin = rows.some(row => unwrapOne(row.role)?.code === ORG_SUPER_ADMIN_ROLE_CODE)
+  let activeAdminOrgId: string | null = null
+  if (hasOrgSuperAdmin) {
+    const membership = await supabaseAdmin.from('user_organizations')
+      .select('org_id, organization:organizations!inner(status)')
+      .eq('user_id', userId).eq('is_default', true).eq('status', 'active')
+      .eq('employment_status', 'active').is('left_at', null).eq('organization.status', 'active')
+      .maybeSingle()
+    if (membership.error) throw membership.error
+    activeAdminOrgId = membership.data?.org_id ?? null
+  }
+
+  return rows
     .map((row) => {
       const role = unwrapOne(row.role)
       if (!role?.id || !role.code || !role.name) {
         return null
       }
+      if (role.code === ORG_SUPER_ADMIN_ROLE_CODE && (
+        !activeAdminOrgId || row.org_id !== activeAdminOrgId || row.scope_type !== 'org' || row.scope_id !== activeAdminOrgId
+      )) return null
 
       return {
         scopeType: row.scope_type,
@@ -422,7 +450,11 @@ async function getCachedRoleTemplates(userId: string): Promise<ScopedRoleAssignm
 }
 
 export async function getUserScopedRoleAssignments(userId: string): Promise<ScopedRoleAssignment[]> {
-  return applyCurrentRolePermissionOverrides(await getCachedRoleTemplates(userId))
+  const assignments = await getCachedRoleTemplates(userId)
+  if (assignments.some(assignment => assignment.roleCode === ORG_SUPER_ADMIN_ROLE_CODE)) {
+    return getFreshUserScopedRoleAssignments(userId)
+  }
+  return applyCurrentRolePermissionOverrides(assignments)
 }
 
 export function getOrgScopedAssignments(
@@ -592,10 +624,11 @@ export async function listAccessibleSalesSpaces(userId: string, orgId: string): 
   return promise
 }
 
-async function listAccessibleUserIdsFromAssignments(
+export async function listAccessibleUserIdsFromAssignments(
   userId: string,
   effectiveOrgId: string,
-  assignments: ScopedRoleAssignment[]
+  assignments: ScopedRoleAssignment[],
+  options: { activeScopesOnly?: boolean; includeMembershipSpaces?: boolean } = {},
 ): Promise<{
   orgId: string
   assignments: ScopedRoleAssignment[]
@@ -627,7 +660,7 @@ async function listAccessibleUserIdsFromAssignments(
       .filter((assignment) => assignment.scopeType === 'department')
       .map((assignment) => assignment.scopeId)
   )
-  const expandedDepartmentIds = await listDepartmentSubtreeIds(effectiveOrgId, departmentScopeIds)
+  const expandedDepartmentIds = await listDepartmentSubtreeIds(effectiveOrgId, departmentScopeIds, options.activeScopesOnly)
   const directSpaceIds = uniqueStrings(
     assignments
       .filter((assignment) => assignment.scopeType === 'space')
@@ -662,20 +695,21 @@ async function listAccessibleUserIdsFromAssignments(
     }
   }
 
-  const memberSpacesResult = await supabaseAdmin
-    .from('sales_space_members')
-    .select('space:sales_spaces!sales_space_members_org_space_fk!inner(id, org_id)')
-    .eq('user_id', userId)
-    .eq('space.org_id', effectiveOrgId)
-
-  if (memberSpacesResult.error) {
-    throw memberSpacesResult.error
+  let memberSpaceIds: string[] = []
+  if (options.includeMembershipSpaces !== false) {
+    let query = supabaseAdmin
+      .from('sales_space_members')
+      .select('space:sales_spaces!sales_space_members_org_space_fk!inner(id, org_id)')
+      .eq('user_id', userId)
+      .eq('space.org_id', effectiveOrgId)
+    if (options.activeScopesOnly) query = query.eq('space.status', 'active')
+    const { data, error } = await query
+    if (error) throw error
+    memberSpaceIds = ((data || []) as SalesSpaceMembershipRow[])
+      .map((row) => unwrapOne(row.space))
+      .filter((space): space is SalesSpaceIdentity => space?.org_id === effectiveOrgId)
+      .map((space) => space.id)
   }
-
-  const memberSpaceIds = ((memberSpacesResult.data || []) as SalesSpaceMembershipRow[])
-    .map((row) => unwrapOne(row.space))
-    .filter((space): space is SalesSpaceIdentity => space?.org_id === effectiveOrgId)
-    .map((space) => space.id)
 
   const candidateSpaceIds = uniqueStrings([
     ...directSpaceIds,
@@ -683,18 +717,33 @@ async function listAccessibleUserIdsFromAssignments(
   ])
 
   if (candidateSpaceIds.length > 0) {
-    const spaceOwnersResult = await supabaseAdmin
+    let query = supabaseAdmin
       .from('sales_spaces')
-      .select('id, org_id, owner_id')
+      .select('id, org_id, owner_id, department_id, status')
       .eq('org_id', effectiveOrgId)
       .in('id', candidateSpaceIds)
+    if (options.activeScopesOnly) query = query.eq('status', 'active')
+    const spaceOwnersResult = await query
 
     if (spaceOwnersResult.error) {
       throw spaceOwnersResult.error
     }
 
-    const exactOrgSpaces = ((spaceOwnersResult.data || []) as SalesSpaceOwnerRow[])
+    let exactOrgSpaces = ((spaceOwnersResult.data || []) as (SalesSpaceOwnerRow & { status?: string })[])
       .filter((space) => space.org_id === effectiveOrgId)
+    if (options.activeScopesOnly) {
+      exactOrgSpaces = exactOrgSpaces.filter(space => space.status === 'active' && space.department_id)
+      const linkedDepartments = uniqueStrings(exactOrgSpaces.map(space => space.department_id))
+      if (linkedDepartments.length > 0) {
+        const { data, error } = await supabaseAdmin.from('departments').select('id,org_id,status')
+          .eq('org_id', effectiveOrgId).eq('status', 'active').in('id', linkedDepartments)
+        if (error) throw error
+        const activeDepartments = new Set((data ?? []).filter(
+          department => department.org_id === effectiveOrgId && department.status === 'active',
+        ).map(department => department.id))
+        exactOrgSpaces = exactOrgSpaces.filter(space => space.department_id && activeDepartments.has(space.department_id))
+      }
+    }
     const exactOrgSpaceIds = exactOrgSpaces.map((space) => space.id)
 
     if (exactOrgSpaceIds.length > 0) {

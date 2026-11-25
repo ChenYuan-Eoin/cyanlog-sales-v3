@@ -1,3 +1,15 @@
+export const ORG_SUPER_ADMIN_ROLE_CODE = 'ORG_SUPER_ADMIN'
+export const SHIPPING_OPERATOR_ROLE_CODE = 'SHIPPING_OPERATOR'
+
+export function isRoleAssignableInScope(code: string, scopeType: 'org' | 'department' | 'space'): boolean {
+  return code !== SHIPPING_OPERATOR_ROLE_CODE || scopeType === 'org'
+}
+
+const ORG_SUPER_ADMIN_PERMISSIONS = [
+  'admin:access', 'org:write', 'user:view', 'user:write', 'dept:view', 'dept:write',
+  'config:read', 'config:write', 'config:publish', 'role:manage',
+]
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
@@ -26,6 +38,9 @@ export function resolveRolePermissions(
 ): { permissions: string[]; overridden: boolean } {
   if (role.code === 'FXIAOKE_BASELINE') {
     return { permissions: ['quote:view', 'contract:view', 'customer:view'], overridden: true }
+  }
+  if (role.code === ORG_SUPER_ADMIN_ROLE_CODE) {
+    return { permissions: [...ORG_SUPER_ADMIN_PERMISSIONS], overridden: true }
   }
   if (settings != null && !isRecord(settings)) return { permissions: [], overridden: true }
   if (!isRecord(settings) || !Object.prototype.hasOwnProperty.call(settings, 'role_permission_overrides')) {

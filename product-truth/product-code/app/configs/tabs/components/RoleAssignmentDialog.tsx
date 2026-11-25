@@ -13,6 +13,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { BuildingIcon, ShieldIcon, XIcon } from 'lucide-react'
 import type { OrgSummaryDepartment, OrgSummarySpace, ScopedRoleAssignment } from '../../types'
+import { isRoleAssignableInScope } from '@/lib/role-permission-resolution'
+import { isGenericallyAssignableRole } from '../role-assignment-policy'
 
 interface Role {
   id: string
@@ -59,11 +61,14 @@ export function RoleAssignmentDialog({
   const onOpenChange = controlledOnOpenChange ?? setInternalOpen
   const [loading, setLoading] = useState(false)
   const [roles, setRoles] = useState<Role[]>([])
-  const [selectedRoles, setSelectedRoles] = useState<string[]>(currentRoles)
+  const [selectedOrgRoles, setSelectedOrgRoles] = useState<string[]>(currentRoles)
+  const [selectedScopedRoleId, setSelectedScopedRoleId] = useState('')
   const [fetchingRoles, setFetchingRoles] = useState(false)
   const [scopeType, setScopeType] = useState<'org' | 'department' | 'space'>('org')
   const [scopeId, setScopeId] = useState('')
   const [revokingKey, setRevokingKey] = useState<string | null>(null)
+  const assignableRoles = roles.filter(role => isRoleAssignableInScope(role.code, scopeType))
+  const selectedScopedRole = assignableRoles.find(role => role.id === selectedScopedRoleId)
 
   // 获取角色列表
   useEffect(() => {
@@ -79,7 +84,7 @@ export function RoleAssignmentDialog({
         if (res.ok) {
           const result = await res.json()
           if (result.success && result.data?.roles) {
-            setRoles(result.data.roles.filter((role: Role) => role.code !== 'SUPER_ADMIN'))
+            setRoles(result.data.roles.filter((role: Role) => isGenericallyAssignableRole(role.code)))
           }
         }
       } catch (err) {
@@ -94,35 +99,37 @@ export function RoleAssignmentDialog({
 
   // 同步 currentRoles 变化
   useEffect(() => {
-    setSelectedRoles(currentRoles)
+    setSelectedOrgRoles(currentRoles)
   }, [currentRoles])
 
   const handleToggleRole = useCallback((roleId: string) => {
-    setSelectedRoles((prev) =>
-      scopeType !== 'org'
-        ? (prev.includes(roleId) ? [] : [roleId])
-        : prev.includes(roleId)
-          ? prev.filter((id) => id !== roleId)
-          : [...prev, roleId]
-    )
+    if (scopeType !== 'org') {
+      setSelectedScopedRoleId(previous => previous === roleId ? '' : roleId)
+      return
+    }
+    setSelectedOrgRoles(previous => (
+      previous.includes(roleId) ? previous.filter(id => id !== roleId) : [...previous, roleId]
+    ))
   }, [scopeType])
 
   const handleSubmit = useCallback(async () => {
     setLoading(true)
     try {
       if (scopeType === 'org') {
-        await onSubmit(selectedRoles)
+        await onSubmit(selectedOrgRoles)
       } else {
-        if (!onSubmitScoped || !scopeId || selectedRoles.length !== 1) throw new Error('请选择一个角色和一个作用域')
-        await onSubmitScoped(selectedRoles[0], scopeType, scopeId)
+        if (!onSubmitScoped || !scopeId || !selectedScopedRole) return
+        await onSubmitScoped(selectedScopedRole.id, scopeType, scopeId)
       }
       onOpenChange(false)
     } finally {
       setLoading(false)
     }
-  }, [scopeType, onSubmit, selectedRoles, onSubmitScoped, scopeId, onOpenChange])
+  }, [scopeType, onSubmit, selectedOrgRoles, onSubmitScoped, selectedScopedRole, scopeId, onOpenChange])
 
-  const nonOrgScopedRoles = scopedRoles.filter((assignment) => assignment.scopeType !== 'org')
+  const nonOrgScopedRoles = scopedRoles.filter(
+    assignment => assignment.scopeType !== 'org' && isGenericallyAssignableRole(assignment.roleCode),
+  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -144,18 +151,18 @@ export function RoleAssignmentDialog({
 
         {fetchingRoles ? (
           <div className="py-8 text-center text-slate-500">加载角色列表...</div>
-        ) : roles.length === 0 ? (
-          <div className="py-8 text-center text-slate-500">暂无可用角色</div>
+        ) : assignableRoles.length === 0 ? (
+          <div className="py-8 text-center text-slate-500">当前作用域没有可分配的角色</div>
         ) : (
           <div className="space-y-4 max-h-[400px] overflow-y-auto">
-            {roles.map((role) => (
+            {assignableRoles.map((role) => (
               <div
                 key={role.id}
                 className="flex items-start gap-3 p-3 rounded-lg border hover:bg-slate-50 transition"
               >
                 <Checkbox
                   id={`role-${role.id}`}
-                  checked={selectedRoles.includes(role.id)}
+                  checked={scopeType === 'org' ? selectedOrgRoles.includes(role.id) : selectedScopedRoleId === role.id}
                   onCheckedChange={() => handleToggleRole(role.id)}
                 />
                 <div className="flex-1">
@@ -165,6 +172,7 @@ export function RoleAssignmentDialog({
                   >
                     <span className="font-medium">{role.name}</span>
                     {pendingRoles?.some(pending => pending.id === role.id) && <Badge variant="outline">待首次登录生效</Badge>}
+                    {!isRoleAssignableInScope(role.code, 'department') && <Badge variant="outline">仅整个组织</Badge>}
                     <Badge variant="outline" className="text-xs">
                       {role.code}
                     </Badge>
@@ -203,6 +211,7 @@ export function RoleAssignmentDialog({
                         <span className="min-w-0 flex-1 truncate text-slate-600">
                           {scopeType === 'department' ? '部门' : '销售空间'} · {assignment.scopeName}
                         </span>
+                        {!isRoleAssignableInScope(assignment.roleCode, scopeType) && <Badge variant="outline">历史绑定 · 仅可撤销</Badge>}
                         <Button
                           type="button"
                           variant="ghost"
@@ -242,7 +251,7 @@ export function RoleAssignmentDialog({
                 onChange={(event) => {
                   setScopeType(event.target.value as 'org' | 'department' | 'space')
                   setScopeId('')
-                  setSelectedRoles([])
+                  setSelectedScopedRoleId('')
                 }}
               >
                 <option value="org">整个组织</option>
@@ -290,7 +299,7 @@ export function RoleAssignmentDialog({
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={loading || fetchingRoles || (scopeType !== 'org' && (!scopeId || selectedRoles.length !== 1))}
+                disabled={loading || fetchingRoles || (scopeType !== 'org' && (!onSubmitScoped || !scopeId || !selectedScopedRole))}
               >
                 {loading ? '保存中...' : '保存'}
               </Button>

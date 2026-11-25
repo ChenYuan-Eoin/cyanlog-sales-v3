@@ -3,13 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: vi.fn() } }))
 vi.mock('@/lib/auth', () => ({ requireAuth: vi.fn(async () => ({ id: 'user-1' })) }))
-const accessMocks = vi.hoisted(() => ({ userHasOrgConfigAccess: vi.fn() }))
-const scopedAccessMocks = vi.hoisted(() => ({
-  getDefaultOrgId: vi.fn(), getUserScopedRoleAssignments: vi.fn(), canManageOrg: vi.fn(),
-}))
-vi.mock('@/lib/configs/access', () => accessMocks)
-vi.mock('@/lib/scoped-access', () => scopedAccessMocks)
-
 import { supabaseAdmin } from '@/lib/supabase'
 import { GET } from './route'
 
@@ -22,50 +15,74 @@ const roles = [
   { id: 'role-2', code: 'SALES', name: '销售', permissions: ['quote:create'] },
 ]
 
-function database(settings: any = {}, error: Error | null = null) {
+const currentMember = { org_id: 'org-1', status: 'active', employment_status: 'active', is_default: true, left_at: null }
+const assignment = {
+  scope_type: 'org', scope_id: 'org-1', org_id: 'org-1', user_id: 'user-1', granted_at: null,
+  role: { id: 'reader', code: 'READ_ONLY', name: '配置只读', permissions: ['config:read'] },
+}
+const root = { ...assignment, role: { id: 'root', code: 'SUPER_ADMIN', name: '超管', permissions: ['*'] } }
+
+function database({
+  settings = {}, error = null, members = [currentMember], assignments = [assignment], globalRoles = roles,
+  organizationStatus = 'active', permissionRows = [], permissionError = null,
+}: { settings?: unknown; error?: Error | null; members?: unknown[]; assignments?: unknown[]; globalRoles?: unknown[]; organizationStatus?: string; permissionRows?: unknown[]; permissionError?: Error | null } = {}) {
+  const membershipQuery: any = {
+    select: vi.fn(() => membershipQuery), eq: vi.fn(() => membershipQuery),
+    limit: vi.fn(async () => ({ data: members, error: null })),
+  }
   const orgQuery: any = {
     select: vi.fn(() => orgQuery), eq: vi.fn(() => orgQuery),
-    maybeSingle: vi.fn(async () => ({ data: error ? null : { settings }, error })),
+    maybeSingle: vi.fn(async () => ({ data: error ? null : { id: 'org-1', status: organizationStatus, settings }, error })),
+  }
+  const assignmentsQuery: any = {
+    select: vi.fn(() => assignmentsQuery), eq: vi.fn(() => assignmentsQuery),
+    then(resolve: (data: object) => void) { return Promise.resolve({ data: assignments, error: null }).then(resolve) },
   }
   const roleQuery: any = {
-    select: vi.fn(() => roleQuery), order: vi.fn(() => roleQuery),
-    range: vi.fn(async () => ({ data: roles, error: null, count: roles.length })),
+    select: vi.fn(() => roleQuery), order: vi.fn(() => roleQuery), eq: vi.fn(() => roleQuery),
+    range: vi.fn(async () => ({ data: globalRoles, error: null, count: globalRoles.length })),
+  }
+  const permissionQuery = {
+    select: vi.fn(() => permissionQuery),
+    in: vi.fn(async () => ({ data: permissionRows, error: permissionError })),
   }
   vi.mocked(supabaseAdmin.from).mockImplementation(((table: string) => {
+    if (table === 'user_organizations') return membershipQuery
     if (table === 'organizations') return orgQuery
+    if (table === 'user_roles') return assignmentsQuery
     if (table === 'roles') return roleQuery
+    if (table === 'permission_points') return permissionQuery
     throw new Error(`Unexpected table ${table}`)
   }) as any)
-  return { roleQuery, orgQuery }
+  return { roleQuery, orgQuery, assignmentsQuery, membershipQuery, permissionQuery }
 }
 
 describe('GET /api/roles organization permissions', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    accessMocks.userHasOrgConfigAccess.mockResolvedValue(true)
-    scopedAccessMocks.getDefaultOrgId.mockResolvedValue('org-1')
-    scopedAccessMocks.getUserScopedRoleAssignments.mockResolvedValue([])
-    scopedAccessMocks.canManageOrg.mockReturnValue(false)
-  })
+  beforeEach(() => vi.clearAllMocks())
 
   it('当前组织无配置读取或组织管理权限时返回 403', async () => {
-    accessMocks.userHasOrgConfigAccess.mockResolvedValue(false)
+    database({ assignments: [] })
     const res = await GET(makeRequest())
     expect(res.status).toBe(403)
     expect((await res.json()).error.code).toBe('A002')
-    expect(scopedAccessMocks.canManageOrg).toHaveBeenCalledWith([], 'org-1')
-    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).not.toHaveBeenCalledWith('roles')
   })
 
   it('返回当前组织覆盖后的有效权限、空撤销和真实只读状态', async () => {
-    const { roleQuery, orgQuery } = database({ role_permission_overrides: { 'role-1': ['config:read'], 'role-2': [] } })
+    const { roleQuery, orgQuery, assignmentsQuery, membershipQuery } = database({
+      settings: { role_permission_overrides: { 'role-1': ['config:read'], 'role-2': [] } },
+    })
     const res = await GET(makeRequest('https://example.test/api/roles?limit=20&offset=0'))
     const body = await res.json()
     expect(res.status).toBe(200)
     expect(body).toMatchObject({
       success: true,
       data: {
-        roles: [{ ...roles[0], permissions: ['config:read'] }, { ...roles[1], permissions: [] }],
+        org_id: 'org-1',
+        roles: [
+          { ...roles[0], permissions: ['config:read'], permissions_edit_block_reason: null },
+          { ...roles[1], permissions: [], permissions_edit_block_reason: null },
+        ],
         permission_keys: expect.arrayContaining(['config:read', 'config:write', 'role:manage']),
         permissions_editable: false,
         permissions_edit_block_reason: expect.stringContaining('仅当前组织的超级管理员'),
@@ -74,17 +91,20 @@ describe('GET /api/roles organization permissions', () => {
     })
     expect(roleQuery.range).toHaveBeenCalledWith(0, 19)
     expect(orgQuery.eq).toHaveBeenCalledWith('id', 'org-1')
+    expect(membershipQuery.eq.mock.calls).toEqual([['user_id', 'user-1'], ['is_default', true]])
+    expect(assignmentsQuery.eq.mock.calls).toEqual([
+      ['org_id', 'org-1'], ['user_id', 'user-1'], ['scope_type', 'org'], ['scope_id', 'org-1'],
+    ])
   })
 
   it.each([
-    ['current organization root', { scopeType: 'org', scopeId: 'org-1', roleCode: 'SUPER_ADMIN', permissions: ['*'] }, true],
-    ['another organization root', { scopeType: 'org', scopeId: 'org-2', roleCode: 'SUPER_ADMIN', permissions: ['*'] }, false],
-    ['department root', { scopeType: 'dept', scopeId: 'org-1', roleCode: 'SUPER_ADMIN', permissions: ['*'] }, false],
-    ['config writer', { scopeType: 'org', scopeId: 'org-1', roleCode: 'ADMIN', permissions: ['config:write'] }, false],
-    ['revoked root', { scopeType: 'org', scopeId: 'org-1', roleCode: 'SUPER_ADMIN', permissions: [], permissionsOverridden: true }, false],
-  ])('计算 %s 的真实 editable 状态', async (_label, assignment, editable) => {
-    database()
-    scopedAccessMocks.getUserScopedRoleAssignments.mockResolvedValue([assignment])
+    ['current organization root', root, {}, true],
+    ['another organization root', { ...root, org_id: 'org-2' }, {}, false],
+    ['department root', { ...root, scope_type: 'department' }, {}, false],
+    ['config writer', { ...root, role: { ...root.role, code: 'ADMIN', permissions: ['config:write'] } }, {}, false],
+    ['revoked root', root, { role_permission_overrides: { root: [] } }, false],
+  ])('计算 %s 的真实 editable 状态', async (_label, grant, settings, editable) => {
+    database({ assignments: [assignment, grant], settings })
     const res = await GET(makeRequest())
     const body = await res.json()
     expect(res.status).toBe(200)
@@ -92,10 +112,62 @@ describe('GET /api/roles organization permissions', () => {
     expect(body.data.permissions_edit_block_reason).toEqual(editable ? null : expect.any(String))
   })
 
+  it.each([[], [{ ...currentMember, employment_status: 'ended' }], [currentMember, currentMember]])(
+    '不接受缺失、已离职或重复默认成员关系 %#', async (...members) => {
+      database({ members })
+      const res = await GET(makeRequest())
+      expect(res.status).toBe(403)
+      expect(supabaseAdmin.from).not.toHaveBeenCalledWith('roles')
+    },
+  )
+
+  it('不读取已停用组织的角色', async () => {
+    database({ organizationStatus: 'inactive' })
+    expect((await GET(makeRequest())).status).toBe(403)
+    expect(supabaseAdmin.from).not.toHaveBeenCalledWith('roles')
+  })
+
+  it('单角色回读可过滤角色 ID，纷享基础角色返回只读说明', async () => {
+    const { roleQuery } = database({
+      assignments: [root], globalRoles: [{ id: 'baseline', code: 'FXIAOKE_BASELINE', name: '纷享基础', permissions: [] }],
+    })
+    const res = await GET(makeRequest('https://example.test/api/roles?role_id=baseline'))
+    expect(res.status).toBe(200)
+    expect((await res.json()).data).toMatchObject({
+      org_id: 'org-1',
+      permissions_editable: true,
+      roles: [{ id: 'baseline', permissions: ['quote:view', 'contract:view', 'customer:view'], permissions_edit_block_reason: expect.any(String) }],
+    })
+    expect(roleQuery.eq).toHaveBeenCalledWith('id', 'baseline')
+  })
+
   it('组织设置读取失败时返回 500，不返回全局模板权限', async () => {
-    database({}, new Error('settings unavailable'))
+    database({ error: new Error('settings unavailable') })
     const res = await GET(makeRequest())
     expect(res.status).toBe(500)
     expect(await res.json()).toMatchObject({ success: false, error: { code: 'S002' } })
   })
+})
+
+it('only requests the two actionable shipping definitions for the existing role catalog', async () => {
+  const definition = {
+    id: 'one', code: 'shipping:operate', name: '寄件操作', resource: 'shipping', action: 'operate',
+    kind: 'atomic', status: 'published', category: 'shipping', supported_scope_types: ['org'], dependencies: [],
+    enforcement_consumer: 'lib/shipping/operator-access.ts#requireShippingOperator',
+  }
+  const { permissionQuery } = database({
+    assignments: [root],
+    globalRoles: [{ ...roles[1], permissions: ['preserved:legacy', 'shipping:manage_connections'] }],
+    permissionRows: [definition, {
+      ...definition, id: 'two', code: 'shipping:manage_connections', action: 'manage_connections', status: 'draft',
+      enforcement_consumer: 'lib/shipping/connection-authorization.ts',
+    }],
+  })
+  const { data } = await (await GET(makeRequest())).json()
+  expect(permissionQuery.in).toHaveBeenCalledWith('code', ['shipping:operate', 'shipping:manage_connections'])
+  expect(data.roles[0].permissions).toEqual(['preserved:legacy', 'shipping:manage_connections'])
+  expect(data.permission_keys).toContain('shipping:operate')
+  expect(data.permission_keys).not.toContain('shipping:manage_connections')
+  expect(data.permission_keys).not.toContain('preserved:legacy')
+  expect(data.permission_catalog).toMatchObject([{ id: 'shipping', items: [{ key: 'shipping:operate', selectable: true }] }])
 })

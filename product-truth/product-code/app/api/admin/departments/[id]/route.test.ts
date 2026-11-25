@@ -14,6 +14,7 @@ vi.mock('@/lib/scoped-access', () => ({
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     from: vi.fn(),
+    rpc: vi.fn(),
   },
 }))
 
@@ -26,8 +27,17 @@ import {
 import { supabaseAdmin } from '@/lib/supabase'
 import { DELETE, PATCH } from './route'
 
-const routeContext: any = {
-  params: Promise.resolve({ id: '00000000-0000-0000-0000-000000000001' }),
+const departmentId = '00000000-0000-0000-0000-000000000001'
+const oldParentId = '00000000-0000-0000-0000-000000000002'
+const newParentId = '00000000-0000-0000-0000-000000000003'
+const routeContext = { params: Promise.resolve({ id: departmentId }) }
+
+function patchDepartment(body: object) {
+  return PATCH(new Request(`https://example.test/api/admin/departments/${departmentId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }) as any, routeContext)
 }
 
 function malformedJsonRequest(): any {
@@ -44,6 +54,7 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
     ;(getDefaultOrgId as any).mockResolvedValue('org-1')
     ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue(['fresh-assignment'])
     ;(canMutateOrgDepartments as any).mockReturnValue(true)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { leaderId: null, userId: null }, error: null } as never)
   })
 
   it('没有当前组织部门写权限时，在解析 body 和访问业务表前拒绝 PATCH', async () => {
@@ -93,6 +104,89 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
     expect(update.eq).toHaveBeenCalledWith('org_id', 'org-1')
   })
 
+  it('保持上级不变时让部门编辑者修改资料，不重写上级或深度', async () => {
+    const lookup = makeQuery({ data: { id: departmentId, depth: 3, parent_id: oldParentId }, error: null })
+    const update = makeQuery({ data: { id: departmentId }, error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup).mockReturnValueOnce(update)
+
+    const response = await patchDepartment({ name: '改名', sort_order: 2, leader_id: null, parent_id: oldParentId })
+    expect(response.status).toBe(200)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+    expect(update.update).toHaveBeenCalledExactlyOnceWith({ name: '改名', sort_order: 2, leader_id: null })
+  })
+
+  it('上级字段与当前值一致且没有其他修改时返回当前信息', async () => {
+    const existing = { id: departmentId, name: '销售部', depth: 3, parent_id: oldParentId }
+    const lookup = makeQuery({ data: existing, error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup)
+
+    const response = await patchDepartment({ parent_id: oldParentId })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ data: existing })
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+    expect(lookup.update).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['42501', 403, 'NO_PERMISSION'],
+    ['PGRST202', 503, 'DEPARTMENT_LEAD_ACCESS_UNAVAILABLE'],
+  ])('改动部门上级在权限查询返回 %s 时停止', async (code, status, responseCode) => {
+    const lookup = makeQuery({ data: { id: departmentId, parent_id: oldParentId }, error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: null, error: { code } } as never)
+
+    const response = await patchDepartment({ parent_id: null })
+    expect(response.status).toBe(status)
+    expect(await response.json()).toMatchObject({ code: responseCode })
+    expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith('admin_get_department_lead_access_v1', {
+      p_actor_id: 'admin-user', p_org_id: 'org-1', p_department_id: departmentId,
+    })
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+    expect(lookup.update).not.toHaveBeenCalled()
+  })
+
+  it('防止部门成为自己的上级', async () => {
+    const lookup = makeQuery({ data: { id: departmentId, parent_id: oldParentId }, error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup)
+
+    expect((await patchDepartment({ parent_id: departmentId })).status).toBe(400)
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+  })
+
+  it('限制新上级为同组织启用部门，并以读取到的旧上级作为更新条件', async () => {
+    const lookup = makeQuery({ data: { id: departmentId, parent_id: null }, error: null })
+    const parent = makeQuery({ data: { depth: 3, path: `/${newParentId}/` }, error: null })
+    const update = makeQuery({ data: { id: departmentId, parent_id: newParentId }, error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup).mockReturnValueOnce(parent).mockReturnValueOnce(update)
+
+    expect((await patchDepartment({ parent_id: newParentId })).status).toBe(200)
+    expect(parent.eq.mock.calls).toEqual([['id', newParentId], ['org_id', 'org-1'], ['status', 'active']])
+    expect(update.update).toHaveBeenCalledExactlyOnceWith({ parent_id: newParentId, depth: 4 })
+    expect(update.eq.mock.calls).toEqual([['id', departmentId], ['org_id', 'org-1'], ['status', 'active']])
+    expect(update.is).toHaveBeenCalledExactlyOnceWith('parent_id', null)
+  })
+
+  it('同组织启用上级查询无结果时拒绝改隶', async () => {
+    const lookup = makeQuery({ data: { id: departmentId, parent_id: oldParentId }, error: null })
+    const parent = makeQuery({ data: null, error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup).mockReturnValueOnce(parent)
+
+    expect((await patchDepartment({ parent_id: newParentId })).status).toBe(400)
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
+  })
+
+  it('并发改变当前上级或停用部门时返回冲突', async () => {
+    const lookup = makeQuery({ data: { id: departmentId, parent_id: oldParentId }, error: null })
+    const update = makeQuery({ data: null, error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup).mockReturnValueOnce(update)
+
+    const response = await patchDepartment({ parent_id: null })
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'DEPARTMENT_MOVE_CHANGED' })
+    expect(update.eq).toHaveBeenCalledWith('parent_id', oldParentId)
+  })
+
   it('没有当前组织部门写权限时，不访问业务表并拒绝 DELETE', async () => {
     ;(canMutateOrgDepartments as any).mockReturnValue(false)
 
@@ -125,7 +219,7 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
 
 function makeQuery(result: { data?: unknown; error?: unknown }) {
   const query: any = {}
-  ;['select', 'update', 'eq', 'limit'].forEach((method) => {
+  ;['select', 'update', 'eq', 'is', 'limit'].forEach((method) => {
     query[method] = vi.fn().mockReturnValue(query)
   })
   query.single = vi.fn().mockResolvedValue(result)
