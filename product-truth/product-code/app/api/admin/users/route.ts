@@ -8,7 +8,6 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import {
   canMutateOrgDepartments,
-  canMutateOrgUsers,
   getDefaultOrgId,
   getFreshDefaultOrgId,
   getFreshUserScopedRoleAssignments,
@@ -20,6 +19,9 @@ import {
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
 import { validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
+import { canPerformMemberAction } from '@/lib/admin/member-actions'
+import { ORG_MEMBER_INVITE } from '@/lib/admin/member-action-keys'
+import { ORG_BUSINESS_ROLE_ASSIGN } from '@/lib/permissions'
 import { normalizeIdentityPhone } from '@/lib/fxiaoke/identity'
 
 const createUserSchema = z.object({
@@ -100,7 +102,7 @@ export async function POST(req: NextRequest) {
     const orgId = await getFreshDefaultOrgId(currentUser.id)
     const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
 
-    if (!canMutateOrgUsers(actorAssignments, orgId)) {
+    if (!canPerformMemberAction(actorAssignments, orgId, ORG_MEMBER_INVITE)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
@@ -123,6 +125,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_DEPARTMENT_PERMISSION' }, { status: 403 })
     }
 
+    if (role_ids.length > 0 && !canPerformMemberAction(actorAssignments, orgId, ORG_BUSINESS_ROLE_ASSIGN)) {
+      return NextResponse.json({ error: '无权预分配成员角色', code: 'NO_ROLE_ASSIGN_PERMISSION' }, { status: 403 })
+    }
     const roleValidation = await validateOrgRoleAssignment(actorAssignments, orgId, role_ids)
     if (!roleValidation.ok && roleValidation.reason === 'ROLE_NOT_FOUND') {
       return NextResponse.json({ error: '部分角色不存在' }, { status: 400 })

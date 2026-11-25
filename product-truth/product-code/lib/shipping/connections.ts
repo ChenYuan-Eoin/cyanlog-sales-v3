@@ -72,14 +72,15 @@ export async function loadShippingConfiguration(orgId: string): Promise<Shipping
 
 export async function saveCarrierCredentials(orgId: string, userId: string, input: unknown) {
   const parsed = connectionSchema.parse(input)
+  const updateServices = input !== null && typeof input === 'object' && Object.hasOwn(input, 'services')
   const credentials = JSON.stringify({ partnerId: parsed.partnerId, checkWord: parsed.checkWord })
   const { data, error } = await supabaseAdmin.from('shipping_carrier_connections').upsert({
     org_id: orgId, carrier_key: 'sf', environment: parsed.environment,
     credentials_ciphertext: encryptShippingSecret(credentials), partner_id_tail: parsed.partnerId.slice(-4),
-    authorized_services: parsed.services,
+    ...(updateServices ? { authorized_services: parsed.services } : {}),
     connection_status: 'configured', order_capability: 'not_tested', query_capability: 'not_tested', tracking_capability: 'not_tested', cancel_capability: 'not_tested',
     last_tested_at: null, created_by: userId, updated_by: userId
-  }, { onConflict: 'org_id,carrier_key,environment' }).select('id').single()
+  }, { onConflict: 'org_id,carrier_key,environment', defaultToNull: false }).select('id').single()
   if (error || !data) throw databaseError()
   const linked = await supabaseAdmin.from('shipping_billing_accounts').update({ connection_id: data.id }).eq('org_id', orgId).eq('carrier_key', 'sf').eq('environment', parsed.environment).is('connection_id', null)
   if (linked.error) throw databaseError()

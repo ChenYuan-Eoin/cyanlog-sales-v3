@@ -2,6 +2,47 @@ const ORG_DELEGATION_SENSITIVE_RESOURCES = new Set([
   'admin', 'org', 'user', 'dept', 'config', 'role', 'permission', 'platform', 'report', 'feishu',
 ])
 
+export const ORG_MEMBER_EDIT = 'user:edit_profile'
+export const ORG_BUSINESS_ROLE_ASSIGN = 'user:assign_roles'
+export const ORG_DEPARTMENT_DIRECTORY_VIEW = 'dept:directory_view'
+export const ORG_DEPARTMENT_STRUCTURE_EDIT = 'dept:edit_structure'
+export const ORG_DEPARTMENT_STRUCTURE_DELETE = 'dept:delete_structure'
+export const ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS = [
+  ORG_DEPARTMENT_DIRECTORY_VIEW, ORG_DEPARTMENT_STRUCTURE_EDIT, ORG_DEPARTMENT_STRUCTURE_DELETE,
+] as const
+export const ORGANIZATION_SOURCE_PERMISSION_KEYS = [
+  'org:source_view', 'org:source_connect', 'org:source_preview', 'org:source_apply',
+] as const
+
+export function hasConfigurationReadPermission(permissions: string[]): boolean {
+  return ['config:read', 'config:write', 'config:publish'].some(key => hasPermission(permissions, key))
+}
+
+export function hasOrganizationSourcePermission(permissions: string[]): boolean {
+  return ORGANIZATION_SOURCE_PERMISSION_KEYS.some(key => hasPermission(permissions, key))
+}
+
+export function hasOrgDepartmentDirectoryPermission(permissions: string[]): boolean {
+  return hasPermission(permissions, ORG_DEPARTMENT_DIRECTORY_VIEW)
+}
+
+export function canEnterConfigurationCenter(permissions: string[], authorizationRoleCodes: string[]): boolean {
+  return hasConfigurationReadPermission(permissions)
+    || canAccessOrgAdmin(permissions, authorizationRoleCodes)
+    || hasOrganizationSourcePermission(permissions)
+    || hasOrgDepartmentDirectoryPermission(permissions)
+}
+
+export function hasLegacyOrgMemberWrite(permissions: string[], authorizationRoleCodes: string[]): boolean {
+  return authorizationRoleCodes.includes('SUPER_ADMIN') || authorizationRoleCodes.includes('ADMIN')
+    || hasPermission(permissions, 'user:write') || hasPermission(permissions, 'org:write')
+}
+
+export function hasLegacyDepartmentStructureWrite(permissions: string[], authorizationRoleCodes: string[]): boolean {
+  return authorizationRoleCodes.includes('SUPER_ADMIN') || authorizationRoleCodes.includes('ADMIN')
+    || hasPermission(permissions, 'dept:write') || hasPermission(permissions, 'org:write')
+}
+
 export function isOrgDelegationSensitivePermission(permission: string): boolean {
   return permission === '*' || ORG_DELEGATION_SENSITIVE_RESOURCES.has(permission.split(':')[0])
 }

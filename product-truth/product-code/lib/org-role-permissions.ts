@@ -1,11 +1,16 @@
 import { supabaseAdmin } from '@/lib/supabase'
-import { REGISTERED_MODULE_PERMISSION_KEYS, SHIPPING_BUNDLE } from '@/lib/module-access'
 import {
-  canAccessOrgAdmin, hasPermission, isOrgDelegationSensitivePermission,
+  hasShippingPermission, REGISTERED_MODULE_PERMISSION_KEYS, shippingActionViewDependency, SHIPPING_BUNDLE,
+  SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE,
+} from '@/lib/module-access'
+import {
+  canAccessOrgAdmin, hasPermission, isOrgDelegationSensitivePermission, ORG_BUSINESS_ROLE_ASSIGN, ORG_MEMBER_EDIT,
+  ORG_DEPARTMENT_DIRECTORY_VIEW, ORG_DEPARTMENT_STRUCTURE_DELETE, ORG_DEPARTMENT_STRUCTURE_EDIT,
 } from '@/lib/permissions'
 import { PERMISSION_KEYS, SUPER_ADMIN_CORE_PERMISSIONS, resolveRolePermissions } from '@/lib/role-permission-policy'
 import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
 import type { ScopedRoleAssignment } from '@/lib/scoped-access'
+import { ORG_MEMBER_LIFECYCLE_ACTIONS } from '@/lib/admin/member-action-keys'
 
 export async function loadOrgRolePermissionSettings(orgId: string): Promise<unknown> {
   const { data, error } = await supabaseAdmin
@@ -160,11 +165,20 @@ export async function saveOrgRolePermissions(
   const known = new Set<string>([...PERMISSION_KEYS, ...current.permissions])
   if (permissions.some((key) => !known.has(key))) return { ok: false, reason: 'invalid' }
   const newGrants = permissions.filter(key => !current.permissions.includes(key))
+  if (permissions.some(key => key === ORG_MEMBER_EDIT || key === ORG_BUSINESS_ROLE_ASSIGN
+    || ORG_MEMBER_LIFECYCLE_ACTIONS.some(action => action === key))
+    && !hasPermission(permissions, 'user:view')) return { ok: false, reason: 'invalid' }
+  if (permissions.some(key => key === ORG_DEPARTMENT_STRUCTURE_EDIT || key === ORG_DEPARTMENT_STRUCTURE_DELETE)
+    && !hasPermission(permissions, ORG_DEPARTMENT_DIRECTORY_VIEW)) return { ok: false, reason: 'invalid' }
+  if (permissions.some(key => {
+    const dependency = shippingActionViewDependency(key)
+    return dependency !== null && !hasShippingPermission(permissions, dependency)
+  })) return { ok: false, reason: 'invalid' }
   const tenantActor = authorizedSnapshot && !authorizedSnapshot.canEditPlatformRoot ? authorizedSnapshot : null
   if (tenantActor && permissions.includes('*')) return { ok: false, reason: 'escalation_forbidden' }
 
   const grantsRequiringPublishedDefinition = newGrants.includes(SHIPPING_BUNDLE)
-    ? REGISTERED_MODULE_PERMISSION_KEYS
+    ? [SHIPPING_OPERATE, SHIPPING_MANAGE_CONNECTIONS, ...REGISTERED_MODULE_PERMISSION_KEYS.filter(key => newGrants.includes(key))]
     : REGISTERED_MODULE_PERMISSION_KEYS.filter(key => newGrants.includes(key))
   if (grantsRequiringPublishedDefinition.length > 0) {
     const { loadRoleModulePermissionCatalog } = await import('@/lib/permission-registry')
@@ -172,7 +186,8 @@ export async function saveOrgRolePermissions(
     const available = new Map(catalog.flatMap(group => group.items.map(item => [item.key, item.dependencies] as const)))
     for (const key of grantsRequiringPublishedDefinition) {
       const dependencies = available.get(key)
-      if (!dependencies || dependencies.some(dependency => !hasPermission(permissions, dependency))) {
+      if (!dependencies || dependencies.some(dependency =>
+        !available.has(dependency) || !hasShippingPermission(permissions, dependency))) {
         return { ok: false, reason: 'invalid' }
       }
     }

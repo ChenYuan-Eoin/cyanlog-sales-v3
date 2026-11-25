@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/table'
 import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, PowerOffIcon, PowerIcon, LockIcon, UnlockIcon, MailIcon, BanIcon, FingerprintIcon } from 'lucide-react'
 import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment } from '../types'
+import type { MemberActionAvailability } from '@/lib/admin/member-actions'
 import Fuse from 'fuse.js'
 import { success, error, confirmAction } from '@/lib/toast'
 import { buildDepartmentOptions, resolveDepartmentSpaceIds } from '@/lib/department-spaces'
@@ -43,6 +44,17 @@ interface OrgStructureTabProps {
   currentUserId: string | null
   onRefresh?: () => void | Promise<void>
   onOpenIntegrations?: () => void
+}
+
+const unavailableMemberActions: MemberActionAvailability = {
+  edit: false,
+  assignRoles: false,
+  invite: false,
+  manageLogin: false,
+  manageEmployment: false,
+  removeMembership: false,
+  manageDepartments: false,
+  bindExternalIdentity: false,
 }
 
 type LeaderAccess = { userId: string | null; leaderId: string | null }
@@ -198,13 +210,20 @@ interface DepartmentTreeProps {
   departments: OrgSummaryDepartment[]
   users: OrgSummaryUser[]
   memberCounts: Map<string, number> | null
+  memberAccess: boolean
+  canEdit: boolean
+  canDelete: boolean
+  showRootAdd?: boolean
   selectedDeptId: string | null
   onSelectDept: (id: string | null) => void
   onRefresh?: () => void | Promise<void>
   className?: string
 }
 
-function DepartmentTree({ departments, users, memberCounts, selectedDeptId, onSelectDept, onRefresh, className }: DepartmentTreeProps) {
+function DepartmentTree({
+  departments, users, memberCounts, memberAccess, canEdit, canDelete, showRootAdd,
+  selectedDeptId, onSelectDept, onRefresh, className,
+}: DepartmentTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [editDept, setEditDept] = useState<OrgSummaryDepartment | null>(null)
   const [deletingDept, setDeletingDept] = useState<OrgSummaryDepartment | null>(null)
@@ -317,10 +336,11 @@ function DepartmentTree({ departments, users, memberCounts, selectedDeptId, onSe
           </div>
 
           {/* Actions: Edit / Delete */}
-          <DropdownMenu>
+          {(canEdit || canDelete) && <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
+                aria-label={`管理部门 ${dept.name}`}
                 className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity rounded p-1 hover:bg-slate-200/50"
                 onClick={(e) => e.stopPropagation()}
               >
@@ -328,33 +348,33 @@ function DepartmentTree({ departments, users, memberCounts, selectedDeptId, onSe
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setEditDept(dept)}>
+              {canEdit && <DropdownMenuItem onSelect={() => setEditDept(dept)}>
                 <EditIcon className="h-4 w-4 mr-2" />
                 编辑
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => { setAddDeptParentId(dept.parent_id ? dept.parent_id : null); setAddDeptOpen(true); }}>
+              </DropdownMenuItem>}
+              {canEdit && <DropdownMenuItem onSelect={() => { setAddDeptParentId(dept.parent_id ? dept.parent_id : null); setAddDeptOpen(true); }}>
                 <PlusIcon className="h-4 w-4 mr-2" />
                 添加同级部门
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => { setAddDeptParentId(dept.id); setAddDeptOpen(true); }}>
+              </DropdownMenuItem>}
+              {canEdit && <DropdownMenuItem onSelect={() => { setAddDeptParentId(dept.id); setAddDeptOpen(true); }}>
                 <PlusIcon className="h-4 w-4 mr-2" />
                 添加下级部门
-              </DropdownMenuItem>
-              <DropdownMenuItem
+              </DropdownMenuItem>}
+              {canDelete && <DropdownMenuItem
                 className="text-red-600"
                 disabled={deletingDept?.id === dept.id}
                 onSelect={() => handleDelete(dept)}
               >
                 <TrashIcon className="h-4 w-4 mr-2" />
                 {deletingDept?.id === dept.id ? '删除中...' : '删除'}
-              </DropdownMenuItem>
+              </DropdownMenuItem>}
             </DropdownMenuContent>
-          </DropdownMenu>
+          </DropdownMenu>}
 
           {/* Member count */}
-          <Badge variant={isSelected ? 'default' : 'outline'} className="shrink-0 text-xs">
+          {memberAccess && <Badge variant={isSelected ? 'default' : 'outline'} className="shrink-0 text-xs">
             {memberCounts ? memberCounts.get(dept.id) ?? 0 : '—'}
-          </Badge>
+          </Badge>}
         </div>
 
         {isExpanded && hasChildren && (
@@ -371,6 +391,15 @@ function DepartmentTree({ departments, users, memberCounts, selectedDeptId, onSe
   return (
     <>
       <div className={`space-y-1 ${className}`}>
+        {showRootAdd && canEdit && (
+          <Button type="button" size="sm" variant="outline" onClick={() => {
+            setAddDeptParentId(null)
+            setAddDeptOpen(true)
+          }}>
+            <PlusIcon className="mr-1 h-4 w-4" />
+            添加部门
+          </Button>
+        )}
         {rootDepts.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500">
             暂无部门数据
@@ -381,7 +410,7 @@ function DepartmentTree({ departments, users, memberCounts, selectedDeptId, onSe
       </div>
 
       {/* Edit Dialog - controlled by state, not nested in DropdownMenu */}
-      {editDept && (
+      {editDept && canEdit && (
         <DepartmentFormDialog
           departments={departments}
           users={users}
@@ -396,7 +425,7 @@ function DepartmentTree({ departments, users, memberCounts, selectedDeptId, onSe
                 name: values.name,
                 code: values.code,
                 parent_id: values.parent_id,
-                leader_id: values.leader_id,
+                ...(memberAccess ? { leader_id: values.leader_id } : {}),
               }),
             })
             const result = await res.json()
@@ -411,7 +440,7 @@ function DepartmentTree({ departments, users, memberCounts, selectedDeptId, onSe
       )}
 
       {/* 添加同级/下级部门 Dialog */}
-      {addDeptOpen && (
+      {addDeptOpen && canEdit && (
         <DepartmentFormDialog
           departments={departments}
           users={users}
@@ -449,13 +478,14 @@ interface MemberTableProps {
   users: OrgSummaryUser[]
   departments: OrgSummaryDepartment[]
   currentUserId: string | null
+  actions: MemberActionAvailability
   onEditUser: (user: OrgSummaryUser) => void
   onAssignRole: (user: OrgSummaryUser) => void
   onBindIdentity: (user: OrgSummaryUser) => void
   onRefresh?: () => void | Promise<void>
 }
 
-function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIdentity, onRefresh }: MemberTableProps) {
+function MemberTable({ users, currentUserId, actions, onEditUser, onAssignRole, onBindIdentity, onRefresh }: MemberTableProps) {
   const [globalFilter, setGlobalFilter] = useState('')
 
   // 使用 Fuse.js 进行模糊搜索
@@ -574,16 +604,16 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="z-[100]">
               {/* P0: 编辑 */}
-              <DropdownMenuItem disabled={isDirectoryManaged} title={isDirectoryManaged ? '人员资料与在职状态由外部目录管理' : undefined} onSelect={() => onEditUser(user)}>
+              <DropdownMenuItem disabled={!actions.edit || isDirectoryManaged} title={isDirectoryManaged ? '人员资料与在职状态由外部目录管理' : undefined} onSelect={() => onEditUser(user)}>
                 <EditIcon className="h-4 w-4 mr-2" />
                 编辑
               </DropdownMenuItem>
 
               {/* P0: 分配角色 */}
               <DropdownMenuItem
-                disabled={Boolean(roleMutationRestriction) || directoryUnavailable}
+                disabled={!actions.assignRoles || Boolean(roleMutationRestriction) || directoryUnavailable}
                 onSelect={() => {
-                  if (!roleMutationRestriction && !directoryUnavailable) onAssignRole(user)
+                  if (actions.assignRoles && !roleMutationRestriction && !directoryUnavailable) onAssignRole(user)
                 }}
                 title={roleMutationRestriction?.reason || (directoryUnavailable ? '非在职目录成员不可分配角色' : undefined) || (user.can_preassign_org_roles ? '预分配的组织角色将在员工首次登录后生效' : undefined)}
               >
@@ -611,7 +641,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
                 </DropdownMenuItem>
               ) : (
                 <DropdownMenuItem
-                  disabled={isInvited || isDisabled}
+                  disabled={!actions.bindExternalIdentity || isInvited || isDisabled}
                   onSelect={() => onBindIdentity(user)}
                 >
                   <FingerprintIcon className="h-4 w-4 mr-2" />
@@ -628,7 +658,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
                 <DropdownMenuItem disabled>纷享员工无需邀请码；首次登录即可查看，业务操作另按授权</DropdownMenuItem>
               ) : <>
               <DropdownMenuItem
-                disabled={!isInvited}
+                disabled={!actions.invite || !isInvited}
                 onSelect={async () => {
                   if (!await confirmAction(`重新生成 "${user.display_name}" 的待激活邀请码吗？旧激活码将立即失效。`, { confirmText: '重发邀请' })) return
                   try {
@@ -653,7 +683,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
               </DropdownMenuItem>
 
               <DropdownMenuItem
-                disabled={!isInvited}
+                disabled={!actions.invite || !isInvited}
                 onSelect={async () => {
                   if (!await confirmAction(`撤销 "${user.display_name}" 当前待激活邀请吗？`, { confirmText: '撤销邀请', danger: true })) return
                   try {
@@ -680,7 +710,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
 
               {/* P1: 停用/启用 */}
               <DropdownMenuItem
-                disabled={isInvited}
+                disabled={!actions.manageEmployment || isInvited || Boolean(roleMutationRestriction)}
                 onSelect={async () => {
                   const isRehire = user.status === 'inactive'
                   const action = isRehire ? '恢复在职' : isDisabled ? '启用' : '停用'
@@ -727,7 +757,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
 
               {/* P1: 允许/禁止登录 */}
               <DropdownMenuItem
-                disabled={isInvited}
+                disabled={!actions.manageLogin || isInvited || Boolean(roleMutationRestriction)}
                 onSelect={async () => {
                   const action = isLoginDisabled ? '允许' : '禁止'
                   if (!await confirmAction(`确定要${action}用户 "${user.display_name}" 登录吗？`, { confirmText: action, danger: !isLoginDisabled })) return
@@ -767,7 +797,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
               {!isInvited && (
                 <DropdownMenuItem
                   className="text-red-600"
-                  disabled={Boolean(roleMutationRestriction)}
+                  disabled={!actions.manageEmployment || Boolean(roleMutationRestriction)}
                   onSelect={async () => {
                     if (!await confirmAction(`确定要为 "${user.display_name}" 办理离职吗？\n成员关系、角色和部门授权会结束，历史审计保留，可在之后明确复职。`, { confirmText: '办理离职', danger: true })) return
                     try {
@@ -796,7 +826,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
               {!isInvited && (
                 <DropdownMenuItem
                   className="text-red-600"
-                  disabled={Boolean(roleMutationRestriction)}
+                  disabled={!actions.removeMembership || Boolean(roleMutationRestriction)}
                   onSelect={async () => {
                     if (!await confirmAction(
                       `确定要将 "${user.display_name}" 移出当前组织吗？\n只结束当前租户的成员关系、角色和数据授权，人员账户与历史审计保留。`,
@@ -830,7 +860,7 @@ function MemberTable({ users, currentUserId, onEditUser, onAssignRole, onBindIde
         )
       },
     },
-  ], [currentUserId, onEditUser, onAssignRole, onBindIdentity, onRefresh])
+  ], [currentUserId, actions, onEditUser, onAssignRole, onBindIdentity, onRefresh])
 
   const table = useReactTable({
     data: filteredUsers,
@@ -1006,7 +1036,34 @@ export default function OrgStructureTab({
   const assigningRoleIds = useMemo(() => assigningUser ? editableOrgRoleIds(assigningUser) : [], [assigningUser])
   const [bindingUser, setBindingUser] = useState<OrgSummaryUser | null>(null)
 
+  const actions = orgSummary?.member_actions ?? unavailableMemberActions
+  const departmentAccess = orgSummary?.department_access
+  const canEditDepartments = departmentAccess?.canEdit ?? actions.manageDepartments
+  const canDeleteDepartments = departmentAccess?.canDelete ?? actions.manageDepartments
   const isEmptyState = departments.length === 0 && users.length === 0
+
+  if (orgSummary?.member_access === false) {
+    return (
+      <div className="space-y-4">
+        <StatCard icon={<BuildingIcon size={18} />} label="部门" value={stats.deptCount} />
+        <div className="rounded-lg border bg-white p-4">
+          <h3 className="mb-3 font-medium text-slate-900">部门结构</h3>
+          <DepartmentTree
+            departments={departments}
+            users={[]}
+            memberCounts={null}
+            memberAccess={false}
+            canEdit={canEditDepartments}
+            canDelete={canDeleteDepartments}
+            showRootAdd
+            selectedDeptId={selectedDeptId}
+            onSelectDept={setSelectedDeptId}
+            onRefresh={onRefresh}
+          />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -1077,6 +1134,9 @@ export default function OrgStructureTab({
                 departments={departments}
                 users={users}
                 memberCounts={departmentMemberCounts}
+                memberAccess
+                canEdit={canEditDepartments}
+                canDelete={canDeleteDepartments}
                 selectedDeptId={selectedDeptId}
                 onSelectDept={setSelectedDeptId}
                 onRefresh={onRefresh}
@@ -1128,6 +1188,7 @@ export default function OrgStructureTab({
                 users={filteredUsers}
                 departments={departments}
                 currentUserId={currentUserId}
+                actions={actions}
                 onEditUser={setEditingUser}
                 onAssignRole={(user) => {
                   const restriction = getRoleMutationRestriction(user, currentUserId)
@@ -1172,10 +1233,10 @@ export default function OrgStructureTab({
               </Button>
             )}
           </div>
-          <div className="rounded-lg border bg-white p-4">
+          {(canEditDepartments || actions.invite) && <div className="rounded-lg border bg-white p-4">
             <h3 className="font-medium text-slate-900">组织操作</h3>
             <div className="mt-4 grid gap-2">
-          <DepartmentFormDialog
+          {canEditDepartments && <DepartmentFormDialog
             departments={departments}
             users={users}
             onSubmit={async (values) => {
@@ -1203,10 +1264,10 @@ export default function OrgStructureTab({
                 添加部门
               </Button>
             }
-          />
-          <UserFormDialog
-            departments={departments}
-            roles={orgSummary?.roles ?? []}
+          />}
+          {actions.invite && <UserFormDialog
+            departments={actions.manageDepartments ? departments : []}
+            roles={actions.assignRoles ? orgSummary?.roles ?? [] : []}
             onSubmit={async (values) => {
               const res = await fetch('/api/admin/users', {
                 method: 'POST',
@@ -1238,9 +1299,9 @@ export default function OrgStructureTab({
                 添加成员
               </Button>
             }
-          />
+          />}
             </div>
-          </div>
+          </div>}
 
           <div className="rounded-lg border bg-white p-4">
             <h3 className="font-medium text-slate-900">当前上下文</h3>
@@ -1262,7 +1323,7 @@ export default function OrgStructureTab({
       </div>
 
       {/* 编辑用户 Dialog */}
-      {editingUser && (
+      {editingUser && actions.edit && (
         <UserFormDialog
           departments={departments}
           editingUser={editingUser}
@@ -1287,13 +1348,13 @@ export default function OrgStructureTab({
 
       <IdentityBindingDialog
         user={bindingUser}
-        open={Boolean(bindingUser)}
+        open={actions.bindExternalIdentity && Boolean(bindingUser)}
         onOpenChange={(open) => !open && setBindingUser(null)}
         onBound={onRefresh}
       />
 
       {/* 分配角色 Dialog */}
-      {assigningUser && (
+      {assigningUser && actions.assignRoles && (
         <RoleAssignmentDialog
           userId={assigningUser.id}
           userName={assigningUser.display_name}

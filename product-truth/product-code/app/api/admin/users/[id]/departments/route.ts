@@ -7,10 +7,11 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { assertDepartmentInOrg } from '@/lib/admin/org-membership'
 import {
-  canMutateOrgUsers,
   getDefaultOrgId,
   getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
+import { canPerformMemberAction } from '@/lib/admin/member-actions'
+import { ORG_MEMBER_EDIT } from '@/lib/permissions'
 
 const uuidSchema = z.string().regex(/^[0-9a-f-]{36}$/i, '部门 ID 格式不正确')
 
@@ -37,7 +38,7 @@ export async function POST(
     const orgId = await getDefaultOrgId(currentUser.id)
     const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
 
-    if (!canMutateOrgUsers(actorAssignments, orgId)) {
+    if (!canPerformMemberAction(actorAssignments, orgId, ORG_MEMBER_EDIT)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
@@ -122,7 +123,7 @@ export async function DELETE(
     const orgId = await getDefaultOrgId(currentUser.id)
     const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
 
-    if (!canMutateOrgUsers(actorAssignments, orgId)) {
+    if (!canPerformMemberAction(actorAssignments, orgId, ORG_MEMBER_EDIT)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 

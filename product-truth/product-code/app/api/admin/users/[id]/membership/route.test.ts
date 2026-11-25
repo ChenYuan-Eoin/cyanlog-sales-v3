@@ -66,6 +66,21 @@ describe('/api/admin/users/[id]/membership', () => {
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
+  it('distinguishes removing membership from managing employment', async () => {
+    ;(canMutateOrgUsers as any).mockReturnValue(false)
+    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValueOnce([
+      { scopeType: 'org', scopeId: orgId, permissions: ['user:manage_employment'] },
+    ])
+    expect((await DELETE(request(), context)).status).toBe(403)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+
+    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValueOnce([
+      { scopeType: 'org', scopeId: orgId, permissions: ['user:remove_membership'] },
+    ])
+    expect((await DELETE(request(), context)).status).toBe(200)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledOnce()
+  })
+
   it('reports last-admin lockout protection as a conflict', async () => {
     ;(supabaseAdmin.rpc as any).mockResolvedValue({
       data: null,

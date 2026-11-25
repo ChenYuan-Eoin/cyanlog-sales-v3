@@ -1,14 +1,15 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), org: vi.fn(), roles: vi.fn(), manage: vi.fn(), load: vi.fn(), save: vi.fn(), preview: vi.fn(), discover: vi.fn() }))
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), org: vi.fn(), roles: vi.fn(), load: vi.fn(), save: vi.fn(), preview: vi.fn(), discover: vi.fn() }))
 vi.mock('@/lib/auth', () => ({ requireAuth: mocks.auth }))
-vi.mock('@/lib/scoped-access', () => ({ getFreshDefaultOrgId: mocks.org, getFreshUserScopedRoleAssignments: mocks.roles, canManageOrg: mocks.manage }))
+vi.mock('@/lib/scoped-access', () => ({ getFreshDefaultOrgId: mocks.org, getFreshUserScopedRoleAssignments: mocks.roles }))
 vi.mock('@/lib/fxiaoke/settings', () => ({ loadConnection: mocks.load, saveConnection: mocks.save, previewSavedConnection: mocks.preview }))
 vi.mock('@/lib/fxiaoke/client', () => ({ discoverEnterprise: mocks.discover }))
 import { GET, POST } from './route'
 beforeEach(() => {
-  vi.resetAllMocks(); mocks.auth.mockResolvedValue({ id: 'admin' }); mocks.org.mockResolvedValue('org-a'); mocks.roles.mockResolvedValue([])
-  mocks.manage.mockImplementation((_roles, orgId) => orgId === 'org-a'); mocks.load.mockResolvedValue(null)
+  vi.resetAllMocks(); mocks.auth.mockResolvedValue({ id: 'admin' }); mocks.org.mockResolvedValue('org-a')
+  mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', permissions: ['org:source_connect'] }])
+  mocks.load.mockResolvedValue(null)
 })
 const request = (body?: unknown, orgId = 'org-a') => new NextRequest('https://sales.cyanlog.icu/api/admin/organization-sources/fxiaoke', {
   method: body ? 'POST' : 'GET', headers: { 'x-org-id': orgId }, ...(body ? { body: JSON.stringify(body) } : {}),
@@ -29,9 +30,17 @@ it('only discovers an enterprise for an authorized manager and rejects incomplet
 })
 it('rechecks fresh management authority for every request', async () => {
   expect((await GET(request())).status).toBe(200)
-  mocks.manage.mockReturnValue(false)
+  mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', permissions: ['org:source_view'] }])
   expect((await POST(request({ action: 'preview', revision: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }))).status).toBe(403)
   expect(mocks.roles).toHaveBeenCalledTimes(2); expect(mocks.preview).not.toHaveBeenCalled()
+})
+it('returns only status and revision from the legacy connection view', async () => {
+  mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', permissions: ['org:source_view'] }])
+  mocks.load.mockResolvedValue({ appId: 'app', apiUserId: 'api-user', configured: true, revision: 'revision' })
+  const response = await GET(request())
+  expect(await response.json()).toEqual({
+    data: { connection: { appId: '', apiUserId: '', configured: true, revision: 'revision' } },
+  })
 })
 it('rejects anonymous access and unknown actions', async () => {
   expect((await POST(request({ action: 'activate' }))).status).toBe(400)

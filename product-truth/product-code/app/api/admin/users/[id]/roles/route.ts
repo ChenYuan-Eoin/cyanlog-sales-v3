@@ -6,7 +6,6 @@ import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import {
-  canMutateOrgUsers,
   getFreshDefaultOrgId,
   getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
@@ -14,6 +13,8 @@ import {
   userHasOrgRoleCode,
   validateOrgRoleAssignment,
 } from '@/lib/admin/org-role-authority'
+import { canPerformMemberAction } from '@/lib/admin/member-actions'
+import { ORG_BUSINESS_ROLE_ASSIGN } from '@/lib/permissions'
 
 const orgRoleIds = z.array(z.string().regex(/^[0-9a-f-]{36}$/i, '角色 ID 格式不正确'))
 const assignOrgRolesSchema = z.object({
@@ -34,7 +35,7 @@ export async function POST(
     const orgId = await getFreshDefaultOrgId(currentUser.id)
     const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
 
-    if (!canMutateOrgUsers(actorAssignments, orgId)) {
+    if (!canPerformMemberAction(actorAssignments, orgId, ORG_BUSINESS_ROLE_ASSIGN)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 

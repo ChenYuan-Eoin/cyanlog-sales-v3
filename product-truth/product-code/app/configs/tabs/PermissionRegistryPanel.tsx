@@ -240,10 +240,10 @@ export function PermissionRegistryPanel() {
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div>
           <div className="flex items-center gap-2">
-            <h3 className="font-medium text-slate-900">平台权限目录</h3>
+            <h3 className="font-medium text-slate-900">平台权限定义</h3>
             <Badge variant="outline">{definitions.length} 项</Badge>
           </div>
-          <p className="mt-1 text-xs text-slate-500">定义版本、执行消费者和生命周期。</p>
+          <p className="mt-1 text-xs text-slate-500">维护权限定义、版本和发布状态。</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setOpen((value) => !value)}>

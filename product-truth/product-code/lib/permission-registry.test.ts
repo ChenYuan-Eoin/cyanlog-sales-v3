@@ -6,6 +6,7 @@ const rolePermissions = vi.hoisted(() => ({ loadOrgRolePermissionContext: vi.fn(
 vi.mock('@/lib/org-role-permissions', () => rolePermissions)
 
 import { supabaseAdmin } from '@/lib/supabase'
+import { REGISTERED_MODULE_PERMISSION_KEYS } from './module-access'
 import {
   canManagePlatformPermissionRegistry,
   listPermissionDefinitions,
@@ -128,7 +129,7 @@ describe('shipping permissions from the executable registry', () => {
     const keys = await loadPublishedModulePermissionKeys()
     expect(keys).toEqual(['shipping:manage_connections', 'shipping:operate'])
     expect((await loadRoleModulePermissionCatalog()).flatMap(group => group.items).map(item => item.key).sort()).toEqual(keys)
-    expect(query.in).toHaveBeenCalledWith('code', ['shipping:operate', 'shipping:manage_connections'])
+    expect(query.in).toHaveBeenCalledWith('code', [...REGISTERED_MODULE_PERMISSION_KEYS])
   })
 
   it('returns no executable actions for a stale, unverified or failed registry', async () => {

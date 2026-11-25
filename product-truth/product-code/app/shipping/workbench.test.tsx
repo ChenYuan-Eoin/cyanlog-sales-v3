@@ -22,6 +22,19 @@ beforeEach(() => { fetcher.mockReset(); useLedger([]); vi.stubGlobal('React', Re
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('self-service shipping workbench', () => {
+  it('lets a ledger viewer read stored logistics without exposing shipping writes or polling the carrier', async () => {
+    const order: ShipmentOrder = { ...fixtureOrders[0], status: 'waybill_created', waybill: 'SF1234567890123' }
+    useLedger([order])
+    render(<ShippingWorkbench settings={{ ...settings, permissions: ['shipping:ledger_view'] }}/>)
+    await screen.findByRole('heading', { name: '收寄件台账' })
+    await screen.findByRole('button', { name: '复制单号' })
+    expect(screen.queryByRole('region', { name: '批量寄件操作台' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /批量确认并下单|刷新递送信息|取消/ })).toBeNull()
+    expect(screen.queryByRole('form', { name: '物流轨迹查询' })).toBeNull()
+    expect(fetcher.mock.calls.every(([url]) => url !== '/api/shipping/tracking')).toBe(true)
+  })
+
+
   it('saves a pre-dispatch work order as a new review revision without dispatching', async () => {
     const order: ShipmentOrder = {
       ...fixtureOrders[0],

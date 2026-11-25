@@ -6,7 +6,7 @@ import { ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
 import {
   canAccessOrgAdmin,
   canReviewContracts as canReviewContractsByPermission,
-  hasPermission,
+  hasPermission, hasLegacyDepartmentStructureWrite, hasLegacyOrgMemberWrite,
 } from '@/lib/permissions'
 
 export type ScopeType = 'org' | 'department' | 'space'
@@ -497,20 +497,14 @@ export function canMutateOrgUsers(assignments: ScopedRoleAssignment[], orgId: st
   const permissions = getOrgPermissions(assignments, orgId)
   const roleCodes = getOrgAuthorizationRoleCodes(assignments, orgId)
 
-  return roleCodes.includes('SUPER_ADMIN')
-    || roleCodes.includes('ADMIN')
-    || hasPermission(permissions, 'user:write')
-    || hasPermission(permissions, 'org:write')
+  return hasLegacyOrgMemberWrite(permissions, roleCodes)
 }
 
 export function canMutateOrgDepartments(assignments: ScopedRoleAssignment[], orgId: string): boolean {
   const permissions = getOrgPermissions(assignments, orgId)
   const roleCodes = getOrgAuthorizationRoleCodes(assignments, orgId)
 
-  return roleCodes.includes('SUPER_ADMIN')
-    || roleCodes.includes('ADMIN')
-    || hasPermission(permissions, 'dept:write')
-    || hasPermission(permissions, 'org:write')
+  return hasLegacyDepartmentStructureWrite(permissions, roleCodes)
 }
 
 async function loadAccessibleSalesSpaces(userId: string, orgId: string, currentAssignments: ScopedRoleAssignment[]): Promise<{

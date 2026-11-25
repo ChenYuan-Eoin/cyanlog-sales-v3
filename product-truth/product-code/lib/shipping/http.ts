@@ -6,7 +6,10 @@ import { requireShippingConnectionManager } from './connection-authorization'
 import { loadShippingOperatorDecision, requireShippingOperator } from './operator-access'
 import { getRequestAuthToken } from '@/lib/auth-token'
 import { supabaseAdmin } from '@/lib/supabase'
-import { canWriteFxiaokeOwnerShipping } from '@/lib/module-access'
+import {
+  canWriteFxiaokeOwnerShipping, SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE,
+  shippingOwnerPermissionRequirement, shippingPermissionRequirement, type ShippingPermissionKey,
+} from '@/lib/module-access'
 import { ZodError } from 'zod'
 
 type ShippingHandlerOptions = { allowFxiaokeSelfSubmit?: boolean; requiresOwnerWrite?: boolean }
@@ -14,9 +17,13 @@ type ShippingHandlerOptions = { allowFxiaokeSelfSubmit?: boolean; requiresOwnerW
 export async function shippingHandler(req: NextRequest, action: (user: AuthUser, orgId: string, selfSubmit: boolean) => Promise<unknown>, options: ShippingHandlerOptions = {}) {
   try {
     const user = await requireAuth(req)
+    const { pathname } = req.nextUrl
+    const permission = options.allowFxiaokeSelfSubmit
+      ? shippingOwnerPermissionRequirement(pathname, req.method) ?? SHIPPING_OPERATE
+      : shippingPermissionRequirement(pathname, req.method, false) ?? SHIPPING_OPERATE
     const decision = options.allowFxiaokeSelfSubmit
-      ? await loadShippingOperatorDecision(user.id)
-      : { orgId: await requireShippingOperator(user.id), canOperate: true, roleCodes: [] }
+      ? await loadShippingOperatorDecision(user.id, permission)
+      : { orgId: await requireShippingOperator(user.id, permission), canOperate: true, roleCodes: [] }
     if (!decision?.orgId) throw new ShippingError(403, '当前账号没有可用的组织寄件授权。')
     const selfSubmit = !decision.canOperate
     const read = req.method === 'GET' || req.method === 'HEAD'
@@ -44,12 +51,19 @@ export async function shippingHandler(req: NextRequest, action: (user: AuthUser,
   }
 }
 
-export async function shippingManagerHandler(req: NextRequest, action: (user: AuthUser, orgId: string) => Promise<unknown>) {
+export async function shippingManagerHandler(
+  req: NextRequest,
+  action: (user: AuthUser, orgId: string) => Promise<unknown>,
+  resolvePermission?: () => Promise<ShippingPermissionKey | readonly ShippingPermissionKey[]>,
+) {
   try {
     const user = await requireAuth(req)
     const origin = req.headers.get('origin')
     if (req.method !== 'GET' && origin && origin !== req.nextUrl.origin) throw new ShippingError(403, '请求来源不受信任。')
-    const orgId = await requireShippingConnectionManager(user.id)
+    const permission = resolvePermission
+      ? await resolvePermission()
+      : shippingPermissionRequirement(req.nextUrl.pathname, req.method, false) ?? SHIPPING_MANAGE_CONNECTIONS
+    const orgId = await requireShippingConnectionManager(user.id, permission)
     return NextResponse.json(await action(user, orgId), { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     const status = e instanceof AuthError ? 401 : e instanceof ShippingError ? e.status : e instanceof ZodError || e instanceof SyntaxError ? 400 : 500

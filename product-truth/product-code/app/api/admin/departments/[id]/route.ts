@@ -5,11 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import {
-  canMutateOrgDepartments,
-  getDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
+import { loadDepartmentStructureContext } from '@/lib/admin/department-actions'
 
 const uuidSchema = z.guid({ error: 'ID 格式不正确' }).transform(value => value.toLowerCase())
 const DEPARTMENT_FIELDS = 'id, name, code, depth, member_count, parent_id, leader_id, sort_order'
@@ -58,10 +54,8 @@ export async function PATCH(
   try {
     const { id } = await params
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
-    const assignments = await getFreshUserScopedRoleAssignments(user.id)
-
-    if (!canMutateOrgDepartments(assignments, orgId)) {
+    const { orgId, canEdit } = await loadDepartmentStructureContext(user.id)
+    if (!canEdit) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
@@ -210,10 +204,8 @@ export async function DELETE(
   try {
     const { id } = await params
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
-    const assignments = await getFreshUserScopedRoleAssignments(user.id)
-
-    if (!canMutateOrgDepartments(assignments, orgId)) {
+    const { orgId, canDelete } = await loadDepartmentStructureContext(user.id)
+    if (!canDelete) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 

@@ -19,9 +19,14 @@ beforeEach(() => { vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 const appliedAt = '2026-11-09T07:54:14Z'
+const adminActions = {
+  edit: true, assignRoles: true, invite: true, manageLogin: true, manageEmployment: true,
+  removeMembership: true, manageDepartments: true, bindExternalIdentity: true,
+}
 
 it('shows the refreshed manually invited member without counting them in the default synced directory', async () => {
   const orgSummary: OrgSummaryPayload = {
+    member_actions: adminActions,
     departments: [], roles: [], spaces: [], users: [],
     directory_roster: { status: 'ready', asOf: appliedAt, members: [] },
   }
@@ -78,6 +83,7 @@ it('cascades department selection through primary and secondary memberships and 
 })
 
 const statusPayload: OrgSummaryPayload = {
+  member_actions: adminActions,
   directory_roster: { status: 'ready', asOf: appliedAt, members: [{ id: 'active-pending', departmentIds: ['sales', 'child'] }] },
   roles: [], spaces: [], departments: [
     { id: 'sales', name: '销售父部门', parent_name: null, parent_id: null, member_count: 99 },
@@ -103,6 +109,39 @@ it('defaults to employed members, preserves active directory newcomers and count
   fireEvent.click(screen.getByRole('button', { name: /^销售父部门/ }))
   expect(screen.getByText('在职待登录甲')).toBeInTheDocument()
   expect(screen.getByText('共 1 人（含子部门）')).toBeInTheDocument()
+})
+
+it('keeps department-only readers out of member, employee counts, and mutation controls', () => {
+  render(<OrgStructureTab orgSummary={{
+    ...statusPayload,
+    member_access: false,
+    users: [],
+    member_actions: undefined,
+    department_access: { canRead: true, canEdit: false, canDelete: false },
+  }} currentUserId="actor" />)
+
+  expect(screen.getByRole('heading', { name: '部门结构' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /^销售父部门/ })).not.toHaveTextContent('1')
+  expect(screen.queryByLabelText('成员状态')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '管理部门 销售父部门' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '添加部门' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '提交新增成员' })).not.toBeInTheDocument()
+})
+
+it('shows only granted lifecycle actions for an organization member', async () => {
+  render(<OrgStructureTab orgSummary={{
+    ...statusPayload,
+    member_actions: {
+      edit: false, assignRoles: false, invite: false, manageLogin: true, manageEmployment: false,
+      removeMembership: false, manageDepartments: false, bindExternalIdentity: false,
+    },
+  }} currentUserId="actor" />)
+  fireEvent.change(screen.getByLabelText('成员状态'), { target: { value: 'all' } })
+  fireEvent.pointerDown(screen.getByRole('button', { name: '管理本地在职戊' }), { button: 0, ctrlKey: false })
+  expect(await screen.findByRole('menuitem', { name: '禁止登录' })).not.toHaveAttribute('aria-disabled')
+  expect(screen.getByRole('menuitem', { name: '办理离职' })).toHaveAttribute('aria-disabled', 'true')
+  expect(screen.getByRole('menuitem', { name: '移出当前组织' })).toHaveAttribute('aria-disabled', 'true')
+  expect(screen.queryByRole('button', { name: '提交新增成员' })).not.toBeInTheDocument()
 })
 
 it('shows an unconfirmed directory count as unknown and still lets administrators see all local records', () => {

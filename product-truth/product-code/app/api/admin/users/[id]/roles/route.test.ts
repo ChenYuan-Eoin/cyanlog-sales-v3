@@ -124,6 +124,36 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
+  it.each([
+    { scopeType: 'org', scopeId: 'org-1', permissions: ['user:view', 'user:edit_profile'] },
+    { scopeType: 'org', scopeId: 'another-org', permissions: ['user:view', 'user:assign_roles'] },
+    { scopeType: 'department', scopeId: 'org-1', permissions: ['user:view', 'user:assign_roles'] },
+  ])('rejects unrelated actions or a different scope: %j', async (assignment) => {
+    vi.mocked(canMutateOrgUsers).mockReturnValue(false)
+    vi.mocked(getFreshUserScopedRoleAssignments).mockResolvedValue([{
+      roleId: roleId, roleCode: 'CUSTOM', roleName: 'Custom', grantedAt: null,
+      scopeType: assignment.scopeType as 'org' | 'department', scopeId: assignment.scopeId, permissions: assignment.permissions,
+    }])
+    expect((await POST(jsonRequest({ role_ids: [roleId] }), routeContext)).status).toBe(403)
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it('admits an exact organization business role grant without profile write authority', async () => {
+    vi.mocked(canMutateOrgUsers).mockReturnValue(false)
+    vi.mocked(getFreshUserScopedRoleAssignments).mockResolvedValue([{
+      roleId, roleCode: 'CUSTOM', roleName: 'Custom', grantedAt: null,
+      scopeType: 'org', scopeId: 'org-1', permissions: ['user:view', 'user:assign_roles'],
+    }])
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(makeUserLookupQuery({ data: { id: 'member' }, error: null }) as never)
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(makeRoleListQuery({ data: [], error: null }))
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(makeRoleListQuery({ data: [{ role_id: roleId }], error: null }))
+    const response = await POST(jsonRequest({ role_ids: [roleId] }), routeContext)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ data: [{ role_id: roleId }] })
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_replace_org_roles_v1', expect.objectContaining({ p_role_ids: [roleId] }))
+  })
+
   it('目标用户不存在时返回 404 且不替换角色', async () => {
     const query = makeUserLookupQuery({ data: null, error: null })
     ;(supabaseAdmin.from as any).mockReturnValue(query)

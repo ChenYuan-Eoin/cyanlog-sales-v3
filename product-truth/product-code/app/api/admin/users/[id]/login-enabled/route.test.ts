@@ -5,7 +5,7 @@ vi.mock('@/lib/auth', () => ({ requireAuth: vi.fn() }))
 
 vi.mock('@/lib/scoped-access', () => ({
   canMutateOrgUsers: vi.fn(),
-  getDefaultOrgId: vi.fn(),
+  getFreshDefaultOrgId: vi.fn(),
   getFreshUserScopedRoleAssignments: vi.fn(),
 }))
 
@@ -23,7 +23,7 @@ vi.mock('@/lib/supabase', () => ({
 import { requireAuth } from '@/lib/auth'
 import {
   canMutateOrgUsers,
-  getDefaultOrgId,
+  getFreshDefaultOrgId,
   getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
 import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
@@ -58,7 +58,7 @@ describe('/api/admin/users/[id]/login-enabled', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: actorId })
-    ;(getDefaultOrgId as any).mockResolvedValue(orgId)
+    ;(getFreshDefaultOrgId as any).mockResolvedValue(orgId)
     ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue([
       { scopeType: 'org', scopeId: orgId, roleCode: 'ADMIN', permissions: ['user:write'] },
     ])

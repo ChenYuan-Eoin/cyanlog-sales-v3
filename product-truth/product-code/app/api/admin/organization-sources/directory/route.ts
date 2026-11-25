@@ -1,11 +1,6 @@
 // REQ: F003 / WP92. Tenant-scoped immutable directory preview, apply and rollback.
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import {
-  canManageOrg,
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
+import { loadOrganizationSourceAccess, type OrganizationSourceAccess } from '@/lib/admin/organization-source-access'
 import {
   applyDirectoryCutoverPlan,
   loadLatestDirectoryCutoverPlan,
@@ -38,15 +33,14 @@ function response(data: unknown, status = 200) {
 
 async function authorize(
   req: NextRequest,
-  run: (orgId: string, actorId: string) => Promise<Response>,
+  run: (orgId: string, actorId: string, access: OrganizationSourceAccess) => Promise<Response>,
 ) {
   try {
-    const user = await requireAuth(req)
-    const orgId = req.headers.get('x-org-id')?.trim() || await getFreshDefaultOrgId(user.id)
-    if (!orgId || !canManageOrg(await getFreshUserScopedRoleAssignments(user.id), orgId)) {
+    const context = await loadOrganizationSourceAccess(req)
+    if (!context?.access.view) {
       return response(new OrganizationConnectionError('FORBIDDEN', '无权管理此企业的组织目录。', 403), 403)
     }
-    return await run(orgId, user.id)
+    return await run(context.orgId, context.actor.id, context.access)
   } catch (error) {
     if (error instanceof Error && error.name === 'AuthError') {
       return response(new OrganizationConnectionError('UNAUTHORIZED', '请先登录。', 401), 401)
@@ -58,7 +52,7 @@ async function authorize(
 }
 
 export async function GET(req: NextRequest) {
-  return authorize(req, async orgId => {
+  return authorize(req, async (orgId, _actorId, access) => {
     const provider = directoryProvider(req.nextUrl.searchParams.get('provider'))
     if (!await detectDirectoryCutoverStorage()) {
       return response({
@@ -70,14 +64,14 @@ export async function GET(req: NextRequest) {
       })
     }
     return response({
-      plan: await loadLatestDirectoryCutoverPlan(orgId, provider),
+      plan: access.preview || access.apply ? await loadLatestDirectoryCutoverPlan(orgId, provider) : null,
       directory_cutover: { available: true, reason: null },
     })
   })
 }
 
 export async function POST(req: NextRequest) {
-  return authorize(req, async (orgId, actorId) => {
+  return authorize(req, async (orgId, actorId, access) => {
     const raw = await req.text()
     if (raw.length > 65_536) {
       throw new OrganizationConnectionError('INVALID_INPUT', '目录切源请求超出长度限制。', 400)
@@ -92,6 +86,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === 'preview') {
+      if (!access.preview) throw new OrganizationConnectionError('FORBIDDEN', '无权预览此组织的目录差异。', 403)
       const provider = directoryProvider(body.provider)
       return response({
         plan: await prepareDirectoryCutoverPlan({ orgId, actorId, provider }),
@@ -99,6 +94,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === 'apply') {
+      if (!access.apply) throw new OrganizationConnectionError('FORBIDDEN', '无权应用此组织的目录差异。', 403)
       if (!Array.isArray(body.source_revisions)) {
         throw new OrganizationConnectionError('INVALID_INPUT', '来源版本快照缺失。', 400)
       }
@@ -115,6 +111,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === 'rollback') {
+      if (!access.apply) throw new OrganizationConnectionError('FORBIDDEN', '无权回滚此组织的目录同步。', 403)
       return response({
         run: await rollbackDirectoryCutover({
           orgId,

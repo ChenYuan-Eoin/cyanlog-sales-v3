@@ -34,7 +34,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import Fuse from 'fuse.js'
 import {
-  PERMISSION_KEYS,
+  canRevokeShippingAction,
   SUPER_ADMIN_CORE_PERMISSIONS,
   getPermissionGrantSource,
   grantExplicitRolePermissions,
@@ -43,15 +43,20 @@ import {
   revokeRolePermissions,
   toggleExplicitRolePermission,
 } from '@/lib/role-permission-policy'
+import { getEffectiveShippingPermissions, legacyShippingPermission, REGISTERED_MODULE_PERMISSION_KEYS } from '@/lib/module-access'
+import { ORG_BUSINESS_ROLE_ASSIGN, ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ORG_MEMBER_EDIT } from '@/lib/permissions'
+import { ORG_MEMBER_LIFECYCLE_ACTIONS } from '@/lib/admin/member-action-keys'
 import { success, error, confirmAction } from '@/lib/toast'
 import { ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
-import { hasPublishedShippingBundle, REGISTERED_MODULE_PERMISSION_KEYS, SHIPPING_BUNDLE, SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE } from '@/lib/module-access'
 import type { RoleModulePermissionCatalog } from '@/lib/org-role-permission-readback'
-import type {
-  OrgSummaryUser,
-  OrgSummaryDepartment,
-  PermissionCatalogGroup,
-} from '../types'
+import type { OrgSummaryUser, OrgSummaryDepartment } from '../types'
+import {
+  buildRolePermissionDirectory,
+  getDirectoryActions,
+  legacyPermissionLabels,
+  removableShippingCompatibilityKeys,
+  type PermissionDirectoryGroup,
+} from '../permission-directory'
 import {
   getRoleMutationRestriction,
   editableOrgRoleIds,
@@ -59,104 +64,12 @@ import {
 } from './role-assignment-policy'
 import { getRoleMembershipStats, type RoleMember, type RoleMembershipStats } from './role-membership-stats'
 
-// ============ 权限目录 ============
-
-const PERMISSION_CATALOG: PermissionSettingGroup[] = [
-  {
-    id: 'console-access',
-    label: '后台访问',
-    description: '管理后台和角色权限维护。',
-    items: [
-      { key: 'admin:access', label: '管理后台访问', description: '允许进入组织管理与后台入口。' },
-      { key: 'role:manage', label: '角色权限管理', description: '允许超级管理员维护当前组织角色权限。' },
-      { key: 'report:*', label: '经营报表访问', description: '允许查看组织级经营报表与统计。' },
-      { key: 'report:dept', label: '部门报表访问', description: '允许查看所在部门经营数据。' },
-      { key: 'report:finance', label: '财务报表访问', description: '允许查看财务口径报表。' },
-    ],
-  },
-  {
-    id: 'config-center',
-    label: '配置中心',
-    description: '当前组织配置的查看、修改和发布。',
-    items: [
-      { key: 'config:*', label: '配置中心全部权限', description: '包含读取、修改与发布配置。' },
-      { key: 'config:read', label: '配置中心查看', description: '允许读取当前组织的配置。' },
-      { key: 'config:write', label: '配置中心修改', description: '允许修改当前组织的配置。' },
-      { key: 'config:publish', label: '配置发布', description: '允许发布当前组织的配置。' },
-    ],
-  },
-  {
-    id: 'org-admin',
-    label: '组织架构管理',
-    description: '维护部门、成员、角色指派和外部通讯录同步。',
-    items: [
-      { key: 'org:*', label: '组织管理', description: '允许维护组织与组织级设置。' },
-      { key: 'org:write', label: '组织设置修改', description: '允许修改组织级管理项。' },
-      { key: 'dept:*', label: '部门维护', description: '允许新建、调整和停用部门。' },
-      { key: 'dept:view', label: '部门查看', description: '允许查看部门树和成员归属。' },
-      { key: 'dept:write', label: '部门编辑', description: '允许调整部门结构。' },
-      { key: 'user:*', label: '成员维护', description: '允许创建成员、分配角色、停用登录。' },
-      { key: 'user:view', label: '成员查看', description: '允许查看成员档案和角色绑定。' },
-      { key: 'user:write', label: '成员编辑', description: '允许调整成员状态与角色。' },
-      { key: 'feishu:sync', label: '外部通讯录同步', description: '允许从飞书等源刷新部门结构。' },
-    ],
-  },
-  {
-    id: 'quote-domain',
-    label: '报价与客户',
-    description: '决定销售侧是否可以创建报价、管理客户、推进机会。',
-    items: [
-      { key: 'opportunity:*', label: '机会全量管理', description: '允许维护所辖机会与阶段。' },
-      { key: 'opportunity:own', label: '本人机会管理', description: '仅允许维护本人负责机会。' },
-      { key: 'quote:*', label: '报价全量管理', description: '允许查看、编辑与审批报价。' },
-      { key: 'quote:create', label: '创建报价', description: '允许新建报价单。' },
-      { key: 'quote:update_own', label: '编辑本人报价', description: '仅允许编辑本人创建的报价。' },
-      { key: 'quote:approve', label: '报价审批', description: '允许执行报价审批动作。' },
-      { key: 'quote:view', label: '报价查看', description: '允许查看报价结果。' },
-      { key: 'customer:view', label: '客户查看', description: '允许查看客户资料。' },
-      { key: 'customer:create', label: '客户创建', description: '允许录入客户。' },
-      { key: 'customer:*', label: '客户全量管理', description: '允许维护客户档案与关联对象。' },
-    ],
-  },
-  {
-    id: 'contract-domain',
-    label: '合同与模板',
-    description: '决定合同上传、审核、审批和模板查看范围。',
-    items: [
-      { key: 'contract:*', label: '合同全量管理', description: '允许维护与处理全部合同动作。' },
-      { key: 'contract:view', label: '合同查看', description: '允许查看合同记录与审核结果。' },
-      { key: 'contract:upload', label: '合同上传', description: '允许上传待审核合同。' },
-      { key: 'contract:create', label: '合同创建', description: '允许创建合同记录。' },
-      { key: 'contract:write', label: '合同编辑', description: '允许编辑合同相关记录。' },
-      { key: 'contract:review', label: '合同审核执行', description: '允许执行规则与模型审核。' },
-      { key: 'contract:approve', label: '合同审批', description: '允许对合同结果进行审批。' },
-      { key: 'contract:read', label: '合同结果读取', description: '兼容旧接口读取权限。' },
-      { key: 'template:view', label: '模板查看', description: '允许查看合同模板与条款模板。' },
-    ],
-  },
-  {
-    id: 'payment-domain',
-    label: '财务与回款',
-    description: '财务角色使用的支付、回款与账务能力。',
-    items: [
-      { key: 'payment:*', label: '回款与支付管理', description: '允许处理支付、回款与财务动作。' },
-    ],
-  },
-]
-
-const EXTRA_PERMISSION_GROUP: PermissionSettingGroup = {
-  id: 'shipping-domain', label: '寄件操作', description: '管理寄件业务与承运商连接。',
-  items: [
-    { key: SHIPPING_BUNDLE, label: '寄件全部权限', description: '包含当前组织的寄件操作与连接管理。' },
-    { key: SHIPPING_OPERATE, label: '寄件操作', description: '寄件操作权限尚未发布。', selectable: false },
-    { key: SHIPPING_MANAGE_CONNECTIONS, label: '寄件连接管理', description: '寄件连接权限尚未发布。', selectable: false },
-  ],
-}
-
-const PERMISSION_LABELS = new Map(
-  [...PERMISSION_CATALOG, EXTRA_PERMISSION_GROUP]
-    .flatMap((group) => group.items.map((item) => [item.key, item.label] as const)),
-)
+// The editor receives only published rows. An unseen definition may have been
+// disabled, so only advertised actions get a verified effective checkbox.
+const catalogShippingKeys = new Set<string>(REGISTERED_MODULE_PERMISSION_KEYS)
+const retainedLegacyGrantKeys = new Set<string>([
+  ORG_BUSINESS_ROLE_ASSIGN, ORG_MEMBER_EDIT, ...ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ...ORG_MEMBER_LIFECYCLE_ACTIONS,
+])
 
 // ============ Props 类型 ============
 
@@ -233,22 +146,43 @@ export function RoleDetailPanel({
   }, [role.id, role.permissions])
 
   const hasChanges = JSON.stringify([...perms].sort()) !== JSON.stringify([...(role.permissions ?? [])].sort())
+  const permissionGroups = useMemo(() => buildRolePermissionDirectory(modulePermissionCatalog), [modulePermissionCatalog])
+  const availableModuleKeys = useMemo(() => new Set(
+    modulePermissionCatalog?.flatMap(group => group.items
+      .filter(item => !('selectable' in item) || item.selectable !== false)
+      .map(item => item.key)),
+  ), [modulePermissionCatalog])
+
+  function includePermissionDependencies(keys: string[]): string[] {
+    const actions = new Map(permissionGroups.flatMap(getDirectoryActions).map(item => [item.key, item]))
+    const expanded = new Set(keys)
+    for (const key of expanded) {
+      for (const dependency of actions.get(key)?.dependencies ?? []) expanded.add(dependency)
+    }
+    return [...expanded]
+  }
 
   function togglePermission(key: string) {
     if (!canEditPermissions || saving) return
-    setPerms(cur => toggleExplicitRolePermission(cur, key, isSuperAdmin ? SUPER_ADMIN_CORE_PERMISSIONS : []))
+    const protectedPermissions = isSuperAdmin ? SUPER_ADMIN_CORE_PERMISSIONS : []
+    setPerms(current => {
+      if (legacyShippingPermission(key) && getEffectiveShippingPermissions(current, {
+        registered: catalogShippingKeys,
+        published: availableModuleKeys,
+      }).some(permission => permission === key)) {
+        return revokeRolePermissions(current, [key], protectedPermissions, availableModuleKeys)
+      }
+      return isRolePermissionExplicitlyGranted(current, key)
+        ? toggleExplicitRolePermission(current, key, protectedPermissions)
+        : grantExplicitRolePermissions(current, includePermissionDependencies([key]), protectedPermissions)
+    })
   }
 
   function setPermissionGroup(keys: string[], enabled: boolean) {
     if (!canEditPermissions || saving) return
     const protectedPermissions = isSuperAdmin ? SUPER_ADMIN_CORE_PERMISSIONS : []
-    const availableModuleKeys = new Set(
-      modulePermissionCatalog?.flatMap(group => group.items
-        .filter(item => !('selectable' in item) || item.selectable !== false)
-        .map(item => item.key)),
-    )
     setPerms(current => enabled
-      ? grantExplicitRolePermissions(current, keys, protectedPermissions)
+      ? grantExplicitRolePermissions(current, includePermissionDependencies(keys), protectedPermissions)
       : revokeRolePermissions(current, keys, protectedPermissions, availableModuleKeys))
   }
 
@@ -333,7 +267,8 @@ export function RoleDetailPanel({
         <TabsContent value="permissions" className="m-0">
           <PermissionSettingTab
             perms={perms}
-            modulePermissionCatalog={modulePermissionCatalog}
+            groups={permissionGroups}
+            availableModuleKeys={availableModuleKeys}
             isSuperAdmin={isSuperAdmin}
             readOnly={!canEditPermissions || saving}
             blockReason={isOrgSuperAdmin
@@ -945,7 +880,8 @@ function MemberAssignmentTab({
 
 interface PermissionSettingTabProps {
   perms: string[]
-  modulePermissionCatalog?: RoleModulePermissionCatalog
+  groups: PermissionDirectoryGroup[]
+  availableModuleKeys: ReadonlySet<string>
   isSuperAdmin: boolean
   readOnly: boolean
   blockReason?: string | null
@@ -953,44 +889,32 @@ interface PermissionSettingTabProps {
   onSetGroup: (keys: string[], enabled: boolean) => void
 }
 
-type PermissionSettingGroup = Omit<PermissionCatalogGroup, 'items'> & {
-  items: Array<PermissionCatalogGroup['items'][number] & { dependencies?: string[]; selectable?: boolean }>
-}
-
 function PermissionSettingTab({
-  perms, modulePermissionCatalog = [], isSuperAdmin, readOnly, blockReason, onToggle, onSetGroup,
+  perms, groups, availableModuleKeys, isSuperAdmin, readOnly, blockReason, onToggle, onSetGroup,
 }: PermissionSettingTabProps) {
-  const moduleItems = modulePermissionCatalog.flatMap(group => group.items)
-  const moduleKeys = new Set(moduleItems.map(item => item.key))
-  const effectivePerms = perms.filter(key => moduleKeys.has(key)
-    || !REGISTERED_MODULE_PERMISSION_KEYS.some(registered => registered === key))
-  const moduleByKey = new Map(moduleItems.map(item => [item.key, item] as const))
-  const shippingBundleAvailable = hasPublishedShippingBundle(moduleKeys)
-  const staticGroups = [...PERMISSION_CATALOG, EXTRA_PERMISSION_GROUP].map(group => ({
-    ...group, items: group.items.map(item => {
-      if (item.key === SHIPPING_BUNDLE && !shippingBundleAvailable) {
-        return { ...item, description: '寄件操作和寄件连接管理均发布后可设置全部权限。', selectable: false }
-      }
-      return moduleByKey.get(item.key) ?? item
-    }),
+  const actions = groups.flatMap(getDirectoryActions)
+  const availableKeys = new Set(actions.filter(item => item.available).map(item => item.key))
+  const effectiveShippingKeys = new Set<string>(getEffectiveShippingPermissions(perms, {
+    registered: catalogShippingKeys,
+    published: availableModuleKeys,
   }))
-  const staticKeys = new Set(staticGroups.flatMap(group => group.items.map(item => item.key)))
-  const unknownPermissions = perms.filter(key => !moduleKeys.has(key) && !staticKeys.has(key)
-    && (!PERMISSION_KEYS.includes(key) || REGISTERED_MODULE_PERMISSION_KEYS.some(registered => registered === key)))
-  const permissionLabels = new Map([...PERMISSION_LABELS, ...moduleItems.map(item => [item.key, item.label] as const)])
-  const moduleGroups = modulePermissionCatalog.map(group => ({
-    ...group, items: group.items.filter(item => !staticKeys.has(item.key)),
-  })).filter(group => group.items.length > 0)
-  const groups: PermissionSettingGroup[] = [...staticGroups, ...moduleGroups]
-  if (unknownPermissions.length > 0) {
-    groups.push({
-      id: 'existing-extra', label: '其他已保存权限', description: '仅展示当前角色已有的权限标识。',
-      items: unknownPermissions.map(key => ({ key, label: key, description: '已保存的权限标识。', selectable: false })),
-    })
-  }
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
+  const permissionLabels = new Map(actions.map(item => [item.key, item.label]))
+  const labelFor = (key: string) => permissionLabels.get(key) ?? legacyPermissionLabels[key] ?? key
+  const existingGrants = perms.filter(key => !availableKeys.has(key))
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
-  const toggleGroup = (groupId: string) => {
+  function isEffective(key: string): boolean {
+    return legacyShippingPermission(key)
+      ? effectiveShippingKeys.has(key)
+      : isRolePermissionEnabled(perms, key)
+  }
+
+  function hasRetainedLegacyGrant(key: string): boolean {
+    if (!retainedLegacyGrantKeys.has(key)) return false
+    return isRolePermissionEnabled(perms.filter(permission => permission !== key), key)
+  }
+
+  function toggleGroup(groupId: string) {
     setCollapsedGroups(current => {
       const next = new Set(current)
       if (next.has(groupId)) next.delete(groupId)
@@ -999,151 +923,178 @@ function PermissionSettingTab({
     })
   }
 
+  function renderGroup(group: PermissionDirectoryGroup, nested = false) {
+    const isExpanded = !collapsedGroups.has(group.id)
+    const items = group.actions ?? []
+    const directKeys = items.filter(item => item.available).map(item => item.key)
+    const expandedKeys = getDirectoryActions(group)
+      .filter(item => item.available || effectiveShippingKeys.has(item.key)).map(item => item.key)
+    const effectiveCount = expandedKeys.filter(isEffective).length
+    const allEffective = expandedKeys.length > 0 && effectiveCount === expandedKeys.length
+    const grantableKeys = directKeys.filter(key => !hasRetainedLegacyGrant(key) && (legacyShippingPermission(key)
+      ? !isEffective(key)
+      : !isRolePermissionExplicitlyGranted(perms, key)))
+    const candidatesToRevoke = directKeys.filter(key => isEffective(key)
+      && (!isSuperAdmin || !SUPER_ADMIN_CORE_PERMISSIONS.includes(key))
+      && !hasRetainedLegacyGrant(key)
+      && canRevokeShippingAction(perms, key, availableModuleKeys))
+    const revocableKeys = candidatesToRevoke.filter(key => !actions.some(action =>
+      action.dependencies?.includes(key) && isEffective(action.key)
+      && !candidatesToRevoke.includes(action.key)))
+
+    return (
+      <section key={group.id} aria-label={group.label} className={nested ? 'rounded-lg border border-slate-200 bg-white' : 'rounded-xl border border-slate-200'}>
+        <div className="flex items-center gap-2 px-4 py-3">
+          <button
+            type="button"
+            onClick={() => toggleGroup(group.id)}
+            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            aria-expanded={isExpanded}
+            aria-controls={`permission-directory-${group.id}`}
+          >
+            {isExpanded
+              ? <ChevronDownIcon aria-hidden="true" size={16} className="text-slate-500" />
+              : <ChevronUpIcon aria-hidden="true" size={16} className="text-slate-500" />}
+            <span className="font-medium text-slate-900">{group.label}</span>
+          </button>
+          {expandedKeys.length > 0 && (
+            <Badge variant={allEffective ? 'default' : effectiveCount > 0 ? 'secondary' : 'outline'}>
+              {allEffective ? '全部生效' : effectiveCount > 0 ? '部分生效' : '未生效'}
+            </Badge>
+          )}
+          {!readOnly && directKeys.length > 0 && (
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onSetGroup(grantableKeys, true)}
+                disabled={grantableKeys.length === 0}
+                aria-label={`选择${group.label}直接权限`}
+                title="选择本组直接权限"
+              >
+                <CheckCheckIcon className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onSetGroup(revocableKeys, false)}
+                disabled={revocableKeys.length === 0}
+                aria-label={`清除${group.label}直接权限`}
+                title="清除本组直接权限"
+              >
+                <EraserIcon className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+        <div id={`permission-directory-${group.id}`} hidden={!isExpanded}>
+          {(items.length > 0 || (group.notes?.length ?? 0) > 0) && (
+            <ul className="divide-y border-t px-4">
+              {items.map(item => {
+                const explicit = isRolePermissionExplicitlyGranted(perms, item.key)
+                const effective = isEffective(item.key)
+                const shippingAction = legacyShippingPermission(item.key) !== null
+                const inheritedLegacy = hasRetainedLegacyGrant(item.key)
+                const checked = shippingAction || inheritedLegacy ? effective : explicit
+                const source = effective ? getPermissionGrantSource(perms, item.key) : null
+                const isCore = isSuperAdmin && SUPER_ADMIN_CORE_PERMISSIONS.includes(item.key)
+                const dependent = explicit && actions.find(action =>
+                  action.available && action.dependencies?.includes(item.key) && isEffective(action.key))
+                const missingDependency = item.dependencies?.find(key => !isEffective(key))
+                const unavailableForRevoke = item.available && shippingAction && checked
+                  && !canRevokeShippingAction(perms, item.key, availableModuleKeys)
+                return (
+                  <li key={item.key} className="flex items-start gap-3 py-2.5">
+                    {item.available && (
+                      <input
+                        type="checkbox"
+                        aria-label={item.label}
+                        checked={checked}
+                        disabled={readOnly || isCore || !!dependent || unavailableForRevoke || inheritedLegacy}
+                        onChange={() => onToggle(item.key)}
+                        className="mt-1"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium text-slate-900">{item.label}</span>
+                        {!item.available && <Badge variant="outline">{effective ? '旧授权生效' : '待接入'}</Badge>}
+                        {isCore && <Badge variant="outline">核心权限</Badge>}
+                        {explicit && item.available && <Badge variant="outline">显式授权</Badge>}
+                        {item.available && effective && !explicit && <Badge variant="secondary">当前有效</Badge>}
+                        {source?.via === 'bundle' && <Badge variant="secondary">由 {labelFor(source.grant)} 汇总</Badge>}
+                        {source?.via === 'dependency' && <Badge variant="secondary">由 {labelFor(source.grant)} 依赖生效</Badge>}
+                        {missingDependency && <Badge variant="outline">勾选时补齐 {labelFor(missingDependency)}</Badge>}
+                        {dependent && <Badge variant="outline">供 {dependent.label} 使用</Badge>}
+                      </div>
+                      <div className="mt-0.5 text-xs text-slate-500">{item.description}</div>
+                      {unavailableForRevoke && (
+                        <div className="mt-0.5 text-xs text-slate-500">同组权限发布完整后才能单独撤销这项旧授权。</div>
+                      )}
+                      {inheritedLegacy && (
+                        <div className="mt-0.5 text-xs text-slate-500">已有授权包含此动作，当前只能随原授权一起维护。</div>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+              {group.notes?.map(note => (
+                <li key={note.label} className="py-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-slate-700">{note.label}</span>
+                    <Badge variant="outline">{note.status}</Badge>
+                  </div>
+                  {note.description && <div className="mt-0.5 text-xs text-slate-500">{note.description}</div>}
+                </li>
+              ))}
+            </ul>
+          )}
+          {group.children && (
+            <div className="space-y-2 border-t bg-slate-50/50 p-3">
+              {group.children.map(child => renderGroup(child, true))}
+            </div>
+          )}
+        </div>
+      </section>
+    )
+  }
+
   return (
-    <div className="p-6 space-y-4">
+    <div className="space-y-3 p-6">
       {isSuperAdmin && (
-        <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-          <ShieldIcon className="inline-block h-4 w-4 mr-2" />
-          权限更改仅作用于当前组织。为保证可以恢复配置，管理后台访问、配置中心查看与修改、角色权限管理始终保留。
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <ShieldIcon className="mr-2 inline-block h-4 w-4" />
+          权限更改作用于当前组织。恢复配置所需的核心权限由系统保留。
         </div>
       )}
-
       {readOnly && blockReason && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
           {blockReason}
         </div>
       )}
-
-      {!readOnly && moduleItems.some(item => item.dependencies?.length > 0) && (
-        <p className="text-sm text-slate-600">勾选动作时会一并勾选其前置权限。请在保存前核对。</p>
-      )}
-
-      {groups.map(group => {
-        const isExpanded = !collapsedGroups.has(group.id)
-        const groupPermissions = group.items.filter(item => item.selectable !== false).map(item => item.key)
-        const revokeOnly = group.id === EXTRA_PERMISSION_GROUP.id
-          ? group.items.filter(item => item.selectable === false && perms.includes(item.key)).map(item => item.key)
-          : []
-        const hasAllExplicit = groupPermissions.length > 0
-          && groupPermissions.every(key => isRolePermissionExplicitlyGranted(perms, key))
-        const hasSomeEffective = groupPermissions.some(key => isRolePermissionEnabled(effectivePerms, key))
-        const canClear = hasSomeEffective || revokeOnly.length > 0
-
-        return (
-          <div key={group.id} className="rounded-xl border border-slate-200">
-            <div className="flex items-center gap-2 px-4 py-3">
-              <button
-                type="button"
-                onClick={() => toggleGroup(group.id)}
-                className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                aria-expanded={isExpanded}
-              >
-                {isExpanded ? (
-                  <ChevronDownIcon size={18} className="text-slate-400" />
-                ) : (
-                  <ChevronUpIcon size={18} className="text-slate-400" />
+      {groups.map(group => renderGroup(group))}
+      {existingGrants.length > 0 && (
+        <details className="rounded-xl border border-slate-200">
+          <summary className="cursor-pointer px-4 py-3 font-medium text-slate-900">已有兼容授权</summary>
+          <ul className="divide-y border-t px-4">
+            {existingGrants.map(key => (
+              <li key={key} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <span className="flex flex-wrap items-center gap-2">
+                  {labelFor(key)}
+                  <Badge variant="outline">已保存</Badge>
+                </span>
+                {!readOnly && removableShippingCompatibilityKeys.includes(key) && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => onToggle(key)} aria-label={`移除${labelFor(key)}`}>
+                    移除
+                  </Button>
                 )}
-                <div className="text-left">
-                  <div className="font-medium text-slate-900">{group.label}</div>
-                  <div className="text-xs text-slate-500">{group.description}</div>
-                </div>
-              </button>
-              {groupPermissions.length > 0 && (
-                <Badge variant={hasAllExplicit ? 'default' : hasSomeEffective ? 'secondary' : 'outline'}>
-                  {hasAllExplicit ? '全部显式' : hasSomeEffective ? '部分生效' : '未生效'}
-                </Badge>
-              )}
-              {!readOnly && (groupPermissions.length > 0 || revokeOnly.length > 0) && (
-                <div className="flex items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onSetGroup(groupPermissions, true)}
-                    disabled={groupPermissions.length === 0 || hasAllExplicit}
-                    aria-label={`选择${group.label}全部权限`}
-                    title={`选择${group.label}全部权限`}
-                  >
-                    <CheckCheckIcon className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onSetGroup([...groupPermissions, ...revokeOnly], false)}
-                    disabled={!canClear}
-                    aria-label={`清除${group.label}全部权限`}
-                    title={`清除${group.label}全部权限`}
-                  >
-                    <EraserIcon className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {/* 权限列表 */}
-            {isExpanded && (
-              <div className="border-t px-4 py-4 bg-slate-50/50">
-                <div className="grid gap-3 md:grid-cols-2">
-                  {group.items.map(item => {
-                    const checked = isRolePermissionExplicitlyGranted(perms, item.key)
-                    const effective = item.selectable !== false && isRolePermissionEnabled(effectivePerms, item.key)
-                    const grantSource = effective ? getPermissionGrantSource(effectivePerms, item.key) : null
-                    const isCore = isSuperAdmin && SUPER_ADMIN_CORE_PERMISSIONS.includes(item.key)
-                    const missingDependency = item.dependencies?.find(key => !isRolePermissionEnabled(effectivePerms, key))
-                    const disabled = readOnly || isCore || (item.selectable === false && !revokeOnly.includes(item.key))
-                    return (
-                      <label
-                        key={item.key}
-                        className={`flex items-start gap-3 rounded-lg border bg-white p-3 ${
-                          disabled
-                            ? 'opacity-60 cursor-not-allowed'
-                            : 'cursor-pointer hover:border-slate-300'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          aria-label={item.label}
-                          checked={checked}
-                          disabled={disabled}
-                          onChange={() => onToggle(item.key)}
-                          className="mt-0.5 rounded"
-                        />
-                        <div className="flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className={`text-sm font-medium ${disabled ? 'text-slate-500' : 'text-slate-900'}`}>
-                              {item.label}
-                            </span>
-                            {isCore && <Badge className="border-amber-200 bg-amber-100 text-amber-800">核心权限</Badge>}
-                            {checked && <Badge variant="outline">{item.selectable === false ? '已保存' : '显式授权'}</Badge>}
-                            {missingDependency && (
-                              <Badge variant="outline">
-                                {checked ? '需' : '勾选时补齐'}{permissionLabels.get(missingDependency) ?? missingDependency}
-                              </Badge>
-                            )}
-                            {effective && !checked && <Badge variant="secondary">当前有效</Badge>}
-                            {grantSource?.via === 'bundle' && (
-                              <Badge variant="secondary">
-                                由 {permissionLabels.get(grantSource.grant) || grantSource.label} 汇总
-                              </Badge>
-                            )}
-                            {grantSource?.via === 'dependency' && (
-                              <Badge variant="secondary">
-                                由 {permissionLabels.get(grantSource.grant) || grantSource.label} 依赖生效
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="text-xs text-slate-500 mt-0.5">{item.description}</div>
-                        </div>
-                      </label>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        )
-      })}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   )
 }

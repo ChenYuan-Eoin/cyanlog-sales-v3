@@ -3,7 +3,9 @@ import { z } from 'zod'
 import { AuthError, requireAuth } from '@/lib/auth'
 import { userHasOrgRoleCode, validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
 import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
-import { canMutateOrgUsers, getFreshUserScopedRoleAssignments } from '@/lib/scoped-access'
+import { getFreshUserScopedRoleAssignments } from '@/lib/scoped-access'
+import { canPerformMemberAction } from '@/lib/admin/member-actions'
+import { ORG_BUSINESS_ROLE_ASSIGN } from '@/lib/permissions'
 import { supabaseAdmin } from '@/lib/supabase'
 
 const SHIPPING_OPERATOR_ORG_SCOPE_MESSAGE = '顺丰寄件操作员只能分配到整个组织'
@@ -29,7 +31,7 @@ async function changeScope(req: NextRequest, userId: string, action: 'assign' | 
     }
     const { orgId } = context
     const assignments = await getFreshUserScopedRoleAssignments(user.id)
-    if (!canMutateOrgUsers(assignments, orgId)) {
+    if (!canPerformMemberAction(assignments, orgId, ORG_BUSINESS_ROLE_ASSIGN)) {
       return failure('当前账号无权变更该成员的作用域角色', 'NO_PERMISSION', 403)
     }
     const input = scopeSchema.safeParse(await req.json().catch(() => null))

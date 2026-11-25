@@ -5,11 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import {
-  canMutateOrgDepartments,
-  getDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
+import { loadDepartmentStructureContext } from '@/lib/admin/department-actions'
 
 const uuidSchema = z.string().regex(/^[0-9a-f-]{36}$/i, 'ID 格式不正确')
 const createDepartmentSchema = z.object({
@@ -50,7 +46,10 @@ async function assertUserInOrg(orgId: string, userId: string | null | undefined)
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
+    const { orgId, canRead } = await loadDepartmentStructureContext(user.id)
+    if (!canRead) {
+      return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
+    }
 
     const { data: departments, error } = await supabaseAdmin
       .from('departments')
@@ -82,10 +81,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
-    const assignments = await getFreshUserScopedRoleAssignments(user.id)
-
-    if (!canMutateOrgDepartments(assignments, orgId)) {
+    const { orgId, canEdit } = await loadDepartmentStructureContext(user.id)
+    if (!canEdit) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 

@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase'
-import { getPublishedModulePermissionKeys, REGISTERED_MODULE_PERMISSION_KEYS } from '@/lib/module-access'
+import { getShippingPermissionPublication, REGISTERED_MODULE_PERMISSION_KEYS } from '@/lib/module-access'
 import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
 import {
   BUILTIN_PERMISSION_DEFINITIONS,
@@ -277,21 +277,25 @@ async function readLiveModulePermissionRows(): Promise<PermissionRow[]> {
       .in('code', [...REGISTERED_MODULE_PERMISSION_KEYS])
 
     if (error || !Array.isArray(data)) return []
-    const available = new Set(getPublishedModulePermissionKeys(data))
-    return (data as unknown as PermissionRow[]).filter(row => row && available.has(row.code))
+    return data as unknown as PermissionRow[]
   } catch {
     return []
   }
 }
 
+export async function loadShippingModulePermissionState() {
+  return getShippingPermissionPublication(await readLiveModulePermissionRows())
+}
+
 export async function loadPublishedModulePermissionKeys(): Promise<string[]> {
-  const rows = await readLiveModulePermissionRows()
-  return rows.map(row => row.code).sort()
+  const { published } = await loadShippingModulePermissionState()
+  return [...published].sort()
 }
 
 export async function loadRoleModulePermissionCatalog(): Promise<PermissionCatalogGroup[]> {
   const rows = await readLiveModulePermissionRows()
-  return buildPermissionCatalog(rows.map(fromRow))
+  const { published } = getShippingPermissionPublication(rows)
+  return buildPermissionCatalog(rows.filter(row => row && published.has(row.code)).map(fromRow))
 }
 
 export async function loadPermissionDefinition(id: string): Promise<PermissionDefinition> {

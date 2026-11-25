@@ -7,7 +7,12 @@ const db = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: db.from } }))
 vi.mock('@/lib/org-role-permissions', () => ({ loadCurrentOrganizationRoleAssignments: db.context }))
-vi.mock('@/lib/permission-registry', () => ({ loadPublishedModulePermissionKeys: db.published }))
+vi.mock('@/lib/permission-registry', () => ({
+  loadShippingModulePermissionState: async () => {
+    const keys: string[] = await db.published()
+    return { registered: new Set(keys), published: new Set(keys) }
+  },
+}))
 
 const user = { id: 'staff', email: null, phone: null, display_name: null, org_id: 'org-a' }
 const token = 'session-token'
@@ -26,7 +31,7 @@ beforeEach(() => {
 describe('shipping entry authorization', () => {
   it('allows a verified Fxiaoke employee only the owner entry in the current organization', async () => {
     expect(await resolveShippingEntry(user, token)).toEqual({
-      orgId: 'org-a', canOperate: false, canManageConnections: false, canViewOwn: true, canSubmitOwn: true,
+      orgId: 'org-a', canOperate: false, canManageConnections: false, canViewOwn: true, canSubmitOwn: true, permissions: [],
     })
     expect(db.eq.mock.calls).toEqual([['token', token], ['user_id', user.id]])
     expect(await resolveShippingEntry({ ...user, org_id: 'org-b' }, token)).toMatchObject({ canViewOwn: false, canSubmitOwn: false })

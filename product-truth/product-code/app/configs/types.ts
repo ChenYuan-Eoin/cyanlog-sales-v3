@@ -2,6 +2,7 @@
 // 从 ConfigsClient.tsx 提取
 
 import type { DepartmentSpace } from '@/lib/department-spaces'
+import type { MemberActionAvailability } from '@/lib/admin/member-actions'
 
 export interface Config {
   id: string
@@ -608,7 +609,7 @@ export interface OrgSummaryDepartment {
   depth?: number
   parent_id?: string | null
   parent_name: string | null
-  member_count: number
+  member_count?: number
   leader_id?: string | null
   leader_name?: string | null
 }
@@ -644,6 +645,9 @@ export interface OrgSummaryPayload {
   spaces: OrgSummarySpace[]
   department_spaces?: DepartmentSpace[]
   directory_roster?: OrgDirectoryRoster
+  member_access?: boolean
+  member_actions?: MemberActionAvailability
+  department_access?: { canRead: boolean; canEdit: boolean; canDelete: boolean }
   role_membership_stats?: {
     effectiveAvailable: boolean
     pendingAvailable: boolean

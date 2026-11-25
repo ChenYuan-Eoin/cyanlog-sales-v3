@@ -1,5 +1,6 @@
 'use client'
 
+import type { ShippingActionKey } from '@/lib/module-access'
 import { useEffect, useState } from 'react'
 import { CheckCircle2, LoaderCircle, Plus, Settings, ShieldCheck, X } from 'lucide-react'
 import type { ShippingConfiguration } from '@/lib/shipping/connections'
@@ -12,6 +13,7 @@ import { SF_SERVICE_CATALOG, DEFAULT_INTAKE_SERVICES } from '@/lib/shipping/sf-s
 import { shippingWorkbenchRequest, ShippingWorkbenchRequestError } from '@/lib/shipping/workbench-client'
 
 type ConfigurationReply = {
+  permissions?: string[]
   credentialStorageReady?: boolean
   deploymentEnvironment?: 'production' | 'preview' | 'development' | 'unknown'
   configuration?: ShippingConfiguration
@@ -56,6 +58,12 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   const [probePassed, setProbePassed] = useState(false)
   const [interceptConfirmationOpen, setInterceptConfirmationOpen] = useState(false)
   const [interceptConfirmed, setInterceptConfirmed] = useState(false)
+  const [permissions, setPermissions] = useState<string[]>()
+  const canWrite = (key: ShippingActionKey) => permissions === undefined || permissions.includes(key)
+  const canConnect = canWrite('shipping:connection_write')
+  const canSetBilling = canWrite('shipping:billing_write')
+  const canSetIntake = canWrite('shipping:intake_write')
+  const canEnableIntercept = canWrite('shipping:intercept_enable')
   const [accessState, setAccessState] = useState<'checking' | 'ready' | 'unavailable'>('checking')
   const [legacyConfigurationAvailable, setLegacyConfigurationAvailable] = useState<Record<'sandbox' | 'production', boolean>>({ sandbox: false, production: false })
   const [legacyMigrationReport, setLegacyMigrationReport] = useState<{ imported: string[]; needsAttention: string[] } | null>(null)
@@ -78,6 +86,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       return
     }
     setConfiguration(data.configuration)
+    setPermissions(data.permissions)
     setCredentialStorageReady(data.credentialStorageReady !== false)
     setDeploymentEnvironment(data.deploymentEnvironment || 'unknown')
     if (data.legacyConfigurationAvailable) setLegacyConfigurationAvailable(data.legacyConfigurationAvailable)
@@ -119,14 +128,15 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   }
 
   async function saveConnection() {
-    if (!credentialStorageReady) return
+    if (!canConnect || !credentialStorageReady) return
     if (!partnerId.trim() || !checkWord.trim()) { setMessage('请填写 PartnerID 和应用密钥。'); return }
     setProbeMessage(''); setProbePassed(false)
-    const saved = await mutate('connection', 'save_connection', { environment, partnerId, checkWord, services: authorizedServices })
+    const saved = await mutate('connection', 'save_connection', { environment, partnerId, checkWord, ...(canSetBilling ? { services: authorizedServices } : {}) })
     if (saved) { setPartnerId(''); setCheckWord(''); setServiceDrafts(current => ({ ...current, [environment]: undefined })) }
   }
 
   async function saveAuthorizedServices() {
+    if (!canSetBilling) return
     if (!connection) { setMessage('请先保存当前环境的顺丰连接。'); return }
     if (!authorizedServices.length) { setMessage('请至少添加一项顺丰服务产品。'); return }
     const saved = await mutate('services', 'save_authorized_services', { environment, services: authorizedServices })
@@ -143,6 +153,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   }
 
   async function testConnection() {
+    if (!canConnect) return
     const selectedEnvironment = environment
     setBusy('probe'); setProbeMessage(`正在请求顺丰${selectedEnvironment === 'sandbox' ? '沙盒' : '生产'}只读接口…`); setProbePassed(false); setMessage('')
     try {
@@ -154,7 +165,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   }
 
   async function enableInterceptAccess() {
-    if (!connection || connection.status !== 'connected' || !interceptConfirmed) return
+    if (!canEnableIntercept || !connection || connection.status !== 'connected' || !interceptConfirmed) return
     const saved = await mutate('intercept', 'enable_sf_intercept_access', {
       environment,
       confirmation: SF_INTERCEPT_CONFIRMATION,
@@ -172,7 +183,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
   }
 
   async function saveAccount() {
-    if (!credentialStorageReady) return
+    if (!canSetBilling || !credentialStorageReady) return
     if (!accountNumber.trim()) { setMessage('请输入月结卡号。'); return }
     const saved = await mutate('account', 'add_billing_account', { accountNumber, displayName: accountName, environment })
     if (saved) { setAccountNumber('') }
@@ -221,18 +232,18 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
                 <strong>{connection.status === 'connected' ? '连接测试通过' : connection.status === 'failed' ? '连接测试失败' : '已保存，待测试'}</strong>
                 {connection.lastTestedAt && <span>最近测试：{new Date(connection.lastTestedAt).toLocaleString('zh-CN')}</span>}
               </div>}
-              <details open={!connection}>
+              {canConnect && <details open={!connection}>
                 <summary>{connection ? '更换应用凭据' : '填写应用凭据'}</summary>
                 <div className={styles.twoColumns}>
                   <label>PartnerID<input autoComplete="off" value={partnerId} onChange={event => setPartnerId(event.target.value)} placeholder="顺丰应用编号"/></label>
                   <label>应用密钥<input autoComplete="new-password" type="password" value={checkWord} onChange={event => setCheckWord(event.target.value)} placeholder={connection ? '填写新密钥' : '顺丰应用密钥'}/></label>
                 </div>
                 <div className={styles.actions}><button disabled={!!busy || !credentialStorageReady} onClick={() => void saveConnection()}>{busy === 'connection' ? '保存中…' : '保存连接'}</button></div>
-              </details>
-              <div className={styles.actions}>
+              </details>}
+              {canConnect && <div className={styles.actions}>
                 <button className={styles.secondary} disabled={!!busy || !connection} onClick={() => void testConnection()}>{busy === 'probe' ? <><LoaderCircle size={14}/>测试中…</> : environment === 'sandbox' ? '测试沙盒连接' : '测试生产连接（只读）'}</button>
-              </div>
-              <p className={styles.actionHint}>{connection ? '仅查询订单，不会创建或取消运单。' : '保存连接后可测试。'}</p>
+              </div>}
+              {canConnect && <p className={styles.actionHint}>{connection ? '仅查询订单，不会创建或取消运单。' : '保存连接后可测试。'}</p>}
               {probeMessage && <p className={`${styles.probe} ${probePassed ? styles.success : styles.failure}`} role="status">{probePassed && <CheckCircle2 size={14}/>} {probeMessage}</p>}
               {legacyConfigurationAvailable[environment] && <div className={styles.legacyImport}>
                 <p>发现旧版配置，可补充导入尚未保存的连接、月结账号和寄件资料。</p>
@@ -244,33 +255,33 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
 
           <section className={styles.section} aria-label="月结与服务">
             <div className={styles.sectionTitle}><div><Settings size={16}/><h4>月结与服务</h4></div></div>
-            <fieldset className={styles.formGroup} disabled={!!busy}>
+            <fieldset className={styles.formGroup} disabled={!!busy || !canSetBilling}>
               <h5 className={styles.groupTitle}>月结账号</h5>
               <div className={styles.accountList}>{environmentAccounts.map(account => <article key={account.id} className={styles.account}>
                 <div><strong>{account.displayName}</strong><small>{account.environment === 'sandbox' ? '沙盒' : '生产'} · 尾号 {account.tail} · {account.status === 'active' ? '已启用' : '已停用'}{account.isDefault ? ' · 默认' : ''}</small></div>
                 <div className={styles.accountActions}>
-                  {account.status === 'active' && !account.isDefault && <button className={styles.textAction} disabled={!!busy} onClick={() => void mutate(`default-${account.id}`, 'set_default_account', { accountId: account.id })}>设默认</button>}
-                  {account.status === 'active' && <button className={styles.textAction} disabled={!!busy} onClick={() => { if (window.confirm(`停用月结账号「${account.displayName}」（尾号 ${account.tail}）？新工单将无法选择此账号，历史工单记录保留。`)) void mutate(`disable-${account.id}`, 'deactivate_account', { accountId: account.id }) }}>停用</button>}
+                  {canSetBilling && account.status === 'active' && !account.isDefault && <button className={styles.textAction} disabled={!!busy} onClick={() => void mutate(`default-${account.id}`, 'set_default_account', { accountId: account.id })}>设默认</button>}
+                  {canSetBilling && account.status === 'active' && <button className={styles.textAction} disabled={!!busy} onClick={() => { if (window.confirm(`停用月结账号「${account.displayName}」（尾号 ${account.tail}）？新工单将无法选择此账号，历史工单记录保留。`)) void mutate(`disable-${account.id}`, 'deactivate_account', { accountId: account.id }) }}>停用</button>}
                 </div>
               </article>)}</div>
               {!environmentAccounts.length && <p className={styles.hint}>{deploymentEnvironment === 'preview' || deploymentEnvironment === 'development' ? '当前预览/开发站点未保存该顺丰环境的月结账号；不代表正式站账号缺失。' : '当前站点的所选顺丰环境尚未保存月结账号。'}</p>}
-              <div className={styles.twoColumns}>
+              {canSetBilling && <><div className={styles.twoColumns}>
                 <label>月结卡号<input autoComplete="off" inputMode="numeric" value={accountNumber} onChange={event => setAccountNumber(event.target.value.replace(/\D/g, '').slice(0, 32))} placeholder="输入完整月结卡号"/></label>
                 <label>备注说明（选填）<input value={accountName} onChange={event => setAccountName(event.target.value)} maxLength={80}/></label>
               </div>
-              <div className={styles.actions}><button className={styles.secondary} disabled={!!busy || !credentialStorageReady} onClick={() => void saveAccount()}>{busy === 'account' ? '保存中…' : <><Plus size={14}/>保存月结账号</>}</button></div>
+              <div className={styles.actions}><button className={styles.secondary} disabled={!!busy || !credentialStorageReady} onClick={() => void saveAccount()}>{busy === 'account' ? '保存中…' : <><Plus size={14}/>保存月结账号</>}</button></div></>}
 
               <div className={styles.serviceHeading}><h5 className={styles.groupTitle}>可提报服务</h5><span>当前顺丰应用下的月结账号共用</span></div>
               <div className={styles.services}>{authorizedServices.map((service, index) => <div key={service.id}>
                 <span>{service.name}{index === 0 ? ' · 默认' : ''}</span>
-                <div className={styles.accountActions}>{index > 0 && <button className={styles.textAction} onClick={() => setAuthorizedServices(current => [service, ...current.filter(item => item.id !== service.id)])}>设为默认服务</button>}<button className={styles.textAction} aria-label={`移除${service.name}`} onClick={() => setAuthorizedServices(current => current.filter(item => item.id !== service.id))}>移除</button></div>
+                {canSetBilling && <div className={styles.accountActions}>{index > 0 && <button className={styles.textAction} onClick={() => setAuthorizedServices(current => [service, ...current.filter(item => item.id !== service.id)])}>设为默认服务</button>}<button className={styles.textAction} aria-label={`移除${service.name}`} onClick={() => setAuthorizedServices(current => current.filter(item => item.id !== service.id))}>移除</button></div>}
               </div>)}</div>
-              <div className={styles.serviceInputs}>
+              {canSetBilling && <div className={styles.serviceInputs}>
                 <label>顺丰服务产品<select value={newServiceId} onChange={event => { const item = SF_SERVICE_CATALOG.find(row => row.id === Number(event.target.value)); setNewServiceId(event.target.value); setNewServiceName(item?.name || ''); setNewServicePreference(item?.preference || 'standard') }}><option value="">从官方目录选择</option>{SF_SERVICE_CATALOG.map(item => <option key={item.id} value={item.id} disabled={Boolean(item.limitation)}>{item.name}{item.limitation ? '（暂不支持）' : ''}</option>)}</select></label>
                 <button className={styles.secondary} onClick={addService}><Plus size={14}/>添加服务</button>
-              </div>
+              </div>}
               <p className={styles.actionHint}>第一项为默认服务。单票上限 20kg，暂不支持跨境及港澳台寄件。</p>
-              <div className={styles.actions}><button className={styles.secondary} disabled={!!busy || !connection || !authorizedServices.length} onClick={() => void saveAuthorizedServices()}>{busy === 'services' ? '保存服务中…' : '保存可提报服务'}</button></div>
+              {canSetBilling && <div className={styles.actions}><button className={styles.secondary} disabled={!!busy || !connection || !authorizedServices.length} onClick={() => void saveAuthorizedServices()}>{busy === 'services' ? '保存服务中…' : '保存可提报服务'}</button></div>}
               {!connection && <p className={styles.actionHint}>请先保存当前环境的顺丰连接。</p>}
             </fieldset>
           </section>
@@ -281,7 +292,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
             <p className={styles.hint}>在途转寄与退回仅在快件已揽收、尚未派件出仓时开放；每次提交前都会重新查询原单轨迹。顺丰开放平台必须先为当前应用关联 EXP_RECE_WANTED_INTERCEPT。</p>
             {connection?.interceptAccess === 'live' || connection?.interceptAccess === 'testing'
               ? <p className={styles.success} role="status">当前环境的转寄与退回能力已启用。</p>
-              : <div aria-label="在途转寄与退回设置">
+              : canEnableIntercept && <div aria-label="在途转寄与退回设置">
                   {!interceptConfirmationOpen && <button type="button" className={styles.secondary} disabled={!!busy || !connection || connection.status !== 'connected'} onClick={() => setInterceptConfirmationOpen(true)}>启用在途转寄与退回</button>}
                   {!connection && <p className={styles.actionHint}>请先保存当前环境的顺丰连接。</p>}
                   {connection && connection.status !== 'connected' && <p className={styles.actionHint}>请先完成当前连接的生产只读测试。</p>}
@@ -301,22 +312,24 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
         <section aria-label="寄件业务设置">
           <section className={styles.section} aria-label="默认寄件人内容">
             <div className={styles.sectionTitle}><div><Settings size={16}/><h3>公司默认寄件人</h3></div></div>
-            <div className={styles.addressImport}>
+            {canSetIntake && <div className={styles.addressImport}>
               <label>粘贴默认寄方信息<textarea aria-label="默认寄方地址文本" rows={3} value={senderText} onChange={event => setSenderText(event.target.value)} placeholder="姓名 电话 省市区及详细地址"/></label>
               <div className={styles.actions}><button type="button" disabled={!senderText.trim() || !!busy} onClick={() => { const parsed = parseAddress(senderText); if (!contactSchema.safeParse(parsed.contact).success) { setMessage('未识别出完整寄方，原资料已保留。请补齐姓名、电话和完整地址后重试。'); return } setSender(parsed.contact); setMessage(parsed.warnings.join('；') || '寄方已解析，请核对后保存。') }}>解析默认寄方信息</button></div>
-            </div>
+            </div>}
+            <fieldset className={styles.formGroup} disabled={!canSetIntake || !!busy}>
             <div className={styles.twoColumns}><label>姓名<input value={sender.name} onChange={event => setSender(value => ({ ...value, name: event.target.value }))}/></label><label>电话<input value={sender.phone} onChange={event => setSender(value => ({ ...value, phone: event.target.value }))}/></label></div>
             <div className={styles.threeColumns}><label>省<input value={sender.province} onChange={event => setSender(value => ({ ...value, province: event.target.value }))}/></label><label>市<input value={sender.city} onChange={event => setSender(value => ({ ...value, city: event.target.value }))}/></label><label>区县<input value={sender.county} onChange={event => setSender(value => ({ ...value, county: event.target.value }))}/></label></div>
             <label>详细地址<input value={sender.address} onChange={event => setSender(value => ({ ...value, address: event.target.value }))}/></label>
-            <div className={styles.actions}><button disabled={!!busy} onClick={() => void saveSenderProfile()}>{busy === 'sender' ? '保存中…' : '保存寄件人信息'}</button></div>
+            {canSetIntake && <div className={styles.actions}><button disabled={!!busy} onClick={() => void saveSenderProfile()}>{busy === 'sender' ? '保存中…' : '保存寄件人信息'}</button></div>}
+            </fieldset>
           </section>
-          <details><summary>寄件提报规则</summary><IntakeConfiguration/></details>
+          <details><summary>寄件提报规则</summary><IntakeConfiguration readOnly={!canSetIntake}/></details>
           <details>
             <summary>审核与下单权限</summary>
-            <IntakeConfiguration mode="departments"/>
+            <IntakeConfiguration mode="departments" readOnly={!canSetIntake}/>
             <section className={styles.permissionCard} aria-label="审核与下单角色管理">
               <h3>操作与审核权限</h3>
-              <p className={styles.hint}>由组织管理员在“组织与权限”中为角色配置“寄件操作”权限，并将成员分配到对应角色。</p>
+              <p className={styles.hint}>由组织管理员在“组织与权限”中为角色配置相应的寄件工作台权限，并将成员分配到对应角色。</p>
               {!standaloneReturn && <a href="/configs?tab=role-access">前往组织与权限配置角色</a>}
             </section>
           </details>

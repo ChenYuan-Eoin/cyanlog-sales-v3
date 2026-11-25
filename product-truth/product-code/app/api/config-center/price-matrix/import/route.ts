@@ -1,13 +1,13 @@
 // REQ: F038
 // PURPOSE: 多维价盘导入预览（只校验不落库；阶段 0 硬门：234 行 0 失败）
 import { NextRequest } from 'next/server'
-import { withAuthAndOrg } from '@/lib/api/auth-wrapper'
 import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { priceMatrixRowSchema } from '@/lib/config-center/validation'
 import { validatePriceRows } from '@/lib/config-center/price-import'
+import { withConfigCenterAccess } from '../../access'
 
 const importSchema = z.object({
   rows: z.array(priceMatrixRowSchema).min(1, '至少一行'),
@@ -15,12 +15,15 @@ const importSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  return withAuthAndOrg(req, async (user, orgId) => {
+  return withConfigCenterAccess(req, 'read', async (user, orgId, access) => {
     try {
       const body = await req.json()
       const parsed = importSchema.safeParse(body)
       if (!parsed.success) {
         return errorResponse(createApiError('VALIDATION_ERROR', `导入数据无效: ${parsed.error.issues.map((e) => e.message).join('; ')}`))
+      }
+      if (parsed.data.commit && !access.canWrite) {
+        return errorResponse(createApiError('FORBIDDEN'))
       }
       const rows = parsed.data.rows as Parameters<typeof validatePriceRows>[0]
       const result = validatePriceRows(rows)

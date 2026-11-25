@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => {
     requireAuth: vi.fn(),
     defaultOrgId: vi.fn(),
     assignments: vi.fn(),
-    canManage: vi.fn(),
     providers: vi.fn(),
     load: vi.fn(),
     save: vi.fn(),
@@ -31,7 +30,6 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@/lib/auth', () => ({ requireAuth: mocks.requireAuth }))
 vi.mock('@/lib/scoped-access', () => ({
-  canManageOrg: mocks.canManage,
   getFreshDefaultOrgId: mocks.defaultOrgId,
   getFreshUserScopedRoleAssignments: mocks.assignments,
 }))
@@ -94,8 +92,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.requireAuth.mockResolvedValue({ id: 'admin-1' })
   mocks.defaultOrgId.mockResolvedValue('org-1')
-  mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1' }])
-  mocks.canManage.mockReturnValue(true)
+  mocks.assignments.mockResolvedValue([{
+    scopeType: 'org', scopeId: 'org-1', permissions: ['org:source_connect', 'org:source_apply'],
+  }])
   mocks.providers.mockReturnValue([
     capability,
     {
@@ -129,7 +128,7 @@ describe('/api/admin/organization-sources/connection', () => {
     expect(response.status).toBe(200)
     expect((await response.json()).data).toEqual({ provider: capability, storage_mode: 'unified', connection })
     expect(mocks.defaultOrgId).toHaveBeenCalledWith('admin-1')
-    expect(mocks.canManage).toHaveBeenCalledWith([{ scopeType: 'org', scopeId: 'org-1' }], 'org-1')
+    expect(mocks.assignments).toHaveBeenCalledWith('admin-1')
     expect(mocks.load).toHaveBeenCalledWith('org-1', 'feishu')
   })
 
@@ -141,7 +140,17 @@ describe('/api/admin/organization-sources/connection', () => {
     expect(mocks.load).not.toHaveBeenCalled()
   })
 
+  it('returns connection readiness without credential metadata to view-only access', async () => {
+    mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1', permissions: ['org:source_view'] }])
+    mocks.load.mockResolvedValue({ ...connection, metadata: { appId: 'configured-provider-app' } })
+
+    const response = await GET(request('GET', { provider: 'feishu' }))
+    expect(response.status).toBe(200)
+    expect((await response.json()).data.connection).toEqual({ ...connection, metadata: {} })
+  })
+
   it('saves a draft with the authenticated actor and selected provider', async () => {
+    mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-2', permissions: ['org:source_connect'] }])
     const configuration = { appId: 'cli_xxx', appSecret: 'secret', revision: null }
     const response = await POST(request('POST', {
       orgId: 'org-2',
@@ -191,11 +200,10 @@ describe('/api/admin/organization-sources/connection', () => {
     mocks.requireAuth.mockRejectedValueOnce(authError)
     expect((await GET(request('GET', { provider: 'feishu' }))).status).toBe(401)
 
-    mocks.canManage.mockReturnValue(false)
+    mocks.assignments.mockResolvedValueOnce([])
     expect((await GET(request('GET', { provider: 'feishu' }))).status).toBe(403)
     expect(mocks.load).not.toHaveBeenCalled()
 
-    mocks.canManage.mockReturnValue(true)
     mocks.load.mockRejectedValueOnce(new Error('sensitive upstream value'))
     const response = await GET(request('GET', { provider: 'feishu' }))
     expect(response.status).toBe(500)
@@ -208,8 +216,20 @@ describe('/api/admin/organization-sources/connection', () => {
     expect((await POST(request('POST', { body }))).status).toBe(200)
     expect(mocks.activate).toHaveBeenCalledWith({ orgId: 'org-1', actorId: 'admin-1', provider: 'fxiaoke', configurationRevision: revision })
     mocks.activate.mockClear()
-    mocks.canManage.mockReturnValue(false)
     expect((await POST(request('POST', { body, orgId: 'foreign-org' }))).status).toBe(403)
+    expect(mocks.activate).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['org:source_view', 'save'],
+    ['user:view', 'preview'],
+    ['org:source_connect', 'activate_directory'],
+  ])('rejects %s for the independent %s action', async (permission, action) => {
+    mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1', permissions: [permission] }])
+    const body = { action, provider: 'fxiaoke', revision: '00000000-0000-4000-8000-000000000001' }
+    expect((await POST(request('POST', { body }))).status).toBe(403)
+    expect(mocks.save).not.toHaveBeenCalled()
+    expect(mocks.preview).not.toHaveBeenCalled()
     expect(mocks.activate).not.toHaveBeenCalled()
   })
 })

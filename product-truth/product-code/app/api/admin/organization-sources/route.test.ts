@@ -5,14 +5,12 @@ const mocks = vi.hoisted(() => ({
   requireAuth: vi.fn(),
   defaultOrgId: vi.fn(),
   assignments: vi.fn(),
-  canManage: vi.fn(),
   load: vi.fn(),
   providers: vi.fn(),
 }))
 
 vi.mock('@/lib/auth', () => ({ requireAuth: mocks.requireAuth }))
 vi.mock('@/lib/scoped-access', () => ({
-  canManageOrg: mocks.canManage,
   getFreshDefaultOrgId: mocks.defaultOrgId,
   getFreshUserScopedRoleAssignments: mocks.assignments,
 }))
@@ -55,8 +53,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.requireAuth.mockResolvedValue({ id: 'user-1' })
   mocks.defaultOrgId.mockResolvedValue('org-1')
-  mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1' }])
-  mocks.canManage.mockReturnValue(true)
+  mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1', permissions: ['org:source_view'] }])
   mocks.load.mockResolvedValue([source])
   mocks.providers.mockReturnValue([
     { key: 'feishu', label: '飞书', syncAvailable: true, unavailableReason: null },
@@ -71,11 +68,11 @@ describe('/api/admin/organization-sources', () => {
     expect((await response.json()).data).toMatchObject({
       sources: [source],
       active_primary_source_id: source.id,
+      permissions: { view: true, connect: false, preview: false, apply: false, enterpriseLogin: false },
     })
   })
 
   it('requires current-organization management authority', async () => {
-    mocks.canManage.mockReturnValue(false)
     const response = await POST(request('POST', {
       provider: 'feishu',
       external_tenant_id: 'tenant-1',
@@ -84,10 +81,30 @@ describe('/api/admin/organization-sources', () => {
       sync_mode: 'authoritative',
     }, 'org-2'))
     expect(response.status).toBe(403)
-    expect(mocks.canManage).toHaveBeenCalledWith(
-      [{ scopeType: 'org', scopeId: 'org-1' }],
-      'org-2',
-    )
+    expect(mocks.assignments).toHaveBeenCalledWith('user-1')
+  })
+
+  it('keeps external provider data outside an ordinary member view grant', async () => {
+    mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1', permissions: ['user:view'] }])
+    expect((await GET(request())).status).toBe(403)
+    expect(mocks.load).not.toHaveBeenCalled()
+  })
+
+  it('preserves an unchanged existing administrator and respects an explicit permission override', async () => {
+    const administrator = { scopeType: 'org', scopeId: 'org-1', roleCode: 'ADMIN' }
+    mocks.assignments.mockResolvedValueOnce([{ ...administrator, permissions: ['admin:access'] }])
+    const existing = await GET(request())
+    expect((await existing.json()).data.permissions).toEqual({
+      view: true, connect: true, preview: true, apply: true, enterpriseLogin: false,
+    })
+
+    mocks.assignments.mockResolvedValueOnce([{
+      ...administrator, permissionsOverridden: true, permissions: ['org:source_view'],
+    }])
+    const overridden = await GET(request())
+    expect((await overridden.json()).data.permissions).toEqual({
+      view: true, connect: false, preview: false, apply: false, enterpriseLogin: false,
+    })
   })
 
   it('keeps the legacy bind endpoint closed while shared lifecycle writes are pending', async () => {

@@ -5,7 +5,7 @@ vi.mock('@/lib/auth', () => ({ requireAuth: vi.fn() }))
 
 vi.mock('@/lib/scoped-access', () => ({
   canMutateOrgUsers: vi.fn(),
-  getDefaultOrgId: vi.fn(),
+  getFreshDefaultOrgId: vi.fn(),
   getFreshUserScopedRoleAssignments: vi.fn(),
 }))
 
@@ -29,7 +29,7 @@ vi.mock('@/lib/supabase', () => ({
 import { requireAuth } from '@/lib/auth'
 import {
   canMutateOrgUsers,
-  getDefaultOrgId,
+  getFreshDefaultOrgId,
   getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
 import { assertDepartmentInOrg } from '@/lib/admin/org-membership'
@@ -102,7 +102,7 @@ describe('/api/admin/users/[id] account lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: actorId })
-    ;(getDefaultOrgId as any).mockResolvedValue(orgId)
+    ;(getFreshDefaultOrgId as any).mockResolvedValue(orgId)
     ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue([
       { scopeType: 'org', scopeId: orgId, roleCode: 'ADMIN', permissions: ['user:write'] },
     ])
@@ -159,6 +159,29 @@ describe('/api/admin/users/[id] account lifecycle', () => {
     expect(body.code).toBe('MIXED_ACCOUNT_STATE_UPDATE')
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it('登录状态权限不能修改在职状态、人员资料或办理离职', async () => {
+    ;(canMutateOrgUsers as any).mockReturnValue(false)
+    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue([
+      { scopeType: 'org', scopeId: orgId, permissions: ['user:manage_login'] },
+    ])
+    for (const payload of [
+      { display_name: '新姓名' },
+      { status: 'suspended' },
+      { status: 'suspended', login_enabled: false },
+    ]) {
+      expect((await PATCH(patchRequest(payload), routeContext)).status).toBe(403)
+    }
+    expect((await DELETE(deleteRequest(), routeContext)).status).toBe(403)
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+
+    ;(supabaseAdmin.from as any).mockReturnValue(makeQuery({ data: targetUser(), error: null }))
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
+    expect((await PATCH(patchRequest({ login_enabled: false }), routeContext)).status).toBe(200)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_set_account_state_v1', expect.objectContaining({
+      p_org_id: orgId, p_status: null, p_login_enabled: false,
+    }))
   })
 
   it('禁止操作者通过通用 PATCH 停用自己', async () => {

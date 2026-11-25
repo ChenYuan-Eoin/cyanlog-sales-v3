@@ -57,7 +57,7 @@ describe('PermissionRegistryPanel', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(<PermissionRegistryPanel />)
-    expect(await screen.findByText('平台权限目录')).toBeInTheDocument()
+    expect(await screen.findByText('平台权限定义')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '管理目录' }))
     expect(screen.getByText('report:read')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '提交审核' }))

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import {
-  canMutateOrgUsers,
   getFreshDefaultOrgId,
   getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
+import { canPerformMemberAction } from '@/lib/admin/member-actions'
+import { ORG_MEMBER_MANAGE_EMPLOYMENT } from '@/lib/admin/member-action-keys'
 
 export async function POST(
   req: NextRequest,
@@ -16,7 +17,7 @@ export async function POST(
     const currentUser = await requireAuth(req)
     const orgId = await getFreshDefaultOrgId(currentUser.id)
     const assignments = await getFreshUserScopedRoleAssignments(currentUser.id)
-    if (!canMutateOrgUsers(assignments, orgId)) {
+    if (!canPerformMemberAction(assignments, orgId, ORG_MEMBER_MANAGE_EMPLOYMENT)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
     if (id === currentUser.id) {

@@ -1,11 +1,6 @@
 // REQ: F003 / WP50. One authenticated API for every configurable provider.
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import {
-  canManageOrg,
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
+import { loadOrganizationSourceAccess, type OrganizationSourceAccess } from '@/lib/admin/organization-source-access'
 import {
   listOrganizationConnectionProviders,
   loadOrganizationConnection,
@@ -27,14 +22,13 @@ function response(data: unknown, status = 200) {
   )
 }
 
-async function authorize(req: NextRequest, run: (orgId: string, actorId: string) => Promise<Response>) {
+async function authorize(req: NextRequest, run: (orgId: string, actorId: string, access: OrganizationSourceAccess) => Promise<Response>) {
   try {
-    const user = await requireAuth(req)
-    const orgId = req.headers.get('x-org-id')?.trim() || await getFreshDefaultOrgId(user.id)
-    if (!orgId || !canManageOrg(await getFreshUserScopedRoleAssignments(user.id), orgId)) {
+    const context = await loadOrganizationSourceAccess(req)
+    if (!context?.access.view) {
       return response(new OrganizationConnectionError('FORBIDDEN', '无权管理此企业的组织接入。', 403), 403)
     }
-    return await run(orgId, user.id)
+    return await run(context.orgId, context.actor.id, context.access)
   } catch (error) {
     if (error instanceof Error && error.name === 'AuthError') {
       return response(new OrganizationConnectionError('UNAUTHORIZED', '请先登录。', 401), 401)
@@ -45,22 +39,26 @@ async function authorize(req: NextRequest, run: (orgId: string, actorId: string)
 }
 
 export async function GET(req: NextRequest) {
-  return authorize(req, async orgId => {
+  return authorize(req, async (orgId, _actorId, access) => {
     const provider = req.nextUrl.searchParams.get('provider') || ''
     const capability = listOrganizationConnectionProviders().find(item => item.key === provider)
     if (!capability?.configurable) {
       throw new OrganizationConnectionError('PROVIDER_NOT_CONFIGURABLE', '该组织提供方尚未接入连接配置。', 400)
     }
+    const [connection, storageMode] = await Promise.all([
+      loadOrganizationConnection(orgId, provider),
+      detectConnectionStorageMode(),
+    ])
     return response({
       provider: capability,
-      storage_mode: await detectConnectionStorageMode(),
-      connection: await loadOrganizationConnection(orgId, provider),
+      storage_mode: storageMode,
+      connection: connection && !access.connect ? { ...connection, metadata: {} } : connection,
     })
   })
 }
 
 export async function POST(req: NextRequest) {
-  return authorize(req, async (orgId, actorId) => {
+  return authorize(req, async (orgId, actorId, access) => {
     const raw = await req.text()
     if (raw.length > 16_384) throw new OrganizationConnectionError('INVALID_INPUT', '配置内容超出长度限制。', 400)
     let body: Record<string, unknown>
@@ -74,12 +72,15 @@ export async function POST(req: NextRequest) {
 
     const provider = typeof body.provider === 'string' ? body.provider : ''
     if (body.action === 'save') {
+      if (!access.connect) throw new OrganizationConnectionError('FORBIDDEN', '无权保存此组织的外部连接。', 403)
       return response({ connection: await saveOrganizationConnection({ orgId, actorId, provider, value: body.configuration }) })
     }
     if (body.action === 'preview' && typeof body.revision === 'string' && UUID.test(body.revision)) {
+      if (!access.connect) throw new OrganizationConnectionError('FORBIDDEN', '无权验证此组织的外部连接。', 403)
       return response(await previewOrganizationConnection({ orgId, actorId, provider, revision: body.revision }))
     }
     if (body.action === 'activate_directory' && typeof body.revision === 'string' && UUID.test(body.revision)) {
+      if (!access.apply) throw new OrganizationConnectionError('FORBIDDEN', '无权启用此组织的目录连接。', 403)
       return response({ connection: await activateDirectoryConnection({
         orgId, actorId, provider, configurationRevision: body.revision,
       }) })

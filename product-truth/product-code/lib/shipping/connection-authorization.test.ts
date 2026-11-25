@@ -1,18 +1,19 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
-import { loadPublishedModulePermissionKeys } from '@/lib/permission-registry'
+import { loadShippingModulePermissionState } from '@/lib/permission-registry'
 import { requireShippingConnectionManager } from './connection-authorization'
 
 vi.mock('@/lib/org-role-permissions', () => ({ loadOrgRolePermissionContext: vi.fn() }))
-vi.mock('@/lib/permission-registry', () => ({ loadPublishedModulePermissionKeys: vi.fn() }))
+vi.mock('@/lib/permission-registry', () => ({ loadShippingModulePermissionState: vi.fn() }))
 
+const publication = (keys: string[]) => ({ published: new Set(keys), registered: new Set(keys) })
 const context = { orgId: 'org-a', settings: {}, canRead: false, canEdit: false, canEditPlatformRoot: false }
 
 describe('shipping connection effective authority', () => {
   beforeEach(() => {
     vi.resetAllMocks()
-    vi.mocked(loadPublishedModulePermissionKeys).mockResolvedValue(['shipping:operate', 'shipping:manage_connections'])
+    vi.mocked(loadShippingModulePermissionState).mockResolvedValue(publication(['shipping:operate', 'shipping:manage_connections']))
     vi.mocked(loadOrgRolePermissionContext).mockResolvedValue({ ...context, actorPermissions: [] })
   })
 
@@ -27,7 +28,7 @@ describe('shipping connection effective authority', () => {
   it('allows a platform grant only with an exact active current org and a published definition', async () => {
     vi.mocked(loadOrgRolePermissionContext).mockResolvedValue({ ...context, actorPermissions: ['*'] })
     await expect(requireShippingConnectionManager('root')).resolves.toBe('org-a')
-    vi.mocked(loadPublishedModulePermissionKeys).mockResolvedValueOnce(['shipping:operate'])
+    vi.mocked(loadShippingModulePermissionState).mockResolvedValueOnce(publication(['shipping:operate']))
     await expect(requireShippingConnectionManager('root')).rejects.toMatchObject({ status: 403 })
     vi.mocked(loadOrgRolePermissionContext).mockResolvedValueOnce(null)
     await expect(requireShippingConnectionManager('root')).rejects.toMatchObject({ status: 403 })

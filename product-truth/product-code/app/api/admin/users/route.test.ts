@@ -192,6 +192,21 @@ describe('POST /api/admin/users', () => {
     }))
   })
 
+  it('新增成员授权可以创建待激活邀请，但不能借邀请预分配角色', async () => {
+    ;(canMutateOrgUsers as any).mockReturnValue(false)
+    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue([
+      { scopeType: 'org', scopeId: orgId, permissions: ['user:invite'] },
+    ])
+    const forbidden = await POST(makeRequest({ role_ids: [userId] }))
+    expect(forbidden.status).toBe(403)
+    expect((await forbidden.json()).code).toBe('NO_ROLE_ASSIGN_PERMISSION')
+    expect(validateOrgRoleAssignment).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+
+    mockSuccessfulUserInsert()
+    expect((await POST(makeRequest())).status).toBe(201)
+  })
+
   it('有主部门时使用同一组织双权限并把 orgId 传给关系 helper', async () => {
     const { userInsert } = mockSuccessfulUserInsert()
     userInsert.single.mockResolvedValueOnce({

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  getPublishedModulePermissionKeys, SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE, shippingPermissionRequirement,
+  getEffectiveShippingPermissions, getPublishedModulePermissionKeys, getShippingPermissionPublication, SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE, shippingPermissionRequirement,
 } from './module-access'
 
 const operator = {
@@ -31,13 +31,32 @@ describe('shipping-only registered actions', () => {
     ])).toEqual([])
   })
 
+  it('makes saved granular grants independent and bridges legacy permissions only while registered', () => {
+    const detail = { ...operator, code: 'shipping:order_confirm', action: 'order_confirm', dependencies: ['shipping:ledger_view'], enforcement_consumer: 'lib/shipping/http.ts' }
+    const publication = getShippingPermissionPublication([operator, connections, detail])
+    expect(getEffectiveShippingPermissions(['shipping:order_confirm'], publication))
+      .toEqual(['shipping:order_confirm'])
+    expect(getEffectiveShippingPermissions(['shipping:operate'], publication))
+      .toContain('shipping:order_confirm')
+    expect(getEffectiveShippingPermissions(['shipping:manage_connections'], publication))
+      .not.toContain('shipping:order_confirm')
+    const disabled = getShippingPermissionPublication([operator, connections, { ...detail, status: 'disabled' }])
+    expect(getEffectiveShippingPermissions(['shipping:operate'], disabled))
+      .not.toContain('shipping:order_confirm')
+    const absent = getShippingPermissionPublication([operator, connections])
+    expect(getEffectiveShippingPermissions(['shipping:operate'], absent))
+      .toContain('shipping:order_confirm')
+    expect(getEffectiveShippingPermissions(['shipping:order_confirm'], absent))
+      .toEqual([])
+  })
+
   it('separates workspace settings from connection management and shipment execution', () => {
-    expect(shippingPermissionRequirement('/api/shipping/settings', 'GET', true)).toBe(SHIPPING_OPERATE)
-    expect(shippingPermissionRequirement('/api/shipping/settings', 'POST', true)).toBe(SHIPPING_MANAGE_CONNECTIONS)
-    expect(shippingPermissionRequirement('/shipping/settings', 'GET', false)).toBe(SHIPPING_MANAGE_CONNECTIONS)
-    expect(shippingPermissionRequirement('/api/shipping/ledger/ORDER-0/confirm', 'POST', false)).toBe(SHIPPING_OPERATE)
-    expect(shippingPermissionRequirement('/api/shipping/ledger/ORDER-0/carrier-changes', 'GET', false)).toBe(SHIPPING_OPERATE)
-    expect(shippingPermissionRequirement('/api/shipping/ledger/ORDER-0/carrier-changes', 'POST', false)).toBe(SHIPPING_OPERATE)
+    expect(shippingPermissionRequirement('/api/shipping/settings', 'GET', true)).toBe('shipping:ledger_view')
+    expect(shippingPermissionRequirement('/api/shipping/settings', 'POST', true)).toBeNull()
+    expect(shippingPermissionRequirement('/shipping/settings', 'GET', false)).toBe('shipping:settings_view')
+    expect(shippingPermissionRequirement('/api/shipping/ledger/ORDER-0/confirm', 'POST', false)).toBe('shipping:order_confirm')
+    expect(shippingPermissionRequirement('/api/shipping/ledger/ORDER-0/carrier-changes', 'GET', false)).toBe('shipping:ledger_view')
+    expect(shippingPermissionRequirement('/api/shipping/ledger/ORDER-0/carrier-changes', 'POST', false)).toBe('shipping:order_change')
     expect(shippingPermissionRequirement('/api/shipping/owner/orders', 'GET', false)).toBeNull()
   })
 })

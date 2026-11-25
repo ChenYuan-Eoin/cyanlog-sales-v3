@@ -59,6 +59,7 @@ function mockExactOrgAuth(options: {
   sourceConnectionState?: string
   shippingOperatorStatus?: string
   shippingOperatorScopes?: string[]
+  shippingActions?: Record<string, { status: string; dependencies: string[] }>
   organizationStatus?: string
   sessionCreatedAt?: string
   sessionExpiresAt?: string
@@ -118,6 +119,10 @@ function mockExactOrgAuth(options: {
     }
     if (table === 'permission_points') {
       const code = url.searchParams.get('code')?.slice(3)
+      if (code && options.shippingActions?.[code]) return Response.json([{
+        code, kind: 'atomic', category: 'shipping', resource: 'shipping', action: code.slice('shipping:'.length),
+        supported_scope_types: ['org'], enforcement_consumer: 'lib/shipping/http.ts', ...options.shippingActions[code],
+      }])
       if (code !== 'shipping:operate' && code !== 'shipping:manage_connections') return Response.json([])
       const operator = code === 'shipping:operate'
       return Response.json([{
@@ -323,6 +328,84 @@ describe('role-free federated session boundary', () => {
 
     bind({ roles: [{ roles: { id: 'sales', code: 'SALES', permissions: ['quote:view'] } }], authMethod: 'fxiaoke', shippingOperatorStatus: 'disabled' })
     expect((await post('/api/shipping/owner/orders')).status).toBe(200)
+  })
+
+  it('admits the department directory only to the exact configuration and department paths', async () => {
+    const token = 'directory-viewer'
+    const role = { id: 'directory-role', code: 'READONLY', permissions: ['dept:directory_view'] }
+    const id = '4cf0681d-dcb2-45f2-bfa2-71c1bc253213'
+    mockExactOrgAuth({ token, orgId: 'org-a', authMethod: 'fxiaoke', roles: [{ roles: role }] })
+    const request = (path: string, method = 'GET') => middleware(makeRequest(
+      `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
+    ))
+    expect((await request('/configs?tab=org-structure')).status).toBe(200)
+    expect((await request('/api/admin/org')).status).toBe(200)
+    expect((await request('/api/admin/org', 'HEAD')).status).toBe(200)
+    expect((await request('/api/admin/departments')).status).toBe(200)
+    // Authorized department paths reach the dedicated handler's action checks.
+    expect((await request('/api/admin/departments', 'POST')).status).toBe(200)
+    expect((await request(`/api/admin/departments/${id}`, 'PATCH')).status).toBe(200)
+    expect((await request(`/api/admin/departments/${id}`, 'DELETE')).status).toBe(200)
+    for (const [path, method] of [
+      ['/api/admin/org', 'POST'], ['/api/admin/users', 'GET'], ['/api/configs', 'GET'],
+      ['/api/admin/departments/leader-access', 'GET'], ['/api/admin/departments/leader-access', 'PUT'],
+      [`/api/admin/departments/${id}/other`, 'PATCH'], ['/api/admin/departments/invalid-id', 'PATCH'],
+    ]) {
+      expect((await request(path, method)).status, path).toBe(403)
+    }
+    mockExactOrgAuth({ token, orgId: 'org-a', authMethod: 'fxiaoke', roles: [{ roles: { ...role, permissions: ['dept:view'] } }] })
+    expect((await request('/api/admin/org')).status).toBe(403)
+    expect((await request('/api/admin/departments')).status).toBe(403)
+    expect((await request('/configs?tab=org-structure')).status).toBe(307)
+  })
+
+  it('admits an explicitly authorized member role assigner without giving generic configuration or login writes', async () => {
+    const token = 'member-role-assigner'
+    const id = '4cf0681d-dcb2-45f2-bfa2-71c1bc253213'
+    const role = { id: 'member-role', code: 'READONLY', permissions: ['user:view', 'user:assign_roles'] }
+    mockExactOrgAuth({ token, orgId: 'org-a', authMethod: 'fxiaoke', roles: [{ roles: role }] })
+    const request = (path: string, method = 'GET') => middleware(makeRequest(
+      `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
+    ))
+    expect((await request('/configs?tab=org-structure')).status).toBe(200)
+    expect((await request('/api/admin/org')).status).toBe(200)
+    expect((await request('/api/roles')).status).toBe(200)
+    expect((await request(`/api/admin/users/${id}/roles`, 'POST')).status).toBe(200)
+    expect((await request(`/api/admin/users/${id}/login-enabled`, 'PATCH')).status).toBe(403)
+    expect((await request(`/api/admin/users/${id}/org-super-admin`, 'PATCH')).status).toBe(403)
+    expect((await request('/api/configs')).status).toBe(403)
+  })
+
+  it('admits settings-only viewers to both settings entries while preserving the generic config boundary', async () => {
+    const token = 'shipping-settings-viewer'
+    mockExactOrgAuth({
+      token, orgId: 'org-a', roles: [{ roles: { id: 'settings-reader', code: 'SETTINGS_READER', permissions: ['shipping:settings_view'] } }],
+      shippingActions: { 'shipping:settings_view': { status: 'published', dependencies: [] } },
+    })
+    const request = (path: string, method = 'GET') => middleware(makeRequest(
+      `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}`, 'x-user-shipping-settings-view': 'forged' }, method,
+    ))
+    const shell = await request('/configs?tab=shipping')
+    expect(shell.status).toBe(200)
+    expect(shell.headers.get('x-middleware-request-x-user-shipping-settings-view')).toBe('1')
+    const direct = await request('/shipping/settings')
+    expect(direct.status).toBe(200)
+    expect(direct.headers.get('x-middleware-request-x-user-shipping-settings-view')).toBeNull()
+    expect((await request('/api/configs')).status).toBe(403)
+    expect((await request('/api/shipping/settings', 'POST')).status).toBe(403)
+  })
+
+  it('does not use the legacy grant to bypass a disabled granular action', async () => {
+    const token = 'legacy-operator-disabled-confirm'
+    mockExactOrgAuth({
+      token, orgId: 'org-a', roles: [{ roles: { id: 'operator', code: 'SHIPPING_OPERATOR', permissions: ['shipping:operate'] } }],
+      shippingActions: { 'shipping:order_confirm': { status: 'disabled', dependencies: ['shipping:ledger_view'] } },
+    })
+    const request = (path: string, method = 'GET') => middleware(makeRequest(
+      `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
+    ))
+    expect((await request('/api/shipping/ledger')).status).toBe(200)
+    expect((await request('/api/shipping/ledger/example/confirm', 'POST')).status).toBe(403)
   })
 
   it('keeps the shipping connection manager separate from ledger operations', async () => {

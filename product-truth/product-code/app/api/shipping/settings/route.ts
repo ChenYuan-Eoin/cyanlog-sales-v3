@@ -21,8 +21,13 @@ import {
 import { canImportLegacyShippingConfiguration } from '@/lib/shipping/legacy-configuration-scope'
 import { probeSfConnection } from '@/lib/shipping/sf-client'
 import { ShippingError } from '@/lib/shipping/config'
-import { requireShippingConnectionManager } from '@/lib/shipping/connection-authorization'
+import { checkShippingConnectionAccess, loadShippingConnectionAccess } from '@/lib/shipping/connection-authorization'
+import { shippingSettingsWritePermission, type ShippingPermissionKey } from '@/lib/module-access'
 export const runtime = 'nodejs'
+
+const LEGACY_IMPORT_PERMISSIONS = [
+  'shipping:manage_connections', 'shipping:connection_write', 'shipping:billing_write', 'shipping:intake_write',
+] as const satisfies readonly ShippingPermissionKey[]
 
 export async function GET(req: NextRequest) {
   try {
@@ -32,14 +37,17 @@ export async function GET(req: NextRequest) {
       if (!access?.canOperate) throw new ShippingError(403, '当前账号没有自助收寄操作权限。')
       const settings = await loadShippingWorkspaceSettings(access.orgId)
       return NextResponse.json({
-        settings: { ...settings, canOperate: true, canManageConnections: access.canManageConnections },
+        settings: { ...settings, canOperate: true, canManageConnections: access.canManageConnections, permissions: access.permissions },
       }, { headers: { 'Cache-Control': 'no-store' } })
     }
-    const orgId = await requireShippingConnectionManager(user.id)
+    const { orgId, permissions } = await loadShippingConnectionAccess(user.id)
+    checkShippingConnectionAccess(permissions, 'shipping:settings_view')
     const configuration = await loadShippingConfiguration(orgId)
     const legacy = { sandbox: hasLegacyShippingConfiguration('sandbox', configuration), production: hasLegacyShippingConfiguration('production', configuration) }
-    const legacyAllowed = (legacy.sandbox || legacy.production) && await canImportLegacyShippingConfiguration(orgId)
+    const legacyAllowed = LEGACY_IMPORT_PERMISSIONS.every(permission => permissions.includes(permission))
+      && (legacy.sandbox || legacy.production) && await canImportLegacyShippingConfiguration(orgId)
     return NextResponse.json({
+      permissions,
       deploymentEnvironment: ['production', 'preview', 'development'].includes(process.env.VERCEL_ENV || '') ? process.env.VERCEL_ENV : 'unknown',
       credentialStorageReady: /^[a-fA-F0-9]{64}$/.test(process.env.SHIPPING_CREDENTIALS_ENCRYPTION_KEY || ''),
       configuration,
@@ -56,8 +64,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  type SettingsBody = { action?: string; [key: string]: unknown }
+  let body: SettingsBody
   return shippingManagerHandler(req, async (user, orgId) => {
-    const body = await shippingJson(req) as { action?: string; [key: string]: unknown }
     const { action, ...input } = body
     switch (action) {
       case 'save_connection': return { configuration: await saveCarrierCredentials(orgId, user.id, input) }
@@ -95,5 +104,15 @@ export async function POST(req: NextRequest) {
       }
       default: throw new ShippingError(400, '不支持的寄件配置操作。')
     }
+  }, async () => {
+    const parsed = await shippingJson(req)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new ShippingError(400, '请核对寄件配置信息。')
+    body = parsed as SettingsBody
+    const permission = shippingSettingsWritePermission(body.action)
+    if (!permission) throw new ShippingError(400, '不支持的寄件配置操作。')
+    if (body.action === 'import_legacy_configuration') return LEGACY_IMPORT_PERMISSIONS
+    const required: ShippingPermissionKey[] = [permission]
+    if (body.action === 'save_connection' && Object.hasOwn(body, 'services')) required.push('shipping:billing_write')
+    return required
   })
 }

@@ -6,14 +6,16 @@ import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import {
-  canMutateOrgUsers,
-  getDefaultOrgId,
+  getFreshDefaultOrgId,
   getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
 import {
   assertDepartmentInOrg,
 } from '@/lib/admin/org-membership'
 import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
+import { canPerformMemberAction } from '@/lib/admin/member-actions'
+import { ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN } from '@/lib/admin/member-action-keys'
+import { ORG_MEMBER_EDIT } from '@/lib/permissions'
 import { normalizeIdentityPhone } from '@/lib/fxiaoke/identity'
 
 const updateUserSchema = z.object({
@@ -34,10 +36,13 @@ export async function PATCH(
   try {
     const { id } = await params
     const currentUser = await requireAuth(req)
-    const orgId = await getDefaultOrgId(currentUser.id)
+    const orgId = await getFreshDefaultOrgId(currentUser.id)
 
     const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
-    if (!canMutateOrgUsers(actorAssignments, orgId)) {
+    const canEditProfile = canPerformMemberAction(actorAssignments, orgId, ORG_MEMBER_EDIT)
+    const canManageEmployment = canPerformMemberAction(actorAssignments, orgId, ORG_MEMBER_MANAGE_EMPLOYMENT)
+    const canManageLogin = canPerformMemberAction(actorAssignments, orgId, ORG_MEMBER_MANAGE_LOGIN)
+    if (!canEditProfile && !canManageEmployment && !canManageLogin) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
@@ -63,6 +68,14 @@ export async function PATCH(
       || title !== undefined
       || primary_dept_id !== undefined
       || report_to_user_id !== undefined
+
+    if (
+      (status !== undefined && !canManageEmployment)
+      || (login_enabled !== undefined && !canManageLogin)
+      || (hasProfileMutation && !canEditProfile)
+    ) {
+      return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
+    }
 
     if (!hasAccountStateMutation && !hasProfileMutation) {
       return NextResponse.json(
@@ -244,10 +257,10 @@ export async function DELETE(
   try {
     const { id } = await params
     const currentUser = await requireAuth(req)
-    const orgId = await getDefaultOrgId(currentUser.id)
+    const orgId = await getFreshDefaultOrgId(currentUser.id)
 
     const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
-    if (!canMutateOrgUsers(actorAssignments, orgId)) {
+    if (!canPerformMemberAction(actorAssignments, orgId, ORG_MEMBER_MANAGE_EMPLOYMENT)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 

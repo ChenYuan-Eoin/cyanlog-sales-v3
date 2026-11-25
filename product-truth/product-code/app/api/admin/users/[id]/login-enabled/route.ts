@@ -6,11 +6,12 @@ import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import {
-  canMutateOrgUsers,
-  getDefaultOrgId,
+  getFreshDefaultOrgId,
   getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
 import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
+import { canPerformMemberAction } from '@/lib/admin/member-actions'
+import { ORG_MEMBER_MANAGE_LOGIN } from '@/lib/admin/member-action-keys'
 
 const loginEnabledSchema = z.object({
   login_enabled: z.boolean(),
@@ -24,10 +25,10 @@ export async function PATCH(
   try {
     const { id } = await params
     const currentUser = await requireAuth(req)
-    const orgId = await getDefaultOrgId(currentUser.id)
+    const orgId = await getFreshDefaultOrgId(currentUser.id)
     const assignments = await getFreshUserScopedRoleAssignments(currentUser.id)
 
-    if (!canMutateOrgUsers(assignments, orgId)) {
+    if (!canPerformMemberAction(assignments, orgId, ORG_MEMBER_MANAGE_LOGIN)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 

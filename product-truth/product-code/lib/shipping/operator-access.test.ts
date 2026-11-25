@@ -17,7 +17,13 @@ const m = vi.hoisted(() => ({
 vi.mock('@/lib/auth', () => ({ requireAuth: m.requireAuth, AuthError: class extends Error {} }))
 vi.mock('@/lib/shipping/workflow', () => ({ confirmAndSubmitShipment: m.submitShipment }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: m.from } }))
-vi.mock('@/lib/permission-registry', () => ({ loadPublishedModulePermissionKeys: m.publishedKeys }))
+vi.mock('@/lib/permission-registry', () => ({
+  loadPublishedModulePermissionKeys: m.publishedKeys,
+  loadShippingModulePermissionState: async () => {
+    const keys: string[] = await m.publishedKeys()
+    return { registered: new Set(keys), published: new Set(keys) }
+  },
+}))
 
 const userId = 'user-1'
 const orgId = 'org-1'
@@ -130,6 +136,16 @@ describe('organization-scoped shipping operator access', () => {
     vi.stubEnv('SHIPPING_ALLOWED_USER_IDS', userId)
     await expect(requireShippingOperator(userId)).rejects.toMatchObject({ status: 403 })
     expect(m.from).not.toHaveBeenCalledWith('user_permission_assignments')
+  })
+
+  it('does not turn a read-only ledger grant into permission to confirm a shipment', async () => {
+    m.tables.user_roles = [operatorAssignment({ role: { ...establishedRole, permissions: ['shipping:ledger_view'] } })]
+    m.publishedKeys.mockResolvedValue(['shipping:ledger_view', 'shipping:order_confirm'])
+    const response = await confirmShipment(new NextRequest('https://example.test/api/shipping/ledger/id/confirm', {
+      method: 'POST', body: JSON.stringify({}),
+    }), { params: Promise.resolve({ id: 'id' }) })
+    expect(response.status).toBe(403)
+    expect(m.submitShipment).not.toHaveBeenCalled()
   })
 
   it('enforces live grant, tenant and revocation at the actual shipment confirmation handler', async () => {

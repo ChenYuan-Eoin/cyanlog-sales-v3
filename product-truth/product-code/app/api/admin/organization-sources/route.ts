@@ -2,14 +2,9 @@
 // PURPOSE: View tenant sources while activation, unbinding and source cutover stay closed.
 
 import { NextRequest } from 'next/server'
-import { requireAuth, type AuthUser } from '@/lib/auth'
 import { createApiError } from '@/lib/api/errors'
 import { errorResponse, successResponse } from '@/lib/api/common'
-import {
-  canManageOrg,
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
+import { loadOrganizationSourceAccess, type OrganizationSourceAccess } from '@/lib/admin/organization-source-access'
 import {
   listOrganizationSourceProviders,
   loadOrganizationSources,
@@ -19,15 +14,12 @@ import {
 
 const DEFERRED_LIFECYCLE_MESSAGE = '当前版本只保存共享连接草稿并验证通讯录；启用、主来源切换、同步和停用将在目录差异确认批次开放。'
 
-async function authorize(req: NextRequest, handler: (user: AuthUser, orgId: string) => Promise<Response>) {
+async function authorize(req: NextRequest, handler: (orgId: string, access: OrganizationSourceAccess) => Promise<Response>) {
   try {
-    const user = await requireAuth(req)
-    const requestedOrgId = req.headers.get('x-org-id')?.trim()
-    const orgId = requestedOrgId || await getFreshDefaultOrgId(user.id)
-    if (!orgId) return errorResponse(createApiError('NO_ORG'))
-    const assignments = await getFreshUserScopedRoleAssignments(user.id)
-    if (!canManageOrg(assignments, orgId)) return errorResponse(createApiError('FORBIDDEN'))
-    return handler(user, orgId)
+    const context = await loadOrganizationSourceAccess(req)
+    if (!context) return errorResponse(createApiError('NO_ORG'))
+    if (!context.access.view) return errorResponse(createApiError('FORBIDDEN'))
+    return await handler(context.orgId, context.access)
   } catch (error) {
     if (error instanceof Error && error.name === 'AuthError') {
       return errorResponse(createApiError('UNAUTHORIZED'))
@@ -49,7 +41,7 @@ function sourceError(error: unknown) {
 }
 
 export async function GET(req: NextRequest) {
-  return authorize(req, async (_user, orgId) => {
+  return authorize(req, async (orgId, permissions) => {
     try {
       const sources = await loadOrganizationSources(orgId)
       const activePrimary = sortActiveOrganizationSources(sources).find((source) => source.priority === 1) || null
@@ -57,6 +49,7 @@ export async function GET(req: NextRequest) {
         sources,
         active_primary_source_id: activePrimary?.id || null,
         providers: listOrganizationSourceProviders(),
+        permissions,
       })
     } catch (error) {
       return sourceError(error)

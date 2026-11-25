@@ -5,9 +5,9 @@ vi.mock('@/lib/auth', () => ({
   requireAuth: vi.fn(),
 }))
 
-vi.mock('@/lib/scoped-access', () => ({
-  canMutateOrgDepartments: vi.fn(),
-  getDefaultOrgId: vi.fn(),
+vi.mock('@/lib/scoped-access', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/scoped-access')>(),
+  getFreshDefaultOrgId: vi.fn(),
   getFreshUserScopedRoleAssignments: vi.fn(),
 }))
 
@@ -19,12 +19,18 @@ vi.mock('@/lib/supabase', () => ({
 
 import { requireAuth } from '@/lib/auth'
 import {
-  canMutateOrgDepartments,
-  getDefaultOrgId,
+  getFreshDefaultOrgId,
   getFreshUserScopedRoleAssignments,
+  type ScopedRoleAssignment,
 } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
-import { POST } from './route'
+import { GET, POST } from './route'
+
+function grant(permissions: string[], scopeType: ScopedRoleAssignment['scopeType'] = 'org', scopeId = 'org-1') {
+  vi.mocked(getFreshUserScopedRoleAssignments).mockResolvedValue([{
+    scopeType, scopeId, permissions, roleCode: 'DEPARTMENTS', roleId: 'role-1', roleName: '部门', grantedAt: null,
+  }])
+}
 
 function malformedJsonRequest(): any {
   return new Request('https://example.test/api/admin/departments', {
@@ -37,20 +43,18 @@ describe('POST /api/admin/departments validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: 'admin-user' })
-    ;(getDefaultOrgId as any).mockResolvedValue('org-1')
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue(['fresh-assignment'])
-    ;(canMutateOrgDepartments as any).mockReturnValue(true)
+    ;(getFreshDefaultOrgId as any).mockResolvedValue('org-1')
+    grant(['dept:write'])
   })
 
   it('没有当前组织部门写权限时，在解析 body 和访问业务表前拒绝', async () => {
-    ;(canMutateOrgDepartments as any).mockReturnValue(false)
+    grant(['dept:directory_view'])
     const json = vi.fn().mockResolvedValue({ name: '销售部', code: 'SALES' })
 
     const res = await POST({ json } as any)
 
     expect(res.status).toBe(403)
     expect(getFreshUserScopedRoleAssignments).toHaveBeenCalledWith('admin-user')
-    expect(canMutateOrgDepartments).toHaveBeenCalledWith(['fresh-assignment'], 'org-1')
     expect(json).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
@@ -65,6 +69,7 @@ describe('POST /api/admin/departments validation', () => {
   })
 
   it('当前组织部门写权限创建的部门只能落在当前组织', async () => {
+    grant(['dept:directory_view', 'dept:edit_structure'])
     const uniqueQuery = makeQuery({ data: null, error: null })
     const insertQuery = makeQuery({
       data: { id: 'dept-1', name: '销售部', code: 'SALES' },
@@ -87,14 +92,39 @@ describe('POST /api/admin/departments validation', () => {
       code: 'SALES',
     }))
   })
+
+  it('目录只读授权仅允许读取当前组织的部门树', async () => {
+    grant(['dept:directory_view'])
+    const query = makeQuery({ data: [{ id: 'dept-1' }], error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(query)
+
+    const read = await GET({} as any)
+    const create = await POST(malformedJsonRequest())
+    expect(read.status).toBe(200)
+    expect(await read.json()).toMatchObject({ data: [{ id: 'dept-1' }] })
+    expect(query.eq).toHaveBeenCalledWith('org_id', 'org-1')
+    expect(create.status).toBe(403)
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    [['dept:view'], 'org', 'org-1'],
+    [['dept:directory_view'], 'department', 'dept-1'],
+    [['dept:directory_view'], 'org', 'org-2'],
+  ] as const)('拒绝工作台查看及当前组织级范围以外的部门树权限 %j', async (permissions, scopeType, scopeId) => {
+    grant([...permissions], scopeType, scopeId)
+    expect((await GET({} as any)).status).toBe(403)
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
 })
 
 function makeQuery(result: { data?: unknown; error?: unknown }) {
   const query: any = {}
-  ;['select', 'insert', 'eq'].forEach((method) => {
+  ;['select', 'insert', 'eq', 'order'].forEach((method) => {
     query[method] = vi.fn().mockReturnValue(query)
   })
   query.maybeSingle = vi.fn().mockResolvedValue(result)
   query.single = vi.fn().mockResolvedValue(result)
+  query.then = (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve)
   return query
 }

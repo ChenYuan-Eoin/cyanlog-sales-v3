@@ -16,6 +16,8 @@ type ConfigurableCapability = ProviderCapability & { key: OrganizationConnection
 
 type OrganizationConnectionFormProps = {
   provider: ConfigurableCapability
+  canConnect: boolean
+  canApply: boolean
   onChanged?: () => void | Promise<void>
 }
 
@@ -63,7 +65,7 @@ function FieldHelp({ fieldKey, text }: { fieldKey: string; text: string }) {
 
 const inputClass = 'mt-1 h-10 w-full min-w-0 border border-slate-400 bg-white text-slate-900 shadow-sm placeholder:text-slate-500 focus-visible:border-blue-600 focus-visible:ring-blue-500/30'
 
-export function OrganizationConnectionForm({ provider, onChanged }: OrganizationConnectionFormProps) {
+export function OrganizationConnectionForm({ provider, canConnect, canApply, onChanged }: OrganizationConnectionFormProps) {
   const [connection, setConnection] = useState<ConnectionSummary | null>(null)
   const [storageMode, setStorageMode] = useState<'unified' | 'legacy_fxiaoke_read_only'>('unified')
   const [values, setValues] = useState<Record<string, string>>({})
@@ -148,7 +150,7 @@ export function OrganizationConnectionForm({ provider, onChanged }: Organization
   }
 
   async function save() {
-    if (inFlight.current || loading || readFailed) return
+    if (!canConnect || inFlight.current || loading || readFailed) return
     inFlight.current = true
     setBusy(true)
     setFailure('')
@@ -182,7 +184,7 @@ export function OrganizationConnectionForm({ provider, onChanged }: Organization
   }
 
   async function validateAndPreview() {
-    if (inFlight.current || loading || readFailed || dirty || !connection) return
+    if (!canConnect || inFlight.current || loading || readFailed || dirty || !connection) return
     inFlight.current = true
     setBusy(true)
     setFailure('')
@@ -226,7 +228,7 @@ export function OrganizationConnectionForm({ provider, onChanged }: Organization
   const { currentConfigurationEnabled } = presentation
 
   async function activateDirectory() {
-    if (inFlight.current || loading || readFailed || dirty || !connection || connection.draftCheckStatus !== 'preview_ready') return
+    if (!canApply || inFlight.current || loading || readFailed || dirty || !connection || connection.draftCheckStatus !== 'preview_ready') return
     inFlight.current = true
     setBusy(true)
     setFailure('')
@@ -267,7 +269,7 @@ export function OrganizationConnectionForm({ provider, onChanged }: Organization
           当前生产库尚未完成统一连接结构升级。现有纷享连接可继续做只读连接与通讯录检查；修改配置、启用来源和目录切源暂不开放。
         </p>
       )}
-      <fieldset disabled={loading || readFailed || busy || legacyReadOnly} className="grid min-w-0 grid-cols-1 gap-4">
+      <fieldset disabled={!canConnect || loading || readFailed || busy || legacyReadOnly} className="grid min-w-0 grid-cols-1 gap-4">
         {provider.fields.map(field => (
           <div key={field.key} className="min-w-0 space-y-1">
             <label className="block text-sm font-medium" htmlFor={`organization-connection-${provider.key}-${field.key}`}>
@@ -310,10 +312,10 @@ export function OrganizationConnectionForm({ provider, onChanged }: Organization
       </Button>}
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" disabled={loading || readFailed || busy || legacyReadOnly || !dirty} onClick={() => void save()}>
+        {canConnect && <Button type="button" disabled={loading || readFailed || busy || legacyReadOnly || !dirty} onClick={() => void save()}>
           {busy ? '正在处理…' : '保存配置草稿'}
-        </Button>
-        {provider.previewAvailable && (
+        </Button>}
+        {canConnect && provider.previewAvailable && (
           <Button
             type="button"
             variant="outline"
@@ -323,16 +325,16 @@ export function OrganizationConnectionForm({ provider, onChanged }: Organization
             {busy ? '处理中…' : '检查连接与读取范围'}
           </Button>
         )}
-        {!legacyReadOnly && !currentConfigurationEnabled && (
+        {canApply && !legacyReadOnly && !currentConfigurationEnabled && (
           <Button type="button" disabled={loading || readFailed || busy || dirty || connection?.draftCheckStatus !== 'preview_ready'}
             onClick={() => void activateDirectory()}>
             {presentation.activationLabel}
           </Button>
         )}
       </div>
-      <p className="text-xs leading-5 text-slate-500">保存配置 → 检查连接 → 启用目录连接 → 读取差异并确认整体同步。启用只保存目录读取配置，不授予企业登录、账号关联或角色权限；部门与员工在确认差异后统一应用。</p>
+      {(canConnect || canApply) && <p className="text-xs leading-5 text-slate-500">保存配置 → 检查连接 → 启用目录连接 → 读取差异并确认整体同步。启用只保存目录读取配置，不授予企业登录、账号关联或角色权限；部门与员工在确认差异后统一应用。</p>}
 
-      {preview && (
+      {canConnect && preview && (
         <div className="space-y-3 border-t border-slate-200 pt-3">
           <div>
             <p className="font-medium">读取范围检查：{preview.departments.length} 个部门、{preview.employees.length} 位员工</p>

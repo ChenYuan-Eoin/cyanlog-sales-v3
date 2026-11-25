@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), defaultOrg: vi.fn(), assignments: vi.fn(), canManage: vi.fn(), inspect: vi.fn() }))
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), defaultOrg: vi.fn(), assignments: vi.fn(), inspect: vi.fn() }))
 vi.mock('@/lib/auth', () => ({ requireAuth: mocks.auth }))
-vi.mock('@/lib/scoped-access', () => ({ getFreshDefaultOrgId: mocks.defaultOrg, getFreshUserScopedRoleAssignments: mocks.assignments, canManageOrg: mocks.canManage }))
+vi.mock('@/lib/scoped-access', () => ({ getFreshDefaultOrgId: mocks.defaultOrg, getFreshUserScopedRoleAssignments: mocks.assignments }))
 vi.mock('@/lib/organization-connections', async () => ({ inspectOrganizationDirectory: mocks.inspect, ...await import('@/lib/organization-connections/errors') }))
 import { OrganizationConnectionError } from '@/lib/organization-connections/errors'
 import { POST } from './route'
@@ -15,8 +15,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.auth.mockResolvedValue({ id: 'admin-1' })
   mocks.defaultOrg.mockResolvedValue('org-1')
-  mocks.assignments.mockResolvedValue([{ scopeId: 'org-1' }])
-  mocks.canManage.mockImplementation((_roles, org) => org === 'org-1')
+  mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1', permissions: ['org:source_preview'] }])
   mocks.inspect.mockResolvedValue({ readOnly: true, applied: false, scope: { verified: false } })
 })
 describe('directory inspection authorization and input', () => {
@@ -32,6 +31,11 @@ describe('directory inspection authorization and input', () => {
     expect((await POST(request(valid, 'other-org'))).status).toBe(403)
     mocks.auth.mockRejectedValue(Object.assign(new Error('expired'), { name: 'AuthError' }))
     expect((await POST(request())).status).toBe(401)
+    expect(mocks.inspect).not.toHaveBeenCalled()
+  })
+  it('does not contact the provider with source view alone', async () => {
+    mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1', permissions: ['org:source_view'] }])
+    expect((await POST(request())).status).toBe(403)
     expect(mocks.inspect).not.toHaveBeenCalled()
   })
   it.each([{}, '{broken', 'x'.repeat(2049), { ...valid, revision: 'stale' }, { ...valid, scopeVerified: true }, { ...valid, orgId: 'other-org' }])('rejects malformed or authority-expanding input', async body => {

@@ -13,7 +13,7 @@ export class ConfigCenterError extends Error {
   }
 }
 
-const ID_COLUMNS = new Set(['id', 'org_id', 'created_by', 'created_at', 'updated_at', 'version'])
+const SERVER_MANAGED_COLUMNS = new Set(['id', 'org_id', 'created_by', 'created_at', 'updated_at', 'version', 'status'])
 
 /** 版本表父键映射（不同域版本表主键列名不同；键=版本表名） */
 const VERSION_PARENT_KEYS: Record<string, string> = {
@@ -26,7 +26,7 @@ const VERSION_PARENT_KEYS: Record<string, string> = {
 function payloadOf(body: Record<string, unknown>): Record<string, unknown> {
   const payload: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(body)) {
-    if (!ID_COLUMNS.has(key)) {
+    if (!SERVER_MANAGED_COLUMNS.has(key)) {
       payload[key] = value
     }
   }
@@ -120,21 +120,40 @@ export async function createDomainItem(domain: ConfigDomain, orgId: string, user
   return data
 }
 
-/** 更新（仅 DRAFT）；approval-chains 额外替换 nodes */
-export async function updateDomainItem(domain: ConfigDomain, orgId: string, id: string, body: Record<string, unknown>) {
+/** 已发布配置的原地编辑需同时拥有发布权限。审批链可额外替换节点。 */
+export async function updateDomainItem(
+  domain: ConfigDomain,
+  orgId: string,
+  id: string,
+  body: Record<string, unknown>,
+  canPublish: boolean,
+) {
   const def = DOMAIN_REGISTRY[domain]
   const existing = await getDomainItem(domain, orgId, id)
   if (existing.status === 'ARCHIVED') {
     throw new ConfigCenterError('NOT_DRAFT', '已归档配置不可编辑')
+  }
+  if (existing.status === 'PUBLISHED' && !canPublish) {
+    throw new ConfigCenterError('FORBIDDEN', '修改已生效配置需要发布权限')
   }
   let payload = payloadOf(body)
   if (domain === 'approval-rules') {
     payload = await resolveChainCode(orgId, payload)
   }
   const { nodes, ...rest } = payload as Record<string, unknown> & { nodes?: unknown[] }
-  const { data, error } = await supabaseAdmin.from(def.table).update(rest).eq('id', id).eq('org_id', orgId).select().single()
+  const { data, error } = await supabaseAdmin
+    .from(def.table)
+    .update(rest)
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .eq('status', existing.status)
+    .select()
+    .maybeSingle()
   if (error) {
     throw new ConfigCenterError('DB_ERROR', error.message)
+  }
+  if (!data) {
+    throw new ConfigCenterError('CONFLICT', '配置状态已变化，请刷新后重试')
   }
   if (domain === 'approval-chains' && Array.isArray(nodes)) {
     await replaceChainNodes(orgId, id, nodes)
@@ -148,9 +167,19 @@ export async function deleteDomainItem(domain: ConfigDomain, orgId: string, id: 
   if (existing.status !== 'DRAFT') {
     throw new ConfigCenterError('NOT_DRAFT', '仅草稿可删除')
   }
-  const { error } = await supabaseAdmin.from(def.table).delete().eq('id', id).eq('org_id', orgId)
+  const { data, error } = await supabaseAdmin
+    .from(def.table)
+    .delete()
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .eq('status', 'DRAFT')
+    .select('id')
+    .maybeSingle()
   if (error) {
     throw new ConfigCenterError('DB_ERROR', error.message)
+  }
+  if (!data) {
+    throw new ConfigCenterError('CONFLICT', '配置状态已变化，请刷新后重试')
   }
 }
 
@@ -174,14 +203,24 @@ export async function publishDomainItem(domain: ConfigDomain, orgId: string, id:
   }
 }
 
-export async function rollbackDomainItem(domain: ConfigDomain, orgId: string, id: string, version: number) {
+export async function rollbackDomainItem(
+  domain: ConfigDomain,
+  orgId: string,
+  id: string,
+  version: number,
+  canPublish: boolean,
+) {
   const def = DOMAIN_REGISTRY[domain]
   if (!def.versionTable) {
     throw new ConfigCenterError('NO_VERSION', '该配置域不支持版本回滚')
   }
-  const parentKey = def.versionTable ? VERSION_PARENT_KEYS[def.versionTable] : undefined
+  const parentKey = VERSION_PARENT_KEYS[def.versionTable]
   if (!parentKey) {
-    throw new ConfigCenterError('NO_VERSION', `该配置域版本表未配置父键: ${def.versionTable ?? def.table}`)
+    throw new ConfigCenterError('NO_VERSION', `该配置域版本表未配置父键: ${def.versionTable}`)
+  }
+  const existing = await getDomainItem(domain, orgId, id)
+  if (existing.status !== 'DRAFT' && !canPublish) {
+    throw new ConfigCenterError('FORBIDDEN', '回滚非草稿配置需要发布权限')
   }
   const { data, error } = await supabaseAdmin
     .from(def.versionTable)
@@ -195,22 +234,30 @@ export async function rollbackDomainItem(domain: ConfigDomain, orgId: string, id
   if (!data) {
     throw new ConfigCenterError('NOT_FOUND', `版本 ${version} 不存在`)
   }
-  const { error: updateError } = await supabaseAdmin
+  const { data: updated, error: updateError } = await supabaseAdmin
     .from(def.table)
-    .update({ ...(data.value as Record<string, unknown>), status: 'DRAFT' })
+    .update({ ...payloadOf(data.value as Record<string, unknown>), status: 'DRAFT' })
     .eq('id', id)
     .eq('org_id', orgId)
+    .eq('status', existing.status)
+    .eq('version', existing.version)
+    .select('id')
+    .maybeSingle()
   if (updateError) {
     throw new ConfigCenterError('DB_ERROR', updateError.message)
+  }
+  if (!updated) {
+    throw new ConfigCenterError('CONFLICT', '配置状态已变化，请刷新后重试')
   }
 }
 
 export async function listVersions(domain: ConfigDomain, orgId: string, id: string) {
   const def = DOMAIN_REGISTRY[domain]
+  await getDomainItem(domain, orgId, id)
   if (!def.versionTable) {
     return []
   }
-  const parentKey = def.versionTable ? VERSION_PARENT_KEYS[def.versionTable] : undefined
+  const parentKey = VERSION_PARENT_KEYS[def.versionTable]
   if (!parentKey) {
     return []
   }

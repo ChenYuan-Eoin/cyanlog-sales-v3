@@ -1,3 +1,8 @@
+import {
+  ORGANIZATION_SOURCE_PERMISSION_KEYS, ORG_BUSINESS_ROLE_ASSIGN, ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ORG_MEMBER_EDIT,
+} from './permissions'
+import { ORG_MEMBER_LIFECYCLE_ACTIONS } from './admin/member-action-keys'
+
 export const ORG_SUPER_ADMIN_ROLE_CODE = 'ORG_SUPER_ADMIN'
 export const SHIPPING_OPERATOR_ROLE_CODE = 'SHIPPING_OPERATOR'
 
@@ -8,6 +13,8 @@ export function isRoleAssignableInScope(code: string, scopeType: 'org' | 'depart
 const ORG_SUPER_ADMIN_PERMISSIONS = [
   'admin:access', 'org:write', 'user:view', 'user:write', 'dept:view', 'dept:write',
   'config:read', 'config:write', 'config:publish', 'role:manage',
+  ORG_MEMBER_EDIT, ORG_BUSINESS_ROLE_ASSIGN, ...ORG_MEMBER_LIFECYCLE_ACTIONS,
+  ...ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ...ORGANIZATION_SOURCE_PERMISSION_KEYS,
 ]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -24,7 +31,7 @@ function templatePermissions(role: { code: string; permissions: unknown }): stri
   // Preserve capabilities that existing authorization granted by role code before the first edit.
   const legacyCapabilities: Record<string, string[]> = {
     SUPER_ADMIN: ['*'],
-    ADMIN: ['admin:access', 'user:write', 'dept:write', 'contract:write', 'shipping:manage_connections'],
+    ADMIN: ['admin:access', 'user:write', 'dept:write', 'contract:write', 'shipping:manage_connections', ...ORGANIZATION_SOURCE_PERMISSION_KEYS],
     SALES_OPS: ['admin:access'],
     LEGAL: ['contract:review'],
   }

@@ -1,4 +1,4 @@
-import { hasPermission } from '@/lib/permissions'
+import { hasConfigurationReadPermission, hasPermission } from '@/lib/permissions'
 import {
   getFreshUserScopedRoleAssignments,
   getUserScopedRoleAssignments,
@@ -12,12 +12,6 @@ export interface OrgConfigAccessDecision {
   canWrite: boolean
   canPublish: boolean
 }
-
-const CONFIG_READ_PERMISSIONS = [
-  'config:read',
-  'config:write',
-  'config:publish',
-] as const
 
 const CONFIG_WRITE_PERMISSIONS = [
   'config:write',
@@ -55,7 +49,7 @@ export function evaluateOrgConfigAccess(
   const permissions = getExactOrgPermissions(assignments, orgId)
 
   return {
-    canRead: hasAnyPermission(permissions, CONFIG_READ_PERMISSIONS),
+    canRead: hasConfigurationReadPermission(permissions),
     canWrite: hasAnyPermission(permissions, CONFIG_WRITE_PERMISSIONS),
     canPublish: hasAnyPermission(permissions, CONFIG_PUBLISH_PERMISSIONS),
   }

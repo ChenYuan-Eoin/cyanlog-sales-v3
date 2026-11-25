@@ -192,6 +192,27 @@ it('requires just the shipping action being added to have valid published regist
     .toMatchObject({ ok: true, role: { permissions: [] } })
 })
 
+it('saves a separate shipping action only with its published view and can withdraw it independently', async () => {
+  const state = database()
+  const view = 'shipping:ledger_view'
+  const confirm = 'shipping:order_confirm'
+  const granted = [...salesPermissions, view, confirm]
+  const catalog = buildPermissionCatalog(BUILTIN_PERMISSION_DEFINITIONS.filter(item => [view, confirm].includes(item.key)))
+  vi.mocked(loadRoleModulePermissionCatalog).mockResolvedValue(catalog)
+
+  expect(await saveOrgRolePermissions('org-1', 'role-1', [...salesPermissions, confirm], salesPermissions))
+    .toEqual({ ok: false, reason: 'invalid' })
+  expect(state.operations.some(entry => entry.patch)).toBe(false)
+
+  expect(await saveOrgRolePermissions('org-1', 'role-1', granted, salesPermissions))
+    .toMatchObject({ ok: true, role: { permissions: granted } })
+  expect(await saveOrgRolePermissions('org-1', 'role-1', [...salesPermissions, confirm], granted))
+    .toEqual({ ok: false, reason: 'invalid' })
+  expect(await saveOrgRolePermissions('org-1', 'role-1', [...salesPermissions, view], granted))
+    .toMatchObject({ ok: true, role: { permissions: [...salesPermissions, view] } })
+  expect(state.organizations[1].settings).toEqual({ isolated: true })
+})
+
 it('validates both published shipping actions when saving a new bundle and preserves an existing bundle', async () => {
   const state = database()
   const bundle = ['shipping:*']

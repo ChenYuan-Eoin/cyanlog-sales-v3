@@ -5,13 +5,14 @@ vi.mock('@/lib/auth', () => ({
   requireAuth: vi.fn(),
 }))
 
-vi.mock('@/lib/permissions', () => ({
+vi.mock('@/lib/permissions', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/permissions')>(),
   canAccessOrgAdmin: vi.fn(),
 }))
 
 vi.mock('@/lib/scoped-access', () => ({
   canManageOrg: vi.fn(),
-  getDefaultOrgId: vi.fn(),
+  getFreshDefaultOrgId: vi.fn(),
   getOrgRoleCodes: vi.fn(),
   getFreshUserScopedRoleAssignments: vi.fn(),
 }))
@@ -24,7 +25,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { canAccessOrgAdmin } from '@/lib/permissions'
-import { getDefaultOrgId } from '@/lib/scoped-access'
+import { getFreshDefaultOrgId } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import { GET, POST } from './route'
 
@@ -58,7 +59,7 @@ describe('GET /api/admin/org', () => {
       ? makeQuery({ data: { id: 'org-1', status: 'active' }, error: null })
       : makeQuery({ data: [], error: null, count: 0 }))
     ;(canAccessOrgAdmin as any).mockReturnValue(true)
-    ;(getDefaultOrgId as any).mockResolvedValue('org-1')
+    ;(getFreshDefaultOrgId as any).mockResolvedValue('org-1')
   })
 
   it('RPC 成功时返回聚合数据和分段耗时头', async () => {
@@ -91,6 +92,12 @@ describe('GET /api/admin/org', () => {
       role_membership_stats: {
         effectiveAvailable: true, pendingAvailable: true, activeSpaceIds: [], activeMemberIds: [], orgSuperAdminAssignableMemberIds: [],
       },
+      member_access: true,
+      member_actions: {
+        edit: true, assignRoles: true, invite: true, manageLogin: true, manageEmployment: true,
+        removeMembership: true, manageDepartments: true, bindExternalIdentity: false,
+      },
+      department_access: { canRead: true, canEdit: true, canDelete: true },
     })
     expect(res.headers.get('Cache-Control')).toBe('no-store')
     expect(res.headers.get('X-Org-Payload-Source')).toBe('rpc')
@@ -100,7 +107,7 @@ describe('GET /api/admin/org', () => {
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith('get_org_admin_directory_payload_v2', {
       p_org_id: 'org-1',
     })
-    expect(getDefaultOrgId).not.toHaveBeenCalled()
+    expect(getFreshDefaultOrgId).not.toHaveBeenCalled()
     expect(vi.mocked(supabaseAdmin.from).mock.calls.map(call => call[0])).toEqual([
       'organization_sources', 'organizations', 'sales_spaces', 'user_organizations',
     ])
@@ -123,6 +130,12 @@ describe('GET /api/admin/org', () => {
     expect(await res.json()).toEqual({
       ...payload, department_spaces: [],
       directory_roster: { status: 'unavailable', reason: 'DIRECTORY_UNCONFIRMED' },
+      member_access: true,
+      member_actions: {
+        edit: true, assignRoles: true, invite: true, manageLogin: true, manageEmployment: true,
+        removeMembership: true, manageDepartments: true, bindExternalIdentity: false,
+      },
+      department_access: { canRead: true, canEdit: true, canDelete: true },
       role_membership_stats: {
         effectiveAvailable: false, pendingAvailable: false, activeSpaceIds: [], activeMemberIds: [], orgSuperAdminAssignableMemberIds: [],
       },
@@ -249,6 +262,34 @@ describe('GET /api/admin/org', () => {
     expect(res.status).toBe(405)
     expect(res.headers.get('Allow')).toBe('GET')
     expect(body.code).toBe('ORG_AGGREGATE_READ_ONLY')
+  })
+
+  it('只读部门授权只查询组织中的部门，不读取成员目录或角色数据', async () => {
+    const actual = await vi.importActual<typeof import('@/lib/permissions')>('@/lib/permissions')
+    vi.mocked(canAccessOrgAdmin).mockImplementation(actual.canAccessOrgAdmin)
+    const departments = makeQuery({ data: [{ id: 'dept-1', name: '部门甲', parent_id: null }], error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValue(departments)
+    const req: any = new Request('https://example.test/api/admin/org', {
+      headers: {
+        'x-user-id': 'u-1',
+        'x-org-id': 'org-1',
+        'x-user-permissions': actual.ORG_DEPARTMENT_DIRECTORY_VIEW,
+      },
+    })
+
+    const response = await GET(req)
+    const body = await response.json()
+    expect(response.status).toBe(200)
+    expect(body).toMatchObject({
+      departments: [{ id: 'dept-1', name: '部门甲', parent_name: null }],
+      users: [], roles: [], spaces: [], member_access: false,
+      department_access: { canRead: true, canEdit: false, canDelete: false },
+    })
+    expect(body).not.toHaveProperty('directory_roster')
+    expect(body).not.toHaveProperty('role_membership_stats')
+    expect(supabaseAdmin.from).toHaveBeenCalledExactlyOnceWith('departments')
+    expect(departments.eq).toHaveBeenCalledWith('org_id', 'org-1')
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
   it('显式空授权角色不能回退到原 SUPER_ADMIN 身份重新获得访问', async () => {

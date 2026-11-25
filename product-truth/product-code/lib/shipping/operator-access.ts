@@ -1,5 +1,5 @@
-import { SHIPPING_OPERATE } from '@/lib/module-access'
-import { loadPublishedModulePermissionKeys } from '@/lib/permission-registry'
+import { getEffectiveShippingPermissions, SHIPPING_OPERATE, type ShippingPermissionKey } from '@/lib/module-access'
+import { loadShippingModulePermissionState } from '@/lib/permission-registry'
 import { resolveRolePermissions } from '@/lib/role-permission-resolution'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
@@ -26,27 +26,29 @@ type RecipientAssignment = {
   } | null
 }
 
-export async function loadShippingOperatorDecision(userId: string): Promise<{ orgId: string; canOperate: boolean; roleCodes: string[] } | null> {
+export async function loadShippingOperatorDecision(userId: string, permission: ShippingPermissionKey = SHIPPING_OPERATE): Promise<{ orgId: string; canOperate: boolean; roleCodes: string[] } | null> {
   try {
     const access = await loadPublishedShippingAccess(userId)
     if (!access) return null
     return {
       orgId: access.orgId,
       roleCodes: access.roleCodes,
-      canOperate: access.permissions.includes(SHIPPING_OPERATE),
+      canOperate: access.permissions.includes(permission),
     }
   } catch {
     throw new ShippingError(503, '寄件操作授权读取失败。')
   }
 }
 
-export async function requireShippingOperator(userId: string) {
-  const decision = await loadShippingOperatorDecision(userId)
+export async function requireShippingOperator(userId: string, permission: ShippingPermissionKey = SHIPPING_OPERATE) {
+  const decision = await loadShippingOperatorDecision(userId, permission)
   if (!decision?.canOperate) throw new ShippingError(403, '当前账号没有自助收寄操作权限。')
   return decision.orgId
 }
 
-function getOperatorRecipient(assignment: RecipientAssignment): OperatorRecipient | null {
+function getOperatorRecipient(
+  assignment: RecipientAssignment, publication: Awaited<ReturnType<typeof loadShippingModulePermissionState>>,
+): OperatorRecipient | null {
   const { user_id: userId, org_id: orgId, membership, user, role } = assignment
   if (!userId || !orgId || assignment.scope_type !== 'org' || assignment.scope_id !== orgId
     || user?.id !== userId || user.status !== 'active' || user.login_enabled !== true
@@ -57,14 +59,15 @@ function getOperatorRecipient(assignment: RecipientAssignment): OperatorRecipien
 
   const { permissions } = resolveRolePermissions(membership.organization.settings, role)
   // Workbench access can inherit platform authority. Reminders go to explicitly assigned shipping operators.
-  if (!permissions.includes(SHIPPING_OPERATE) && !permissions.includes('shipping:*')) return null
+  const operatorGrants = permissions.filter(permission => permission !== '*')
+  if (!getEffectiveShippingPermissions(operatorGrants, publication).includes('shipping:record_review')) return null
   return { userId, orgId }
 }
 
 export async function listShippingOperatorRecipients() {
   try {
-    const publishedKeys = await loadPublishedModulePermissionKeys()
-    if (!publishedKeys.includes(SHIPPING_OPERATE)) return []
+    const publication = await loadShippingModulePermissionState()
+    if (!publication.published.has(SHIPPING_OPERATE) && !publication.published.has('shipping:record_review')) return []
 
     const recipients = new Map<string, OperatorRecipient>()
     for (let offset = 0; ; offset += REMINDER_PAGE_SIZE) {
@@ -86,7 +89,7 @@ export async function listShippingOperatorRecipients() {
       if (error || !data) throw error ?? new Error('Missing shipping recipient assignments')
 
       for (const assignment of data as unknown as RecipientAssignment[]) {
-        const recipient = getOperatorRecipient(assignment)
+        const recipient = getOperatorRecipient(assignment, publication)
         if (recipient) recipients.set(`${recipient.userId}:${recipient.orgId}`, recipient)
       }
       if (data.length < REMINDER_PAGE_SIZE) return [...recipients.values()]

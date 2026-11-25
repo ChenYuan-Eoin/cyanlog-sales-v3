@@ -46,7 +46,7 @@ function loadConfigNavigation(token: string | null, refreshSignal?: AbortSignal)
       const body = response.ok ? await response.json() : null
       const roles = Array.isArray(body?.user?.roles) ? body.user.roles : []
       const baselineOnly = roles.length === 1 && roles[0]?.code === 'FXIAOKE_BASELINE'
-      return !baselineOnly && body?.user?.canManageOrg === true
+      return !baselineOnly && (body?.user?.canViewConfigs ?? body?.user?.canManageOrg) === true
     })
     .catch(() => false)
   if (!token) return readProfile()

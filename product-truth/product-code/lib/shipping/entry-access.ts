@@ -1,21 +1,22 @@
 import type { AuthUser } from '@/lib/auth'
-import { canWriteFxiaokeOwnerShipping, SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE } from '@/lib/module-access'
+import {
+  canWriteFxiaokeOwnerShipping, getEffectiveShippingPermissions,
+} from '@/lib/module-access'
 import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
-import { loadPublishedModulePermissionKeys } from '@/lib/permission-registry'
-import { hasPermission } from '@/lib/permissions'
+import { loadShippingModulePermissionState } from '@/lib/permission-registry'
 import { supabaseAdmin } from '@/lib/supabase'
 
 type PublishedShippingAccess = { orgId: string; permissions: string[]; roleCodes: string[] }
 
 export async function loadPublishedShippingAccess(userId: string): Promise<PublishedShippingAccess | null> {
-  const [context, published] = await Promise.all([
-    loadCurrentOrganizationRoleAssignments(userId), loadPublishedModulePermissionKeys(),
+  const [context, publication] = await Promise.all([
+    loadCurrentOrganizationRoleAssignments(userId), loadShippingModulePermissionState(),
   ])
   if (!context) return null
   const permissions = context.assignments.flatMap(assignment => assignment.permissions)
   return {
     orgId: context.orgId,
-    permissions: published.filter(key => hasPermission(permissions, key)),
+    permissions: getEffectiveShippingPermissions(permissions, publication),
     roleCodes: context.assignments.map(assignment => assignment.roleCode),
   }
 }
@@ -38,9 +39,10 @@ export async function resolveShippingEntry(
     && user.org_id === access.orgId && access.roleCodes.length > 0
   return {
     orgId: access.orgId,
-    canOperate: access.permissions.includes(SHIPPING_OPERATE),
+    canOperate: access.permissions.includes('shipping:ledger_view'),
     canViewOwn,
     canSubmitOwn: canViewOwn && canWriteFxiaokeOwnerShipping(access.roleCodes),
-    canManageConnections: access.permissions.includes(SHIPPING_MANAGE_CONNECTIONS),
+    canManageConnections: access.permissions.includes('shipping:settings_view'),
+    permissions: access.permissions,
   }
 }

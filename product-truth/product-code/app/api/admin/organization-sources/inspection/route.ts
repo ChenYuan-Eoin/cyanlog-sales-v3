@@ -1,8 +1,7 @@
 // F003 / WP51. POST initiates an explicit external read; no organization business writes.
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { requireAuth } from '@/lib/auth'
-import { canManageOrg, getFreshDefaultOrgId, getFreshUserScopedRoleAssignments } from '@/lib/scoped-access'
+import { loadOrganizationSourceAccess } from '@/lib/admin/organization-source-access'
 import { inspectOrganizationDirectory, OrganizationConnectionError } from '@/lib/organization-connections'
 
 export const runtime = 'nodejs'
@@ -17,9 +16,8 @@ function respond(body: unknown, status = 200) {
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireAuth(req)
-    const orgId = req.headers.get('x-org-id')?.trim() || await getFreshDefaultOrgId(user.id)
-    if (!orgId || !canManageOrg(await getFreshUserScopedRoleAssignments(user.id), orgId)) {
+    const context = await loadOrganizationSourceAccess(req)
+    if (!context?.access.preview) {
       return respond({ error: '无权核验此企业的组织目录。', code: 'FORBIDDEN' }, 403)
     }
     const raw = await req.text()
@@ -29,7 +27,7 @@ export async function POST(req: NextRequest) {
       return respond({ error: '目录核验请求格式无效。', code: 'INVALID_INPUT' }, 400)
     }
     if (!parsed.success) return respond({ error: '请读取当前连接后重新核验。', code: 'INVALID_INPUT' }, 400)
-    const report = await inspectOrganizationDirectory({ orgId, ...parsed.data })
+    const report = await inspectOrganizationDirectory({ orgId: context.orgId, ...parsed.data })
     return respond({ data: { report } })
   } catch (error) {
     if (error instanceof Error && error.name === 'AuthError') return respond({ error: '请先登录。', code: 'UNAUTHORIZED' }, 401)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getRequestAuthToken } from '@/lib/auth-token'
+import { canEnterConfigurationCenter } from '@/lib/permissions'
 import {
   canManageOrg,
   getDefaultOrgId,
@@ -38,7 +39,8 @@ export async function GET(req: NextRequest) {
       return errorResponse('读取用户失败', 500, 'USER_FETCH_FAILED')
     }
 
-    const roles = getOrgScopedAssignments(scopedAssignments, orgId).map((assignment) => ({
+    const organizationRoles = getOrgScopedAssignments(scopedAssignments, orgId)
+    const roles = organizationRoles.map((assignment) => ({
       code: assignment.roleCode,
       name: assignment.roleName,
     }))
@@ -49,6 +51,10 @@ export async function GET(req: NextRequest) {
         roles,
         scopedRoles: scopedAssignments,
         canManageOrg: canManageOrg(scopedAssignments, orgId),
+        canViewConfigs: canEnterConfigurationCenter(
+          organizationRoles.flatMap(assignment => assignment.permissions ?? []),
+          organizationRoles.filter(assignment => !assignment.permissionsOverridden).map(assignment => assignment.roleCode),
+        ),
         authMethod: sessionResult.data?.user_id === user.id ? sessionResult.data.auth_method : null,
       },
     })

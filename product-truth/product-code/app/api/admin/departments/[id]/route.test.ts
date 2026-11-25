@@ -5,9 +5,9 @@ vi.mock('@/lib/auth', () => ({
   requireAuth: vi.fn(),
 }))
 
-vi.mock('@/lib/scoped-access', () => ({
-  canMutateOrgDepartments: vi.fn(),
-  getDefaultOrgId: vi.fn(),
+vi.mock('@/lib/scoped-access', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/scoped-access')>(),
+  getFreshDefaultOrgId: vi.fn(),
   getFreshUserScopedRoleAssignments: vi.fn(),
 }))
 
@@ -20,8 +20,7 @@ vi.mock('@/lib/supabase', () => ({
 
 import { requireAuth } from '@/lib/auth'
 import {
-  canMutateOrgDepartments,
-  getDefaultOrgId,
+  getFreshDefaultOrgId,
   getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -31,6 +30,12 @@ const departmentId = '00000000-0000-0000-0000-000000000001'
 const oldParentId = '00000000-0000-0000-0000-000000000002'
 const newParentId = '00000000-0000-0000-0000-000000000003'
 const routeContext = { params: Promise.resolve({ id: departmentId }) }
+
+function grant(permissions: string[]) {
+  vi.mocked(getFreshUserScopedRoleAssignments).mockResolvedValue([{
+    scopeType: 'org', scopeId: 'org-1', permissions, roleCode: 'DEPARTMENTS', roleId: 'role-1', roleName: '部门', grantedAt: null,
+  }])
+}
 
 function patchDepartment(body: object) {
   return PATCH(new Request(`https://example.test/api/admin/departments/${departmentId}`, {
@@ -51,21 +56,19 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: 'admin-user' })
-    ;(getDefaultOrgId as any).mockResolvedValue('org-1')
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue(['fresh-assignment'])
-    ;(canMutateOrgDepartments as any).mockReturnValue(true)
+    ;(getFreshDefaultOrgId as any).mockResolvedValue('org-1')
+    grant(['dept:write'])
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { leaderId: null, userId: null }, error: null } as never)
   })
 
   it('没有当前组织部门写权限时，在解析 body 和访问业务表前拒绝 PATCH', async () => {
-    ;(canMutateOrgDepartments as any).mockReturnValue(false)
+    grant(['dept:directory_view'])
     const json = vi.fn().mockResolvedValue({ name: '新部门名' })
 
     const res = await PATCH({ json } as any, routeContext)
 
     expect(res.status).toBe(403)
     expect(getFreshUserScopedRoleAssignments).toHaveBeenCalledWith('admin-user')
-    expect(canMutateOrgDepartments).toHaveBeenCalledWith(['fresh-assignment'], 'org-1')
     expect(json).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
@@ -80,6 +83,7 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
   })
 
   it('更新部门的最终 mutation 保留当前组织边界', async () => {
+    grant(['dept:directory_view', 'dept:edit_structure'])
     const lookup = makeQuery({
       data: { id: 'dept-1', depth: 0, parent_id: null },
       error: null,
@@ -188,7 +192,7 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
   })
 
   it('没有当前组织部门写权限时，不访问业务表并拒绝 DELETE', async () => {
-    ;(canMutateOrgDepartments as any).mockReturnValue(false)
+    grant(['dept:directory_view'])
 
     const res = await DELETE({ method: 'DELETE' } as any, routeContext)
 
@@ -196,7 +200,19 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
+  it('维护权限与删除权限分开，两个动作都需要查看部门树', async () => {
+    grant(['dept:directory_view', 'dept:edit_structure'])
+    expect((await DELETE({ method: 'DELETE' } as any, routeContext)).status).toBe(403)
+    grant(['dept:directory_view', 'dept:delete_structure'])
+    expect((await patchDepartment({ name: '新部门名' })).status).toBe(403)
+    grant(['dept:edit_structure', 'dept:delete_structure'])
+    expect((await patchDepartment({ name: '新部门名' })).status).toBe(403)
+    expect((await DELETE({ method: 'DELETE' } as any, routeContext)).status).toBe(403)
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
   it('软删除部门的最终 mutation 保留当前组织边界', async () => {
+    grant(['dept:directory_view', 'dept:delete_structure'])
     const lookup = makeQuery({
       data: { id: 'dept-1', member_count: 0, name: '销售部' },
       error: null,

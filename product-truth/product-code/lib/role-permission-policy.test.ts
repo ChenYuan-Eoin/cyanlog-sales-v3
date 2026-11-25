@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { canAccessOrgAdmin, canReviewContracts, hasPermission } from './permissions'
 import { evaluateOrgConfigAccess } from './configs/access'
+import { SHIPPING_WORKBENCH_ACTION_KEYS } from './module-access'
 import {
   getPermissionGrantSource,
   grantExplicitRolePermissions,
@@ -68,6 +69,22 @@ describe('organization role permission policy', () => {
   })
   it('does not grant unrelated capabilities when editing a narrow role', () => {
     expect(toggleExplicitRolePermission(['contract:view'], 'contract:review')).toEqual(['contract:view', 'contract:review'])
+  })
+  it('withdraws a shipping action inherited from the old grant while preserving its published siblings', () => {
+    const granted = ['shipping:operate', 'shipping:manage_connections', 'quote:view']
+    const published = new Set<string>(SHIPPING_WORKBENCH_ACTION_KEYS)
+    const next = revokeRolePermissions(granted, ['shipping:order_confirm'], [], published)
+    expect(isRolePermissionEnabled(next, 'shipping:order_confirm')).toBe(false)
+    expect(isRolePermissionEnabled(next, 'shipping:record_review')).toBe(true)
+    expect(isRolePermissionEnabled(next, 'shipping:settings_view')).toBe(true)
+    expect(next).toContain('quote:view')
+    expect(next).not.toContain('shipping:operate')
+  })
+
+  it('preserves inherited shipping capability when only part of its replacement family is published', () => {
+    const granted = ['shipping:*']
+    expect(revokeRolePermissions(granted, ['shipping:order_confirm'], [], new Set(['shipping:order_confirm'])))
+      .toEqual(granted)
   })
   it('shows and revokes permissions implied by existing broader capabilities', () => {
     expect(isRolePermissionEnabled(['contract:write'], 'contract:review')).toBe(true)

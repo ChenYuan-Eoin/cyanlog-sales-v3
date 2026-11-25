@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   org: vi.fn(),
   roles: vi.fn(),
-  manage: vi.fn(),
   credentials: vi.fn(),
   inspect: vi.fn(),
   transport: vi.fn(),
@@ -15,7 +14,6 @@ vi.mock('@/lib/auth', () => ({ requireAuth: mocks.auth }))
 vi.mock('@/lib/scoped-access', () => ({
   getFreshDefaultOrgId: mocks.org,
   getFreshUserScopedRoleAssignments: mocks.roles,
-  canManageOrg: mocks.manage,
 }))
 vi.mock('@/lib/fxiaoke/settings', () => ({ loadSavedCredentialsForMetadataInspection: mocks.credentials }))
 vi.mock('@/lib/fxiaoke/client', () => ({ inspectObjectMetadata: mocks.inspect }))
@@ -35,8 +33,7 @@ beforeEach(() => {
   vi.resetAllMocks()
   mocks.auth.mockResolvedValue({ id: 'admin' })
   mocks.org.mockResolvedValue('org-a')
-  mocks.roles.mockResolvedValue([])
-  mocks.manage.mockImplementation((_roles, orgId) => orgId === 'org-a')
+  mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', permissions: ['org:source_preview'] }])
   mocks.credentials.mockResolvedValue(credentials)
   mocks.transport.mockReturnValue('fixed-transport')
   mocks.inspect.mockResolvedValue({
@@ -76,6 +73,13 @@ it('rejects another organization before decrypting saved credentials', async () 
   const response = await GET(request(undefined, 'org-b'))
   expect(response.status).toBe(403)
   expect(mocks.credentials).not.toHaveBeenCalled()
+})
+
+it('requires provider-read permission before decrypting saved credentials', async () => {
+  mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', permissions: ['org:source_view'] }])
+  expect((await GET(request())).status).toBe(403)
+  expect(mocks.credentials).not.toHaveBeenCalled()
+  expect(mocks.inspect).not.toHaveBeenCalled()
 })
 
 it('uses the fixed-egress transport for a valid object description', async () => {

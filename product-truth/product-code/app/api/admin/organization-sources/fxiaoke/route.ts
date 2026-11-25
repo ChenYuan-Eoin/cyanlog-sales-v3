@@ -1,7 +1,6 @@
 // REQ: F003 / WP91. Organization managers only; never accepts arbitrary provider URLs.
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { canManageOrg, getFreshDefaultOrgId, getFreshUserScopedRoleAssignments } from '@/lib/scoped-access'
+import { loadOrganizationSourceAccess, type OrganizationSourceAccess } from '@/lib/admin/organization-source-access'
 import { discoveryInput, FxiaokeError } from '@/lib/fxiaoke/contracts'
 import { discoverEnterprise } from '@/lib/fxiaoke/client'
 import { loadConnection, previewSavedConnection, saveConnection } from '@/lib/fxiaoke/settings'
@@ -10,14 +9,13 @@ import { transportForOrganization } from '@/lib/fxiaoke/egress/server'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-async function authorized(req: NextRequest, run: (orgId: string, actorId: string) => Promise<unknown>) {
+async function authorized(req: NextRequest, run: (orgId: string, actorId: string, access: OrganizationSourceAccess) => Promise<unknown>) {
   try {
-    const user = await requireAuth(req)
-    const orgId = req.headers.get('x-org-id')?.trim() || await getFreshDefaultOrgId(user.id)
-    if (!orgId || !canManageOrg(await getFreshUserScopedRoleAssignments(user.id), orgId)) {
+    const context = await loadOrganizationSourceAccess(req)
+    if (!context?.access.view) {
       return NextResponse.json({ error: '无权管理此企业的组织接入。' }, { status: 403 })
     }
-    return NextResponse.json({ data: await run(orgId, user.id) }, { headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json({ data: await run(context.orgId, context.actor.id, context.access) }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (err) {
     if (err instanceof Error && err.name === 'AuthError') return NextResponse.json({ error: '请先登录。' }, { status: 401 })
     if (err instanceof FxiaokeError) return NextResponse.json({ error: err.message, code: err.code }, { status: err.status })
@@ -25,10 +23,14 @@ async function authorized(req: NextRequest, run: (orgId: string, actorId: string
   }
 }
 export async function GET(req: NextRequest) {
-  return authorized(req, async orgId => ({ connection: await loadConnection(orgId) }))
+  return authorized(req, async (orgId, _actorId, access) => {
+    const connection = await loadConnection(orgId)
+    return { connection: connection && !access.connect ? { ...connection, appId: '', apiUserId: '' } : connection }
+  })
 }
 export async function POST(req: NextRequest) {
-  return authorized(req, async (orgId, actorId) => {
+  return authorized(req, async (orgId, actorId, access) => {
+    if (!access.connect) throw new FxiaokeError('FORBIDDEN', '无权维护此企业的纷享连接。', 403)
     const raw = await req.text()
     if (raw.length > 8192) throw new FxiaokeError('INVALID_INPUT', '配置内容超出长度限制。')
     let body: Record<string, unknown>

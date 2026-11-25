@@ -2,23 +2,22 @@
 // needed to configure the CRM shipping bridge. This endpoint never activates a
 // source, synchronizes a directory, or writes provider data.
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { loadOrganizationSourceAccess } from '@/lib/admin/organization-source-access'
 import { inspectObjectMetadata } from '@/lib/fxiaoke/client'
 import { FxiaokeError } from '@/lib/fxiaoke/contracts'
 import { directoryTransportForOrganization } from '@/lib/fxiaoke/egress/directory-transport'
 import { loadSavedCredentialsForMetadataInspection } from '@/lib/fxiaoke/settings'
-import { canManageOrg, getFreshDefaultOrgId, getFreshUserScopedRoleAssignments } from '@/lib/scoped-access'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await requireAuth(req)
-    const orgId = req.headers.get('x-org-id')?.trim() || await getFreshDefaultOrgId(user.id)
-    if (!orgId || !canManageOrg(await getFreshUserScopedRoleAssignments(user.id), orgId)) {
+    const context = await loadOrganizationSourceAccess(req)
+    if (!context?.access.preview) {
       return NextResponse.json({ error: '无权检查此企业的纷享对象元数据。' }, { status: 403 })
     }
+    const { orgId } = context
 
     const operation = req.nextUrl.searchParams.get('operation') || 'list'
     if (operation !== 'list' && operation !== 'describe') {

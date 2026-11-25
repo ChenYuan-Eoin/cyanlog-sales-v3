@@ -18,6 +18,18 @@ async function waitForConfiguration() {
 }
 
 describe('shipping configuration drawer', () => {
+  it('shows a settings viewer the saved sections without any save controls', async () => {
+    fetcher.mockImplementation(async (url: string) => url.includes('intake-settings')
+      ? Response.json({ rules: DEFAULT_INTAKE_RULES, departments: [] })
+      : Response.json({ permissions: ['shipping:settings_view'], configuration: { connections: [], billingAccounts: [], sender: null } }))
+    render(<ShippingConfigDrawer embedded />)
+    await waitForConfiguration()
+    expect(screen.getByRole('heading', { name: '公司默认寄件人' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /保存连接|保存月结账号|保存可提报服务|保存寄件人信息/ })).toBeNull()
+    expect(fetcher.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true)
+  })
+
+
   it('delegates operator assignment to the existing role center without a member picker', async () => {
     render(<ShippingConfigDrawer embedded />)
     await waitForConfiguration()

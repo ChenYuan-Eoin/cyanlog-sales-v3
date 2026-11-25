@@ -22,7 +22,7 @@ export default async function ShippingPage() {
   const access = await resolveShippingEntry(user, token ?? null)
   if (access?.canOperate) {
     const settings = await loadShippingWorkspaceSettings(access.orgId)
-    return <ShippingWorkbench settings={{ ...settings, canOperate: true, canManageConnections: access.canManageConnections }} />
+    return <ShippingWorkbench settings={{ ...settings, canOperate: true, canManageConnections: access.canManageConnections, permissions: access.permissions }} />
   }
 
   if (access?.canViewOwn) {

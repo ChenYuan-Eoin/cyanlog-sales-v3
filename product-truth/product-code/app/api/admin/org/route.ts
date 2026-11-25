@@ -9,9 +9,11 @@ import { requireAuth } from '@/lib/auth'
 import { buildDepartmentSpaces } from '@/lib/department-spaces'
 import { readDirectoryRosterSource, verifyDirectoryRoster } from '@/lib/organization-directory-roster'
 import { canAccessOrgAdmin } from '@/lib/permissions'
+import { getMemberActionAvailability, getScopedMemberActionAvailability, type MemberActionAvailability } from '@/lib/admin/member-actions'
+import { evaluateDepartmentStructureAccess, getDepartmentStructureAccess } from '@/lib/admin/department-actions'
 import {
   canManageOrg,
-  getDefaultOrgId,
+  getFreshDefaultOrgId,
   getOrgRoleCodes,
   getFreshUserScopedRoleAssignments,
   type ScopeType,
@@ -51,6 +53,9 @@ type OrgContext = {
   user: { id: string }
   orgId: string
   roleCodes: string[]
+  memberAccess: boolean
+  memberActions: MemberActionAvailability
+  departmentAccess: ReturnType<typeof evaluateDepartmentStructureAccess>
 }
 
 type OrgAdminPayload = {
@@ -265,6 +270,11 @@ async function getOrgUserRoles(orgId: string, orgUserIds?: string[]) {
   return data || []
 }
 
+function hasMemberAction(actions: MemberActionAvailability) {
+  return actions.edit || actions.assignRoles || actions.invite || actions.manageLogin
+    || actions.manageEmployment || actions.removeMembership
+}
+
 async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
   const headerUserId = req.headers.get('x-user-id')?.trim()
   const headerOrgId = req.headers.get('x-org-id')?.trim()
@@ -281,9 +291,10 @@ async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
 
     const authorizationRoleCodes = (req.headers.get('x-user-authorization-role-codes') ?? roleCodes.join(','))
       .split(',').map((code) => code.trim()).filter(Boolean)
-    if (!canAccessOrgAdmin(permissions, authorizationRoleCodes)) {
-      return null
-    }
+    const memberActions = getMemberActionAvailability(permissions, authorizationRoleCodes)
+    const memberAccess = canAccessOrgAdmin(permissions, authorizationRoleCodes) || hasMemberAction(memberActions)
+    const departmentAccess = evaluateDepartmentStructureAccess(permissions, authorizationRoleCodes)
+    if (!memberAccess && !departmentAccess.canRead) return null
 
     return {
       user: { id: headerUserId },
@@ -291,24 +302,31 @@ async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
       // snapshot. Do not mix those permissions with a separately cached org.
       orgId: headerOrgId,
       roleCodes,
+      memberAccess,
+      memberActions,
+      departmentAccess,
     }
   }
 
   const user = await requireAuth(req)
   const [assignments, orgId] = await Promise.all([
     getFreshUserScopedRoleAssignments(user.id),
-    getDefaultOrgId(user.id),
+    getFreshDefaultOrgId(user.id),
   ])
+  if (!orgId) return null
   const roleCodes = getOrgRoleCodes(assignments, orgId)
-
-  if (!canManageOrg(assignments, orgId)) {
-    return null
-  }
+  const memberActions = getScopedMemberActionAvailability(assignments, orgId)
+  const memberAccess = canManageOrg(assignments, orgId) || hasMemberAction(memberActions)
+  const departmentAccess = getDepartmentStructureAccess(assignments, orgId)
+  if (!memberAccess && !departmentAccess.canRead) return null
 
   return {
     user,
     orgId,
     roleCodes,
+    memberAccess,
+    memberActions,
+    departmentAccess,
   }
 }
 
@@ -491,6 +509,23 @@ export async function GET(req: NextRequest) {
       return errorResponse('无权限访问组织管理', 403, 'FORBIDDEN')
     }
 
+    if (!auth.memberAccess) {
+      const departments = await getOrgDepartments(auth.orgId)
+      const names = new Map(departments.map(department => [department.id, department.name]))
+      return NextResponse.json({
+        departments: departments.map(({ id, name, code, depth, parent_id }) => ({
+          id, name, code, depth, parent_id,
+          parent_name: parent_id ? names.get(parent_id) ?? null : null,
+        })),
+        users: [],
+        roles: [],
+        spaces: [],
+        member_access: false,
+        member_actions: auth.memberActions,
+        department_access: auth.departmentAccess,
+      }, { headers: { 'Cache-Control': 'no-store' } })
+    }
+
     const directorySource = await readDirectoryRosterSource(auth.orgId)
     let data: OrgAdminPayload
     try {
@@ -514,6 +549,9 @@ export async function GET(req: NextRequest) {
         ? { ...directoryRoster, members: directoryRoster.members.map(({ id, departmentIds }) => ({ id, departmentIds })) }
         : directoryRoster,
       role_membership_stats: roleMembershipBasis,
+      member_access: true,
+      member_actions: auth.memberActions,
+      department_access: auth.departmentAccess,
     }, {
       headers: {
         'Cache-Control': 'no-store',

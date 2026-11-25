@@ -16,6 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { confirmAction, error, success } from '@/lib/toast'
+import type { OrganizationSourceAccess } from '@/lib/admin/organization-source-access'
 import type { OrganizationConnectionProvider, ProviderCapability } from '@/lib/organization-connections/types'
 import type { DirectoryCutoverClientPlan } from '@/lib/organization-connections/directory-cutover'
 import { connectionPresentation } from '@/lib/organization-connections/presentation'
@@ -53,6 +54,7 @@ function primaryDirectorySource(sources: Source[]) {
 type SourcePayload = {
   sources?: Source[]
   providers?: ProviderCapability[]
+  permissions?: OrganizationSourceAccess
   active_primary_source_id?: string | null
 }
 
@@ -141,6 +143,7 @@ function readErrorMessage(value: unknown, fallback: string) {
 export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelProps) {
   const [sources, setSources] = useState<Source[]>([])
   const [providers, setProviders] = useState<ProviderCapability[]>([])
+  const [access, setAccess] = useState<OrganizationSourceAccess | null>(null)
   const [selectedProvider, setSelectedProvider] = useState<OrganizationConnectionProvider | null>(null)
   const selectedProviderRef = useRef<OrganizationConnectionProvider | null>(null)
   const [latestPlan, setLatestPlan] = useState<DirectoryCutoverClientPlan | null>(null)
@@ -157,6 +160,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
   const load = useCallback(async () => {
     const generation = ++directoryReadGeneration.current
     setLoading(true)
+    setAccess(null)
     setSourceReadError('')
     let sourcesLoaded = false
     try {
@@ -192,6 +196,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
 
       setSources(nextSources)
       setProviders(nextProviders)
+      setAccess(sourceBody.data.permissions ?? null)
       setSelectedProvider(preferredProvider)
       selectedProviderRef.current = preferredProvider
       setLatestPlan(null)
@@ -277,7 +282,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
   }
 
   async function setSsoEnabled(enabled: boolean) {
-    if (selectedProviderRef.current !== 'fxiaoke' || !directorySource?.connectionRevision || ssoAction) return
+    if (!access?.enterpriseLogin || selectedProviderRef.current !== 'fxiaoke' || !directorySource?.connectionRevision || ssoAction) return
     const accepted = await confirmAction(
       enabled
         ? '启用纷享企业登录？已匹配的在职员工可凭纷享身份先登录，无需邀请码；未分配 ICU 角色时只能看到待授权页。目录同步本身不会授予业务权限。'
@@ -304,7 +309,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
 
   async function previewDirectory() {
     const provider = selectedProviderRef.current
-    if (!provider || !directoryReady || directoryAction !== null) return
+    if (!access?.preview || !provider || !directoryReady || directoryAction !== null) return
     const providerLabel = providers.find(item => item.key === provider)?.label || provider
     setDirectoryAction('preview')
     try {
@@ -370,7 +375,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
   }
 
   async function rollbackLatestPlan() {
-    if (!latestPlan) return
+    if (!latestPlan || !canRollback) return
     const accepted = await confirmAction(
       '确认回滚本次目录切源？系统只会在连接、目录和成员关系均未发生后续变化时恢复切换前的精确状态。',
       { confirmText: '确认回滚', danger: true },
@@ -435,7 +440,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
     && (latestPlan.targetSourceId !== directorySource.id
       || latestPlan.connectionRevision !== directorySource.connectionRevision))
   const canApply = Boolean(
-    directoryReady && latestPlan
+    access?.apply && directoryReady && latestPlan
     && latestPlan.provider === directoryProvider
     && latestPlan.snapshot.connectionVerified
     && latestPlan.contractVersion === 'f003-directory-cutover-v2'
@@ -446,7 +451,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
     && directoryAction === null,
   )
   const canRollback = Boolean(
-    latestPlan
+    access?.apply && latestPlan
     && latestPlan.status === 'applied'
     && latestPlan.run?.status === 'applied'
     && directoryAction === null,
@@ -606,7 +611,13 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
 
         {selected && (
           <div className="mt-3">
-            <OrganizationConnectionForm key={selected.key} provider={selected} onChanged={refreshAll} />
+            <OrganizationConnectionForm
+              key={selected.key}
+              provider={selected}
+              canConnect={access?.connect === true}
+              canApply={access?.apply === true}
+              onChanged={refreshAll}
+            />
           </div>
         )}
 
@@ -649,7 +660,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
           <ArrowLeftRightIcon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
         </div>
 
-        {selected && <details className="mt-3 text-xs text-slate-500">
+        {selected && access?.preview && <details className="mt-3 text-xs text-slate-500">
           <summary className="cursor-pointer">查看连接读取诊断</summary>
           <DirectoryInspectionPanel key={`${selected.key}:${inspectionGeneration}`} provider={selected} />
         </details>}
@@ -680,7 +691,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
           <p className="mt-1 text-[11px] leading-5 text-slate-500">
             手工部门与旧来源会继续保留。同步统一更新{directoryLabel}的部门、目录员工和归属；未关联账号的员工显示为待关联，账号关联和角色保持不变。
           </p>
-          <Button
+          {access?.preview && <Button
             type="button"
             variant="outline"
             size="sm"
@@ -699,10 +710,10 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
                 : directoryReady
                   ? '读取组织目录并生成差异'
                   : `${directoryLabel}启用目录连接后可用`}
-          </Button>
+          </Button>}
         </div>
 
-        {latestPlan && (
+        {latestPlan && (access?.preview || access?.apply) && (
           <div className="mt-3 rounded-lg border border-slate-200 p-3" data-testid="directory-cutover-plan">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -843,7 +854,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
             ? '纷享已是身份权威来源。停用或冲突身份仍会被拒绝；正式站真人登录验收尚需单独完成。'
             : '确认至少一位已匹配的在职纷享成员后可启用企业登录。未分配角色的员工只会进入待授权页，不能访问业务接口。'}
         </div>
-        {directoryProvider === 'fxiaoke' && directorySource?.status === 'active'
+        {access?.enterpriseLogin && directoryProvider === 'fxiaoke' && directorySource?.status === 'active'
           && directorySource.connectionState === 'verified'
           && directorySource.authorityScope.directory === 'authoritative' && (
             <Button

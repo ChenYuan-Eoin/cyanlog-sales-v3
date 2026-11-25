@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => {
     requireAuth: vi.fn(),
     defaultOrgId: vi.fn(),
     assignments: vi.fn(),
-    canManageOrg: vi.fn(),
     latest: vi.fn(),
     prepare: vi.fn(),
     apply: vi.fn(),
@@ -28,7 +27,6 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@/lib/auth', () => ({ requireAuth: mocks.requireAuth }))
 vi.mock('@/lib/scoped-access', () => ({
-  canManageOrg: mocks.canManageOrg,
   getFreshDefaultOrgId: mocks.defaultOrgId,
   getFreshUserScopedRoleAssignments: mocks.assignments,
 }))
@@ -62,8 +60,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.requireAuth.mockResolvedValue({ id: 'admin-1' })
   mocks.defaultOrgId.mockResolvedValue('org-1')
-  mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1' }])
-  mocks.canManageOrg.mockReturnValue(true)
+  mocks.assignments.mockResolvedValue([{
+    scopeType: 'org', scopeId: 'org-1', permissions: ['org:source_preview', 'org:source_apply'],
+  }])
   mocks.latest.mockResolvedValue(null)
   mocks.prepare.mockResolvedValue({ id: 'plan-1' })
   mocks.apply.mockResolvedValue({ runId: 'run-1' })
@@ -73,6 +72,7 @@ beforeEach(() => {
 
 describe('/api/admin/organization-sources/directory', () => {
   it('loads only the latest plan for a freshly authorized organization', async () => {
+    mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-explicit', permissions: ['org:source_preview'] }])
     const response = await GET(request('GET', undefined, 'org-explicit'))
 
     expect(response.status).toBe(200)
@@ -83,7 +83,6 @@ describe('/api/admin/organization-sources/directory', () => {
       },
     })
     expect(mocks.assignments).toHaveBeenCalledWith('admin-1')
-    expect(mocks.canManageOrg).toHaveBeenCalledWith([{ scopeType: 'org', scopeId: 'org-1' }], 'org-explicit')
     expect(mocks.latest).toHaveBeenCalledWith('org-explicit', 'fxiaoke')
   })
 
@@ -143,9 +142,31 @@ describe('/api/admin/organization-sources/directory', () => {
     mocks.requireAuth.mockRejectedValueOnce(authError)
     expect((await GET(request('GET'))).status).toBe(401)
 
-    mocks.canManageOrg.mockReturnValueOnce(false)
     expect((await GET(request('GET', undefined, 'org-other'))).status).toBe(403)
     expect(mocks.latest).not.toHaveBeenCalled()
+  })
+
+  it('keeps saved personnel changes and sync controls outside a view-only grant', async () => {
+    mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1', permissions: ['org:source_view'] }])
+
+    const read = await GET(request('GET'))
+    expect(read.status).toBe(200)
+    expect((await read.json()).data.plan).toBeNull()
+    expect(mocks.latest).not.toHaveBeenCalled()
+    expect((await POST(request('POST', { action: 'preview', provider: 'fxiaoke' }))).status).toBe(403)
+    expect(mocks.prepare).not.toHaveBeenCalled()
+  })
+
+  it('requires apply authority independently from preview and department grants', async () => {
+    mocks.assignments.mockResolvedValue([
+      { scopeType: 'org', scopeId: 'org-1', permissions: ['org:source_preview'] },
+      { scopeType: 'department', scopeId: 'org-1', permissions: ['org:source_apply'] },
+    ])
+
+    expect((await POST(request('POST', { action: 'apply', source_revisions: [] }))).status).toBe(403)
+    expect((await POST(request('POST', { action: 'rollback', plan_id: 'plan-1' }))).status).toBe(403)
+    expect(mocks.apply).not.toHaveBeenCalled()
+    expect(mocks.rollback).not.toHaveBeenCalled()
   })
 
 

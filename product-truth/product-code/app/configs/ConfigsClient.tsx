@@ -15,7 +15,8 @@ import {
   FileTextIcon,
 } from '@/components/icons'
 import { isAIRuntimeOverview } from './types'
-import type { AIRuntimeOverview, Config, ConfigPublishFeedback, ConfigsInitialData, EditableConfig, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId, PermissionCatalogGroup } from './types'
+import { buildRolePermissionDirectory } from './permission-directory'
+import type { AIRuntimeOverview, Config, ConfigPublishFeedback, ConfigsInitialData, EditableConfig, ProductRecord, ProductPriceTier, OrgSummaryPayload, ConfigTabId, ConfigSectionId } from './types'
 import { deleteBrowserCache, readBrowserCacheEntry, scopedCacheKey, writeBrowserCache } from '@/lib/browser-cache'
 import { DEFAULT_THEME } from '@/lib/ui-theme-shared'
 import { getAIConfigKind } from '@/lib/configs/ai-config-kind'
@@ -227,76 +228,6 @@ const CONFIG_SECTIONS: Array<{
   },
 ]
 
-const PERMISSION_CATALOG: PermissionCatalogGroup[] = [
-  {
-    id: 'console-access',
-    label: '后台访问',
-    description: '决定用户是否能进入组织管理、配置中心和管理入口。',
-    items: [
-      { key: 'admin:access', label: '管理后台访问', description: '允许进入组织管理与后台入口。' },
-      { key: 'config:*', label: '配置中心访问', description: '允许进入并维护配置中心能力域。' },
-      { key: 'report:*', label: '经营报表访问', description: '允许查看组织级经营报表与统计。' },
-      { key: 'report:dept', label: '部门报表访问', description: '允许查看所在部门经营数据。' },
-      { key: 'report:finance', label: '财务报表访问', description: '允许查看财务口径报表。' },
-    ],
-  },
-  {
-    id: 'org-admin',
-    label: '组织架构管理',
-    description: '维护部门、成员、角色指派和外部通讯录同步。',
-    items: [
-      { key: 'org:*', label: '组织管理', description: '允许维护组织与组织级设置。' },
-      { key: 'org:write', label: '组织设置修改', description: '允许修改组织级管理项。' },
-      { key: 'dept:*', label: '部门维护', description: '允许新建、调整和停用部门。' },
-      { key: 'dept:view', label: '部门查看', description: '允许查看部门树和成员归属。' },
-      { key: 'user:*', label: '成员维护', description: '允许创建成员、分配角色、停用登录。' },
-      { key: 'user:view', label: '成员查看', description: '允许查看成员档案和角色绑定。' },
-      { key: 'user:write', label: '成员编辑', description: '允许调整成员状态与角色。' },
-      { key: 'feishu:sync', label: '外部通讯录同步', description: '允许从飞书等源刷新部门结构。' },
-    ],
-  },
-  {
-    id: 'quote-domain',
-    label: '报价与客户',
-    description: '决定销售侧是否可以创建报价、管理客户、推进机会。',
-    items: [
-      { key: 'opportunity:*', label: '机会全量管理', description: '允许维护所辖机会与阶段。' },
-      { key: 'opportunity:own', label: '本人机会管理', description: '仅允许维护本人负责机会。' },
-      { key: 'quote:*', label: '报价全量管理', description: '允许查看、编辑与审批报价。' },
-      { key: 'quote:create', label: '创建报价', description: '允许新建报价单。' },
-      { key: 'quote:update_own', label: '编辑本人报价', description: '仅允许编辑本人创建的报价。' },
-      { key: 'quote:approve', label: '报价审批', description: '允许执行报价审批动作。' },
-      { key: 'quote:view', label: '报价查看', description: '允许查看报价结果。' },
-      { key: 'customer:view', label: '客户查看', description: '允许查看客户资料。' },
-      { key: 'customer:create', label: '客户创建', description: '允许录入客户。' },
-      { key: 'customer:*', label: '客户全量管理', description: '允许维护客户档案与关联对象。' },
-    ],
-  },
-  {
-    id: 'contract-domain',
-    label: '合同与模板',
-    description: '决定合同上传、审核、审批和模板查看范围。',
-    items: [
-      { key: 'contract:*', label: '合同全量管理', description: '允许维护与处理全部合同动作。' },
-      { key: 'contract:view', label: '合同查看', description: '允许查看合同记录与审核结果。' },
-      { key: 'contract:upload', label: '合同上传', description: '允许上传待审核合同。' },
-      { key: 'contract:write', label: '合同编辑', description: '允许编辑合同相关记录。' },
-      { key: 'contract:review', label: '合同审核执行', description: '允许执行规则与模型审核。' },
-      { key: 'contract:approve', label: '合同审批', description: '允许对合同结果进行审批。' },
-      { key: 'contract:read', label: '合同结果读取', description: '兼容旧接口读取权限。' },
-      { key: 'template:view', label: '模板查看', description: '允许查看合同模板与条款模板。' },
-    ],
-  },
-  {
-    id: 'payment-domain',
-    label: '财务与回款',
-    description: '财务角色使用的支付、回款与账务能力。',
-    items: [
-      { key: 'payment:*', label: '回款与支付管理', description: '允许处理支付、回款与财务动作。' },
-    ],
-  },
-]
-
 const DATA_SCOPE_LEVELS = [
   {
     key: 'OWN',
@@ -368,7 +299,7 @@ function firstParam(value: string | string[] | undefined): string | null {
   return value || null
 }
 
-function normalizeInitialRouteState(routeState?: ConfigsRouteState) {
+function normalizeInitialRouteState(routeState: ConfigsRouteState | undefined, allowedTabs: ReadonlySet<ConfigTabId>, defaultTab: ConfigTabId) {
   let requestedTab = firstParam(routeState?.tab)
   let ruleId = firstParam(routeState?.ruleId)
   let mode = firstParam(routeState?.mode)
@@ -380,11 +311,11 @@ function normalizeInitialRouteState(routeState?: ConfigsRouteState) {
     mode = searchParams.get('mode')
   }
 
-  const tab = requestedTab && requestedTab in CONFIG_TABS
+  const tab = requestedTab && allowedTabs.has(requestedTab as ConfigTabId)
     ? requestedTab as ConfigTabId
-    : (ruleId || mode === 'new' ? 'rules' : 'price-list')
+    : ((ruleId || mode === 'new') && allowedTabs.has('rules') ? 'rules' : defaultTab)
 
-  return { tab, ruleId, mode }
+  return { tab, ruleId: tab === 'rules' ? ruleId : null, mode: tab === 'rules' ? mode : null }
 }
 
 function getApiErrorMessage(payload: unknown, fallback: string): string {
@@ -458,10 +389,39 @@ type ConfigsClientProps = {
   initialData?: ConfigsInitialData
   orgId?: string
   routeState?: ConfigsRouteState
+  tabAccess?: ConfigsTabAccess
 }
 
-export default function ConfigsClient({ initialData, routeState }: ConfigsClientProps) {
-  const [initialSearch] = useState(() => normalizeInitialRouteState(routeState))
+export interface ConfigsTabAccess {
+  general: boolean
+  organization: boolean
+  integrations: boolean
+  roles: boolean
+  shipping: boolean
+}
+
+function getVisibleConfigSections(tabAccess?: ConfigsTabAccess) {
+  if (!tabAccess) return CONFIG_SECTIONS
+  const organizationTabs = {
+    'org-structure': tabAccess.organization,
+    integrations: tabAccess.integrations,
+    'role-access': tabAccess.roles,
+  }
+  return CONFIG_SECTIONS.flatMap(section => {
+    if (section.id === 'shipping') return tabAccess.shipping ? [section] : []
+    if (section.id !== 'org-access') return tabAccess.general ? [section] : []
+    const tabs = section.tabs.filter(tab => tab in organizationTabs && organizationTabs[tab as keyof typeof organizationTabs])
+    if (!tabs.length) return []
+    if (tabs.length === section.tabs.length) return [section]
+    return [{ ...section, tabs, description: tabs.map(tab => CONFIG_TABS[tab].label).join('、') + '。' }]
+  })
+}
+
+export default function ConfigsClient({ initialData, routeState, tabAccess }: ConfigsClientProps) {
+  const visibleSections = useMemo(() => getVisibleConfigSections(tabAccess), [tabAccess])
+  const allowedTabs = useMemo(() => new Set(visibleSections.flatMap(section => section.tabs)), [visibleSections])
+  const defaultTab = visibleSections[0]?.tabs[0] ?? 'price-list'
+  const [initialSearch] = useState(() => normalizeInitialRouteState(routeState, allowedTabs, defaultTab))
   // 优先使用服务端预取的数据，避免客户端重复请求
   const [rules, setRules] = useState<ContractPolicyRule[]>(initialData?.rules || [])
   const [configs, setConfigs] = useState<Config[]>(initialData?.configs || [])
@@ -472,7 +432,8 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
   const [products, setProducts] = useState<ProductRecord[]>(initialData?.products || [])
   const [loading, setLoading] = useState(!initialData)  // 有初始数据则不显示 loading
   const [error, setError] = useState('')
-  const [activeTab, setActiveTab] = useState<ConfigTabId>(initialSearch.tab)
+  const [requestedTab, setActiveTab] = useState<ConfigTabId>(initialSearch.tab)
+  const activeTab = allowedTabs.has(requestedTab) ? requestedTab : defaultTab
   const [focusRuleId, setFocusRuleId] = useState<string | null>(initialSearch.ruleId)
   const [ruleMode, setRuleMode] = useState<string | null>(initialSearch.mode)
   const [tabReady, setTabReady] = useState(false)
@@ -558,6 +519,7 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
     tab: ConfigTabId,
     options?: { force?: boolean; background?: boolean; preserveRoleDraft?: boolean },
   ) => {
+    if (!allowedTabs.has(tab)) return
     // 防重复请求：如果已经在加载该 tab，则跳过
     if (loadingTabRef.current === tab && !options?.force) return
     // 如果已经加载过，则跳过
@@ -847,7 +809,7 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
         loadingTabRef.current = null
       }
     }
-  }, [applyRoleSnapshot, clearRoleView, handleOrgReadFailure, handleRoleReadFailure, readOrgSummary, readRoleSnapshot])
+  }, [allowedTabs, applyRoleSnapshot, clearRoleView, handleOrgReadFailure, handleRoleReadFailure, readOrgSummary, readRoleSnapshot])
 
   const refreshTabData = useCallback(async (tab: ConfigTabId) => {
     const token = localStorage.getItem('token')
@@ -872,30 +834,31 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
-    const tab = searchParams.get('tab')
-    const nextRuleId = searchParams.get('ruleId')
-    const nextMode = searchParams.get('mode')
-    if (tab && tab in CONFIG_TABS) {
-      setActiveTab(tab as ConfigTabId)
-    } else if (nextRuleId || nextMode === 'new') {
-      setActiveTab('rules')
+    const browserRoute = {
+      tab: searchParams.get('tab') ?? undefined,
+      ruleId: searchParams.get('ruleId') ?? undefined,
+      mode: searchParams.get('mode') ?? undefined,
     }
-    setFocusRuleId(nextRuleId)
-    setRuleMode(nextMode)
+    const { tab, ruleId, mode } = normalizeInitialRouteState({
+      tab: browserRoute.tab ?? routeState?.tab,
+      ruleId: browserRoute.ruleId ?? routeState?.ruleId,
+      mode: browserRoute.mode ?? routeState?.mode,
+    }, allowedTabs, defaultTab)
+    setActiveTab(tab)
+    setFocusRuleId(ruleId)
+    setRuleMode(mode)
     setTabReady(true)
     // 按需加载：初始加载当前 tab 数据（如果还没加载过）
     if (!hasInitialData) {
-      const initialTab = (tab && tab in CONFIG_TABS)
-        ? tab as ConfigTabId
-        : (nextRuleId || nextMode === 'new' ? 'rules' : 'price-list')
       // 使用 setTimeout 避免与第二个 useEffect 竞态
-      setTimeout(() => {
-        if (!loadedTabsRef.current.has(initialTab) && loadingTabRef.current !== initialTab) {
-          void loadTabData(initialTab)
+      const pending = setTimeout(() => {
+        if (!loadedTabsRef.current.has(tab) && loadingTabRef.current !== tab) {
+          void loadTabData(tab)
         }
       }, 0)
+      return () => clearTimeout(pending)
     }
-  }, [hasInitialData, loadTabData])
+  }, [allowedTabs, defaultTab, hasInitialData, loadTabData, routeState])
 
   useEffect(() => {
     if (!tabReady) return
@@ -915,8 +878,8 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
   }, [activeTab, tabReady, loadTabData])
 
   const refreshOrgSummary = useCallback(async () => {
-    await loadTabData('role-access', { force: true })
-  }, [loadTabData])
+    await loadTabData(allowedTabs.has('role-access') ? 'role-access' : 'org-structure', { force: true })
+  }, [allowedTabs, loadTabData])
 
   useEffect(() => {
     if (activeTab !== 'role-access' && activeTab !== 'org-structure') return
@@ -939,7 +902,7 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
     configs.filter((c) => c.type === type)
   ), [configs])
   const activeSection = CONFIG_TABS[activeTab].section
-  const sectionMeta = CONFIG_SECTIONS.find((section) => section.id === activeSection) || CONFIG_SECTIONS[0]
+  const sectionMeta = visibleSections.find((section) => section.id === activeSection) || CONFIG_SECTIONS[0]
   const sectionTabs = sectionMeta.tabs
   const activeTabLoading = loading && !loadedTabs.has(activeTab)
 
@@ -1037,16 +1000,16 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
       case 'role-access':
         return [
           { label: '角色总数', value: countValue(roles.length) },
-          { label: '能力分组', value: String(PERMISSION_CATALOG.length) },
+          { label: '能力分组', value: String(buildRolePermissionDirectory(roleAuthority?.modulePermissionCatalog).length) },
           { label: '作用域层级', value: String(DATA_SCOPE_LEVELS.length) },
         ]
       default:
         return []
     }
-  }, [activeTab, activeTabLoading, error, getConfigsByType, loadedTabs, orgSummary?.departments.length, orgSummary?.directory_roster, products, roles.length, rules])
+  }, [activeTab, activeTabLoading, error, getConfigsByType, loadedTabs, orgSummary?.departments.length, orgSummary?.directory_roster, products, roleAuthority?.modulePermissionCatalog, roles.length, rules])
 
   function switchSection(sectionId: ConfigSectionId) {
-    const nextSection = CONFIG_SECTIONS.find((section) => section.id === sectionId)
+    const nextSection = visibleSections.find((section) => section.id === sectionId)
     if (!nextSection) return
     setActiveTab(nextSection.tabs[0])
   }
@@ -1699,7 +1662,7 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
 
         <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)] xl:gap-8">
           <nav aria-label="配置域快捷导航" className="flex gap-2 overflow-x-auto pb-1 xl:hidden">
-            {CONFIG_SECTIONS.map((section) => {
+            {visibleSections.map((section) => {
               const isActiveSection = section.id === activeSection
               return (
                 <button
@@ -1726,7 +1689,7 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
               </div>
 
               <div className="space-y-2">
-                {CONFIG_SECTIONS.map((section) => {
+                {visibleSections.map((section) => {
                   const isActiveSection = section.id === activeSection
                   return (
                     <div key={section.id} className={section.id === 'org-access' ? 'border-t border-slate-200 pt-3' : undefined}>
@@ -1859,7 +1822,7 @@ export default function ConfigsClient({ initialData, routeState }: ConfigsClient
                 onRefreshConfigs={() => refreshTabData(activeTab)}
                 orgSummary={orgSummary}
                 onRefreshOrg={refreshOrgSummary}
-                onOpenIntegrations={() => setActiveTab('integrations')}
+                onOpenIntegrations={allowedTabs.has('integrations') ? () => setActiveTab('integrations') : undefined}
                 roles={roles}
                 savingRoleId={savingRoleId}
                 permissionsEditable={permissionsEditable}

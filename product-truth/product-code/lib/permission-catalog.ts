@@ -1,3 +1,12 @@
+import {
+  ORG_BUSINESS_ROLE_ASSIGN, ORG_DEPARTMENT_DIRECTORY_VIEW, ORG_DEPARTMENT_STRUCTURE_DELETE,
+  ORG_DEPARTMENT_STRUCTURE_EDIT, ORG_MEMBER_EDIT,
+} from './permissions'
+import { SHIPPING_ACTION_DEFINITIONS, shippingActionViewDependency } from './module-access'
+import {
+  ORG_MEMBER_INVITE, ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_REMOVE_MEMBERSHIP,
+} from './admin/member-action-keys'
+
 export type PermissionKind = 'atomic' | 'bundle'
 export type PermissionLifecycleStatus = 'draft' | 'reviewed' | 'published' | 'deprecated' | 'disabled' | 'deleted'
 export type PermissionScopeType = 'org' | 'department' | 'space' | 'self'
@@ -136,10 +145,23 @@ export const BUILTIN_PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   definition({ key: 'dept:*', category: 'org', label: '部门组合权限', description: '部门查看与编辑资源通配能力。', kind: 'bundle', status: 'draft', enforcementConsumer: null }),
   definition({ key: 'dept:view', category: 'org', label: '部门查看', description: '请求查看部门树和成员归属的保留权限。', status: 'draft', enforcementConsumer: null }),
   definition({ key: 'dept:write', category: 'org', label: '部门编辑', description: '允许调整当前组织部门结构。', enforcementConsumer: 'lib/scoped-access.ts#canMutateOrgDepartments', impliedBy: ['org:write'] }),
+  definition({ key: ORG_DEPARTMENT_DIRECTORY_VIEW, category: 'org', label: '查看部门树', description: '查看当前组织的部门层级。', scopes: ['org'], enforcementConsumer: 'lib/admin/department-actions.ts' }),
+  definition({ key: ORG_DEPARTMENT_STRUCTURE_EDIT, category: 'org', label: '维护部门', description: '新增部门以及修改部门的名称、上级和负责人。', scopes: ['org'], dependencies: [ORG_DEPARTMENT_DIRECTORY_VIEW], enforcementConsumer: 'lib/admin/department-actions.ts' }),
+  definition({ key: ORG_DEPARTMENT_STRUCTURE_DELETE, category: 'org', label: '删除部门', description: '删除符合条件的部门。', scopes: ['org'], dependencies: [ORG_DEPARTMENT_DIRECTORY_VIEW], enforcementConsumer: 'lib/admin/department-actions.ts' }),
   definition({ key: 'user:*', category: 'org', label: '成员组合权限', description: '包含成员查看与编辑。', kind: 'bundle', enforcementConsumer: 'lib/permissions.ts#canAccessOrgAdmin' }),
   definition({ key: 'user:view', category: 'org', label: '成员查看', description: '允许查看当前组织成员档案和角色绑定。', enforcementConsumer: 'lib/permissions.ts#canAccessOrgAdmin' }),
+  definition({ key: ORG_MEMBER_EDIT, category: 'org', label: '编辑成员', description: '修改当前组织内成员的资料和部门归属。', scopes: ['org'], dependencies: ['user:view'], enforcementConsumer: 'lib/admin/member-actions.ts' }),
+  definition({ key: ORG_BUSINESS_ROLE_ASSIGN, category: 'org', label: '分配或撤销业务角色', description: '变更本组织成员的业务角色绑定，仍受可委派角色范围校验。', scopes: ['org'], dependencies: ['user:view'], enforcementConsumer: 'lib/admin/member-actions.ts' }),
+  definition({ key: ORG_MEMBER_INVITE, category: 'org', label: '添加或邀请成员', description: '创建邀请、重发或撤销待激活邀请。', scopes: ['org'], dependencies: ['user:view'], enforcementConsumer: 'lib/admin/member-actions.ts' }),
+  definition({ key: ORG_MEMBER_MANAGE_LOGIN, category: 'org', label: '管理成员登录', description: '启用或停用本组织成员登录。', scopes: ['org'], dependencies: ['user:view'], enforcementConsumer: 'lib/admin/member-actions.ts' }),
+  definition({ key: ORG_MEMBER_MANAGE_EMPLOYMENT, category: 'org', label: '办理离职或复职', description: '更新本组织成员的在职状态。', scopes: ['org'], dependencies: ['user:view'], enforcementConsumer: 'lib/admin/member-actions.ts' }),
+  definition({ key: ORG_MEMBER_REMOVE_MEMBERSHIP, category: 'org', label: '移出组织', description: '结束成员在当前组织的成员关系。', scopes: ['org'], dependencies: ['user:view'], enforcementConsumer: 'lib/admin/member-actions.ts' }),
   definition({ key: 'user:write', category: 'org', label: '成员编辑', description: '允许调整当前组织成员状态、部门和角色。', enforcementConsumer: 'lib/scoped-access.ts#canMutateOrgUsers', impliedBy: ['org:write'] }),
   definition({ key: 'feishu:sync', category: 'org', label: '外部通讯录同步', description: '请求刷新已验证外部来源部门与成员的保留权限。', status: 'draft', enforcementConsumer: null }),
+  definition({ key: 'org:source_view', category: 'org', label: '查看连接与同步状态', description: '查看本组织的外部连接和目录同步状态。', scopes: ['org'], enforcementConsumer: 'lib/admin/organization-source-access.ts' }),
+  definition({ key: 'org:source_connect', category: 'org', label: '维护与验证连接', description: '保存或验证本组织的外部连接。', scopes: ['org'], enforcementConsumer: 'lib/admin/organization-source-access.ts' }),
+  definition({ key: 'org:source_preview', category: 'org', label: '预览目录同步', description: '预览部门与成员的目录变更。', scopes: ['org'], enforcementConsumer: 'lib/admin/organization-source-access.ts' }),
+  definition({ key: 'org:source_apply', category: 'org', label: '应用或回滚目录同步', description: '应用已核对的同步、切换目录来源或回滚切换。', scopes: ['org'], enforcementConsumer: 'lib/admin/organization-source-access.ts' }),
 
   definition({ key: 'opportunity:*', category: 'quote', label: '机会组合权限', description: '机会资源通配能力。', kind: 'bundle', status: 'draft', enforcementConsumer: null }),
   definition({ key: 'opportunity:own', category: 'quote', label: '本人机会管理', description: '请求维护本人负责机会的保留权限。', scopes: ['self'], status: 'draft', enforcementConsumer: null }),
@@ -165,6 +187,14 @@ export const BUILTIN_PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   definition({ key: 'payment:*', category: 'payment', label: '财务与回款组合权限', description: '支付与回款资源通配能力。', kind: 'bundle', enforcementConsumer: 'lib/permissions.ts#hasPermission' }),
 
   definition({ key: 'shipping:*', category: 'shipping', label: '寄件组合权限', description: '包含当前组织的寄件操作与连接管理。', scopes: ['org'], kind: 'bundle', enforcementConsumer: 'lib/permissions.ts#hasPermission' }),
+  ...Object.entries(SHIPPING_ACTION_DEFINITIONS).map(([key, [label, description]]) => {
+    const dependency = shippingActionViewDependency(key)
+    return definition({
+      key, label, description, category: 'shipping', scopes: ['org'],
+      dependencies: dependency ? [dependency] : [],
+      enforcementConsumer: 'lib/shipping/http.ts',
+    })
+  }),
   definition({ key: 'shipping:operate', category: 'shipping', label: '寄件操作', description: '允许在当前组织查看收寄台账、核对工单和执行已授权的承运商操作。', scopes: ['org'], enforcementConsumer: 'lib/shipping/operator-access.ts#requireShippingOperator' }),
   definition({ key: 'shipping:manage_connections', category: 'shipping', label: '寄件连接管理', description: '允许维护当前组织的承运商与企业接入配置。', scopes: ['org'], enforcementConsumer: 'lib/shipping/connection-authorization.ts' }),
 ]

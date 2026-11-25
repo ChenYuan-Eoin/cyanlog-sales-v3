@@ -4,7 +4,7 @@ import { effectiveShippingDepartmentIds, intakeRulesSchema, toggleShippingDepart
 import type { ShippingDepartment } from '@/lib/shipping/department-access'
 import styles from './config-drawer.module.css'
 
-export default function IntakeConfiguration({ mode = 'fields' }: { mode?: 'fields' | 'departments' }) {
+export default function IntakeConfiguration({ mode = 'fields', readOnly = false }: { mode?: 'fields' | 'departments'; readOnly?: boolean }) {
   const [rules, setRules] = useState<IntakeRules | null>(null)
   const [departments, setDepartments] = useState<ShippingDepartment[]>([])
   const [search, setSearch] = useState('')
@@ -22,7 +22,7 @@ export default function IntakeConfiguration({ mode = 'fields' }: { mode?: 'field
     return () => { active = false }
   }, [])
   async function save() {
-    if (!rules || busy) return
+    if (!rules || busy || readOnly) return
     setBusy(true); setMessage('')
     try {
       const next = mode === 'fields' ? { companyName: rules.companyName } : { allowedDepartmentIds: rules.allowedDepartmentIds ?? null }
@@ -81,7 +81,7 @@ export default function IntakeConfiguration({ mode = 'fields' }: { mode?: 'field
     <h3>{mode === 'fields' ? '客户信息填写规则' : '授权寄件部门'}</h3>
     {mode === 'departments' && <p className={styles.hint}>员工只能使用本人最细一级的所属部门提报。</p>}
     {!rules && !message && <p role="status">正在读取寄件配置…</p>}
-    {rules && <fieldset className={styles.formGroup} disabled={busy}>
+    {rules && <fieldset className={styles.formGroup} disabled={busy || readOnly}>
       {mode === 'fields' ? <div><strong>公司名称</strong>
         <label className={styles.checkbox}><input type="checkbox" checked={rules.companyName.enabled} onChange={event => setRules({ ...rules, companyName: { ...rules.companyName, enabled: event.target.checked, required: event.target.checked && rules.companyName.required } })}/>显示公司名称</label>
         <label className={styles.checkbox}><input type="checkbox" disabled={!rules.companyName.enabled} checked={rules.companyName.required} onChange={event => setRules({ ...rules, companyName: { ...rules.companyName, required: event.target.checked } })}/>公司名称必填</label>

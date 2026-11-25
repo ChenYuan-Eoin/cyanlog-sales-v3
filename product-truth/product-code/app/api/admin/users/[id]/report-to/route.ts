@@ -6,10 +6,11 @@ import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import {
-  canMutateOrgUsers,
   getDefaultOrgId,
   getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
+import { canPerformMemberAction } from '@/lib/admin/member-actions'
+import { ORG_MEMBER_EDIT } from '@/lib/permissions'
 import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
 
 const reportToSchema = z.object({
@@ -30,7 +31,7 @@ export async function PATCH(
     const orgId = await getDefaultOrgId(currentUser.id)
 
     const assignments = await getFreshUserScopedRoleAssignments(currentUser.id)
-    if (!canMutateOrgUsers(assignments, orgId)) {
+    if (!canPerformMemberAction(assignments, orgId, ORG_MEMBER_EDIT)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 

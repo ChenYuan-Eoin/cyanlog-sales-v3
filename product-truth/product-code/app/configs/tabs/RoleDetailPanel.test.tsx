@@ -4,6 +4,7 @@ import '@testing-library/jest-dom/vitest'
 import { RoleDetailPanel } from './RoleDetailPanel'
 import { confirmAction, error } from '@/lib/toast'
 import { hasPermission } from '@/lib/permissions'
+import { SHIPPING_ACTION_DEFINITIONS, SHIPPING_WORKBENCH_ACTION_KEYS } from '@/lib/module-access'
 
 vi.mock('@/lib/toast', () => ({ success: vi.fn(), error: vi.fn(), confirmAction: vi.fn() }))
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
@@ -23,7 +24,7 @@ describe('RoleDetailPanel explicit permission editing', () => {
     }} />)
     openPermissions()
     expect(screen.getByText('纷享基础角色由系统管理，权限固定为只读。')).toBeInTheDocument()
-    expect(screen.getByRole('checkbox', { name: /财务报表访问/ })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: /配置发布/ })).toBeDisabled()
     expect(screen.queryByRole('button', { name: '保存更改' })).not.toBeInTheDocument()
     expect(onSave).not.toHaveBeenCalled()
   })
@@ -32,17 +33,17 @@ describe('RoleDetailPanel explicit permission editing', () => {
     const onSave = vi.fn()
     render(<RoleDetailPanel {...defaults} permissionsEditable onSave={onSave} />)
     openPermissions()
-    const financial = screen.getByRole('checkbox', { name: /财务报表访问/ })
-    expect(financial).toBeEnabled()
-    expect(financial).not.toBeChecked()
-    expect(screen.getByRole('checkbox', { name: /管理后台访问/ })).toBeDisabled()
+    const publish = screen.getByRole('checkbox', { name: /配置发布/ })
+    expect(publish).toBeEnabled()
+    expect(publish).not.toBeChecked()
+    expect(screen.queryByRole('checkbox', { name: /管理后台/ })).not.toBeInTheDocument()
     expect(screen.getAllByText('当前有效').length).toBeGreaterThan(0)
-    fireEvent.click(financial)
-    expect(financial).toBeChecked()
+    fireEvent.click(publish)
+    expect(publish).toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
     const saved = onSave.mock.calls[0][0] as string[]
-    expect(saved).toContain('report:finance')
-    expect(hasPermission(saved, 'report:finance')).toBe(true)
+    expect(saved).toContain('config:publish')
+    expect(hasPermission(saved, 'config:publish')).toBe(true)
     expect(hasPermission(saved, 'report:dept')).toBe(true)
     expect(hasPermission(saved, 'config:write')).toBe(true)
   })
@@ -51,15 +52,15 @@ describe('RoleDetailPanel explicit permission editing', () => {
     render(
       <RoleDetailPanel
         {...defaults}
-        role={{ id: 'legal', code: 'LEGAL', name: '法务', description: null, permissions: ['contract:write'] }}
+        role={{ id: 'admin', code: 'ADMIN', name: '管理员', description: null, permissions: ['config:write'] }}
         permissionsEditable
         onSave={vi.fn()}
       />
     )
     openPermissions()
-    expect(screen.getByRole('checkbox', { name: /合同编辑/ })).toBeChecked()
-    expect(screen.getByRole('checkbox', { name: /合同审核执行/ })).not.toBeChecked()
-    expect(screen.getAllByText('由 合同编辑 依赖生效').length).toBeGreaterThan(0)
+    expect(screen.getByRole('checkbox', { name: /配置中心修改/ })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /配置中心查看/ })).not.toBeChecked()
+    expect(screen.getAllByText('由 配置中心修改 依赖生效').length).toBeGreaterThan(0)
   })
 
   it('changes only the clicked explicit checkbox when dependencies become effective', () => {
@@ -96,10 +97,10 @@ describe('RoleDetailPanel explicit permission editing', () => {
     )
     openPermissions()
     expect(screen.getByRole('checkbox', { name: /配置中心查看/ })).not.toBeChecked()
-    fireEvent.click(screen.getByRole('button', { name: '选择配置中心全部权限' }))
+    fireEvent.click(screen.getByRole('button', { name: '选择配置中心直接权限' }))
     expect(screen.getByRole('checkbox', { name: /配置中心查看/ })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: /配置中心修改/ })).toBeChecked()
-    fireEvent.click(screen.getByRole('button', { name: '清除配置中心全部权限' }))
+    fireEvent.click(screen.getByRole('button', { name: '清除配置中心直接权限' }))
     expect(screen.getByRole('checkbox', { name: /配置中心查看/ })).not.toBeChecked()
     expect(screen.getByRole('checkbox', { name: /配置中心修改/ })).not.toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
@@ -110,16 +111,16 @@ describe('RoleDetailPanel explicit permission editing', () => {
 
   it('preserves an explicit draft through a failed save', () => {
     const onSave = vi.fn()
-    const draftRole = { id: 'sales', code: 'SALES', name: '销售', description: null, permissions: ['report:finance'] }
+    const draftRole = { id: 'sales', code: 'SALES', name: '销售', description: null, permissions: ['config:publish'] }
     const { rerender } = render(
       <RoleDetailPanel {...defaults} role={draftRole} permissionsEditable onSave={onSave} />
     )
     openPermissions()
-    fireEvent.click(screen.getByRole('checkbox', { name: /财务报表访问/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /配置发布/ }))
     rerender(<RoleDetailPanel {...defaults} role={draftRole} permissionsEditable saving onSave={onSave} />)
-    expect(screen.getByRole('checkbox', { name: /财务报表访问/ })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: /配置发布/ })).toBeDisabled()
     rerender(<RoleDetailPanel {...defaults} role={draftRole} permissionsEditable onSave={onSave} />)
-    expect(screen.getByRole('checkbox', { name: /财务报表访问/ })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /配置发布/ })).not.toBeChecked()
     expect(screen.getByRole('button', { name: '保存更改' })).toBeEnabled()
   })
 })
@@ -278,11 +279,39 @@ describe('organization super administrator membership', () => {
       orgSuperAdminAuthority={authority} onSave={vi.fn()} />)
     openPermissions()
     expect(screen.getByText('组织超级管理员的治理权限由系统固定。')).toBeInTheDocument()
-    expect(screen.getByRole('checkbox', { name: /角色权限管理/ })).toBeDisabled()
+    expect(screen.getByText('保存角色权限')).toBeVisible()
+    expect(screen.queryByRole('checkbox', { name: /角色权限管理/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '已保存' })).not.toBeInTheDocument()
   })
 })
 
+
+it('places real actions under navigation paths and keeps unconnected points out of the editor', () => {
+  render(<RoleDetailPanel {...defaults} permissionsEditable onSave={vi.fn()} modulePermissionCatalog={[{
+    id: 'shipping', label: '寄件', description: '自助收寄',
+    items: [
+      { key: 'shipping:ledger_view', label: '查看收寄台账', description: '查阅工作台。', dependencies: [] },
+      { key: 'shipping:settings_view', label: '查看寄件设置', description: '读取设置。', dependencies: [] },
+    ],
+  }]} />)
+  openPermissions()
+  const config = within(screen.getByRole('region', { name: '配置中心' }))
+  const organization = within(config.getByRole('region', { name: '组织与权限' }))
+  const role = within(organization.getByRole('region', { name: '角色权限' }))
+  expect(role.getByText('保存角色权限')).toBeVisible()
+  expect(role.queryByRole('checkbox', { name: '保存角色权限' })).not.toBeInTheDocument()
+  expect(role.getByText('任免超级管理员')).toBeVisible()
+  expect(role.queryByRole('checkbox', { name: '任免超级管理员' })).not.toBeInTheDocument()
+  const shipping = within(screen.getByRole('region', { name: '自助收寄' }))
+  expect(shipping.getByRole('checkbox', { name: '查看收寄台账' })).toBeChecked()
+  expect(shipping.getByRole('checkbox', { name: '查看收寄台账' })).toBeDisabled()
+  expect(shipping.queryByRole('checkbox', { name: '确认并下单' })).not.toBeInTheDocument()
+  const settings = within(screen.getByRole('region', { name: '寄件设置' }))
+  expect(settings.getByRole('checkbox', { name: '查看寄件设置' })).toBeChecked()
+  expect(config.queryByRole('checkbox', { name: '查看寄件设置' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('checkbox', { name: /全部权限|财务报表访问|报价审批/ })).not.toBeInTheDocument()
+  expect(within(shipping.getByRole('region', { name: '收寄工作台' })).getByText('全部生效')).toBeInTheDocument()
+})
 
 it('makes only published shipping actions assignable while preserving saved and unrecognized grants', () => {
   const onSave = vi.fn()
@@ -290,35 +319,106 @@ it('makes only published shipping actions assignable while preserving saved and 
     id: 'sales', code: 'SALES', name: '销售', description: null,
     permissions: ['shipping:manage_connections', 'tenant-unregistered:approve'],
   }} permissionsEditable onSave={onSave} modulePermissionCatalog={[{
-    id: 'shipping', label: '寄件操作', description: '自助收寄',
-    items: [{ key: 'shipping:operate', label: '寄件操作', description: '进入寄件工作台并操作订单。', dependencies: [] }],
+    id: 'shipping', label: '寄件', description: '自助收寄',
+    items: [{ key: 'shipping:ledger_view', label: '查看收寄台账', description: '查看寄件工作台。', dependencies: [] }],
   }]} />)
   openPermissions()
-  const operation = screen.getByRole('checkbox', { name: '寄件操作' })
-  const connection = screen.getByRole('checkbox', { name: '寄件连接管理' })
+  const operation = screen.getByRole('checkbox', { name: '查看收寄台账' })
   expect(operation).toBeEnabled()
-  expect(connection).toBeEnabled()
-  expect(connection).toBeChecked()
-  expect(within(connection.closest('label')!).getByText('已保存')).toBeInTheDocument()
-  expect(screen.getByRole('checkbox', { name: '寄件全部权限' })).toBeDisabled()
-  expect(screen.getByRole('checkbox', { name: 'tenant-unregistered:approve' })).toBeDisabled()
+  expect(screen.queryByRole('checkbox', { name: '维护顺丰连接' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('checkbox', { name: 'tenant-unregistered:approve' })).not.toBeInTheDocument()
+  expect(screen.getByText('已有兼容授权')).toBeVisible()
   fireEvent.click(operation)
   fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
-  expect(onSave).toHaveBeenCalledWith(['shipping:manage_connections', 'tenant-unregistered:approve', 'shipping:operate'])
+  expect(onSave).toHaveBeenCalledWith(['shipping:manage_connections', 'tenant-unregistered:approve', 'shipping:ledger_view'])
 })
 
-it('allows a saved shipping bundle to be removed when granting it is unavailable', () => {
+it('allows explicit removal of a stored shipping bundle without a bundle checkbox', () => {
   const onSave = vi.fn()
   render(<RoleDetailPanel {...defaults} role={{
     id: 'sales', code: 'SALES', name: '销售', description: null,
     permissions: ['shipping:*', 'quote:view'],
   }} permissionsEditable onSave={onSave} />)
   openPermissions()
-  const bundle = screen.getByRole('checkbox', { name: '寄件全部权限' })
-  expect(bundle).toBeChecked()
-  fireEvent.click(bundle)
-  expect(bundle).not.toBeChecked()
-  expect(bundle).toBeDisabled()
+  fireEvent.click(screen.getByText('已有兼容授权'))
+  const remove = screen.getByRole('button', { name: '移除寄件旧组合授权' })
+  fireEvent.click(remove)
+  expect(screen.queryByRole('button', { name: '移除寄件旧组合授权' })).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
   expect(onSave).toHaveBeenCalledWith(['quote:view'])
+})
+
+it('revokes a published inherited shipping action while preserving other effective actions', () => {
+  const onSave = vi.fn()
+  const role = { id: 'shipping', code: 'SHIPPING_OPERATOR', name: '寄件操作员', description: null, permissions: ['shipping:operate', 'quote:view'] }
+  const catalog = [{
+    id: 'shipping', label: '寄件', description: '',
+    items: [
+      { key: 'shipping:operate', label: '寄件操作旧授权', description: '', dependencies: [] },
+      ...SHIPPING_WORKBENCH_ACTION_KEYS.map(key => {
+        const [label, description] = SHIPPING_ACTION_DEFINITIONS[key]
+        return { key, label, description, dependencies: [] }
+      }),
+    ],
+  }]
+  render(<RoleDetailPanel {...defaults} role={role} permissionsEditable onSave={onSave} modulePermissionCatalog={catalog} />)
+  openPermissions()
+  const create = screen.getByRole('checkbox', { name: '录入寄件工单' })
+  expect(create).toBeChecked()
+  expect(create).toBeEnabled()
+  fireEvent.click(create)
+  expect(create).not.toBeChecked()
+  expect(screen.getByRole('checkbox', { name: '查看收寄台账' })).toBeChecked()
+  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  expect(onSave).toHaveBeenCalledWith([
+    'quote:view', ...SHIPPING_WORKBENCH_ACTION_KEYS.filter(key => key !== 'shipping:record_create'),
+  ])
+})
+
+it('grants business role assignment with its member read prerequisite and preserves other stored grants', () => {
+  const onSave = vi.fn()
+  const role = { id: 'admin', code: 'ADMIN', name: '管理员', description: null, permissions: ['quote:view'] }
+  render(<RoleDetailPanel {...defaults} role={role} permissionsEditable onSave={onSave} />)
+  openPermissions()
+  const assignment = screen.getByRole('checkbox', { name: '分配或撤销业务角色' })
+  const view = screen.getByRole('checkbox', { name: '查看成员' })
+  fireEvent.click(assignment)
+  expect(assignment).toBeChecked()
+  expect(view).toBeChecked()
+  expect(view).toBeDisabled()
+  expect(screen.getByRole('checkbox', { name: '编辑成员' })).not.toBeChecked()
+  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  expect(onSave).toHaveBeenCalledWith(['quote:view', 'user:assign_roles', 'user:view'])
+})
+
+it('keeps department maintenance separate from deletion and supplies directory read', () => {
+  const onSave = vi.fn()
+  const role = { id: 'departments', code: 'DEPARTMENTS', name: '部门', description: null, permissions: ['quote:view'] }
+  render(<RoleDetailPanel {...defaults} role={role} permissionsEditable onSave={onSave} />)
+  openPermissions()
+  const group = within(screen.getByRole('region', { name: '部门' }))
+  fireEvent.click(group.getByRole('checkbox', { name: '维护部门' }))
+
+  expect(group.getByRole('checkbox', { name: '查看部门树' })).toBeChecked()
+  expect(group.getByRole('checkbox', { name: '查看部门树' })).toBeDisabled()
+  expect(group.getByRole('checkbox', { name: '删除部门' })).not.toBeChecked()
+  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  expect(onSave).toHaveBeenCalledWith(['quote:view', 'dept:edit_structure', 'dept:directory_view'])
+})
+
+it('retains a legacy department grant when saving an unrelated action', () => {
+  const onSave = vi.fn()
+  const role = { id: 'dept-legacy', code: 'DEPARTMENTS', name: '部门', description: null, permissions: ['dept:write'] }
+  render(<RoleDetailPanel {...defaults} role={role} permissionsEditable onSave={onSave} />)
+  openPermissions()
+  const group = within(screen.getByRole('region', { name: '部门' }))
+  for (const action of ['查看部门树', '维护部门', '删除部门']) {
+    const checkbox = group.getByRole('checkbox', { name: action })
+    expect(checkbox).toBeChecked()
+    expect(checkbox).toBeDisabled()
+  }
+  expect(group.getByRole('button', { name: '清除部门直接权限' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('checkbox', { name: '配置发布' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  expect(onSave).toHaveBeenCalledWith(['dept:write', 'config:publish'])
 })

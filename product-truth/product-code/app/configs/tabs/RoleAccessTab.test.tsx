@@ -15,9 +15,9 @@ describe('RoleAccessTab capability propagation', () => {
   it('forwards server editing capability and revokes editing when it changes', () => {
     const { rerender } = render(<RoleAccessTab {...defaults} permissionsEditable />)
     fireEvent.click(screen.getByRole('tab', { name: '权限设置' }))
-    expect(screen.getByRole('checkbox', { name: /财务报表访问/ })).toBeEnabled()
+    expect(screen.getByRole('checkbox', { name: /配置发布/ })).toBeEnabled()
     rerender(<RoleAccessTab {...defaults} permissionsEditable={false} permissionsEditBlockReason="当前账号只可查看角色。" />)
-    expect(screen.getByRole('checkbox', { name: /财务报表访问/ })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: /配置发布/ })).toBeDisabled()
     expect(screen.getByText('当前账号只可查看角色。')).toBeInTheDocument()
   })
 })

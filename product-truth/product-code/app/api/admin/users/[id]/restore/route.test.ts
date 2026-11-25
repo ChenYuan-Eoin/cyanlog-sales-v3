@@ -69,6 +69,23 @@ describe('POST /api/admin/users/[id]/restore', () => {
     })
   })
 
+  it('allows explicit employment authority to restore an account, separate from login authority', async () => {
+    const context = { params: Promise.resolve({ id: targetId }) }
+    ;(canMutateOrgUsers as any).mockReturnValue(false)
+    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValueOnce([
+      { scopeType: 'org', scopeId: orgId, permissions: ['user:manage_login'] },
+    ])
+    expect((await POST(request(), context)).status).toBe(403)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+
+    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValueOnce([
+      { scopeType: 'org', scopeId: orgId, permissions: ['user:manage_employment'] },
+    ])
+    const response = await POST(request(), context)
+    expect(response.status).toBe(200)
+    expect((await response.json()).data.login_enabled).toBe(false)
+  })
+
   it('returns conflict when membership is not restorable', async () => {
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: false, error: null })
     const response = await POST(request(), { params: Promise.resolve({ id: targetId }) } as any)

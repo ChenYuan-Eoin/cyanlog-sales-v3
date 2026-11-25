@@ -10,7 +10,14 @@ vi.mock('@/lib/shipping/collaboration', () => ({ getOrganizationShipmentProvider
 vi.mock('@/lib/shipping/legacy-configuration-scope', () => ({ canImportLegacyShippingConfiguration: async () => true }))
 vi.mock('@/lib/shipping/outbound', () => ({ importedOutboundSuffix: importedSuffix }))
 vi.mock('@/lib/shipping/tracking-store', () => ({ recordTrackingResult: recordTracking }))
-vi.mock('@/lib/shipping/connection-authorization', () => ({ requireShippingConnectionManager: requireManager }))
+vi.mock('@/lib/shipping/connection-authorization', async original => ({
+  ...await original<typeof import('@/lib/shipping/connection-authorization')>(),
+  requireShippingConnectionManager: requireManager,
+  loadShippingConnectionAccess: async (userId: string) => ({
+    orgId: await requireManager(userId, 'shipping:settings_view'),
+    permissions: ['shipping:settings_view'],
+  }),
+}))
 vi.mock('@/lib/shipping/operator-access', () => ({ requireShippingOperator: requireOperator }))
 vi.mock('@/lib/shipping/entry-access', () => ({ resolveShippingEntry }))
 vi.mock('@/lib/shipping/workspace-settings', () => ({ loadShippingWorkspaceSettings: loadWorkspaceSettings }))
@@ -55,6 +62,24 @@ describe('shipping access is server enforced', () => {
   })
 
   it('stores machine credentials through the manager route and does not echo them', async () => { auth.mockResolvedValue({ id: 'allowed' }); const response = await POSTSettings(new NextRequest('http://localhost/api/shipping/settings', { method: 'POST', body: JSON.stringify({ action: 'save_connection', environment: 'sandbox', partnerId: 'partner-1234', checkWord: 'secret-check-word' }) })); expect(response.status).toBe(200); expect(saveCredentials).toHaveBeenCalledWith('org-1', 'allowed', { environment: 'sandbox', partnerId: 'partner-1234', checkWord: 'secret-check-word' }); expect(await response.text()).not.toContain('secret-check-word') })
+  it('requires the billing grant when a connection save also changes allowed services', async () => {
+    auth.mockResolvedValue({ id: 'allowed' })
+    requireManager.mockImplementation(async (_userId: string, permissions: string[]) => {
+      if (permissions.includes('shipping:billing_write')) throw new ShippingError(403, '缺少月结和服务权限。')
+      return 'org-1'
+    })
+    const request = (services?: unknown) => new NextRequest('http://localhost/api/shipping/settings', {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'save_connection', environment: 'sandbox', partnerId: 'partner-1234', checkWord: 'secret-check-word',
+        ...(services ? { services } : {}),
+      }),
+    })
+    expect((await POSTSettings(request([{ id: 2, name: '顺丰标快', preference: 'standard' }]))).status).toBe(403)
+    expect(saveCredentials).not.toHaveBeenCalled()
+    expect((await POSTSettings(request())).status).toBe(200)
+    expect(saveCredentials).toHaveBeenCalledOnce()
+  })
   it('updates authorized services without requiring machine credentials in the request', async () => { auth.mockResolvedValue({ id: 'allowed' }); const services = [{ id: 2, name: '顺丰标快', preference: 'standard' }]; const response = await POSTSettings(new NextRequest('http://localhost/api/shipping/settings', { method: 'POST', body: JSON.stringify({ action: 'save_authorized_services', environment: 'sandbox', services }) })); expect(response.status).toBe(200); expect(saveServices).toHaveBeenCalledWith('org-1', 'allowed', { environment: 'sandbox', services }); expect(await response.text()).not.toContain('secret-check-word') })
   it('updates authorized services without sending machine credentials again', async () => { auth.mockResolvedValue({ id: 'allowed' }); const services = [{ id: 2, name: '顺丰标快', preference: 'standard' }]; const response = await POSTSettings(new NextRequest('http://localhost/api/shipping/settings', { method: 'POST', body: JSON.stringify({ action: 'save_authorized_services', environment: 'sandbox', services }) })); expect(response.status).toBe(200); expect(saveServices).toHaveBeenCalledWith('org-1', 'allowed', { environment: 'sandbox', services }); expect(await response.text()).not.toContain('check-word') })
   it('enables in-transit forwarding and return only through the explicit capability action', async () => {

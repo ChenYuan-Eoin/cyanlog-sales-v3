@@ -103,11 +103,28 @@ function plan(overrides: Partial<DirectoryCutoverClientPlan> = {}): DirectoryCut
   }
 }
 
+const permissions = { view: true, connect: true, preview: true, apply: true, enterpriseLogin: true }
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } })
 }
 
 describe('OrganizationSourcePanel', () => {
+  it('shows source status without exposing mutation controls or a directory plan for view-only access', async () => {
+    const readOnly = { view: true, connect: false, preview: false, apply: false, enterpriseLogin: false }
+    const fxiaokeSource = { ...source, provider: 'fxiaoke' }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
+      ? json({ data: { plan: plan(), directory_cutover: { available: true, reason: null } } })
+      : json({ data: { sources: [fxiaokeSource], providers, permissions: readOnly } })))
+
+    render(<OrganizationSourcePanel />)
+    expect(await screen.findByText('tenant-1')).toBeVisible()
+    expect(screen.queryByText('同步核验入口')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('directory-cutover-plan')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '读取组织目录并生成差异' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /纷享登录/ })).not.toBeInTheDocument()
+  })
+
   it('ignores a late directory response from a provider that is no longer selected', async () => {
     let finishOldRead: (response: Response) => void = () => {}
     const oldRead = new Promise<Response>(resolve => { finishOldRead = resolve })
@@ -119,7 +136,7 @@ describe('OrganizationSourcePanel', () => {
         feishuReads++
         return json({ data: { plan: null } })
       }
-      return json({ data: { sources: [source], providers } })
+      return json({ data: { sources: [source], providers, permissions } })
     }))
     render(<OrganizationSourcePanel />)
     await screen.findByText('tenant-1')
@@ -135,7 +152,7 @@ describe('OrganizationSourcePanel', () => {
     const disabled = { ...source, status: 'disabled', connectionState: 'disabled', effectiveConnectionRevision: null,
       lastSuccessfulSyncAt: '2026-11-05T05:49:31Z' }
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
-      ? json({ data: { plan: null } }) : json({ data: { sources: [disabled], providers } })))
+      ? json({ data: { plan: null } }) : json({ data: { sources: [disabled], providers, permissions } })))
     render(<OrganizationSourcePanel />)
     expect(await screen.findByText('配置检查通过', { exact: true })).toBeInTheDocument()
     expect(screen.getAllByText('目录连接未启用', { exact: true }).length).toBeGreaterThan(0)
@@ -148,7 +165,7 @@ describe('OrganizationSourcePanel', () => {
   it('requires a new draft to become effective before reading or applying another directory plan', async () => {
     const changed = { ...source, connectionRevision: 'new-revision' }
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
-      ? json({ data: { plan: plan() } }) : json({ data: { sources: [changed], providers } })))
+      ? json({ data: { plan: plan() } }) : json({ data: { sources: [changed], providers, permissions } })))
     render(<OrganizationSourcePanel />)
     await screen.findByText('配置已改变 · 需重新生成差异')
     expect(screen.queryByRole('button', { name: '确认切换目录主来源' })).not.toBeInTheDocument()
@@ -159,7 +176,7 @@ describe('OrganizationSourcePanel', () => {
   it('does not label an expired plan executable and keeps regeneration available', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
       ? json({ data: { plan: plan({ expiresAt: '2020-01-01T00:00:00Z' }) } })
-      : json({ data: { sources: [source], providers } })))
+      : json({ data: { sources: [source], providers, permissions } })))
     render(<OrganizationSourcePanel />)
     await screen.findByText('差异计划已过期')
     expect(screen.queryByText('差异计划可执行')).not.toBeInTheDocument()
@@ -174,7 +191,7 @@ describe('OrganizationSourcePanel', () => {
         directoryReads++
         return directoryReads === 1 ? json({ error: '同步记录暂不可用' }, 503) : json({ data: { plan: null } })
       }
-      return json({ data: { sources: [source], providers } })
+      return json({ data: { sources: [source], providers, permissions } })
     })
     vi.stubGlobal('fetch', fetcher)
     render(<OrganizationSourcePanel />)
@@ -190,7 +207,7 @@ describe('OrganizationSourcePanel', () => {
   it('cancels confirmation without posting or hiding the current plan', async () => {
     toast.confirmAction.mockResolvedValue(false)
     const fetcher = vi.fn(async (input: RequestInfo | URL, _options?: RequestInit) => String(input).includes('/directory')
-      ? json({ data: { plan: plan() } }) : json({ data: { sources: [source], providers } }))
+      ? json({ data: { plan: plan() } }) : json({ data: { sources: [source], providers, permissions } }))
     vi.stubGlobal('fetch', fetcher)
     render(<OrganizationSourcePanel />)
     fireEvent.click(await screen.findByRole('button', { name: '确认切换目录主来源' }))
@@ -216,7 +233,7 @@ describe('OrganizationSourcePanel', () => {
 
     fetchMock.mockImplementation(async (input?: RequestInfo | URL) => String(input).includes('/directory')
       ? json({ data: { plan: null } })
-      : json({ data: { sources: [source], providers, active_primary_source_id: source.id } }))
+      : json({ data: { sources: [source], providers, permissions, active_primary_source_id: source.id } }))
     fireEvent.click(screen.getByRole('button', { name: '重新读取组织接入状态' }))
     expect(await screen.findByText('tenant-1')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -241,7 +258,7 @@ describe('OrganizationSourcePanel', () => {
             },
           },
         })
-      : json({ data: { sources: [source], providers, active_primary_source_id: source.id } }))
+      : json({ data: { sources: [source], providers, permissions, active_primary_source_id: source.id } }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<OrganizationSourcePanel />)
@@ -256,7 +273,7 @@ describe('OrganizationSourcePanel', () => {
   it('separates connection, directory and login concepts and removes the old direct Feishu sync action', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
       ? json({ data: { plan: null } })
-      : json({ data: { sources: [source], providers, active_primary_source_id: source.id } }))
+      : json({ data: { sources: [source], providers, permissions, active_primary_source_id: source.id } }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<OrganizationSourcePanel />)
@@ -293,7 +310,7 @@ describe('OrganizationSourcePanel', () => {
       : provider)
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
       ? json({ data: { plan: null } })
-      : json({ data: { sources: [source], providers: futureProviders, active_primary_source_id: source.id } }))
+      : json({ data: { sources: [source], providers: futureProviders, permissions, active_primary_source_id: source.id } }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<OrganizationSourcePanel />)
@@ -316,7 +333,7 @@ describe('OrganizationSourcePanel', () => {
     }
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
       ? json({ data: { plan: null } })
-      : json({ data: { sources: [fxiaokeSource], providers, active_primary_source_id: fxiaokeSource.id } }))
+      : json({ data: { sources: [fxiaokeSource], providers, permissions, active_primary_source_id: fxiaokeSource.id } }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<OrganizationSourcePanel />)
@@ -336,7 +353,7 @@ describe('OrganizationSourcePanel', () => {
     }
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
       ? json({ data: { plan: null } })
-      : json({ data: { sources: [fxiaokeSource], providers, active_primary_source_id: fxiaokeSource.id } }))
+      : json({ data: { sources: [fxiaokeSource], providers, permissions, active_primary_source_id: fxiaokeSource.id } }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<OrganizationSourcePanel />)
@@ -353,7 +370,7 @@ describe('OrganizationSourcePanel', () => {
     })
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
       ? json({ data: { plan: blocked } })
-      : json({ data: { sources: [source], providers, active_primary_source_id: source.id } }))
+      : json({ data: { sources: [source], providers, permissions, active_primary_source_id: source.id } }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<OrganizationSourcePanel />)
@@ -367,7 +384,7 @@ describe('OrganizationSourcePanel', () => {
     const conflicted = plan({ applyable: false, conflicts: [{ kind: 'identity_unresolved', externalId: 'u1', message: '工号、邮箱或手机号未能唯一定位成员。' }] })
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
       ? json({ data: { plan: conflicted } })
-      : json({ data: { sources: [source], providers, active_primary_source_id: source.id } }))
+      : json({ data: { sources: [source], providers, permissions, active_primary_source_id: source.id } }))
     vi.stubGlobal('fetch', fetchMock)
 
     render(<OrganizationSourcePanel />)
@@ -388,7 +405,7 @@ describe('OrganizationSourcePanel', () => {
         } } })
       }
       if (String(input).includes('/directory')) return json({ data: { plan: current } })
-      return json({ data: { sources: [source], providers, active_primary_source_id: source.id } })
+      return json({ data: { sources: [source], providers, permissions, active_primary_source_id: source.id } })
     })
     vi.stubGlobal('fetch', fetchMock)
 
@@ -421,7 +438,7 @@ describe('OrganizationSourcePanel', () => {
         } } })
       }
       if (String(input).includes('/directory')) return json({ data: { plan: current } })
-      return json({ data: { sources: [source], providers, active_primary_source_id: source.id } })
+      return json({ data: { sources: [source], providers, permissions, active_primary_source_id: source.id } })
     })
     vi.stubGlobal('fetch', fetchMock)
 
@@ -448,7 +465,7 @@ describe('OrganizationSourcePanel', () => {
       if (String(input).includes('/directory')) return json({ data: { plan: null, directory_cutover: { available: true, reason: null } } })
       return json({ data: { sources: [{ ...fxiaokeSource, authorityScope: {
         ...fxiaokeSource.authorityScope, identity: enabled ? 'authoritative' : 'evidence',
-      } }], providers } })
+      } }], providers, permissions } })
     })
     vi.stubGlobal('fetch', fetchMock)
     render(<OrganizationSourcePanel />)
