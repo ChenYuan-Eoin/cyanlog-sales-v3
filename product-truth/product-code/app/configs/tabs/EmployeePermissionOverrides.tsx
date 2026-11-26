@@ -24,6 +24,7 @@ const overrideSchema = z.discriminatedUnion('effect', [
 const snapshotSchema = z.object({
   org_id: z.string(),
   user_id: z.string(),
+  target_revision: z.string().min(1).max(128).optional(),
   permissions: z.array(z.object({
     key: z.string(), base: z.boolean(), effective: z.boolean(),
     base_scope: scope.nullable(), effective_scope: scope.nullable(), override: overrideSchema,
@@ -39,9 +40,11 @@ const snapshotSchema = z.object({
 type Snapshot = z.infer<typeof snapshotSchema>
 
 export function isEmployeePermissionTarget(user: OrgSummaryUser) {
-  return user.status === 'active' && user.login_enabled !== false && user.directory_pending_account !== true
-    && (!user.membership_status || user.membership_status === 'active')
-    && (!user.employment_status || user.employment_status === 'active')
+  return (user.directory_pending_account === true && user.status === 'inactive'
+    && user.membership_status === 'invited' && user.can_preassign_org_roles === true)
+    || (user.status === 'active' && user.login_enabled !== false && user.directory_pending_account !== true
+      && (!user.membership_status || user.membership_status === 'active')
+      && (!user.employment_status || user.employment_status === 'active'))
 }
 
 function getHeaders(token: string | null) {
@@ -174,7 +177,7 @@ export function EmployeePermissionOverrides({ orgId, userId, userName, onClose }
       const response = await fetch(endpoint, {
         method: 'PATCH',
         headers: { ...getHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ permission_code: state.key, expected_override: state.override, override }),
+        body: JSON.stringify({ permission_code: state.key, expected_override: state.override, override, target_revision: snapshot?.target_revision }),
         signal: controller.signal,
       })
       if (response.status === 400) setReloadRequired(false)
@@ -188,7 +191,7 @@ export function EmployeePermissionOverrides({ orgId, userId, userName, onClose }
       const receipt = written.permissions.find(item => item.key === state.key)
       const verified = readback.permissions.find(item => item.key === state.key)
       if (token !== localStorage.getItem('token') || !receipt || !verified || !sameEmployeeOverride(receipt.override, override)
-        || !sameEmployeeOverride(verified.override, override)) {
+        || !sameEmployeeOverride(verified.override, override) || (readback.target_revision !== snapshot?.target_revision)) {
         throw new Error('未能核对已保存的权限，请重新读取后确认。')
       }
       setSnapshot(readback)
@@ -209,6 +212,7 @@ export function EmployeePermissionOverrides({ orgId, userId, userName, onClose }
           <DialogTitle>员工权限设置 · {userName}</DialogTitle>
           <DialogDescription>员工的基础权限来自部门和角色。个人设置将覆盖该权限点的开关和数据范围。</DialogDescription>
         </DialogHeader>
+        {snapshot?.target_revision && <p role="status" className="text-sm text-slate-600">待首次登录生效</p>}
         {loading && <p role="status" className="text-sm text-slate-600">正在读取员工权限…</p>}
         {saving && <p role="status" className="text-sm text-slate-600">正在保存并核对权限…</p>}
         {feedback && <p role={feedback.kind === 'error' ? 'alert' : 'status'}

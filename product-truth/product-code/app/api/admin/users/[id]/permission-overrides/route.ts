@@ -38,6 +38,7 @@ const patchSchema = z.strictObject({
   permission_code: permissionCodeSchema,
   expected_override: overrideSchema,
   override: overrideSchema,
+  target_revision: z.string().min(1).max(128).optional(),
 }).refine(input => supportsScope(input.permission_code, input.expected_override)
   && supportsScope(input.permission_code, input.override))
 
@@ -92,9 +93,10 @@ async function handle(req: NextRequest, { params }: AsyncRouteParams, write: boo
       change = parsed.data
     }
 
-    const snapshot = await loadEmployeePermissionTable(userId.data, orgId.data)
-    if (!snapshot) return failure('P0002')
+    const snapshot = await loadEmployeePermissionTable(userId.data, orgId.data, actor.id)
+    if (!snapshot) return failure(change?.target_revision === undefined ? 'P0002' : '40001')
     if (!change) return json({ org_id: orgId.data, user_id: userId.data, ...snapshot })
+    if (change.target_revision !== snapshot.target_revision) return failure('40001')
 
     const point = snapshot.permissions.find(permission => permission.key === change.permission_code)
     if (!point) return failure('23514')
@@ -107,20 +109,26 @@ async function handle(req: NextRequest, { params }: AsyncRouteParams, write: boo
     }
     if (!point.can_edit) return failure('42501', 'EMPLOYEE_PERMISSION_OVERRIDE_PROTECTED')
 
-    const { data, error } = await supabaseAdmin.rpc(organizationAction
-      ? 'admin_set_employee_org_permission_override_v1' : 'admin_set_employee_permission_override_v1', {
+    const args = {
       p_actor_id: actor.id,
       p_org_id: orgId.data,
       p_user_id: userId.data,
       p_permission_code: change.permission_code,
       p_expected_override: change.expected_override,
       p_override: change.override,
-    })
+    }
+    const { data, error } = change.target_revision
+      ? await supabaseAdmin.rpc('admin_set_employee_prelogin_permission_override_v1', {
+        ...args, p_target_revision: change.target_revision,
+      })
+      : await supabaseAdmin.rpc(organizationAction
+        ? 'admin_set_employee_org_permission_override_v1' : 'admin_set_employee_permission_override_v1', args)
     if (error) return failure(error.code, error.details)
     if (!matchesOverride(data, change.override)) return failure()
 
-    const updated = await loadEmployeePermissionTable(userId.data, orgId.data)
+    const updated = await loadEmployeePermissionTable(userId.data, orgId.data, actor.id)
     if (!updated) return failure('P0002')
+    if (updated.target_revision !== snapshot.target_revision) return failure('40001')
     const saved = updated.permissions.find(permission => permission.key === change.permission_code)
     if (!matchesOverride(saved?.override, change.override)) return failure('40001')
 

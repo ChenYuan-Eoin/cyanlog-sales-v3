@@ -29,10 +29,9 @@ export function isPublishedOrganizationEmployeePermission(point: {
       && ['org', 'department', 'space', 'self'].every(scope => point.scopeTypes.includes(scope)))
 }
 
-export async function loadEmployeeOrganizationPermissionOverrides(orgId: string, userId: string): Promise<OrganizationOverrides> {
-  const rows = await readMiddlewareRpcRows<{
-    permission_code?: unknown; effect?: unknown; scope?: { type?: unknown } | null
-  }>('employee_permission_overrides_v1', { p_org_id: orgId, p_user_id: userId })
+type EmployeeOverrideRow = { permission_code?: unknown; effect?: unknown; scope?: { type?: unknown } | null }
+
+export function readEmployeeOrganizationPermissionOverrides(rows: EmployeeOverrideRow[]): OrganizationOverrides {
   const result = new Map<OrganizationEmployeePermissionKey, EmployeePermissionOverride>()
   for (const row of rows) {
     if (typeof row?.permission_code !== 'string') throw new Error('Invalid employee permission row')
@@ -48,6 +47,13 @@ export async function loadEmployeeOrganizationPermissionOverrides(orgId: string,
     }
   }
   return result
+}
+
+export async function loadEmployeeOrganizationPermissionOverrides(orgId: string, userId: string): Promise<OrganizationOverrides> {
+  const rows = await readMiddlewareRpcRows<EmployeeOverrideRow>(
+    'employee_permission_overrides_v1', { p_org_id: orgId, p_user_id: userId },
+  )
+  return readEmployeeOrganizationPermissionOverrides(rows)
 }
 
 export async function loadEmployeeOrganizationPermissionDecision(

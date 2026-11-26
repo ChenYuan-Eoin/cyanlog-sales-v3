@@ -87,8 +87,31 @@ it('returns the effective table, evidence, and scopes from the verified organiza
   expect(response.status).toBe(200)
   expect(response.headers.get('cache-control')).toBe('private, no-store')
   expect(await response.json()).toEqual({ org_id: orgId, user_id: userId, ...projection() })
-  expect(loadEmployeePermissionTable).toHaveBeenCalledExactlyOnceWith(userId, orgId)
+  expect(loadEmployeePermissionTable).toHaveBeenCalledExactlyOnceWith(userId, orgId, actorId)
   expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+})
+
+it('applies the pending change only to the verified identity revision', async () => {
+  const revision = 'verified-directory-identity'
+  vi.mocked(loadEmployeePermissionTable)
+    .mockResolvedValue({ ...projection(), target_revision: revision })
+  expect((await patch(change)).status).toBe(409)
+  expect((await patch({ ...change, target_revision: 'stale' })).status).toBe(409)
+  expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+
+  vi.mocked(loadEmployeePermissionTable)
+    .mockResolvedValueOnce({ ...projection(), target_revision: revision })
+    .mockResolvedValueOnce({ ...projection({ override: departmentOverride }), target_revision: revision })
+  const response = await patch({ ...change, target_revision: revision })
+  expect(response.status).toBe(200)
+  expect(await response.json()).toMatchObject({ target_revision: revision })
+  expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith('admin_set_employee_prelogin_permission_override_v1', {
+    p_actor_id: actorId, p_org_id: orgId, p_user_id: userId, p_permission_code: point,
+    p_expected_override: orgOverride, p_override: departmentOverride, p_target_revision: revision,
+  })
+  vi.mocked(loadEmployeePermissionTable).mockResolvedValue(projection())
+  expect((await patch({ ...change, target_revision: revision })).status).toBe(409)
+  expect(supabaseAdmin.rpc).toHaveBeenCalledOnce()
 })
 
 it('requires a current system administrator regardless of session org claim or other permissions', async () => {
@@ -165,7 +188,7 @@ it('CAS replaces a wider data scope with the selected departments and independen
     p_expected_override: orgOverride,
     p_override: departmentOverride,
   })
-  expect(loadEmployeePermissionTable).toHaveBeenNthCalledWith(2, userId, orgId)
+  expect(loadEmployeePermissionTable).toHaveBeenNthCalledWith(2, userId, orgId, actorId)
 })
 
 it.each([

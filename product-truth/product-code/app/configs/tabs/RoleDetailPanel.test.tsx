@@ -145,16 +145,21 @@ it('lists a pending member and revokes only this role before first login', async
   expect(JSON.parse(send.mock.calls[0][1].body)).toEqual({ role_ids: ['another'], expected_role_ids: ['ship', 'another'] })
 })
 
-it('opens the same tenant-scoped employee permission table from a role member', async () => {
+it.each([false, true])('opens the same tenant-scoped employee permission table from a role member (pending: %s)', async pending => {
   const shipping = { id: 'ship', code: 'SHIP', name: '寄件', description: null, permissions: [] }
   const member = {
     id: 'employee', display_name: '收寄成员', email: '', title: '', primary_dept_name: '华南',
     role_names: '寄件', role_ids: [shipping.id], status: 'active', login_enabled: true,
-    membership_status: 'active' as const, employment_status: 'active' as const,
+    membership_status: pending ? 'invited' as const : 'active' as const, employment_status: 'active' as const,
+    ...(pending ? {
+      status: 'inactive', login_enabled: false, directory_pending_account: true, can_preassign_org_roles: true,
+      pending_org_roles: [shipping], role_ids: [], role_names: '',
+    } : {}),
   }
   const path = '/api/admin/users/employee/permission-overrides?orgId=org-a'
   const fetchEmployeePermissions = vi.fn().mockResolvedValue(Response.json({
     org_id: 'org-a', user_id: member.id, permissions: [], departments: [],
+    ...(pending ? { target_revision: 'verified-directory-identity' } : {}),
     shipping_permission_publication: { registered: [], published: [] },
   }))
   vi.stubGlobal('fetch', fetchEmployeePermissions)

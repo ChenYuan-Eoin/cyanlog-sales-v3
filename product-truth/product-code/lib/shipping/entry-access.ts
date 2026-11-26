@@ -1,15 +1,16 @@
 import type { AuthUser } from '@/lib/auth'
 import {
   loadEmployeeOrganizationPermissionOverrides, organizationEmployeePermissionKeys,
-  resolveOrganizationPermissionDecision, selectActiveOrganizationOverrides,
+  readEmployeeOrganizationPermissionOverrides, resolveOrganizationPermissionDecision, selectActiveOrganizationOverrides,
 } from '@/lib/admin/employee-organization-permissions'
 import { hasConfigurationReadPermission, hasPermission } from '@/lib/permissions'
 import {
   getEffectiveOwnerShippingPermissions, getEffectiveShippingPermissions, hasShippingPermission,
   SHIPPING_RECORD_RETURN, type ShippingPermissionKey,
 } from '@/lib/module-access'
-import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
+import { loadCurrentOrganizationRoleAssignments, loadOrgRolePermissionSettings, queryOrgRoles, type OrgVisibleRole } from '@/lib/org-role-permissions'
 import { loadRoleModulePermissionProjection, loadShippingModulePermissionState } from '@/lib/permission-registry'
+import { isRetiredRoleCode, resolveOwnerShippingPermissions, resolveRolePermissions } from '@/lib/role-permission-resolution'
 import { supabaseAdmin } from '@/lib/supabase'
 import { createMiddlewareRestClient } from '@/lib/middleware-rest-client'
 import { DEPARTMENT_LEDGER_VIEW, loadAuthorizedLedgerDepartments, loadDepartmentLedgerScope, type LedgerDepartment } from './department-ledger-access'
@@ -17,7 +18,7 @@ import { isEmployeeTeamPermission, type EmployeePermissionScope } from './employ
 import { isShippingOwnerPermission } from './owner-permission-keys'
 import {
   displayEmployeeTeamPermissionScope, effectiveEmployeeOwnerShippingPermissions, effectiveOrganizationShippingPermissions,
-  employeeShippingPermissionKeys, hasEmployeeShippingOverrides, loadEmployeeShippingState, type EmployeeShippingPermissionRow,
+  employeeShippingPermissionKeys, hasEmployeeShippingOverrides, loadEmployeeShippingState, readEmployeeShippingState, type EmployeeShippingPermissionRow,
 } from './employee-permission-overrides'
 
 type PublishedShippingAccess = {
@@ -107,21 +108,51 @@ function readOnlyOrganizationCapabilities(permissions: string[], systemAdministr
   } as Record<string, boolean>
 }
 
-export async function loadEmployeePermissionTable(userId: string, orgId: string) {
-  const [context, { publication, catalog, organizationEmployeePublication }] = await Promise.all([
+async function loadPreloginEmployeePermissionProjection(actorId: string, orgId: string, userId: string) {
+  const { data, error } = await supabaseAdmin.rpc('admin_employee_prelogin_permission_projection_v1', {
+    p_actor_id: actorId, p_org_id: orgId, p_user_id: userId,
+  })
+  if (error) throw error
+  if (data === null) return null
+  if (typeof data?.target_revision !== 'string' || !data.target_revision
+    || !Array.isArray(data.pending_role_ids) || !data.pending_role_ids.every((id: unknown) => typeof id === 'string')
+    || !Array.isArray(data.overrides) || !Array.isArray(data.shipping_scopes)) {
+    throw new Error('Invalid pending employee permission projection')
+  }
+  const pendingRoleIds = new Set<string>(data.pending_role_ids)
+  const [settings, roles] = await Promise.all([loadOrgRolePermissionSettings(orgId), queryOrgRoles(orgId)])
+  if (roles.error) throw roles.error
+  const assignments = ((roles.data ?? []) as OrgVisibleRole[])
+    .filter(role => pendingRoleIds.has(role.id) && role.code !== 'SUPER_ADMIN' && !isRetiredRoleCode(role.code))
+    .map(role => ({
+      roleCode: role.code, roleName: role.name,
+      permissions: resolveRolePermissions(settings, role).permissions,
+      ownerShippingPermissions: resolveOwnerShippingPermissions(settings, role),
+    }))
+  return {
+    orgId, assignments, revision: data.target_revision as string,
+    employee: readEmployeeShippingState(data.overrides, data.shipping_scopes),
+    organizationOverrides: readEmployeeOrganizationPermissionOverrides(data.overrides),
+  }
+}
+
+export async function loadEmployeePermissionTable(userId: string, orgId: string, actorId?: string) {
+  const [active, { publication, catalog, organizationEmployeePublication }] = await Promise.all([
     loadCurrentOrganizationRoleAssignments(userId), loadRoleModulePermissionProjection(),
   ])
+  const prelogin = !active && actorId ? await loadPreloginEmployeePermissionProjection(actorId, orgId, userId) : null
+  const context = active ?? prelogin
   if (!context || context.orgId !== orgId) return null
 
   const protectedAccount = context.assignments.some(assignment => assignment.roleCode === 'SUPER_ADMIN')
   const [employee, availableDepartments, account, organizationOverrides] = await Promise.all([
-    loadEmployeeShippingState(orgId, userId),
+    prelogin?.employee ?? loadEmployeeShippingState(orgId, userId),
     loadAuthorizedLedgerDepartments(createMiddlewareRestClient(), orgId),
-    supabaseAdmin.from('users').select('id,status,login_enabled').eq('id', userId).maybeSingle(),
-    loadEmployeeOrganizationPermissionOverrides(orgId, userId),
+    prelogin ? null : supabaseAdmin.from('users').select('id,status,login_enabled').eq('id', userId).maybeSingle(),
+    prelogin?.organizationOverrides ?? loadEmployeeOrganizationPermissionOverrides(orgId, userId),
   ])
-  if (account.error) throw account.error
-  if (!account.data || account.data.id !== userId || account.data.status !== 'active' || account.data.login_enabled !== true) return null
+  if (account?.error) throw account.error
+  if (!prelogin && (account?.data?.id !== userId || account.data.status !== 'active' || account.data.login_enabled !== true)) return null
   const ownerGrants = context.assignments.flatMap(assignment => assignment.ownerShippingPermissions ?? [])
   const organizationGrants = context.assignments.flatMap(assignment => assignment.permissions)
   const baseOwner = getEffectiveOwnerShippingPermissions(ownerGrants, publication)
@@ -184,6 +215,7 @@ export async function loadEmployeePermissionTable(userId: string, orgId: string)
       .map(assignment => ({ kind: 'role' as const, name: assignment.roleName })),
   }))
   return {
+    ...(prelogin ? { target_revision: prelogin.revision } : {}),
     permissions: [...permissions, ...organizationRows, ...Object.entries(readOnlyOrganizationActions).map<EmployeePermissionTableRow>(([key, enabled]) => ({
       key, base: enabled, effective: enabled, base_scope: enabled ? orgScope : null, effective_scope: enabled ? orgScope : null,
       override: null, can_edit: false,

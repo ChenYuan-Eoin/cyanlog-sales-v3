@@ -571,6 +571,45 @@ it('renders pending role separately on the organization member row', () => {
   expect(within(row).getByText('寄件 · 待首次登录生效')).toBeInTheDocument()
 })
 
+it('opens the employee permission table before the first login of a verified directory member', async () => {
+  const user = { ...statusPayload.users[0], can_preassign_org_roles: true }
+  const orgId = 'test-org'
+  const endpoint = `/api/admin/users/${user.id}/permission-overrides?orgId=${orgId}`
+  const send = vi.mocked(fetch).mockImplementation(async url => url === endpoint ? Response.json({
+    org_id: orgId, user_id: user.id, target_revision: 'verified-directory-identity', permissions: [], departments: [],
+    shipping_permission_publication: { registered: [], published: [] },
+  }) : new Response(null, { status: 403 }))
+  render(<OrgStructureTab orgSummary={{ ...statusPayload, organization: { id: orgId, name: '测试组织' }, users: [user] }} currentUserId="actor" />)
+  fireEvent.keyDown(screen.getByRole('button', { name: `管理${user.display_name}` }), { key: 'ArrowDown' })
+  const operation = await screen.findByRole('menuitem', { name: '员工权限设置' })
+  expect(operation).not.toHaveAttribute('aria-disabled')
+  fireEvent.click(operation)
+  const dialog = await screen.findByRole('dialog', { name: `员工权限设置 · ${user.display_name}` })
+  expect(await within(dialog).findByText('待首次登录生效')).toBeInTheDocument()
+  expect(send).toHaveBeenCalledWith(endpoint, expect.objectContaining({ cache: 'no-store' }))
+})
+
+it.each([
+  { eligible: true, action: '停用首次登录', method: 'PATCH', suffix: '/login-enabled', body: { login_enabled: false } },
+  { eligible: false, action: '办理离职', method: 'DELETE', suffix: '', body: { reason: 'tenant administrator offboarding' } },
+])('lets a directory employee pending first login use $action', async ({ eligible, action, method, suffix, body }) => {
+  const user = { ...statusPayload.users[0], can_preassign_org_roles: eligible }
+  const endpoint = `/api/admin/users/${user.id}${suffix}`
+  const send = vi.mocked(fetch).mockImplementation(async url => url === endpoint
+    ? Response.json({ success: true }) : new Response(null, { status: 403 }))
+  const onRefresh = vi.fn()
+  render(<OrgStructureTab orgSummary={{ ...statusPayload, users: [user] }} currentUserId="actor" onRefresh={onRefresh} />)
+  fireEvent.keyDown(screen.getByRole('button', { name: `管理${user.display_name}` }), { key: 'ArrowDown' })
+  const operation = await screen.findByRole('menuitem', { name: action })
+  expect(operation).not.toHaveAttribute('aria-disabled')
+  expect(screen.queryByRole('menuitem', { name: '启用账号' })).not.toBeInTheDocument()
+  fireEvent.click(operation)
+  expect(send).not.toHaveBeenCalledWith(endpoint, expect.anything())
+  fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: action }))
+  await waitFor(() => expect(onRefresh).toHaveBeenCalledOnce())
+  expect(send).toHaveBeenCalledWith(endpoint, expect.objectContaining({ method, body: JSON.stringify(body) }))
+})
+
 it('checks the original roles when the directory refreshes while a member is being edited', async () => {
   const user = { ...statusPayload.users[0], can_preassign_org_roles: true, pending_org_roles: [{ id: 'ship', code: 'SHIP', name: '寄件' }] }
   const latest = { ...user, pending_org_roles: [] }

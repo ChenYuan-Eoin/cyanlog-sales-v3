@@ -77,6 +77,10 @@ export async function loadEmployeeShippingState(orgId: string, userId: string): 
     readMiddlewareRpcRows<unknown>('employee_permission_overrides_v1', args),
     readMiddlewareRpcRows<TeamScope>('shipping_employee_permission_scopes_v1', args),
   ])
+  return readEmployeeShippingState(rows, ranges)
+}
+
+export function readEmployeeShippingState(rows: unknown[], ranges: TeamScope[]): EmployeeShippingState {
   const overrides = new Map<EmployeeShippingPermissionKey, EmployeePermissionOverride>()
   for (const value of rows) {
     const row = object(value)

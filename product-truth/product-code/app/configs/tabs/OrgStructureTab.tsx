@@ -614,7 +614,9 @@ function MemberTable({
         const employed = memberEmployment(user) === 'active'
         const firstLoginPending = user.directory_pending_account === true && user.membership_status === 'invited' && user.status === 'inactive'
         return <Badge variant={employed && firstLoginPending ? 'outline' : 'secondary'}>
-          {!employed ? '不可登录' : firstLoginPending ? '待首次登录' : user.login_enabled === false ? '账号已停用' : '已有账号'}
+          {!employed ? '不可登录' : firstLoginPending
+            ? (user.can_preassign_org_roles === false ? '首次登录不可用' : '待首次登录')
+            : user.login_enabled === false ? '账号已停用' : '已有账号'}
         </Badge>
       },
     },
@@ -659,10 +661,14 @@ function MemberTable({
         const isDirectoryPending = user.directory_pending_account === true
         const isDirectoryManaged = Boolean(user.directory_identity_id)
         const directoryUnavailable = isDirectoryManaged && memberEmployment(user) !== 'active'
+        const directoryFirstLogin = isDirectoryManaged && isDirectoryPending && isInvited && !directoryUnavailable
         const lifecycleRestriction = getRoleMutationRestriction(user, currentUserId)
         const roleMutationRestriction = getMemberRoleMutationRestriction(user, currentUserId, systemAdminOrgIdForUser(user))
         const canChangeRoles = actions.assignRoles && !roleMutationRestriction && !directoryUnavailable
         const showAccountActions = !isInvited && !directoryUnavailable && user.status !== 'inactive'
+        const canEnableLogin = isLoginDisabled && !directoryFirstLogin
+        const loginAction = directoryFirstLogin ? '停用首次登录' : canEnableLogin ? '启用账号' : '停用账号'
+        const offboardingRestriction = directoryFirstLogin && lifecycleRestriction?.code === 'MEMBER_NOT_ELIGIBLE' ? null : lifecycleRestriction
         const lifecycleHint = lifecycleRestriction?.code === 'PROTECTED_ROLE_MUTATION_FORBIDDEN'
           ? '请先撤销系统超管角色' : lifecycleRestriction?.label
 
@@ -803,52 +809,42 @@ function MemberTable({
               </DropdownMenuItem>
               )}
 
-              {showAccountActions && (
+              {(showAccountActions || (directoryFirstLogin && user.can_preassign_org_roles === true)) && (
               <DropdownMenuItem
                 disabled={!actions.manageLogin || Boolean(lifecycleRestriction)}
                 title={lifecycleHint}
                 onSelect={async () => {
-                  const action = isLoginDisabled ? '启用账号' : '停用账号'
-                  if (!await confirmAction(`确定要为「${user.display_name}」${action}吗？`, { confirmText: action, danger: !isLoginDisabled })) return
+                  if (!await confirmAction(`确定要为「${user.display_name}」${loginAction}吗？`, { confirmText: loginAction, danger: !canEnableLogin })) return
                   try {
                     const res = await fetch(`/api/admin/users/${user.id}/login-enabled`, {
                       method: 'PATCH',
                       headers: buildAuthHeaders(true),
-                      body: JSON.stringify({ login_enabled: isLoginDisabled }),
+                      body: JSON.stringify({ login_enabled: canEnableLogin }),
                     })
                     const result = await res.json()
                     if (!res.ok) {
-                      error(result.error || `${action}失败`)
+                      error(result.error || `${loginAction}失败`)
                       return
                     }
-                    success(isLoginDisabled ? '账号已启用' : '账号已停用')
+                    success(directoryFirstLogin ? '首次登录已停用' : canEnableLogin ? '账号已启用' : '账号已停用')
                     await onRefresh?.()
                   } catch (_err) {
-                    error(`${action}请求失败`)
+                    error(`${loginAction}请求失败`)
                   }
                 }}
               >
-                {isLoginDisabled ? (
-                  <>
-                    <UnlockIcon className="h-4 w-4 mr-2 text-emerald-600" />
-                    <span className="text-emerald-600">启用账号</span>
-                  </>
-                ) : (
-                  <>
-                    <PowerOffIcon className="h-4 w-4 mr-2 text-amber-600" />
-                    <span className="text-amber-600">停用账号</span>
-                  </>
-                )}
+                {canEnableLogin ? <UnlockIcon className="h-4 w-4 mr-2 text-emerald-600" /> : <PowerOffIcon className="h-4 w-4 mr-2 text-amber-600" />}
+                {loginAction}
               </DropdownMenuItem>
               )}
 
               <DropdownMenuSeparator />
 
-              {showAccountActions && (
+              {(showAccountActions || directoryFirstLogin) && (
                 <DropdownMenuItem
                   className="text-red-600"
-                  disabled={!actions.manageEmployment || Boolean(lifecycleRestriction)}
-                  title={lifecycleHint}
+                  disabled={!actions.manageEmployment || Boolean(offboardingRestriction)}
+                  title={offboardingRestriction ? lifecycleHint : undefined}
                   onSelect={async () => {
                     if (!await confirmAction(`为「${user.display_name}」办理离职后，员工将失去 ICU 的成员身份及访问权限。`, { confirmText: '办理离职', danger: true })) return
                     try {

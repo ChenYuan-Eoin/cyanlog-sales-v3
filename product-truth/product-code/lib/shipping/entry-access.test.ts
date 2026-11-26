@@ -6,10 +6,14 @@ import { SHIPPING_OPERATE, SHIPPING_OWNER_ACTION_KEYS, SHIPPING_RECORD_RETURN, S
 const db = vi.hoisted(() => ({
   from: vi.fn(), select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn(),
   context: vi.fn(), published: vi.fn(),
-  restRows: vi.fn(), rpcRows: vi.fn(),
+  restRows: vi.fn(), rpcRows: vi.fn(), rpc: vi.fn(), roleSettings: vi.fn(), roleCatalog: vi.fn(),
 }))
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: db.from } }))
-vi.mock('@/lib/org-role-permissions', () => ({ loadCurrentOrganizationRoleAssignments: db.context }))
+vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: db.from, rpc: db.rpc } }))
+vi.mock('@/lib/org-role-permissions', () => ({
+  loadCurrentOrganizationRoleAssignments: db.context,
+  loadOrgRolePermissionSettings: db.roleSettings,
+  queryOrgRoles: db.roleCatalog,
+}))
 vi.mock('@/lib/middleware-rest-client', () => ({
   createMiddlewareRestClient: () => ({ selectRows: db.restRows }),
   readMiddlewareRpcRows: db.rpcRows,
@@ -95,6 +99,40 @@ it('reads back the combined employee table with exact organization points and de
     expect.objectContaining({ key: 'shipping:ledger_view', base: false, effective: true,
       effective_scope: { type: 'department', departments: [{ department_id: 'south', include_subdepartments: false }] } }),
   ]))
+})
+
+it('projects verified pending roles and scoped department grants only for the admin table', async () => {
+  db.context.mockResolvedValue(null)
+  db.roleSettings.mockResolvedValue({})
+  db.roleCatalog.mockResolvedValue({ error: null, data: [
+    { id: 'role', code: 'ORDINARY', name: '待生效角色', permissions: ['user:view'] },
+    { id: 'other', code: 'OTHER', name: '其他角色', permissions: ['user:manage_login'] },
+  ] })
+  db.restRows.mockResolvedValue([])
+  db.rpc.mockResolvedValue({ error: null, data: {
+    target_revision: 'verified-directory-identity', pending_role_ids: ['role'], overrides: [],
+    shipping_scopes: [
+      { permission_code: 'shipping:ledger_view', base_organization_wide: false, base_department_ids: ['south'],
+        organization_wide: false, department_ids: ['south'], base_sources: [{ kind: 'department', name: '华南' }] },
+      { permission_code: SHIPPING_RECORD_RETURN, base_organization_wide: false, base_department_ids: [],
+        organization_wide: false, department_ids: [] },
+    ],
+  } })
+  expect(await loadEmployeePermissionTable(user.id, 'org-a', 'actor')).toMatchObject({
+    target_revision: 'verified-directory-identity',
+    permissions: expect.arrayContaining([
+      expect.objectContaining({ key: 'user:view', base: true, sources: [{ kind: 'role', name: '待生效角色' }] }),
+      expect.objectContaining({ key: 'user:manage_login', base: false, sources: [] }),
+      expect.objectContaining({ key: 'shipping:ledger_view', base: true,
+        base_scope: { type: 'department', departments: [{ department_id: 'south', include_subdepartments: false }] } }),
+    ]),
+  })
+  expect(db.rpc).toHaveBeenCalledExactlyOnceWith('admin_employee_prelogin_permission_projection_v1', {
+    p_actor_id: 'actor', p_org_id: 'org-a', p_user_id: user.id,
+  })
+  expect(await loadPublishedShippingAccess(user.id)).toBeNull()
+  expect(db.rpc).toHaveBeenCalledOnce()
+  expect(db.rpcRows).not.toHaveBeenCalled()
 })
 
 describe('shipping entry authorization', () => {

@@ -47,12 +47,13 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('replaces the entire action scope with the selected department and verifies the fresh result', async () => {
+it.each([undefined, 'verified-directory-identity'])('replaces the entire action scope and verifies the fresh result (revision: %s)', async revision => {
   const override = { effect: 'ALLOW' as const, scope: scopeB }
+  const snapshot = (value: EmployeePermissionOverride) => Response.json({ ...payload(value), target_revision: revision })
   const fetchMock = vi.fn()
-    .mockResolvedValueOnce(Response.json(payload(null)))
-    .mockResolvedValueOnce(Response.json(payload(override)))
-    .mockResolvedValueOnce(Response.json(payload(override)))
+    .mockResolvedValueOnce(snapshot(null))
+    .mockResolvedValueOnce(snapshot(override))
+    .mockResolvedValueOnce(snapshot(override))
   vi.stubGlobal('fetch', fetchMock)
   open()
   const row = (await screen.findByRole('combobox', { name: selectors.effect })).closest('li')!
@@ -74,7 +75,7 @@ it('replaces the entire action scope with the selected department and verifies t
   expect(within(row).getByText('最终范围 华南销售')).toBeInTheDocument()
   expect(fetchMock).toHaveBeenNthCalledWith(2, endpoint, expect.objectContaining({
     method: 'PATCH',
-    body: JSON.stringify({ permission_code: ledger, expected_override: null, override }),
+    body: JSON.stringify({ permission_code: ledger, expected_override: null, override, target_revision: revision }),
   }))
   expect(fetchMock).toHaveBeenNthCalledWith(3, endpoint, expect.objectContaining({ cache: 'no-store' }))
 })

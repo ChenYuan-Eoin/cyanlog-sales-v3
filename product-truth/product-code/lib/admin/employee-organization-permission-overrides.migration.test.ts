@@ -10,9 +10,18 @@ const admin = '11111111-1111-4111-8111-111111111111'
 const employee = '22222222-2222-4222-8222-222222222222'
 const outsider = '33333333-3333-4333-8333-333333333333'
 const rootRole = '44444444-4444-4444-8444-444444444444'
+const shippingRole = '55555555-5555-4555-8555-555555555555'
+const source = '66666666-6666-4666-8666-666666666666'
+const identity = '77777777-7777-4777-8777-777777777777'
+const nextIdentity = '88888888-8888-4888-8888-888888888888'
+const department = '99999999-9999-4999-8999-999999999999'
+const childDepartment = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const lifecycle = '20261021000006_personnel_lifecycle_commands.sql'
 const organizationAdmin = '20261125055213_organization_super_admin.sql'
 const replacement = '20261126105311_employee_organization_permission_overrides.sql'
+const firstLogin = '20261118095000_fxiaoke_prelogin_role_assignment.sql'
+const roleCatalog = '20261126061431_org_owned_ordinary_roles.sql'
+const pendingMigration = '20261126111603_fxiaoke_prelogin_employee_permission_overrides.sql'
 const signature = 'public.admin_set_employee_org_permission_override_v1(uuid,uuid,uuid,text,jsonb,jsonb)'
 const allow = { effect: 'ALLOW', scope: { type: 'org' } }
 const deny = { effect: 'DENY', scope: null }
@@ -22,8 +31,8 @@ function migration(file: string) {
   return readFileSync(join(process.cwd(), 'supabase/migrations', file), 'utf8')
 }
 
-function privateFunction(file: string, name: string) {
-  const definition = migration(file).match(new RegExp(`create (?:or replace )?function private\\.${name}\\([\\s\\S]*?\\n\\$\\$;`, 'i'))
+function functionDefinition(file: string, name: string, schema = 'private') {
+  const definition = migration(file).match(new RegExp(`create (?:or replace )?function ${schema}\\.${name}\\([\\s\\S]*?\\n\\$\\$;`, 'i'))
   if (!definition) throw new Error(`Missing SQL dependency ${name}`)
   return definition[0]
 }
@@ -37,30 +46,59 @@ beforeEach(async () => {
     grant usage on schema public to anon, authenticated, service_role;
     create schema private;
     create table public.organizations (id uuid primary key, status text default 'active', settings jsonb);
-    create table public.users (id uuid primary key, status text default 'active', login_enabled boolean default true);
+    create table public.users (
+      id uuid primary key, org_id uuid, status text default 'active', login_enabled boolean default true,
+      password_hash text, last_login_at timestamptz, updated_at timestamptz
+    );
     create table public.user_organizations (
       user_id uuid, org_id uuid, is_default boolean default true, status text default 'active',
-      employment_status text default 'active', left_at timestamptz, primary key (user_id, org_id)
+      employment_status text default 'active', left_at timestamptz, updated_at timestamptz,
+      joined_at timestamptz, employment_started_at timestamptz, employment_ended_at timestamptz,
+      membership_version bigint default 1, updated_by uuid, primary key (user_id, org_id)
     );
-    create table public.roles (id uuid primary key, code text, name text, permissions jsonb, owner_org_id uuid);
-    create table public.user_roles (org_id uuid, user_id uuid, role_id uuid, scope_type text, scope_id uuid);
-    create table private.org_role_metadata (org_id uuid, role_id uuid, name text, archived_at timestamptz);
+    create table public.roles (
+      id uuid primary key, code text, name text, permissions jsonb, owner_org_id uuid,
+      description text, sort_order int, created_at timestamptz
+    );
+    create table public.user_roles (
+      org_id uuid, user_id uuid, role_id uuid, scope_type text, scope_id uuid, granted_by uuid,
+      primary key (user_id, role_id, scope_type, scope_id)
+    );
+    create table private.org_role_metadata (
+      org_id uuid, role_id uuid, name text, archived_at timestamptz, description text, role_revision bigint
+    );
     create table public.permission_points (
       id uuid primary key default gen_random_uuid(), code text unique, name text, description text
     );
     create table public.personnel_lifecycle_events (
+      id uuid default gen_random_uuid(), occurred_at timestamptz default now(),
       org_id uuid, target_user_id uuid, actor_id uuid, command text, before_state jsonb,
       after_state jsonb, reason text, request_id text
+    );
+    create table public.personnel_invitations (
+      id uuid default gen_random_uuid(), org_id uuid, user_id uuid, created_by uuid,
+      status text default 'pending', token_hash text unique, role_ids uuid[] default '{}',
+      expires_at timestamptz, accepted_at timestamptz
+    );
+    create table public.auth_tokens (user_id uuid);
+    create table public.organization_sources (
+      id uuid primary key, system_org_id uuid, provider text, status text, connection_state text,
+      effective_revision uuid, authority_scope jsonb
+    );
+    create table public.external_identities (
+      id uuid primary key, system_org_id uuid, source_id uuid, canonical_user_id uuid, external_user_id text,
+      match_status text, profile_snapshot jsonb
     );
     create table public.departments (id uuid, parent_id uuid, org_id uuid, leader_id uuid, name text, status text);
     create table public.user_departments (org_id uuid, user_id uuid, department_id uuid);
     create table public.department_lead_access (org_id uuid, user_id uuid, department_id uuid);
     insert into public.organizations (id, settings) values ('${org}', '{"keep_setting":true}'), ('${otherOrg}', '{}');
-    insert into public.users (id) values ('${admin}'), ('${employee}'), ('${outsider}');
+    insert into public.users (id, org_id) values ('${admin}', '${org}'), ('${employee}', '${org}'), ('${outsider}', '${otherOrg}');
     insert into public.user_organizations (user_id, org_id) values
       ('${admin}', '${org}'), ('${employee}', '${org}'), ('${outsider}', '${otherOrg}');
     insert into public.roles (id, code, name, permissions) values ('${rootRole}', 'SUPER_ADMIN', '系统超级管理员', '["*"]');
-    insert into public.user_roles values ('${org}', '${admin}', '${rootRole}', 'org', '${org}');
+    insert into public.user_roles (org_id, user_id, role_id, scope_type, scope_id)
+    values ('${org}', '${admin}', '${rootRole}', 'org', '${org}');
   `)
   for (const [file, name] of [
     [lifecycle, 'personnel_lock_org_v1'],
@@ -70,13 +108,27 @@ beforeEach(async () => {
     ['20261126054302_immutable_system_super_admin.sql', 'system_super_admin_role_enabled_v1'],
     ['20261126045425_system_super_admin_authority.sql', 'personnel_is_org_control_admin_v1'],
     ['20261126054700_guard_ordinary_role_assignments.sql', 'assert_system_role_assignment_actor_v1'],
-  ]) await db.exec(privateFunction(file, name))
+  ]) await db.exec(functionDefinition(file, name))
+  await db.exec(migration(firstLogin).split('-- This one predicate')[0])
+  await db.exec(functionDefinition(firstLogin, 'fxiaoke_prelogin_role_targets_v1', 'public'))
+  await db.exec(functionDefinition(firstLogin, 'activate_fxiaoke_sso_member_v1', 'public'))
+  await db.exec(functionDefinition(roleCatalog, 'org_role_catalog_v1'))
+  await db.exec(functionDefinition(roleCatalog, 'org_role_is_referenced_v1'))
+  await db.exec(functionDefinition(roleCatalog, 'admin_list_org_roles_v1', 'public'))
+  await db.exec(functionDefinition('20261126103435_admin_add_member_org_roles.sql', 'accept_personnel_invitation_v1', 'public'))
   for (const file of [
     '20261021000005_permission_registry_lifecycle.sql',
     '20261125171808_shipping_permission_actions.sql',
+  ]) await db.exec(migration(file))
+  await db.exec(migration('20261126052146_department_shipping_permission_grants.sql')
+    .split('create function private.department_permission_state_v1')[0] + 'commit;')
+  await db.exec(migration('20261126064003_shipping_department_record_return.sql')
+    .split('create function private.shipping_return_scope_v1')[0] + 'commit;')
+  for (const file of [
     '20261126064200_permission_dictionary_metadata.sql',
     '20261126074057_employee_permission_overrides.sql',
     replacement,
+    pendingMigration,
   ]) await db.exec(migration(file))
 })
 
@@ -195,4 +247,182 @@ it('removes organization deltas when employment ends and exposes the new writer 
   await db.query(`update public.user_organizations set employment_status = 'ended' where user_id = $1 and org_id = $2`, [employee, org])
   expect((await db.query('select permission_code from private.employee_permission_overrides')).rows).toEqual([])
   expect(await employeeOverrides()).toEqual([])
+})
+
+async function preparePendingEmployee() {
+  await db.exec(`
+    update public.users set status = 'inactive', login_enabled = false where id = '${employee}';
+    update public.user_organizations set status = 'invited' where user_id = '${employee}';
+    insert into public.organization_sources values (
+      '${source}', '${org}', 'fxiaoke', 'active', 'verified', gen_random_uuid(),
+      '{"identity":"authoritative","directory":"authoritative"}'
+    );
+    insert into public.external_identities values (
+      '${identity}', '${org}', '${source}', '${employee}', 'verified-directory-employee', 'matched',
+      '{"provisionedMemberId":"${employee}","status":"active"}'
+    );
+  `)
+}
+
+type PendingProjection = {
+  target_revision: string
+  pending_role_ids: string[]
+  overrides: { permission_code: string; effect: string; scope: unknown }[]
+  shipping_scopes: {
+    permission_code: string
+    base_organization_wide: boolean
+    base_department_ids: string[]
+    organization_wide: boolean
+    department_ids: string[]
+    base_sources: { kind: string; name: string }[]
+  }[]
+}
+
+async function pendingProjection(actorId = admin) {
+  const { rows } = await db.query<{ projection: PendingProjection | null }>(
+    'select public.admin_employee_prelogin_permission_projection_v1($1,$2,$3) as projection',
+    [actorId, org, employee],
+  )
+  return rows[0].projection
+}
+
+async function savePending(code: string, expected: object | null, value: object | null, targetRevision: string) {
+  await db.exec('set role service_role')
+  try {
+    const { rows } = await db.query<{ value: unknown }>(
+      'select public.admin_set_employee_prelogin_permission_override_v1($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7) as value',
+      [admin, org, employee, code, JSON.stringify(expected), JSON.stringify(value), targetRevision],
+    )
+    return rows[0].value
+  } finally {
+    await db.exec('reset role')
+  }
+}
+
+it('projects saved pending roles and the live department tree without granting runtime permission before verified login', async () => {
+  await preparePendingEmployee()
+  await db.exec(`
+    insert into public.roles (id, code, name, permissions, owner_org_id)
+    values ('${shippingRole}', 'TEST_SHIPPING_RETURN', '寄件退回', '["shipping:record_return"]', '${org}');
+    insert into public.fxiaoke_pending_org_roles
+      (org_id, user_id, role_id, source_id, external_identity_id, external_user_id)
+    values ('${org}', '${employee}', '${shippingRole}', '${source}', '${identity}', 'verified-directory-employee');
+    insert into public.departments (id, parent_id, org_id, leader_id, name, status) values
+      ('${department}', null, '${org}', '${employee}', '测试部门', 'active'),
+      ('${childDepartment}', '${department}', '${org}', null, '测试子部门', 'active');
+    insert into public.department_lead_access values ('${org}', '${employee}', '${department}');
+    update public.organizations set settings = settings || '{
+      "department_permission_grants": {
+        "${department}": {"permissions":["shipping:ledger_view"],"include_subdepartments":true}
+      }
+    }' where id = '${org}';
+  `)
+  const projection = await pendingProjection()
+  expect(projection).toMatchObject({
+    target_revision: expect.stringMatching(/^[0-9a-f]{64}$/),
+    pending_role_ids: [shippingRole],
+    overrides: [],
+    shipping_scopes: [
+      {
+        permission_code: 'shipping:ledger_view', base_organization_wide: false,
+        base_department_ids: [department, childDepartment], organization_wide: false,
+        department_ids: [department, childDepartment], base_sources: [{ kind: 'department', name: '测试部门' }],
+      },
+      {
+        permission_code: 'shipping:record_return', base_organization_wide: true,
+        base_department_ids: [], organization_wide: true, department_ids: [],
+        base_sources: [{ kind: 'role', name: '寄件退回' }],
+      },
+    ],
+  })
+  const revision = projection!.target_revision
+  expect(await savePending('user:view', null, allow, revision)).toEqual(allow)
+  expect(await savePending('shipping:ledger_view', null, deny, revision)).toEqual(deny)
+  await expect(savePending('shipping:ledger_view', null, allow, revision)).rejects.toMatchObject({
+    code: '40001', detail: 'EMPLOYEE_PERMISSION_OVERRIDE_CONFLICT',
+  })
+  await expect(save('user:view', null, deny)).rejects.toMatchObject({ code: 'P0002' })
+  expect(await pendingProjection()).toMatchObject({
+    overrides: [{ permission_code: 'shipping:ledger_view', ...deny }, { permission_code: 'user:view', ...allow }],
+    shipping_scopes: [
+      { permission_code: 'shipping:ledger_view', base_department_ids: [department, childDepartment], department_ids: [] },
+      { permission_code: 'shipping:record_return', base_organization_wide: true, organization_wide: true },
+    ],
+  })
+  const runtimeScopes = async () => (await db.query(
+    'select * from public.shipping_employee_permission_scopes_v1($1,$2)', [org, employee],
+  )).rows
+  expect(await employeeOverrides()).toEqual([])
+  expect(await runtimeScopes()).toMatchObject([
+    { permission_code: 'shipping:ledger_view', organization_wide: false, department_ids: [] },
+    { permission_code: 'shipping:record_return', organization_wide: false, department_ids: [] },
+  ])
+  expect((await db.query('select status, login_enabled from public.users where id = $1', [employee])).rows)
+    .toEqual([{ status: 'inactive', login_enabled: false }])
+  expect((await db.query(
+    "select public.activate_fxiaoke_sso_member_v1($1,'verified-directory-employee',$2) as activated", [org, employee],
+  )).rows).toEqual([{ activated: employee }])
+  expect(await pendingProjection()).toBeNull()
+  expect(await employeeOverrides()).toEqual([
+    { permission_code: 'shipping:ledger_view', ...deny }, { permission_code: 'user:view', ...allow },
+  ])
+  expect(await runtimeScopes()).toMatchObject([
+    { permission_code: 'shipping:ledger_view', base_department_ids: [department, childDepartment], department_ids: [] },
+    { permission_code: 'shipping:record_return', base_organization_wide: true, organization_wide: true },
+  ])
+  await expect(savePending('user:view', allow, deny, revision)).rejects.toMatchObject({
+    code: '40001', detail: 'EMPLOYEE_PERMISSION_OVERRIDE_CONFLICT',
+  })
+})
+
+it('keeps a reassigned directory identity from viewing, editing or activating a stale sparse difference', async () => {
+  await preparePendingEmployee()
+  const revision = (await pendingProjection())!.target_revision
+  await savePending('user:view', null, allow, revision)
+  await db.exec(`
+    update public.external_identities set canonical_user_id = null where id = '${identity}';
+    insert into public.external_identities values (
+      '${nextIdentity}', '${org}', '${source}', '${employee}', 'new-directory-identity', 'matched',
+      '{"provisionedMemberId":"${employee}","status":"active"}'
+    );
+  `)
+  const reassigned = await pendingProjection()
+  expect(reassigned?.target_revision).not.toEqual(revision)
+  expect(reassigned?.overrides).toEqual([])
+  await expect(savePending('user:view', allow, deny, revision)).rejects.toMatchObject({
+    code: '40001', detail: 'EMPLOYEE_PERMISSION_OVERRIDE_CONFLICT',
+  })
+  expect((await db.query(
+    "select public.activate_fxiaoke_sso_member_v1($1,'new-directory-identity',$2) as activated", [org, employee],
+  )).rows).toEqual([{ activated: employee }])
+  expect(await employeeOverrides()).toEqual([])
+  expect((await db.query('select permission_code from private.employee_permission_overrides')).rows).toEqual([])
+})
+
+it('does not promote pending differences through generic invitation acceptance or expose the pending RPCs to clients', async () => {
+  await preparePendingEmployee()
+  await expect(pendingProjection(outsider)).rejects.toMatchObject({ code: '42501' })
+  const revision = (await pendingProjection())!.target_revision
+  await savePending('user:view', null, allow, revision)
+  for (const pendingSignature of [
+    'public.admin_employee_prelogin_permission_projection_v1(uuid,uuid,uuid)',
+    'public.admin_set_employee_prelogin_permission_override_v1(uuid,uuid,uuid,text,jsonb,jsonb,text)',
+  ]) {
+    expect((await db.query(
+      `select has_function_privilege('anon',$1,'EXECUTE') as anon,
+              has_function_privilege('authenticated',$1,'EXECUTE') as authenticated,
+              has_function_privilege('service_role',$1,'EXECUTE') as service_role`,
+      [pendingSignature],
+    )).rows).toEqual([{ anon: false, authenticated: false, service_role: true }])
+  }
+  await db.query(
+    "insert into public.personnel_invitations (org_id,user_id,created_by,token_hash,expires_at) values ($1,$2,$3,'test-invite',now() + interval '1 hour')",
+    [org, employee, admin],
+  )
+  expect((await db.query("select public.accept_personnel_invitation_v1('test-invite') as accepted")).rows)
+    .toEqual([{ accepted: { user_id: employee, org_id: org } }])
+  expect(await pendingProjection()).toBeNull()
+  expect(await employeeOverrides()).toEqual([])
+  expect(await save('user:view', null, deny)).toEqual(deny)
+  expect(await employeeOverrides()).toEqual([{ permission_code: 'user:view', ...deny }])
 })
