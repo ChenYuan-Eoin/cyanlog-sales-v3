@@ -13,6 +13,7 @@ import {
   ORG_MEMBER_REMOVE_MEMBERSHIP,
 } from '@/lib/admin/member-action-keys'
 import {
+  REGISTERED_MODULE_PERMISSION_KEYS,
   SHIPPING_ACTION_DEFINITIONS,
   SHIPPING_BUNDLE,
   SHIPPING_MANAGE_CONNECTIONS,
@@ -22,6 +23,8 @@ import {
   SHIPPING_WORKBENCH_ACTION_KEYS,
   type ShippingActionKey,
 } from '@/lib/module-access'
+
+export const registeredShippingPermissionKeys: ReadonlySet<string> = new Set(REGISTERED_MODULE_PERMISSION_KEYS)
 
 type PermissionDirectoryAction = {
   key: string

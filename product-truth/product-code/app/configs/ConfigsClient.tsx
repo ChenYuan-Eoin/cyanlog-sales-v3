@@ -909,6 +909,8 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
   const activeSection = CONFIG_TABS[activeTab].section
   const sectionMeta = visibleSections.find((section) => section.id === activeSection) || CONFIG_SECTIONS[0]
   const sectionTabs = sectionMeta.tabs
+  const organizationViewTabs = sectionTabs.filter(tab => tab === 'org-structure' || tab === 'role-access')
+  const activeOrganizationView = organizationViewTabs.find(tab => tab === activeTab)
   const activeTabLoading = loading && !loadedTabs.has(activeTab)
 
   const moduleCounts = useMemo<Record<ConfigTabId, number>>(() => ({
@@ -1773,7 +1775,27 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-4 xl:mt-6 xl:pt-6">
-                {sectionTabs.map((tabId) => {
+                {organizationViewTabs.length > 0 && (
+                  <select
+                    aria-label="组织与权限视图"
+                    value={activeOrganizationView ?? ''}
+                    onChange={event => {
+                      const selectedView = organizationViewTabs.find(tab => tab === event.target.value)
+                      if (selectedView) setActiveTab(selectedView)
+                    }}
+                    className={`min-h-10 rounded-full border py-2 pl-4 pr-8 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 focus-visible:ring-offset-2 ${
+                      activeOrganizationView
+                        ? 'border-slate-900 bg-slate-900 text-white'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                    }`}
+                  >
+                    {!activeOrganizationView && <option value="" disabled hidden>选择视图</option>}
+                    {organizationViewTabs.map(tab => (
+                      <option key={tab} value={tab} className="bg-white text-slate-900">{tab === 'role-access' ? '角色' : '组织架构'}</option>
+                    ))}
+                  </select>
+                )}
+                {sectionTabs.filter(tab => tab !== 'org-structure' && tab !== 'role-access').map((tabId) => {
                   const meta = CONFIG_TABS[tabId]
                   const TabIcon = meta.icon
                   const isActive = tabId === activeTab
