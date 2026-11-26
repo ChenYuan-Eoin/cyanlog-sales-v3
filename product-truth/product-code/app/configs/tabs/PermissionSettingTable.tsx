@@ -15,6 +15,7 @@ import {
   registeredShippingPermissionKeys,
   removableShippingCompatibilityKeys,
   type PermissionDirectoryGroup,
+  type ShippingDirectoryEntry,
 } from '../permission-directory'
 
 const retainedLegacyGrantKeys = new Set<string>([
@@ -23,29 +24,33 @@ const retainedLegacyGrantKeys = new Set<string>([
 
 interface PermissionSettingTableProps {
   description: string
-  editableOwnerNote?: string
   perms: string[]
   ownerPerms: string[]
   groups: PermissionDirectoryGroup[]
   availableModuleKeys: ReadonlySet<string>
+  shippingPublication?: { registered: ReadonlySet<string>; published: ReadonlySet<string> }
+  entryStates?: Partial<Record<ShippingDirectoryEntry, { checked: boolean; canClear: boolean }> & { config: boolean }>
   isSuperAdmin: boolean
   readOnly: boolean
   ownerReadOnly: boolean
   blockReason?: string | null
   onToggle: (key: string) => void
   onSetGroup: (keys: string[], enabled: boolean) => void
+  onClearEntry?: (entry: ShippingDirectoryEntry) => void
 }
 
 export function PermissionSettingTable({
-  description, editableOwnerNote, perms, ownerPerms, groups, availableModuleKeys, isSuperAdmin, readOnly, ownerReadOnly, blockReason, onToggle, onSetGroup,
+  description, perms, ownerPerms, groups, availableModuleKeys, shippingPublication,
+  entryStates, isSuperAdmin, readOnly, ownerReadOnly, blockReason, onToggle, onSetGroup, onClearEntry,
 }: PermissionSettingTableProps) {
   const actions = groups.flatMap(getDirectoryActions)
   const availableKeys = new Set(actions.filter(item => item.available).map(item => item.key))
-  const effectiveShippingKeys = new Set<string>(getEffectiveShippingPermissions(perms, {
+  const publication = shippingPublication ?? {
     registered: registeredShippingPermissionKeys,
     published: availableModuleKeys,
-  }))
-  const effectiveOwnerKeys = new Set<string>(getEffectiveOwnerShippingPermissions(ownerPerms, { published: availableModuleKeys }))
+  }
+  const effectiveShippingKeys = new Set<string>(getEffectiveShippingPermissions(perms, publication))
+  const effectiveOwnerKeys = new Set<string>(getEffectiveOwnerShippingPermissions(ownerPerms, publication))
   const permissionLabels = new Map(actions.map(item => [item.key, item.label]))
   const labelFor = (key: string) => permissionLabels.get(key) ?? legacyPermissionLabels[key] ?? key
   const existingGrants = [...new Set([...perms, ...ownerPerms])].filter(key => !availableKeys.has(key))
@@ -74,6 +79,35 @@ export function PermissionSettingTable({
       else next.add(groupId)
       return next
     })
+  }
+
+  function renderEntry(group: PermissionDirectoryGroup) {
+    if (!group.entry || !entryStates) return null
+    if (group.entry === 'config') {
+      if (entryStates.config === undefined) return null
+      return <Badge variant={entryStates.config ? 'secondary' : 'outline'}>{entryStates.config ? '入口已开放' : '入口未开放'}</Badge>
+    }
+    const entry = group.entry
+    const state = entryStates[entry]
+    if (!state) return null
+    const { checked, canClear } = state
+    return (
+      <div className="flex shrink-0 items-center gap-2 text-xs text-slate-600">
+        <span>入口</span>
+        <button
+          type="button"
+          role="switch"
+          aria-label={`${group.label}入口`}
+          aria-checked={checked}
+          disabled={!canClear}
+          title={canClear ? '关闭入口并清除本模块授权' : checked ? '入口由保留授权控制' : '选择下方的权限后开放入口'}
+          onClick={() => onClearEntry?.(entry)}
+          className={`relative h-5 w-9 rounded-full focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-default ${checked ? 'bg-blue-600' : 'bg-slate-300'}`}
+        >
+          <span aria-hidden="true" className={`absolute top-0.5 h-4 w-4 rounded-full bg-white ${checked ? 'right-0.5' : 'left-0.5'}`} />
+        </button>
+      </div>
+    )
   }
 
   function renderGroup(group: PermissionDirectoryGroup, nested = false) {
@@ -110,6 +144,7 @@ export function PermissionSettingTable({
               : <ChevronUpIcon aria-hidden="true" size={16} className="text-slate-500" />}
             <span className="font-medium text-slate-900">{group.label}</span>
           </button>
+          {renderEntry(group)}
           {expandedKeys.length > 0 && (
             <Badge variant={allEffective ? 'default' : effectiveCount > 0 ? 'secondary' : 'outline'}>
               {allEffective ? '全部生效' : effectiveCount > 0 ? '部分生效' : '未生效'}
@@ -219,7 +254,6 @@ export function PermissionSettingTable({
       {readOnly && blockReason && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
           {blockReason}
-          {!ownerReadOnly && editableOwnerNote && <p>{editableOwnerNote}</p>}
         </div>
       )}
       {groups.map(group => renderGroup(group))}

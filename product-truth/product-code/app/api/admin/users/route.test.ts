@@ -242,6 +242,16 @@ describe('POST /api/admin/users', () => {
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
+  it('rejects historical baseline on a new invitation before creating any member data', async () => {
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(activeAuthority)
+    vi.mocked(validateOrgRoleAssignment).mockResolvedValue({ ok: false, reason: 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN' })
+
+    const response = await POST(makeRequest({ role_ids: [userId] }))
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN' })
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
   it('preserves verified role preassignment for the active organization system administrator', async () => {
     vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(activeAuthority)
     vi.mocked(validateOrgRoleAssignment).mockResolvedValue({ ok: true, roleIds: [userId] })

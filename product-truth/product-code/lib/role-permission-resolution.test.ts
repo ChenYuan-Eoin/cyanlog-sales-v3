@@ -36,10 +36,15 @@ describe('explicit personal shipping grants', () => {
 })
 
 describe('catalog-free role permission resolution', () => {
-  it('keeps the Fxiaoke baseline permission fixed even if an administrator changes the template or override', () => {
-    expect(resolveRolePermissions({ role_permission_overrides: { baseline: ['*', 'admin:access'] } }, {
-      id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['shipping:operate'],
-    })).toEqual({ permissions: ['quote:view', 'contract:view', 'customer:view'], overridden: true })
+  it('does not apply retired Fxiaoke baseline templates or either stored permission override', () => {
+    const role = { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view', 'contract:view', 'customer:view'] }
+    const settings = {
+      role_permission_overrides: { baseline: ['*', 'admin:access'] },
+      shipping_owner_permission_overrides: { baseline: ['shipping:owner_view', 'shipping:owner_submit'] },
+    }
+    expect(resolveRolePermissions({}, role)).toEqual({ permissions: [], overridden: true })
+    expect(resolveRolePermissions(settings, role)).toEqual({ permissions: [], overridden: true })
+    expect(resolveOwnerShippingPermissions(settings, role)).toEqual([])
   })
   it('uses the role template until the tenant creates an override', () => {
     expect(resolveRolePermissions({}, {

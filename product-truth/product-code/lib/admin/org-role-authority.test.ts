@@ -121,6 +121,18 @@ describe('validateOrgRoleAssignment', () => {
       .resolves.toEqual({ ok: true, roleIds: ['mixed-role'] })
   })
 
+  it('closes new baseline invitations and scoped grants while preserving scope revocation and DB-checked retention', async () => {
+    mockRoles([{ id: 'retired', code: 'FXIAOKE_BASELINE', permissions: ['quote:view'] }])
+    const expected = { ok: false, reason: 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN' }
+    await expect(validateOrgRoleAssignment(actor(['*']), 'org-a', ['retired'])).resolves.toEqual(expected)
+    await expect(validateOrgRoleAssignment(actor(['*']), 'org-a', ['retired'], { scopeType: 'department', action: 'assign' }))
+      .resolves.toEqual(expected)
+    await expect(validateOrgRoleAssignment(actor(['*']), 'org-a', ['retired'], { scopeType: 'space', action: 'revoke' }))
+      .resolves.toEqual({ ok: true, roleIds: ['retired'] })
+    await expect(validateOrgRoleAssignment(actor(['*']), 'org-a', ['retired'], { action: 'replace' }))
+      .resolves.toEqual({ ok: true, roleIds: ['retired'] })
+  })
+
   it('按组织覆盖后的权限防止借分配业务角色获得管理员权限', async () => {
     mockRoles([{ id: 'role-sales', code: 'SALES', permissions: ['contract:view'] }])
     vi.mocked(loadOrgRolePermissionSettings).mockResolvedValueOnce({ role_permission_overrides: { 'role-sales': ['role:manage'] } })

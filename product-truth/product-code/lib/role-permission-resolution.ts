@@ -5,6 +5,7 @@ import { ORG_MEMBER_LIFECYCLE_ACTIONS } from './admin/member-action-keys'
 import { isShippingOwnerPermission, SHIPPING_OWNER_ACTION_KEYS, SHIPPING_OWNER_VIEW } from './shipping/owner-permission-keys'
 
 export const ORG_SUPER_ADMIN_ROLE_CODE = 'ORG_SUPER_ADMIN'
+export const FXIAOKE_BASELINE_ROLE_CODE = 'FXIAOKE_BASELINE'
 export const SHIPPING_OPERATOR_ROLE_CODE = 'SHIPPING_OPERATOR'
 
 export function isRoleAssignableInScope(code: string, scopeType: 'org' | 'department' | 'space'): boolean {
@@ -30,6 +31,7 @@ function normalizePermissions(value: unknown): string[] {
 
 export function resolveOwnerShippingPermissions(settings: unknown, role: { id: string; code: string; permissions: unknown }): string[] {
   if (role.code === 'SUPER_ADMIN') return [...SHIPPING_OWNER_ACTION_KEYS]
+  if (role.code === FXIAOKE_BASELINE_ROLE_CODE) return []
   if (settings != null && !isRecord(settings)) return []
   if (isRecord(settings) && Object.hasOwn(settings, 'shipping_owner_permission_overrides')) {
     const overrides = settings.shipping_owner_permission_overrides
@@ -59,8 +61,8 @@ export function resolveRolePermissions(
   role: { id: string; code: string; permissions: unknown },
 ): { permissions: string[]; overridden: boolean } {
   if (role.code === 'SUPER_ADMIN') return { permissions: ['*'], overridden: false }
-  if (role.code === 'FXIAOKE_BASELINE') {
-    return { permissions: ['quote:view', 'contract:view', 'customer:view'], overridden: true }
+  if (role.code === FXIAOKE_BASELINE_ROLE_CODE) {
+    return { permissions: [], overridden: true }
   }
   if (role.code === ORG_SUPER_ADMIN_ROLE_CODE) {
     return { permissions: [...ORG_SUPER_ADMIN_PERMISSIONS], overridden: true }

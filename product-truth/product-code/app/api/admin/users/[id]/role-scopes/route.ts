@@ -41,6 +41,9 @@ async function changeScope(req: NextRequest, userId: string, action: 'assign' | 
       assignments, orgId, [input.data.role_id], { scopeType: input.data.scope_type, action },
     )
     if (!validation.ok) {
+      if (validation.reason === 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN') {
+        return failure('历史纷享基础角色仅可撤销', validation.reason, 409)
+      }
       if (validation.reason === 'ROLE_SCOPE_NOT_SUPPORTED') {
         return failure(SHIPPING_OPERATOR_ORG_SCOPE_MESSAGE, validation.reason, 409)
       }
@@ -59,6 +62,9 @@ async function changeScope(req: NextRequest, userId: string, action: 'assign' | 
       p_reason: input.data.reason ?? null,
       p_request_id: req.headers.get('x-request-id')?.slice(0, 128) ?? null,
     })
+    if (error?.code === '42501' && error.details === 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN') {
+      return failure('历史纷享基础角色仅可撤销', error.details, 409)
+    }
     if (error?.code === '42501') return failure('当前账号无权变更该作用域角色', 'NO_PERMISSION', 403)
     if (error?.code === '23514' && error.details === 'ROLE_SCOPE_NOT_SUPPORTED') {
       return failure(SHIPPING_OPERATOR_ORG_SCOPE_MESSAGE, error.details, 409)

@@ -231,22 +231,24 @@ describe('middleware host routing', () => {
 })
 
 describe('role-free federated session boundary', () => {
-  it('lets a baseline member exercise a saved personal shipping grant without gaining configuration access', async () => {
+  it('allows explicitly granted personal shipping and does not admit unrelated modules', async () => {
     mockExactOrgAuth({
-      token: 'baseline-token', orgId: 'org-a', authMethod: 'fxiaoke',
-      roles: [{ roles: { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view', 'contract:view', 'customer:view'] } }],
-      settings: { shipping_owner_permission_overrides: { baseline: SHIPPING_OWNER_ACTION_KEYS } },
+      token: 'owner-only-token', orgId: 'org-a', authMethod: 'fxiaoke',
+      roles: [{ roles: { id: 'personal-shipping', code: 'PERSONAL_SHIPPING', permissions: [] } }],
+      settings: { shipping_owner_permission_overrides: { 'personal-shipping': SHIPPING_OWNER_ACTION_KEYS } },
     })
     const request = (path: string, method = 'GET') => {
       const req = makeRequest(`https://sales.cyanlog.icu${path}`, { host: 'sales.cyanlog.icu' }, method)
-      req.cookies.get = vi.fn().mockReturnValue({ value: 'baseline-token' })
+      req.cookies.get = vi.fn().mockReturnValue({ value: 'owner-only-token' })
       return req
     }
     expect((await middleware(request('/shipping'))).status).toBe(200)
     expect((await middleware(request('/sales-portal'))).status).toBe(200)
-    expect((await middleware(request('/api/quotes'))).status).toBe(200)
-    expect((await middleware(request('/api/contracts/drafts'))).status).toBe(200)
-    expect((await middleware(request('/api/knowledge/tree'))).status).toBe(200)
+    expect((await middleware(request('/quotes'))).headers.get('location')).toBe('https://sales.cyanlog.icu/shipping')
+    expect((await middleware(request('/api/navigation'))).headers.get('x-middleware-request-x-user-navigation-scope')).toBe('shipping-only')
+    expect((await middleware(request('/api/quotes'))).status).toBe(403)
+    expect((await middleware(request('/api/contracts/drafts'))).status).toBe(403)
+    expect((await middleware(request('/api/knowledge/tree'))).status).toBe(403)
     expect((await middleware(request('/api/cases'))).status).toBe(403)
     expect((await middleware(request('/api/tech-documents'))).status).toBe(403)
     const changes = '/api/shipping/owner/orders/SO-20261118-ABCD1234/carrier-changes'
@@ -280,11 +282,11 @@ describe('role-free federated session boundary', () => {
 
   it('limits the live operator grant to the current organization and to actual shipping actions', async () => {
     const token = 'operator-token'
-    const baseline = { roles: { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view'] } }
+    const personal = { roles: { id: 'personal', code: 'PERSONAL_SHIPPING', permissions: [] } }
     const operator = { roles: { id: 'operator', code: 'SHIPPING_OPERATOR', permissions: ['shipping:operate'] } }
     const bind = (overrides: Partial<Parameters<typeof mockExactOrgAuth>[0]> = {}) => mockExactOrgAuth({
-      token, orgId: 'org-a', authMethod: 'fxiaoke', roles: [baseline, operator],
-      settings: { shipping_owner_permission_overrides: { baseline: ['shipping:owner_view', 'shipping:owner_submit'] } },
+      token, orgId: 'org-a', authMethod: 'fxiaoke', roles: [personal, operator],
+      settings: { shipping_owner_permission_overrides: { personal: ['shipping:owner_view', 'shipping:owner_submit'] } },
       ...overrides,
     })
     const request = (path: string, method = 'GET') => middleware(makeRequest(
@@ -302,9 +304,9 @@ describe('role-free federated session boundary', () => {
     expect((await request('/api/shipping/orders', 'POST')).status).toBe(403)
 
     for (const state of [
-      { roles: [baseline] },
-      { roles: [baseline, { ...operator, org_id: 'other-org' }] },
-      { roles: [baseline, { ...operator, scope_type: 'department' }] },
+      { roles: [personal] },
+      { roles: [personal, { ...operator, org_id: 'other-org' }] },
+      { roles: [personal, { ...operator, scope_type: 'department' }] },
       { shippingOperatorStatus: 'disabled' },
       { shippingOperatorScopes: ['org', 'department'] },
     ]) {
@@ -423,6 +425,9 @@ describe('role-free federated session boundary', () => {
     const shell = await request('/configs?tab=shipping')
     expect(shell.status).toBe(200)
     expect(shell.headers.get('x-middleware-request-x-user-shipping-settings-view')).toBe('1')
+    expect((await request('/')).headers.get('location')).toBe('https://sales.cyanlog.icu/shipping/settings')
+    expect((await request('/api/quotes')).status).toBe(403)
+    expect((await request('/api/navigation')).headers.get('x-middleware-request-x-user-navigation-scope')).toBe('shipping-only')
     const direct = await request('/shipping/settings')
     expect(direct.status).toBe(200)
     expect(direct.headers.get('x-middleware-request-x-user-shipping-settings-view')).toBeNull()
@@ -529,9 +534,9 @@ describe('role-free federated session boundary', () => {
 
   it.each([
     { roleCodes: ['READONLY'], grants: null, ownerReadStatus: 403, ownerWriteStatus: 403 },
-    { roleCodes: ['FXIAOKE_BASELINE'], grants: [], ownerReadStatus: 403, ownerWriteStatus: 403 },
+    { roleCodes: ['READONLY'], grants: [], ownerReadStatus: 403, ownerWriteStatus: 403 },
     { roleCodes: ['READONLY'], grants: ['shipping:owner_view'], ownerReadStatus: 200, ownerWriteStatus: 403 },
-    { roleCodes: ['FXIAOKE_BASELINE', 'READONLY'], grants: SHIPPING_OWNER_ACTION_KEYS, ownerReadStatus: 200, ownerWriteStatus: 200 },
+    { roleCodes: ['READONLY', 'FXIAOKE_BASELINE'], grants: SHIPPING_OWNER_ACTION_KEYS, ownerReadStatus: 200, ownerWriteStatus: 200 },
   ])('applies the stored personal shipping permissions $grants', async ({ roleCodes, grants, ownerReadStatus, ownerWriteStatus }) => {
     const token = 'viewer-token'
     mockExactOrgAuth({
@@ -581,6 +586,7 @@ describe('role-free federated session boundary', () => {
     ))
     expect((await request(`/api/shipping/public/orders/${'a'.repeat(43)}`)).status).toBe(200)
     expect((await request('/api/shipping/owner/orders')).status).toBe(403)
+    expect((await request('/api/dashboard')).status).toBe(403)
   })
 
   it('revokes owner submission while keeping a separately granted workbench intake for the same employee', async () => {
@@ -640,6 +646,31 @@ describe('role-free federated session boundary', () => {
     expect((await middleware(makeAuthed('/quotes'))).status).toBe(200)
   })
 
+  it('does not admit business routes for a legacy baseline or permissionless ordinary role', async () => {
+    const token = 'historical-baseline-only'
+    mockExactOrgAuth({
+      token, orgId: 'org-a', authMethod: 'fxiaoke',
+      roles: [
+        { roles: { id: 'historical', code: 'FXIAOKE_BASELINE', permissions: ['*'] } },
+        { roles: { id: 'empty', code: 'ORDER_SUPPORT', permissions: [] } },
+      ],
+      settings: { shipping_owner_permission_overrides: { historical: SHIPPING_OWNER_ACTION_KEYS } },
+    })
+    const request = (path: string) => middleware(makeRequest(
+      `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` },
+    ))
+    for (const path of ['/', '/shipping', '/configs', '/quotes']) {
+      expect((await request(path)).headers.get('location'), path).toBe('https://sales.cyanlog.icu/pending-access')
+    }
+    for (const path of ['/api/shipping/owner/orders', '/api/navigation', '/api/quotes']) {
+      const response = await request(path)
+      expect(response.status, path).toBe(403)
+      expect((await response.json()).code).toBe('ROLE_REQUIRED')
+    }
+    expect((await request('/pending-access')).status).toBe(200)
+    expect((await request('/api/profile')).status).toBe(200)
+  })
+
   it('rejects an SSO token immediately when identity authority is disabled', async () => {
     mockExactOrgAuth({ token: 'sso-token', orgId: 'org-a', roles: [], authMethod: 'fxiaoke', sourceIdentity: 'evidence' })
     const req = makeRequest('https://sales.cyanlog.icu/pending-access', { host: 'sales.cyanlog.icu' })
@@ -676,6 +707,7 @@ describe('department-scoped shipping ledger admission', () => {
   it('admits only list, detail and entry for an explicitly scoped reader without an organization role', async () => {
     mockExactOrgAuth(options)
     expect((await request('/')).headers.get('location')).toBe('https://sales.cyanlog.icu/shipping')
+    expect((await request('/api/navigation')).headers.get('x-middleware-request-x-user-navigation-scope')).toBe('department-ledger')
     for (const path of ['/shipping', '/api/navigation', '/api/shipping/ledger', record]) {
       expect((await request(path)).status, path).toBe(200)
     }
@@ -688,8 +720,24 @@ describe('department-scoped shipping ledger admission', () => {
     }
   })
 
+  it('advertises the workbench for a separately admitted department lead and clears forged scope hints', async () => {
+    const ledDepartment = { ...department, leader_id: 'user-1' }
+    mockExactOrgAuth({
+      ...options, departmentLeads: [{ org_id: 'org-a', user_id: 'user-1', department_id: department.id, department: ledDepartment }],
+    })
+    expect((await request('/')).status).toBe(200)
+    expect((await request('/api/navigation')).headers.get('x-middleware-request-x-user-navigation-scope')).toBe('workbench-and-ledger')
+
+    mockExactOrgAuth({ ...options, roles: [{ roles: { id: 'sales', code: 'SALES', permissions: ['quote:view'] } }] })
+    const generalNavigation = await middleware(makeRequest('https://sales.cyanlog.icu/api/navigation', {
+      authorization: 'Bearer ledger-scope', 'x-user-navigation-scope': 'workbench-and-ledger',
+    }))
+    expect(generalNavigation.status).toBe(200)
+    expect(generalNavigation.headers.get('x-middleware-request-x-user-navigation-scope')).toBeNull()
+  })
+
   it('admits an existing role across the new detail read without treating department reads as broader access', async () => {
-    mockExactOrgAuth({ ...options, roles: [{ roles: { id: 'r-other', code: 'READONLY', permissions: [] } }], authMethod: 'fxiaoke' })
+    mockExactOrgAuth({ ...options, roles: [{ roles: { id: 'r-other', code: 'READONLY', permissions: ['quote:view'] } }], authMethod: 'fxiaoke' })
     expect((await request(record)).status).toBe(200)
     expect((await request(`${record}/carrier-changes`)).status).toBe(403)
     expect((await request('/api/shipping/settings?workspace=1')).status).toBe(403)

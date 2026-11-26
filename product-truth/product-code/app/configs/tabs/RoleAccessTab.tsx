@@ -8,24 +8,16 @@ import { getRoleMembershipStats, type RoleMembershipStats } from './role-members
 import { RoleDetailPanel } from './RoleDetailPanel'
 import { PermissionRegistryPanel } from './PermissionRegistryPanel'
 import type { OrgSummaryPayload } from '../types'
-import type { RoleModulePermissionCatalog } from '@/lib/org-role-permission-readback'
+import type { ConfigRoleRecord, RoleModulePermissionCatalog, ShippingPermissionPublication } from '@/lib/org-role-permission-readback'
 import { ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
 
 interface RoleAccessTabProps {
-  roles: Array<{
-    id: string
-    code: string
-    name: string
-    description: string | null
-    permissions: string[] | null
-    owner_shipping_permissions?: string[]
-    permissions_edit_block_reason?: string | null
-    sort_order: number | null
-  }>
+  roles: ConfigRoleRecord[]
   currentUserId: string | null
   savingRoleId: string | null
   permissionsEditable?: boolean
   modulePermissionCatalog?: RoleModulePermissionCatalog
+  shippingPermissionPublication?: ShippingPermissionPublication
   permissionsEditBlockReason?: string | null
   systemSuperAdminAuthority?: { orgId: string }
   orgSummary: OrgSummaryPayload | null
@@ -33,15 +25,7 @@ interface RoleAccessTabProps {
   onRefresh: () => void | Promise<void>
 }
 
-interface RoleWithStats {
-  id: string
-  code: string
-  name: string
-  description: string | null
-  permissions: string[] | null
-  owner_shipping_permissions?: string[]
-  permissions_edit_block_reason?: string | null
-  sort_order: number | null
+interface RoleWithStats extends ConfigRoleRecord {
   membershipStats: RoleMembershipStats
   isSuperAdmin: boolean
   isOrgSuperAdmin: boolean
@@ -53,6 +37,7 @@ export default function RoleAccessTab({
   savingRoleId,
   permissionsEditable = false,
   modulePermissionCatalog,
+  shippingPermissionPublication,
   permissionsEditBlockReason,
   systemSuperAdminAuthority,
   orgSummary,
@@ -202,6 +187,7 @@ export default function RoleAccessTab({
             systemSuperAdminAuthority={systemSuperAdminEditor}
             permissionsEditable={permissionsEditable}
             modulePermissionCatalog={modulePermissionCatalog}
+            shippingPermissionPublication={shippingPermissionPublication}
             permissionsEditBlockReason={permissionsEditBlockReason}
             canAssignBusinessRoles={orgSummary?.member_actions?.assignRoles === true}
             currentUserId={currentUserId}

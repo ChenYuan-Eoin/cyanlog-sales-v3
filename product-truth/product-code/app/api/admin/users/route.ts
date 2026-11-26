@@ -135,6 +135,9 @@ export async function POST(req: NextRequest) {
       roleAssignments = authority.assignments
     }
     const roleValidation = await validateOrgRoleAssignment(roleAssignments, orgId, role_ids)
+    if (!roleValidation.ok && roleValidation.reason === 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN') {
+      return NextResponse.json({ error: '历史纷享基础角色仅可撤销', code: roleValidation.reason }, { status: 409 })
+    }
     if (!roleValidation.ok && roleValidation.reason === 'ROLE_NOT_FOUND') {
       return NextResponse.json({ error: '部分角色不存在' }, { status: 400 })
     }
@@ -232,6 +235,10 @@ export async function POST(req: NextRequest) {
       if (syncError && typeof syncError === 'object' && 'code' in syncError && 'details' in syncError
         && syncError.code === '42501' && syncError.details === 'PERSONNEL_INVITATION_ROLE_AUTHORITY_REQUIRED') {
         return NextResponse.json({ error: '仅系统超级管理员可预分配成员角色', code: 'NO_ROLE_ASSIGN_PERMISSION' }, { status: 403 })
+      }
+      if (syncError && typeof syncError === 'object' && 'code' in syncError && 'details' in syncError
+        && syncError.code === '42501' && syncError.details === 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN') {
+        return NextResponse.json({ error: '历史纷享基础角色仅可撤销', code: syncError.details }, { status: 409 })
       }
       console.error('Create user consistency error:', syncError)
       return NextResponse.json({ error: '创建用户关联数据失败' }, { status: 500 })

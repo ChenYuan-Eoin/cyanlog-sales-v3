@@ -6,6 +6,7 @@ export type ConfigRoleRecord = {
   permissions: string[] | null
   sort_order: number | null
   permissions_edit_block_reason?: string | null
+  permissions_overridden?: boolean
   owner_shipping_permissions?: string[]
 }
 
@@ -16,11 +17,17 @@ export type RoleModulePermissionCatalog = Array<{
   items: Array<{ key: string; label: string; description: string; dependencies: string[] }>
 }>
 
+export type ShippingPermissionPublication = {
+  registered: string[]
+  published: string[]
+}
+
 export type OrgRolePermissionSnapshot = {
   orgId: string
   roles: ConfigRoleRecord[]
   permissionsEditable: boolean
   modulePermissionCatalog: RoleModulePermissionCatalog
+  shippingPermissionPublication?: ShippingPermissionPublication
   canAppointSystemSuperAdmin: boolean
   permissionsEditBlockReason: string | null
 }
@@ -55,8 +62,15 @@ function parseRole(value: unknown): ConfigRoleRecord | null {
     permissions: value.permissions,
     sort_order: typeof value.sort_order === 'number' ? value.sort_order : null,
     permissions_edit_block_reason: typeof value.permissions_edit_block_reason === 'string' ? value.permissions_edit_block_reason : null,
+    ...(typeof value.permissions_overridden === 'boolean' ? { permissions_overridden: value.permissions_overridden } : {}),
     ...(permissionList(value.owner_shipping_permissions) ? { owner_shipping_permissions: value.owner_shipping_permissions } : {}),
   }
+}
+
+function parseShippingPublication(value: unknown): ShippingPermissionPublication | undefined {
+  if (!isObject(value) || !permissionList(value.registered) || !permissionList(value.published)) return undefined
+  const { registered, published } = value
+  return published.every(key => registered.includes(key)) ? { registered, published } : undefined
 }
 
 function parseModuleCatalog(value: unknown): RoleModulePermissionCatalog {
@@ -105,6 +119,7 @@ export async function loadOrgRolePermissionSnapshot(
     roles: roles.filter((role): role is ConfigRoleRecord => role !== null),
     permissionsEditable: data.permissions_editable,
     modulePermissionCatalog: parseModuleCatalog(data.permission_catalog),
+    shippingPermissionPublication: parseShippingPublication(data.shipping_permission_publication),
     canAppointSystemSuperAdmin: data.can_appoint_system_super_admin === true,
     permissionsEditBlockReason: typeof data.permissions_edit_block_reason === 'string' ? data.permissions_edit_block_reason : null,
   }

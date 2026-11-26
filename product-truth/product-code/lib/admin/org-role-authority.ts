@@ -6,7 +6,7 @@ import {
 import { supabaseAdmin } from '@/lib/supabase'
 import { loadOrgRolePermissionSettings } from '@/lib/org-role-permissions'
 import { resolveRolePermissions } from '@/lib/role-permission-policy'
-import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
+import { FXIAOKE_BASELINE_ROLE_CODE, isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
 
 type AssignableRoleRow = {
   id: string
@@ -40,9 +40,9 @@ export async function userHasOrgRoleCode(
 
 export type OrgRoleAssignmentValidation =
   | { ok: true; roleIds: string[] }
-  | { ok: false; reason: 'ROLE_NOT_FOUND' | 'ROLE_ESCALATION_FORBIDDEN' | 'ROLE_SCOPE_NOT_SUPPORTED' }
+  | { ok: false; reason: 'ROLE_NOT_FOUND' | 'ROLE_ESCALATION_FORBIDDEN' | 'ROLE_SCOPE_NOT_SUPPORTED' | 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN' }
 
-type ScopedRoleMutation = { scopeType: 'department' | 'space'; action: 'assign' | 'revoke' }
+type RoleMutation = { scopeType: 'department' | 'space'; action: 'assign' | 'revoke' } | { action: 'replace' }
 
 /**
  * Validate tenant-side role assignment without allowing the caller to create a
@@ -54,7 +54,7 @@ export async function validateOrgRoleAssignment(
   actorAssignments: ScopedRoleAssignment[],
   orgId: string,
   roleIds: string[],
-  scopedMutation?: ScopedRoleMutation,
+  mutation?: RoleMutation,
 ): Promise<OrgRoleAssignmentValidation> {
   const uniqueRoleIds = Array.from(new Set(roleIds.filter(Boolean).map(id => id.toLowerCase())))
   if (uniqueRoleIds.length === 0) {
@@ -76,12 +76,17 @@ export async function validateOrgRoleAssignment(
     return { ok: false, reason: 'ROLE_NOT_FOUND' }
   }
 
-  if (scopedMutation?.action === 'assign' && roles.some(role => !isRoleAssignableInScope(role.code, scopedMutation.scopeType))) {
+  // A whole-set editor can echo a current role. Only the locked DB command
+  // decides whether the historical binding really exists or is a new grant.
+  if (mutation?.action !== 'replace' && mutation?.action !== 'revoke' && roles.some(role => role.code === FXIAOKE_BASELINE_ROLE_CODE)) {
+    return { ok: false, reason: 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN' }
+  }
+  if (mutation?.action === 'assign' && roles.some(role => !isRoleAssignableInScope(role.code, mutation.scopeType))) {
     return { ok: false, reason: 'ROLE_SCOPE_NOT_SUPPORTED' }
   }
   // An existing department or space binding may be removed without delegating its permissions.
-  const rolesToAuthorize = scopedMutation?.action === 'revoke'
-    ? roles.filter(role => role.code !== SHIPPING_OPERATOR_ROLE_CODE)
+  const rolesToAuthorize = mutation?.action === 'revoke'
+    ? roles.filter(role => role.code !== SHIPPING_OPERATOR_ROLE_CODE && role.code !== FXIAOKE_BASELINE_ROLE_CODE)
     : roles
   if (rolesToAuthorize.length === 0) return { ok: true, roleIds: uniqueRoleIds }
 

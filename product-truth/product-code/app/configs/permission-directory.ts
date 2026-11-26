@@ -13,6 +13,7 @@ import {
   ORG_MEMBER_REMOVE_MEMBERSHIP,
 } from '@/lib/admin/member-action-keys'
 import {
+  getEffectiveShippingPermissions,
   REGISTERED_MODULE_PERMISSION_KEYS,
   SHIPPING_ACTION_DEFINITIONS,
   SHIPPING_BUNDLE,
@@ -21,6 +22,7 @@ import {
   SHIPPING_OWNER_ACTION_KEYS,
   SHIPPING_SETTINGS_ACTION_KEYS,
   SHIPPING_WORKBENCH_ACTION_KEYS,
+  shippingActionViewDependency,
   type ShippingActionKey,
 } from '@/lib/module-access'
 
@@ -43,9 +45,34 @@ type PermissionDirectoryNote = {
 export interface PermissionDirectoryGroup {
   id: string
   label: string
+  entry?: ShippingDirectoryEntry | 'config'
   actions?: readonly PermissionDirectoryAction[]
   notes?: readonly PermissionDirectoryNote[]
   children?: readonly PermissionDirectoryGroup[]
+}
+
+export type ShippingDirectoryEntry = 'shipping' | 'shipping-settings'
+
+const shippingEntryGrants = {
+  shipping: { alias: SHIPPING_OPERATE, actions: SHIPPING_WORKBENCH_ACTION_KEYS },
+  'shipping-settings': { alias: SHIPPING_MANAGE_CONNECTIONS, actions: SHIPPING_SETTINGS_ACTION_KEYS },
+}
+
+export function clearShippingEntryGrants(
+  grants: string[], entry: ShippingDirectoryEntry, publication: { registered: ReadonlySet<string>; published: ReadonlySet<string> },
+): string[] {
+  if (grants.includes('*')) return grants
+  const removed = shippingEntryGrants[entry]
+  const removedKeys = new Set<string>([removed.alias, ...removed.actions, SHIPPING_BUNDLE])
+  const next = grants.filter(key => !removedKeys.has(key))
+  if (!grants.includes(SHIPPING_BUNDLE)) return next
+
+  const kept = shippingEntryGrants[entry === 'shipping' ? 'shipping-settings' : 'shipping']
+  if (publication.published.has(kept.alias)) return [...new Set([...next, kept.alias])]
+  const keptKeys = new Set<string>([kept.alias, ...kept.actions])
+  // Keep the other entry's actual grants, including its published compatibility path.
+  const saved = getEffectiveShippingPermissions(grants, publication).filter(key => keptKeys.has(key) && publication.published.has(key))
+  return [...new Set([...next, ...saved])]
 }
 
 export const legacyPermissionLabels: Readonly<Record<string, string>> = {
@@ -86,9 +113,11 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
     .map(item => [item.key, item] as const))
   const shippingActions = (keys: readonly ShippingActionKey[]) => keys.map(key => {
     const published = registered.get(key)
+    const required = shippingActionViewDependency(key)
     const [label, description] = SHIPPING_ACTION_DEFINITIONS[key]
     return published
-      ? { ...published, available: published.dependencies.every(dependency => registered.has(dependency)) }
+      ? { ...published, available: (!required || published.dependencies.includes(required))
+        && published.dependencies.every(dependency => registered.has(dependency)) }
       : { key, label, description, available: false }
   })
 
@@ -102,7 +131,7 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
       notes: [existing('查看报价、创建报价、编辑本人报价', '按现有报价规则执行。')],
     },
     {
-      id: 'shipping', label: '自助收寄',
+      id: 'shipping', label: '自助收寄', entry: 'shipping',
       children: [
         {
           id: 'shipping-personal', label: '本人寄件',
@@ -113,7 +142,7 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
       ],
     },
     {
-      id: 'shipping-settings', label: '寄件设置',
+      id: 'shipping-settings', label: '寄件设置', entry: 'shipping-settings',
       actions: shippingActions(SHIPPING_SETTINGS_ACTION_KEYS),
       notes: [existing('与配置中心中的「寄件配置」共用权限。')],
     },
@@ -134,7 +163,7 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
       notes: [existing('查看、新建和更新日程')],
     },
     {
-      id: 'config', label: '配置中心',
+      id: 'config', label: '配置中心', entry: 'config',
       actions: [
         availableAction('config:read', '配置中心查看', '查看当前组织的通用业务配置。'),
         availableAction('config:write', '配置中心修改', '新建、编辑和删除通用配置草稿。支持版本历史的通用配置可将历史版本恢复到草稿。'),
@@ -214,7 +243,7 @@ export function buildDepartmentPermissionDirectory(available: ReadonlySet<string
     const actions = (group.actions ?? []).filter(action => available.has(action.key))
       .map(action => ({ ...action, available: true }))
     const children = (group.children ?? []).flatMap(departmentGroups)
-    return actions.length || children.length ? [{ id: group.id, label: group.label, actions, children }] : []
+    return actions.length || children.length ? [{ id: group.id, label: group.label, entry: group.entry, actions, children }] : []
   }
 
   return buildRolePermissionDirectory().flatMap(departmentGroups)

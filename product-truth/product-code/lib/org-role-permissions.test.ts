@@ -134,8 +134,7 @@ describe('organization role permission storage', () => {
     expect(state.operations.some(entry => entry.patch)).toBe(false)
   })
 
-  it('revokes owner actions on a fixed baseline without changing its protected permissions', async () => {
-    const core = ['quote:view', 'contract:view', 'customer:view']
+  it('prevents rewriting the deprecated baseline even if historical owner grants are stored', async () => {
     const state = database({
       code: 'FXIAOKE_BASELINE',
       settings: {
@@ -143,21 +142,14 @@ describe('organization role permission storage', () => {
         shipping_owner_permission_overrides: { 'role-1': SHIPPING_OWNER_ACTION_KEYS },
       },
     })
-    const result = await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', core, core, undefined, {
-      permissions: [], expected: SHIPPING_OWNER_ACTION_KEYS,
-    })
-    expect(result).toMatchObject({ ok: true, role: { permissions: core, owner_shipping_permissions: [] } })
-    expect(state.organizations[0].settings).toEqual({
-      locale: 'zh',
-      role_permission_overrides: { 'role-other': ['config:read'] },
-      shipping_owner_permission_overrides: { 'role-1': [] },
-    })
-    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', core, core, undefined, {
-      permissions: [SHIPPING_OWNER_VIEW], expected: SHIPPING_OWNER_ACTION_KEYS,
-    })).toEqual({ ok: false, reason: 'conflict' })
-    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [], core, undefined, {
-      permissions: [], expected: [],
-    })).toMatchObject({ ok: false, reason: 'fixed_role' })
+    const before = structuredClone(state.organizations[0].settings)
+    for (const permissions of [[], [SHIPPING_OWNER_VIEW]]) {
+      expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [], [], undefined, {
+        permissions, expected: [],
+      })).toMatchObject({ ok: false, reason: 'fixed_role' })
+    }
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+    expect(state.organizations[0].settings).toEqual(before)
   })
 
   it('rejects owner actions without their view or when sent as organization permissions', async () => {

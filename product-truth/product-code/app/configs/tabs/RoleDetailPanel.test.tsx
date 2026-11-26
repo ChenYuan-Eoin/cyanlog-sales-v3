@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 import { RoleDetailPanel } from './RoleDetailPanel'
 import { confirmAction, error } from '@/lib/toast'
 import { hasPermission } from '@/lib/permissions'
-import { SHIPPING_ACTION_DEFINITIONS, SHIPPING_WORKBENCH_ACTION_KEYS } from '@/lib/module-access'
+import { SHIPPING_ACTION_DEFINITIONS, SHIPPING_WORKBENCH_ACTION_KEYS, shippingActionViewDependency, type ShippingActionKey } from '@/lib/module-access'
 
 vi.mock('@/lib/toast', () => ({ success: vi.fn(), error: vi.fn(), confirmAction: vi.fn() }))
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
@@ -397,7 +397,8 @@ it('revokes a published inherited shipping action while preserving other effecti
       { key: 'shipping:operate', label: '寄件操作旧授权', description: '', dependencies: [] },
       ...SHIPPING_WORKBENCH_ACTION_KEYS.map(key => {
         const [label, description] = SHIPPING_ACTION_DEFINITIONS[key]
-        return { key, label, description, dependencies: [] }
+        const dependency = shippingActionViewDependency(key)
+        return { key, label, description, dependencies: dependency ? [dependency] : [] }
       }),
     ],
   }]
@@ -462,11 +463,11 @@ it('retains a legacy department grant when saving an unrelated action', () => {
   expect(onSave).toHaveBeenCalledWith(['dept:write', 'config:publish'])
 })
 
-it('configures owner shipping on the base role without changing its fixed business grants', () => {
+it('keeps retired baseline grants read-only and prevents new assignments', () => {
   const onSave = vi.fn()
   const role = {
     id: 'baseline', code: 'FXIAOKE_BASELINE', name: '纷享基础查看', description: null,
-    permissions: ['quote:view'], owner_shipping_permissions: [],
+    permissions: [], owner_shipping_permissions: [],
     permissions_edit_block_reason: '纷享基础角色的普通权限由系统固定。',
   }
   const catalog = [{
@@ -477,17 +478,18 @@ it('configures owner shipping on the base role without changing its fixed busine
     ],
   }]
   render(<RoleDetailPanel {...defaults} role={role} permissionsEditable modulePermissionCatalog={catalog} onSave={onSave} />)
+  expect(screen.queryByRole('button', { name: '添加成员' })).not.toBeInTheDocument()
+  expect(screen.getByText('旧授权仅可撤销')).toBeVisible()
   openPermissions()
   const owner = within(screen.getByRole('region', { name: '本人寄件' }))
   expect(screen.getByRole('checkbox', { name: '配置发布' })).toBeDisabled()
   expect(owner.queryByRole('checkbox', { name: '提交本人寄件' })).not.toBeInTheDocument()
   const resubmit = owner.getByRole('checkbox', { name: '修改并重提本人退回工单' })
-  fireEvent.click(resubmit)
-  expect(resubmit).toBeChecked()
-  expect(owner.getByRole('checkbox', { name: '查看本人寄件记录' })).toBeChecked()
-  expect(owner.getByRole('checkbox', { name: '查看本人寄件记录' })).toBeDisabled()
-  fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
-  expect(onSave).toHaveBeenCalledWith(['quote:view'], ['shipping:owner_resubmit', 'shipping:owner_view'])
+  expect(resubmit).toBeDisabled()
+  expect(resubmit).not.toBeChecked()
+  expect(owner.getByRole('checkbox', { name: '查看本人寄件记录' })).not.toBeChecked()
+  expect(screen.queryByRole('button', { name: '保存授权' })).not.toBeInTheDocument()
+  expect(onSave).not.toHaveBeenCalled()
 })
 
 it('keeps organization and owner shipping permission drafts separate', () => {
@@ -503,4 +505,88 @@ it('keeps organization and owner shipping permission drafts separate', () => {
   fireEvent.click(screen.getByRole('checkbox', { name: '配置发布' }))
   fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
   expect(onSave).toHaveBeenCalledExactlyOnceWith(['*', 'config:publish'])
+})
+
+function shippingCatalog(...keys: ShippingActionKey[]) {
+  return [{ id: 'shipping', label: '寄件', description: '', items: keys.map(key => {
+    const [label, description] = SHIPPING_ACTION_DEFINITIONS[key]
+    const dependency = shippingActionViewDependency(key)
+    return { key, label, description, dependencies: dependency ? [dependency] : [] }
+  }) }]
+}
+
+it('opens a shipping entry by selecting a real action and its published view dependency', () => {
+  const onSave = vi.fn()
+  const sales = { ...role, id: 'sales', code: 'SALES', permissions: [], owner_shipping_permissions: [] }
+  render(<RoleDetailPanel {...defaults} role={sales} permissionsEditable onSave={onSave}
+    modulePermissionCatalog={shippingCatalog('shipping:ledger_view', 'shipping:record_create', 'shipping:intake_write')} />)
+  openPermissions()
+  const entry = screen.getByRole('switch', { name: '自助收寄入口' })
+  expect(entry).not.toBeChecked()
+  expect(entry).toBeDisabled()
+  expect(screen.queryByRole('checkbox', { name: '维护默认寄方与提报规则' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('checkbox', { name: '录入寄件工单' }))
+  expect(entry).toBeChecked()
+  expect(entry).toBeEnabled()
+  expect(screen.getByRole('checkbox', { name: '查看收寄台账' })).toBeChecked()
+  fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
+  expect(onSave).toHaveBeenCalledWith(['shipping:record_create', 'shipping:ledger_view'])
+})
+
+it('clears personal and workbench grants while retaining real legacy settings access', () => {
+  const onSave = vi.fn()
+  const sales = { ...role, id: 'sales', code: 'SALES', permissions: ['shipping:*', 'shipping:record_create', 'quote:view'],
+    owner_shipping_permissions: ['shipping:owner_view', 'shipping:owner_submit'] }
+  const catalog = shippingCatalog('shipping:ledger_view', 'shipping:owner_view', 'shipping:owner_submit')
+  const published = [...catalog[0].items.map(item => item.key), 'shipping:manage_connections']
+  render(<RoleDetailPanel {...defaults} role={sales} permissionsEditable onSave={onSave} modulePermissionCatalog={catalog}
+    shippingPermissionPublication={{ registered: published, published }} />)
+  openPermissions()
+  const shipping = screen.getByRole('switch', { name: '自助收寄入口' })
+  const settings = screen.getByRole('switch', { name: '寄件设置入口' })
+  expect(shipping).toBeChecked()
+  expect(settings).toBeChecked()
+  expect(within(screen.getByRole('region', { name: '配置中心' })).getByText('入口已开放')).toBeVisible()
+  fireEvent.click(shipping)
+  expect(shipping).not.toBeChecked()
+  expect(settings).toBeChecked()
+  expect(screen.getByRole('checkbox', { name: '查看本人寄件记录' })).not.toBeChecked()
+  fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
+  expect(onSave).toHaveBeenCalledWith(['quote:view', 'shipping:manage_connections'], [])
+})
+
+it('clears only settings and preserves workbench and personal access', () => {
+  const onSave = vi.fn()
+  const sales = { ...role, id: 'sales', code: 'SALES', permissions: ['shipping:ledger_view', 'shipping:settings_view', 'shipping:intake_write'],
+    owner_shipping_permissions: ['shipping:owner_view'] }
+  render(<RoleDetailPanel {...defaults} role={sales} permissionsEditable onSave={onSave}
+    modulePermissionCatalog={shippingCatalog('shipping:ledger_view', 'shipping:owner_view', 'shipping:settings_view', 'shipping:intake_write')} />)
+  openPermissions()
+  const settings = screen.getByRole('switch', { name: '寄件设置入口' })
+  fireEvent.click(settings)
+  expect(settings).not.toBeChecked()
+  expect(screen.getByRole('switch', { name: '自助收寄入口' })).toBeChecked()
+  expect(screen.getByRole('checkbox', { name: '查看本人寄件记录' })).toBeChecked()
+  expect(within(screen.getByRole('region', { name: '配置中心' })).getByText('入口未开放')).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
+  expect(onSave).toHaveBeenCalledWith(['shipping:ledger_view'])
+})
+
+it('reports derived configuration admission for a real department action without a standalone control', () => {
+  const sales = { ...role, id: 'sales', code: 'SALES', permissions: ['dept:directory_view'] }
+  render(<RoleDetailPanel {...defaults} role={sales} permissionsEditable onSave={vi.fn()} />)
+  openPermissions()
+  const config = within(screen.getByRole('region', { name: '配置中心' }))
+  expect(config.getByText('入口已开放')).toBeVisible()
+  expect(config.queryByRole('switch')).not.toBeInTheDocument()
+})
+
+it('keeps a registered but unpublished entry closed even when its old alias is granted', () => {
+  const sales = { ...role, id: 'sales', code: 'SALES', permissions: ['shipping:operate'] }
+  render(<RoleDetailPanel {...defaults} role={sales} permissionsEditable onSave={vi.fn()}
+    shippingPermissionPublication={{ registered: ['shipping:operate', 'shipping:ledger_view'], published: ['shipping:operate'] }} />)
+  openPermissions()
+  const shipping = screen.getByRole('switch', { name: '自助收寄入口' })
+  expect(shipping).not.toBeChecked()
+  expect(shipping).toBeDisabled()
 })

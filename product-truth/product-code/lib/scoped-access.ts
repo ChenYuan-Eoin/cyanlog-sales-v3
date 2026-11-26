@@ -2,7 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { buildDepartmentSpaces, resolveDepartmentSpaceIds } from '@/lib/department-spaces'
 import { loadOrgRolePermissionSettings } from '@/lib/org-role-permissions'
 import { resolveRolePermissions } from '@/lib/role-permission-policy'
-import { ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
+import { FXIAOKE_BASELINE_ROLE_CODE, ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
 import {
   canAccessOrgAdmin,
   canReviewContracts as canReviewContractsByPermission,
@@ -379,7 +379,7 @@ async function loadUserScopedRoleAssignments(userId: string): Promise<ScopedRole
   return rows
     .map((row) => {
       const role = unwrapOne(row.role)
-      if (!role?.id || !role.code || !role.name) {
+      if (!role?.id || !role.code || !role.name || role.code === FXIAOKE_BASELINE_ROLE_CODE) {
         return null
       }
       if (role.code === 'SUPER_ADMIN' && (row.org_id !== activeSystemAdminOrgId || !isSystemAdministratorBinding(row, userId))) {

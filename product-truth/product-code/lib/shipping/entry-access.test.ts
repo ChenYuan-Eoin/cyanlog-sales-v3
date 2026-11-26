@@ -24,7 +24,7 @@ const assignment = (roleCode: string, permissions: string[] = [], ownerGrant?: r
     { id: 'role', code: roleCode, permissions },
   ),
 })
-const activeOrg = { orgId: 'org-a', assignments: [assignment('FXIAOKE_BASELINE', [], SHIPPING_OWNER_ACTION_KEYS)] }
+const activeOrg = { orgId: 'org-a', assignments: [assignment('EMPLOYEE_SHIPPING', [], SHIPPING_OWNER_ACTION_KEYS)] }
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -75,12 +75,19 @@ describe('shipping entry authorization', () => {
   })
 
   it('uses the current projected actions and removes a revoked capability with no role-code fallback', async () => {
-    const assigned = { ...assignment('FXIAOKE_BASELINE'), ownerShippingPermissions: ['shipping:owner_view'] }
+    const assigned = assignment('EMPLOYEE_SHIPPING', [], ['shipping:owner_view'])
     db.context.mockResolvedValue({ ...activeOrg, assignments: [assigned] })
     expect(await resolveShippingEntry(user, token)).toMatchObject({
       canViewOwn: true, canSubmitOwn: false, ownerPermissions: ['shipping:owner_view'],
     })
     db.context.mockResolvedValue({ ...activeOrg, assignments: [{ ...assigned, ownerShippingPermissions: [] }] })
+    expect(await resolveShippingEntry(user, token)).toMatchObject({
+      canViewOwn: false, canSubmitOwn: false, canReadLegacyReceipt: false, ownerPermissions: [],
+    })
+  })
+
+  it('does not grant personal shipping to a historical baseline role with an old owner override', async () => {
+    db.context.mockResolvedValue({ ...activeOrg, assignments: [assignment('FXIAOKE_BASELINE', [], SHIPPING_OWNER_ACTION_KEYS)] })
     expect(await resolveShippingEntry(user, token)).toMatchObject({
       canViewOwn: false, canSubmitOwn: false, canReadLegacyReceipt: false, ownerPermissions: [],
     })

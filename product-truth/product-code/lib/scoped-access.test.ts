@@ -339,6 +339,26 @@ describe('organization role permission overrides', () => {
     expect(await getUserScopedRoleAssignments('org-delegated-user')).toEqual([])
   })
 
+  it('excludes the historical Fxiaoke baseline from actor permissions while preserving independent grants', async () => {
+    const userId = 'retired-baseline-user'
+    const orgId = 'retired-baseline-org'
+    const common = { user_id: userId, org_id: orgId, scope_type: 'org', scope_id: orgId, granted_at: null }
+    const oldBaseline = {
+      ...common, role: { id: 'old-role', code: 'FXIAOKE_BASELINE', name: '历史纷享基础', permissions: ['quote:view'] },
+    }
+    const assigned = {
+      ...common, role: { id: 'explicit-role', code: 'PRICING_EDITOR', name: '定价维护', permissions: ['config:write'] },
+    }
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(makeCollectionQuery({ data: [oldBaseline], error: null }))
+    expect(await getFreshUserScopedRoleAssignments(userId)).toEqual([])
+    expect(loadOrgRolePermissionSettings).not.toHaveBeenCalled()
+
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(makeCollectionQuery({ data: [oldBaseline, assigned], error: null }))
+    const grants = await getFreshUserScopedRoleAssignments(userId)
+    expect(getOrgRoleCodes(grants, orgId)).toEqual(['PRICING_EDITOR'])
+    expect(getOrgPermissions(grants, orgId)).toEqual(['config:write'])
+  })
+
   it('rechecks a cached system super administrator binding after a member is removed from that role', async () => {
     const userId = 'revoked-root'
     const orgId = 'org-with-system-admin'

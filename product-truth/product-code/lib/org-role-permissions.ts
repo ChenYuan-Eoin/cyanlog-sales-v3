@@ -9,7 +9,7 @@ import {
   ROLE_DIRECTORY_VIEW,
 } from '@/lib/permissions'
 import { PERMISSION_KEYS, resolveRolePermissions } from '@/lib/role-permission-policy'
-import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions } from '@/lib/role-permission-resolution'
+import { FXIAOKE_BASELINE_ROLE_CODE, isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions } from '@/lib/role-permission-resolution'
 import type { ScopedRoleAssignment } from '@/lib/scoped-access'
 import { ORG_MEMBER_LIFECYCLE_ACTIONS } from '@/lib/admin/member-action-keys'
 import { isShippingOwnerPermission, SHIPPING_OWNER_VIEW } from '@/lib/shipping/owner-permission-keys'
@@ -81,7 +81,7 @@ export async function loadCurrentOrganizationRoleAssignments(userId: string, inc
   const assignments = ((orgRoles.data ?? []) as OrgRoleRow[]).flatMap((row): ScopedRoleAssignment[] => {
     const role = Array.isArray(row.role) ? (row.role.length === 1 ? row.role[0] : null) : row.role
     if (row.org_id !== orgId || row.user_id !== userId || !row.scope_id
-      || !role?.id || !role.code || !role.name) return []
+      || !role?.id || !role.code || !role.name || role.code === FXIAOKE_BASELINE_ROLE_CODE) return []
     if (role.code === 'SUPER_ADMIN' && !activeAccount) return []
     const scopeType = row.scope_type
     if (scopeType === 'org') {
@@ -120,7 +120,7 @@ export async function loadOrgRolePermissionContext(userId: string): Promise<Role
 }
 
 export function rolePermissionsEditBlockReason(roleCode: string): string | null {
-  if (roleCode === 'FXIAOKE_BASELINE') return '纷享基础角色由系统管理，权限固定为只读。'
+  if (roleCode === FXIAOKE_BASELINE_ROLE_CODE) return '历史纷享基础角色已停止授予业务权限，仅可核对和撤销成员绑定。'
   if (roleCode === ORG_SUPER_ADMIN_ROLE_CODE) return '历史组织治理授权仅可撤销。'
   if (roleCode === 'SUPER_ADMIN') return '系统超管的权限由系统固定，可在员工分配中任免成员。'
   return null
@@ -168,7 +168,7 @@ export async function saveOrgRolePermissions(
   const current = resolveRolePermissions(settings, role)
   const currentOwnerPermissions = resolveOwnerShippingPermissions(settings, role)
   const updateOrganizationPermissions = !samePermissions(current.permissions, permissions)
-  if (fixedRoleReason && !(role.code === 'FXIAOKE_BASELINE' && ownerChange && !updateOrganizationPermissions)) {
+  if (fixedRoleReason) {
     return { ok: false, reason: 'fixed_role', message: fixedRoleReason }
   }
   if (!samePermissions(current.permissions, expectedPermissions)) return { ok: false, reason: 'conflict' }

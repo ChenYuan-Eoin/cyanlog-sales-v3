@@ -72,7 +72,7 @@ export async function POST(
       )
     }
 
-    const roleValidation = await validateOrgRoleAssignment(actorAssignments, orgId, role_ids)
+    const roleValidation = await validateOrgRoleAssignment(actorAssignments, orgId, role_ids, { action: 'replace' })
     if (!roleValidation.ok && roleValidation.reason === 'ROLE_NOT_FOUND') {
       return NextResponse.json({ error: '部分角色不存在' }, { status: 400 })
     }
@@ -98,6 +98,11 @@ export async function POST(
         p_expected_role_ids: [...new Set(expected_role_ids)],
       })
     if (replaceError) {
+      if (replaceError.code === '42501' && replaceError.details === 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN') {
+        return NextResponse.json({
+          error: '历史纷享基础角色仅可撤销', code: replaceError.details,
+        }, { status: 409 })
+      }
       if (replaceError.code === '42501') {
         return NextResponse.json({
           error: '受保护的管理角色只能通过专用入口变更。',

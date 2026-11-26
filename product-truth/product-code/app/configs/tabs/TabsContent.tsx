@@ -7,7 +7,7 @@ import type { ContractPolicyRule } from '@/types/rules'
 import type { AIPlatformAssetKind } from '@/lib/configs/types'
 
 import { TableSkeleton, StatsSkeleton, CardSkeleton } from '@/components/ui/skeleton'
-import type { RoleModulePermissionCatalog } from '@/lib/org-role-permission-readback'
+import type { ConfigRoleRecord, RoleModulePermissionCatalog, ShippingPermissionPublication } from '@/lib/org-role-permission-readback'
 
 const ShippingConfigDrawer = dynamic(() => import('@/app/shipping/config-drawer'), {
   loading: () => <CardSkeleton />,
@@ -92,17 +92,11 @@ export interface TabsContentProps {
   onRefreshOrg: () => void | Promise<void>
   onOpenIntegrations?: () => void
   // role-access
-  roles: Array<{
-    id: string
-    code: string
-    name: string
-    description: string | null
-    permissions: string[] | null
-    sort_order: number | null
-  }>
+  roles: ConfigRoleRecord[]
   savingRoleId: string | null
   permissionsEditable?: boolean
   modulePermissionCatalog?: RoleModulePermissionCatalog
+  shippingPermissionPublication?: ShippingPermissionPublication
   permissionsEditBlockReason?: string | null
   systemSuperAdminAuthority?: { orgId: string }
   onSaveRole: (roleId: string, newPerms: string[], ownerShippingPermissions?: string[]) => void
@@ -140,6 +134,7 @@ export default function TabsContent({
   savingRoleId,
   permissionsEditable,
   modulePermissionCatalog,
+  shippingPermissionPublication,
   permissionsEditBlockReason,
   systemSuperAdminAuthority,
   onSaveRole,
@@ -323,6 +318,7 @@ export default function TabsContent({
           savingRoleId={savingRoleId}
           permissionsEditable={permissionsEditable}
           modulePermissionCatalog={modulePermissionCatalog}
+          shippingPermissionPublication={shippingPermissionPublication}
           permissionsEditBlockReason={permissionsEditBlockReason}
           systemSuperAdminAuthority={systemSuperAdminAuthority}
           orgSummary={orgSummary}

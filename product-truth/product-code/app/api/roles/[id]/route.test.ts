@@ -137,7 +137,7 @@ describe('PATCH /api/roles/[id] organization role permissions', () => {
       permissions: [], expected_permissions: ['quote:view', 'contract:view', 'customer:view'],
     }), routeContext)
     expect(res.status).toBe(400)
-    expect((await res.json()).error.message).toContain('只读')
+    expect((await res.json()).error.message).toContain('停止授予业务权限')
     expect(operations.some(operation => operation.patch)).toBe(false)
   })
 

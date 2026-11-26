@@ -106,3 +106,15 @@ it('forwards only selectable catalog actions from the server snapshot', async ()
     { id: 'tender', items: [{ key: view.key, label: view.label, description: view.description, dependencies: [] }] },
   ])
 })
+
+it('preserves runtime publication and override provenance separately from selectable actions', async () => {
+  const publication = { registered: ['shipping:operate', 'shipping:ledger_view'], published: ['shipping:operate'] }
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(readback({
+    shipping_permission_publication: publication,
+    roles: [{ ...role, permissions_overridden: true }],
+  })))
+  const snapshot = await loadOrgRolePermissionSnapshot({})
+  expect(snapshot.shippingPermissionPublication).toEqual(publication)
+  expect(snapshot.roles[0].permissions_overridden).toBe(true)
+  expect(snapshot.modulePermissionCatalog).toEqual([])
+})

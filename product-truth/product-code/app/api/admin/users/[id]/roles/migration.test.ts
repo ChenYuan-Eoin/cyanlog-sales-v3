@@ -14,7 +14,9 @@ const migrations = [
   '20261126045425_system_super_admin_authority.sql',
   '20261126054302_immutable_system_super_admin.sql',
   '20261126054700_guard_ordinary_role_assignments.sql',
+  '20261126054800_guard_role_permission_edits.sql',
   '20261126054900_guard_invitation_role_authority.sql',
+  '20261126060000_retire_new_fxiaoke_baseline_grants.sql',
 ].map(file => readFileSync(join(process.cwd(), 'supabase/migrations', file), 'utf8'))
 const invitationAcceptance = readFileSync(
   join(process.cwd(), 'supabase/migrations/20261029100000_remove_local_password_auth.sql'), 'utf8',
@@ -34,7 +36,9 @@ const otherDepartment = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const space = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const source = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 const identity = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+const baselineRole = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
 const denied = { code: '42501' }
+const baselineRetired = { code: '42501', detail: 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN' }
 
 let db: PGlite
 
@@ -88,6 +92,7 @@ beforeEach(async () => {
     insert into public.roles (id, code, name, permissions) values
       ('${rootRole}', 'SUPER_ADMIN', 'System', '[]'),
       ('${ordinaryRole}', 'SALES', 'Sales', '[]'),
+      ('${baselineRole}', 'FXIAOKE_BASELINE', 'Historical baseline', '["quote:view","contract:view","customer:view"]'),
       ('${actorRole}', 'ADMIN', 'Department administrator', '["role:manage","user:assign_roles"]');
     insert into public.user_roles (user_id, org_id, role_id, scope_type, scope_id) values
       ('${root}', '${org}', '${rootRole}', 'org', '${org}'),
@@ -218,6 +223,7 @@ it('allows ordinary empty invitations, requires live authority for reserved role
   await expect(invite('ordinary-actor', [ordinaryRole], actor)).rejects.toMatchObject(actorRequired)
   await expect(invite('wrong-organization', [ordinaryRole], root, otherOrg)).rejects.toMatchObject(actorRequired)
   await expect(invite('system-root', [rootRole], root)).rejects.toMatchObject(denied)
+  await expect(invite('historical-baseline', [baselineRole], root)).rejects.toMatchObject(baselineRetired)
   await invite('approved', [ordinaryRole], root)
   await invite('to-revoke', [ordinaryRole], root)
 
@@ -245,4 +251,74 @@ it('allows ordinary empty invitations, requires live authority for reserved role
   expect(accepted.rows).toEqual([{ data: { user_id: member, org_id: org } }])
   expect((await db.query('select role_id, granted_by from public.user_roles where user_id = $1', [member])).rows)
     .toEqual([{ role_id: ordinaryRole, granted_by: root }])
+})
+
+it('keeps a retained historical organization binding physically intact and permits revocation without regrant', async () => {
+  await expect(replace(root, [baselineRole])).rejects.toMatchObject(baselineRetired)
+  await expect(replace(root, [baselineRole], member, [])).rejects.toMatchObject(baselineRetired)
+  await db.query(`
+    insert into public.user_roles (user_id, org_id, role_id, scope_type, scope_id, granted_at)
+    values ($1,$2,$3,'org',$2,'2026-11-12 07:00:00+00')
+  `, [member, org, baselineRole])
+  const baseline = () => db.query('select ctid::text, granted_by, granted_at from public.user_roles where role_id = $1', [baselineRole])
+  const { rows: before } = await baseline()
+
+  expect(await replace(root, [baselineRole, ordinaryRole], member, [baselineRole])).toBe('saved')
+  expect((await baseline()).rows).toEqual(before)
+  expect((await db.query('select role_id from public.user_roles where user_id = $1 order by role_id', [member])).rows)
+    .toEqual([{ role_id: ordinaryRole }, { role_id: baselineRole }])
+  expect(await replace(root, [ordinaryRole], member, [baselineRole, ordinaryRole])).toBe('saved')
+  expect((await baseline()).rows).toEqual([])
+  await expect(replace(root, [baselineRole, ordinaryRole], member, [ordinaryRole])).rejects.toMatchObject(baselineRetired)
+})
+
+it('permits removal of old department and space bindings and forbids historical role configuration edits', async () => {
+  await expect(scope('assign', root, 'department', department, baselineRole)).rejects.toMatchObject(baselineRetired)
+  await db.query(`
+    insert into public.user_roles (user_id, org_id, role_id, scope_type, scope_id)
+    values ($1,$2,$3,'department',$4),($1,$2,$3,'space',$5)
+  `, [member, org, baselineRole, department, space])
+  expect(await scope('revoke', root, 'department', department, baselineRole)).toBe(true)
+  expect(await scope('revoke', root, 'space', space, baselineRole)).toBe(true)
+  expect((await db.query('select role_id from public.user_roles where user_id = $1', [member])).rows).toEqual([])
+
+  const result = await db.query(`
+    select public.admin_save_org_role_permissions_v1($1,$2,$3,null,'FXIAOKE_BASELINE',null,null,$4) as result
+  `, [root, org, baselineRole, ['shipping:owner_view']])
+  expect(result.rows).toEqual([{ result: 'fixed_role' }])
+})
+
+it('retains a verified archived reservation without changing provenance and never retargets stale reservations', async () => {
+  await db.query("insert into public.users (id,org_id,status,login_enabled) values ($1,$2,'inactive',false)", [pending, org])
+  await db.query("insert into public.user_organizations (user_id,org_id,status) values ($1,$2,'invited')", [pending, org])
+  await db.query(`
+    insert into public.organization_sources (id,system_org_id,provider,status,connection_state,effective_revision,authority_scope)
+    values ($1,$2,'fxiaoke','active','verified',$1,'{"identity":"authoritative","directory":"authoritative"}')
+  `, [source, org])
+  await db.query(`
+    insert into public.external_identities (id,system_org_id,source_id,canonical_user_id,external_user_id,match_status,profile_snapshot)
+    values ($1,$2,$3,$4,'verified-id','matched',jsonb_build_object('provisionedMemberId',$4::uuid::text,'status','active'))
+  `, [identity, org, source, pending])
+  await expect(replace(root, [baselineRole], pending, [])).rejects.toMatchObject(baselineRetired)
+  await db.query(`
+    insert into public.fxiaoke_pending_org_roles
+      (org_id,user_id,role_id,source_id,external_identity_id,external_user_id,granted_by,granted_at)
+    values ($1,$2,$3,$4,$5,'verified-id',$6,'2026-11-12 07:00:00+00')
+  `, [org, pending, baselineRole, source, identity, actor])
+  const reservation = () => db.query(
+    'select ctid::text, external_user_id, granted_by, granted_at from public.fxiaoke_pending_org_roles where role_id = $1',
+    [baselineRole],
+  )
+  const { rows: before } = await reservation()
+  expect(await replace(root, [baselineRole], pending, [baselineRole])).toBe('saved')
+  expect((await reservation()).rows).toEqual(before)
+  await db.query("update public.external_identities set external_user_id = 'replacement' where id = $1", [identity])
+  await expect(replace(root, [baselineRole], pending, [])).rejects.toMatchObject(baselineRetired)
+  expect((await reservation()).rows).toEqual(before)
+  await db.query("update public.external_identities set external_user_id = 'verified-id' where id = $1", [identity])
+  expect((await db.query("select public.activate_fxiaoke_sso_member_v1($1,'verified-id',$2) as user_id", [org, pending])).rows)
+    .toEqual([{ user_id: pending }])
+  expect((await db.query('select role_id, granted_by from public.user_roles where user_id = $1', [pending])).rows)
+    .toEqual([{ role_id: baselineRole, granted_by: actor }])
+  expect((await reservation()).rows).toEqual([])
 })

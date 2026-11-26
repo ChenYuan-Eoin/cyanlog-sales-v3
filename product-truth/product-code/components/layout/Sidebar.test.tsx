@@ -20,7 +20,7 @@ vi.mock('@/components/branding/BrandingProvider', () => ({
 }))
 vi.mock('@/lib/session-client', () => ({ logoutClientSession: vi.fn() }))
 
-describe('Sidebar shipping navigation lookup', () => {
+describe('Sidebar navigation projection', () => {
   beforeEach(() => {
     currentPathname = '/'
     localStorage.setItem('token', `token-${Math.random()}`)
@@ -32,135 +32,102 @@ describe('Sidebar shipping navigation lookup', () => {
     localStorage.clear()
   })
 
-  it('rechecks shipping on a new mount without probing settings or repeating profile reads on route changes', async () => {
-    const fetchMock = vi.fn(async (url: string) => Response.json(url === '/api/navigation'
-      ? { paths: ['/shipping'] }
-      : { user: { roles: [{ code: 'ADMIN' }], canManageOrg: true } }))
+  it('uses one navigation lookup on mount and does not repeat it on route changes', async () => {
+    const fetchMock = vi.fn(async (_url: string) => Response.json({ paths: ['/shipping'] }))
     vi.stubGlobal('fetch', fetchMock)
     const first = render(<Sidebar />)
     await screen.findByRole('link', { name: '自助收寄' })
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/auth/me', '/api/navigation'])
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/navigation'])
 
     currentPathname = '/quotes'
     first.rerender(<Sidebar />)
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
 
     first.unmount()
     render(<Sidebar />)
     await screen.findByRole('link', { name: '自助收寄' })
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/auth/me', '/api/navigation', '/api/navigation'])
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/navigation', '/api/navigation'])
   })
 
-  it('prefetches just the visible destination on hover or keyboard focus', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 403 })))
+  it('prefetches only the visible destination on hover or keyboard focus', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ paths: [] })))
     prefetch.mockClear()
     render(<Sidebar />)
-    const knowledge = screen.getByRole('link', { name: '知识库' })
+    const knowledge = await screen.findByRole('link', { name: '知识库' })
     const agenda = screen.getByRole('link', { name: '日程' })
     expect(prefetch).not.toHaveBeenCalled()
     fireEvent.mouseEnter(knowledge)
     fireEvent.focus(agenda)
     expect(prefetch.mock.calls).toEqual([['/knowledge'], ['/schedule']])
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
   })
 
-  it('shows proposal navigation and hides configuration for a baseline Fxiaoke member', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => url === '/api/auth/me'
-      ? new Response(JSON.stringify({ user: { authMethod: 'fxiaoke', roles: [{ code: 'FXIAOKE_BASELINE' }] } }), { status: 200 })
-      : Response.json({ paths: ['/shipping'] })))
+  it.each([
+    { paths: ['/shipping'], showsWorkbench: false },
+    { paths: ['/', '/shipping'], showsWorkbench: true },
+  ])('shows only projected department work with $paths', async ({ paths, showsWorkbench }) => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ paths, onlyProjectedPaths: true })))
     render(<Sidebar />)
-    await waitFor(() => expect(screen.getAllByRole('link', { name: /自助收寄/ }).length).toBeGreaterThan(0))
-    expect(screen.queryByRole('link', { name: /配置中心/ })).toBeNull()
+    expect(await screen.findByRole('link', { name: '自助收寄' })).toHaveAttribute('href', '/shipping')
+    expect(Boolean(screen.queryByRole('link', { name: '工作台' }))).toBe(showsWorkbench)
+    for (const name of ['报价中心', '合同审核', '标书中心', '知识库', '日程', '寄件设置', '配置中心']) {
+      expect(screen.queryByRole('link', { name })).toBeNull()
+    }
   })
 
-  it('hides configuration for a Fxiaoke member with a scoped business role', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => url === '/api/auth/me'
-      ? new Response(JSON.stringify({ user: { authMethod: 'fxiaoke', roles: [{ code: 'SALES' }], canManageOrg: false } }), { status: 200 })
-      : Response.json({ paths: ['/shipping'] })))
-    render(<Sidebar />)
-    await waitFor(() => expect(screen.getAllByRole('link', { name: /自助收寄/ }).length).toBeGreaterThan(0))
-    expect(screen.queryByRole('link', { name: /配置中心/ })).toBeNull()
-  })
-
-  it('shows manager-only shipping settings and keeps existing other navigation', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => url === '/api/navigation'
-      ? Response.json({ paths: ['/shipping/settings'] })
-      : Response.json({ user: { roles: [{ code: 'ADMIN' }], canManageOrg: true } })))
+  it('shows settings and configuration for the settings-only projection', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      paths: ['/shipping/settings', '/configs'], onlyProjectedPaths: true,
+    })))
     render(<Sidebar />)
     expect(await screen.findByRole('link', { name: '寄件设置' })).toHaveAttribute('href', '/shipping/settings')
+    expect(screen.getByRole('link', { name: '配置中心' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '自助收寄' })).toBeNull()
-    expect(await screen.findByRole('link', { name: '配置中心' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '合同审核' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '合同审核' })).toBeNull()
   })
 
-  it('removes only revoked shipping links after window focus', async () => {
-    let paths = ['/shipping', '/shipping/settings']
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => url === '/api/navigation'
-      ? Response.json({ paths })
-      : Response.json({ user: { roles: [{ code: 'ADMIN' }], canManageOrg: true } })))
+  it('refreshes shipping and configuration grants on focus while keeping other navigation', async () => {
+    let paths = ['/shipping', '/shipping/settings', '/configs']
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => Response.json({ paths }))
+    vi.stubGlobal('fetch', fetchMock)
+    const token = localStorage.getItem('token')
     render(<Sidebar />)
     await screen.findByRole('link', { name: '寄件设置' })
+    expect(screen.getByRole('link', { name: '配置中心' })).toBeInTheDocument()
+
     paths = ['/shipping']
     fireEvent(window, new Event('focus'))
     await waitFor(() => expect(screen.queryByRole('link', { name: '寄件设置' })).toBeNull())
-    expect(screen.getByRole('link', { name: '自助收寄' })).toBeInTheDocument()
-
-    paths = []
-    fireEvent(window, new Event('focus'))
-    await waitFor(() => expect(screen.queryByRole('link', { name: '自助收寄' })).toBeNull())
-    expect(screen.getByRole('link', { name: '配置中心' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '合同审核' })).toBeInTheDocument()
-  })
-
-  it('shows and hides configuration after same-session authority changes on focus', async () => {
-    const token = localStorage.getItem('token')
-    let canManage = false
-    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
-      if (url === '/api/navigation') return Response.json({ paths: ['/shipping'] })
-      if (url === '/api/auth/me?fresh=1') return Response.json({
-        user: { roles: [{ code: canManage ? 'ORG_SUPER_ADMIN' : 'READONLY' }], canManageOrg: canManage },
-      })
-      return Response.json({ user: { roles: [{ code: 'READONLY' }], canManageOrg: false } })
-    })
-    vi.stubGlobal('fetch', fetchMock)
-    render(<Sidebar />)
-    await screen.findByRole('link', { name: '自助收寄' })
     expect(screen.queryByRole('link', { name: '配置中心' })).toBeNull()
-
-    canManage = true
-    fireEvent(window, new Event('focus'))
-    expect(await screen.findByRole('link', { name: '配置中心' })).toHaveAttribute('href', '/configs')
-    expect(fetchMock).toHaveBeenCalledWith('/api/auth/me?fresh=1', expect.objectContaining({
+    expect(screen.getByRole('link', { name: '自助收寄' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '合同审核' })).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/navigation', expect.objectContaining({
       cache: 'no-store', headers: { Authorization: `Bearer ${token}` },
     }))
 
-    canManage = false
+    paths = ['/configs']
     fireEvent(window, new Event('focus'))
-    await waitFor(() => expect(screen.queryByRole('link', { name: '配置中心' })).toBeNull())
-    expect(localStorage.getItem('token')).toBe(token)
-    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/auth/me')).toHaveLength(1)
+    expect(await screen.findByRole('link', { name: '配置中心' })).toHaveAttribute('href', '/configs')
+    expect(screen.queryByRole('link', { name: '自助收寄' })).toBeNull()
   })
 
-  it('keeps a denied focus result after an older authority response arrives', async () => {
-    let completeProfile: (response: Response) => void = () => {}
-    const pendingProfile = new Promise<Response>(resolve => { completeProfile = resolve })
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url === '/api/navigation') return Response.json({ paths: ['/shipping'] })
-      if (url === '/api/auth/me?fresh=1') return Response.json({ user: { roles: [{ code: 'READONLY' }], canManageOrg: false } })
-      return pendingProfile
-    })
+  it('ignores an older response after a focus refresh and clears access on a session change', async () => {
+    let completeLookup: (response: Response) => void = () => {}
+    const pendingLookup = new Promise<Response>(resolve => { completeLookup = resolve })
+    const fetchMock = vi.fn<(_url: string, _init?: RequestInit) => Promise<Response>>()
+      .mockReturnValueOnce(pendingLookup)
+      .mockResolvedValueOnce(Response.json({ paths: ['/shipping'], onlyProjectedPaths: true }))
+      .mockResolvedValueOnce(new Response('{}', { status: 403 }))
     vi.stubGlobal('fetch', fetchMock)
-    const current = render(<Sidebar />)
-    await screen.findByRole('link', { name: '自助收寄' })
+    render(<Sidebar />)
+    expect(screen.queryByRole('link', { name: '合同审核' })).toBeNull()
     fireEvent(window, new Event('focus'))
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/auth/me?fresh=1', expect.anything()))
-    await act(async () => completeProfile(Response.json({ user: { roles: [{ code: 'ORG_SUPER_ADMIN' }], canManageOrg: true } })))
+    await screen.findByRole('link', { name: '自助收寄' })
+    await act(async () => completeLookup(Response.json({ paths: ['/configs'] })))
     expect(screen.queryByRole('link', { name: '配置中心' })).toBeNull()
 
-    current.unmount()
-    render(<Sidebar />)
-    await screen.findByRole('link', { name: '自助收寄' })
-    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/auth/me')).toHaveLength(1)
-    expect(screen.queryByRole('link', { name: '配置中心' })).toBeNull()
+    localStorage.setItem('token', 'other-session')
+    fireEvent(window, new StorageEvent('storage', { key: 'token' }))
+    await waitFor(() => expect(screen.queryByRole('link', { name: '自助收寄' })).toBeNull())
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 })

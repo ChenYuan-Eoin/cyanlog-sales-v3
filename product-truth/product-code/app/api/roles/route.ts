@@ -7,10 +7,10 @@ import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 import { rolePermissionsEditBlockReason } from '@/lib/org-role-permissions'
 import { hasPublishedShippingBundle, REGISTERED_MODULE_PERMISSION_KEYS, SHIPPING_BUNDLE } from '@/lib/module-access'
-import { loadRoleModulePermissionCatalog } from '@/lib/permission-registry'
+import { loadRoleModulePermissionProjection } from '@/lib/permission-registry'
 import { PERMISSION_KEYS } from '@/lib/role-permission-policy'
 import { ORG_BUSINESS_ROLE_ASSIGN } from '@/lib/permissions'
-import { ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions, resolveRolePermissions } from '@/lib/role-permission-resolution'
+import { FXIAOKE_BASELINE_ROLE_CODE, ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions, resolveRolePermissions } from '@/lib/role-permission-resolution'
 import { isRoleId, withRolePermissionContext } from './context'
 
 export async function GET(req: NextRequest) {
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
       let query = supabaseAdmin
         .from('roles')
         .select('id, code, name', { count: 'exact' })
-        .not('code', 'in', `(SUPER_ADMIN,${ORG_SUPER_ADMIN_ROLE_CODE})`)
+        .not('code', 'in', `(SUPER_ADMIN,${ORG_SUPER_ADMIN_ROLE_CODE},${FXIAOKE_BASELINE_ROLE_CODE})`)
       if (roleId !== null) query = query.eq('id', roleId)
       const { data, error, count } = await query.order('sort_order', { ascending: true }).range(offset, offset + limit - 1)
       if (error) {
@@ -57,14 +57,18 @@ export async function GET(req: NextRequest) {
       return errorResponse(createApiError('DB_ERROR', '查询失败'))
     }
 
-    const roles = (data || []).map((role) => ({
-      ...role,
-      permissions: resolveRolePermissions(settings, role).permissions,
-      owner_shipping_permissions: resolveOwnerShippingPermissions(settings, role),
-      permissions_edit_block_reason: rolePermissionsEditBlockReason(role.code),
-    }))
-    const permissionCatalog = await loadRoleModulePermissionCatalog()
-    const publishedModuleKeys = permissionCatalog.flatMap(group => group.items.map(item => item.key))
+    const roles = (data || []).map((role) => {
+      const effective = resolveRolePermissions(settings, role)
+      return {
+        ...role,
+        permissions: effective.permissions,
+        permissions_overridden: effective.overridden,
+        owner_shipping_permissions: resolveOwnerShippingPermissions(settings, role),
+        permissions_edit_block_reason: rolePermissionsEditBlockReason(role.code),
+      }
+    })
+    const { catalog: permissionCatalog, publication } = await loadRoleModulePermissionProjection()
+    const publishedModuleKeys = [...publication.published].sort()
     const shippingBundleAvailable = hasPublishedShippingBundle(new Set(publishedModuleKeys))
     const permissionKeys = [
       ...PERMISSION_KEYS.filter(key => key !== ORG_BUSINESS_ROLE_ASSIGN && !REGISTERED_MODULE_PERMISSION_KEYS.some(registered => registered === key)
@@ -77,6 +81,7 @@ export async function GET(req: NextRequest) {
         roles,
         permission_keys: permissionKeys,
         permission_catalog: permissionCatalog,
+        shipping_permission_publication: { registered: [...publication.registered].sort(), published: publishedModuleKeys },
         permissions_editable: canEdit,
         can_appoint_system_super_admin: canEdit,
         permissions_edit_block_reason: canEdit ? null : '仅系统超管可以保存角色授权。',

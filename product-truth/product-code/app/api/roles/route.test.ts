@@ -103,13 +103,14 @@ describe('GET /api/roles organization permissions', () => {
         roles[1],
         { id: 'root', code: 'SUPER_ADMIN', name: '平台超管', permissions: ['*'] },
         { id: 'delegated', code: 'ORG_SUPER_ADMIN', name: '组织超管', permissions: ['role:manage'] },
+        { id: 'baseline', code: 'FXIAOKE_BASELINE', name: '历史纷享基础', permissions: ['quote:view'] },
       ],
     })
     const res = await GET(makeRequest('https://example.test/api/roles?view=assignable'))
     expect(res.status).toBe(200)
     expect((await res.json()).data).toEqual({ roles: [{ id: 'role-2', code: 'SALES', name: '销售' }] })
     expect(roleQuery.select).toHaveBeenCalledExactlyOnceWith('id, code, name', { count: 'exact' })
-    expect(roleQuery.not).toHaveBeenCalledWith('code', 'in', '(SUPER_ADMIN,ORG_SUPER_ADMIN)')
+    expect(roleQuery.not).toHaveBeenCalledWith('code', 'in', '(SUPER_ADMIN,ORG_SUPER_ADMIN,FXIAOKE_BASELINE)')
     expect(supabaseAdmin.from).not.toHaveBeenCalledWith('permission_points')
   })
 
@@ -194,14 +195,18 @@ describe('GET /api/roles organization permissions', () => {
 
   it('单角色回读可过滤角色 ID，纷享基础角色返回只读说明', async () => {
     const { roleQuery } = database({
-      assignments: [root], globalRoles: [{ id: 'baseline', code: 'FXIAOKE_BASELINE', name: '纷享基础', permissions: [] }],
+      assignments: [root], globalRoles: [{ id: 'baseline', code: 'FXIAOKE_BASELINE', name: '纷享基础', permissions: ['quote:view'] }],
+      settings: { shipping_owner_permission_overrides: { baseline: ['shipping:owner_view'] } },
     })
     const res = await GET(makeRequest('https://example.test/api/roles?role_id=baseline'))
     expect(res.status).toBe(200)
     expect((await res.json()).data).toMatchObject({
       org_id: 'org-1',
       permissions_editable: true,
-      roles: [{ id: 'baseline', permissions: ['quote:view', 'contract:view', 'customer:view'], permissions_edit_block_reason: expect.any(String) }],
+      roles: [{
+        id: 'baseline', permissions: [], permissions_overridden: true, owner_shipping_permissions: [],
+        permissions_edit_block_reason: expect.stringContaining('仅可核对和撤销'),
+      }],
     })
     expect(roleQuery.eq).toHaveBeenCalledWith('id', 'baseline')
   })
@@ -249,6 +254,10 @@ it.each([false, true])('advertises the shipping bundle only when both actions ar
     expect(data.permission_keys).not.toContain('shipping:*')
   }
   expect(data.permission_keys).not.toContain('preserved:legacy')
+  expect(data.shipping_permission_publication).toEqual({
+    registered: ['shipping:manage_connections', 'shipping:operate'],
+    published: bothPublished ? ['shipping:manage_connections', 'shipping:operate'] : ['shipping:operate'],
+  })
   expect(data.permission_catalog[0]).toMatchObject({
     id: 'shipping', items: expect.arrayContaining([expect.objectContaining({ key: 'shipping:operate', selectable: true })]),
   })

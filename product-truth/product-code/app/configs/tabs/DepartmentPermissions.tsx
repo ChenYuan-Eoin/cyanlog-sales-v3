@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { DEPARTMENT_LEDGER_VIEW } from '@/lib/shipping/department-ledger-access'
 import { buildDepartmentPermissionDirectory, getDirectoryActions } from '../permission-directory'
 import { PermissionSettingTable } from './PermissionSettingTable'
 
@@ -81,6 +82,7 @@ export function DepartmentPermissions({ orgId, departmentId, authHeaders }: {
   const unavailableKeys = state?.draft.permissions.filter(key => !available.has(key)) ?? []
   const editable = state?.saved.editable === true
   const canSave = editable && state && unavailableKeys.length === 0 && !sameGrant(state.saved, state.draft)
+  const ledgerEntry = available.has(DEPARTMENT_LEDGER_VIEW) && state?.draft.permissions.includes(DEPARTMENT_LEDGER_VIEW) === true
 
   function changePermissions(keys: string[], enabled?: boolean) {
     if (!editable || busy) return
@@ -187,6 +189,7 @@ export function DepartmentPermissions({ orgId, departmentId, authHeaders }: {
           ownerPerms={[]}
           groups={groups}
           availableModuleKeys={available}
+          entryStates={{ shipping: { checked: ledgerEntry, canClear: ledgerEntry && editable && !busy } }}
           isSuperAdmin={false}
           readOnly={!editable || busy || groups.length === 0}
           ownerReadOnly
@@ -194,6 +197,7 @@ export function DepartmentPermissions({ orgId, departmentId, authHeaders }: {
             : groups.length === 0 ? '当前没有可配置的部门权限。' : null}
           onToggle={key => changePermissions([key])}
           onSetGroup={changePermissions}
+          onClearEntry={entry => { if (entry === 'shipping') changePermissions([DEPARTMENT_LEDGER_VIEW], false) }}
         />
       </>}
       {feedback && (

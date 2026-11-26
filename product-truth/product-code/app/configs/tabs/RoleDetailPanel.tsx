@@ -36,17 +36,20 @@ import {
   toggleExplicitRolePermission,
 } from '@/lib/role-permission-policy'
 import {
-  getEffectiveShippingPermissions, legacyShippingPermission, shippingActionViewDependency,
+  getEffectiveOwnerShippingPermissions, getEffectiveShippingPermissions, legacyShippingPermission,
 } from '@/lib/module-access'
+import { getConfigsTabAccess, hasConfigsTabAccess } from '@/lib/configs/tab-access'
 import { isShippingOwnerPermission } from '@/lib/shipping/owner-permission-keys'
 import { success, error, confirmAction } from '@/lib/toast'
-import { ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
-import type { RoleModulePermissionCatalog } from '@/lib/org-role-permission-readback'
+import { FXIAOKE_BASELINE_ROLE_CODE, ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
+import type { RoleModulePermissionCatalog, ShippingPermissionPublication } from '@/lib/org-role-permission-readback'
 import type { OrgSummaryUser, OrgSummaryDepartment } from '../types'
 import {
   buildRolePermissionDirectory,
+  clearShippingEntryGrants,
   getDirectoryActions,
   registeredShippingPermissionKeys,
+  type ShippingDirectoryEntry,
 } from '../permission-directory'
 import {
   getRoleMutationRestriction,
@@ -71,6 +74,7 @@ interface RoleDetailPanelProps {
     description: string | null
     permissions: string[] | null
     owner_shipping_permissions?: string[]
+    permissions_overridden?: boolean
     permissions_edit_block_reason?: string | null
   }
   currentUserId: string | null
@@ -78,6 +82,7 @@ interface RoleDetailPanelProps {
   onSave: (perms: string[], ownerShippingPermissions?: string[]) => void
   permissionsEditable?: boolean
   modulePermissionCatalog?: RoleModulePermissionCatalog
+  shippingPermissionPublication?: ShippingPermissionPublication
   permissionsEditBlockReason?: string | null
   canAssignBusinessRoles?: boolean
   systemSuperAdminAuthority?: SystemSuperAdminAuthority
@@ -96,6 +101,7 @@ export function RoleDetailPanel({
   onSave,
   permissionsEditable = false,
   modulePermissionCatalog,
+  shippingPermissionPublication,
   permissionsEditBlockReason,
   canAssignBusinessRoles = false,
   systemSuperAdminAuthority,
@@ -110,9 +116,8 @@ export function RoleDetailPanel({
   const isSuperAdmin = role.code === 'SUPER_ADMIN'
   const isOrgSuperAdmin = role.code === ORG_SUPER_ADMIN_ROLE_CODE
   const protectedRole = isSuperAdmin || isOrgSuperAdmin
-  const canEditPermissions = permissionsEditable && !protectedRole && !role.permissions_edit_block_reason
-  const canEditOwnerPermissions = permissionsEditable && role.owner_shipping_permissions !== undefined
-    && (canEditPermissions || role.code === 'FXIAOKE_BASELINE')
+  const canEditPermissions = permissionsEditable && !protectedRole && role.code !== FXIAOKE_BASELINE_ROLE_CODE && !role.permissions_edit_block_reason
+  const canEditOwnerPermissions = canEditPermissions && role.owner_shipping_permissions !== undefined
   let assignmentBlockReason: string | null = null
   if (!currentUserId) {
     assignmentBlockReason = '当前登录身份尚未确认，角色分配暂不可用。'
@@ -137,19 +142,42 @@ export function RoleDetailPanel({
 
   const hasChanges = JSON.stringify([...perms].sort()) !== JSON.stringify([...(role.permissions ?? [])].sort())
   const hasOwnerChanges = JSON.stringify([...ownerPerms].sort()) !== JSON.stringify([...(role.owner_shipping_permissions ?? [])].sort())
-  const permissionGroups = useMemo(() => buildRolePermissionDirectory(modulePermissionCatalog), [modulePermissionCatalog])
-  const availableModuleKeys = useMemo(() => new Set(
+  const catalogKeys = useMemo(() => new Set(
     modulePermissionCatalog?.flatMap(group => group.items
       .filter(item => !('selectable' in item) || item.selectable !== false)
       .map(item => item.key)),
   ), [modulePermissionCatalog])
+  const shippingPublication = useMemo(() => shippingPermissionPublication
+    ? { registered: new Set(shippingPermissionPublication.registered), published: new Set(shippingPermissionPublication.published) }
+    : { registered: registeredShippingPermissionKeys, published: catalogKeys }, [shippingPermissionPublication, catalogKeys])
+  const availableModuleKeys = useMemo(() => new Set([...catalogKeys].filter(key => shippingPublication.published.has(key))), [catalogKeys, shippingPublication])
+  const permissionGroups = useMemo(() => buildRolePermissionDirectory(modulePermissionCatalog?.map(group => ({
+    ...group, items: group.items.filter(item => availableModuleKeys.has(item.key)),
+  }))), [modulePermissionCatalog, availableModuleKeys])
+
+  const effectiveShipping = getEffectiveShippingPermissions(perms, shippingPublication)
+  const ledgerEntry = effectiveShipping.includes('shipping:ledger_view')
+  const settingsEntry = effectiveShipping.includes('shipping:settings_view')
+  const ownerEntry = getEffectiveOwnerShippingPermissions(ownerPerms, shippingPublication).includes('shipping:owner_view')
+  const canClearOrdinaryEntry = canEditPermissions && !perms.includes('*')
+  const entryStates = {
+    shipping: {
+      checked: ledgerEntry || ownerEntry,
+      canClear: !saving && (ledgerEntry || ownerEntry) && (!ledgerEntry || canClearOrdinaryEntry) && (!ownerEntry || canEditOwnerPermissions),
+    },
+    'shipping-settings': { checked: settingsEntry, canClear: !saving && settingsEntry && canClearOrdinaryEntry },
+    config: hasConfigsTabAccess(getConfigsTabAccess({
+      permissions: perms,
+      roleCodes: [role.code],
+      authorizationRoleCodes: !hasChanges && role.permissions_overridden === false ? [role.code] : [],
+      shippingSettingsView: settingsEntry,
+    })),
+  }
 
   function includePermissionDependencies(keys: string[]): string[] {
     const actions = new Map(permissionGroups.flatMap(getDirectoryActions).map(item => [item.key, item]))
     const expanded = new Set(keys)
     for (const key of expanded) {
-      const ownerDependency = isShippingOwnerPermission(key) && shippingActionViewDependency(key)
-      if (ownerDependency) expanded.add(ownerDependency)
       const dependencies = actions.get(key)?.dependencies ?? []
       for (const dependency of dependencies) expanded.add(dependency)
     }
@@ -166,10 +194,7 @@ export function RoleDetailPanel({
     }
     if (!canEditPermissions || saving) return
     setPerms(current => {
-      if (legacyShippingPermission(key) && getEffectiveShippingPermissions(current, {
-        registered: registeredShippingPermissionKeys,
-        published: availableModuleKeys,
-      }).some(permission => permission === key)) {
+      if (legacyShippingPermission(key) && getEffectiveShippingPermissions(current, shippingPublication).some(permission => permission === key)) {
         return revokeRolePermissions(current, [key], [], availableModuleKeys)
       }
       return isRolePermissionExplicitlyGranted(current, key)
@@ -190,6 +215,12 @@ export function RoleDetailPanel({
     setPerms(current => enabled
       ? grantExplicitRolePermissions(current, includePermissionDependencies(keys))
       : revokeRolePermissions(current, keys, [], availableModuleKeys))
+  }
+
+  function clearPermissionEntry(entry: ShippingDirectoryEntry) {
+    if (!entryStates[entry].canClear) return
+    if (canClearOrdinaryEntry) setPerms(current => clearShippingEntryGrants(current, entry, shippingPublication))
+    if (entry === 'shipping' && canEditOwnerPermissions) setOwnerPerms(current => current.filter(key => !isShippingOwnerPermission(key)))
   }
 
   return (
@@ -277,11 +308,12 @@ export function RoleDetailPanel({
         <TabsContent value="permissions" className="m-0">
           <PermissionSettingTable
             description="此处设置角色可以执行的操作。业务参数由各功能的设置页维护。"
-            editableOwnerNote="此角色的本人寄件权限可单独配置。"
             perms={perms}
             ownerPerms={ownerPerms}
             groups={permissionGroups}
             availableModuleKeys={availableModuleKeys}
+            shippingPublication={shippingPublication}
+            entryStates={entryStates}
             isSuperAdmin={isSuperAdmin}
             readOnly={!canEditPermissions || saving}
             ownerReadOnly={!canEditOwnerPermissions || saving}
@@ -290,6 +322,7 @@ export function RoleDetailPanel({
               : isOrgSuperAdmin ? '此历史角色保留只读记录。' : role.permissions_edit_block_reason ?? permissionsEditBlockReason}
             onToggle={togglePermission}
             onSetGroup={setPermissionGroup}
+            onClearEntry={clearPermissionEntry}
           />
         </TabsContent>
       </Tabs>
@@ -361,10 +394,12 @@ function MemberAssignmentTab({
   const [orgAssignmentFeedback, setOrgAssignmentFeedback] = useState<{ status: 'error' | 'success'; message: string } | null>(null)
   const orgAssignmentInFlight = useRef(false)
   const isLegacySuperAdmin = roleCode === ORG_SUPER_ADMIN_ROLE_CODE
+  const isRetiredBaseline = roleCode === FXIAOKE_BASELINE_ROLE_CODE
   const isSystemSuperAdmin = roleCode === 'SUPER_ADMIN'
   const protectedRole = isSystemSuperAdmin || isLegacySuperAdmin
   const candidateIds = systemSuperAdminAuthority?.memberIds
-  const canAddMembers = assignmentEditable && !isLegacySuperAdmin && (!isSystemSuperAdmin || candidateIds !== undefined)
+  const canAddMembers = assignmentEditable && !isLegacySuperAdmin && !isRetiredBaseline
+    && (!isSystemSuperAdmin || candidateIds !== undefined)
   const addBlockedReason = isSystemSuperAdmin && assignmentEditable && !canAddMembers
     ? '当前组织的在职成员暂无法核对，请刷新后重试。'
     : assignmentBlockReason
@@ -642,7 +677,7 @@ function MemberAssignmentTab({
           ) : (
             <div className="max-w-sm text-right">
               <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
-                {isLegacySuperAdmin && assignmentEditable ? '旧授权仅可撤销' : '无法添加成员'}
+                {(isLegacySuperAdmin || isRetiredBaseline) && assignmentEditable ? '旧授权仅可撤销' : '无法添加成员'}
               </Badge>
               {addBlockedReason && (
                 <p className="mt-1 text-xs leading-5 text-amber-800">

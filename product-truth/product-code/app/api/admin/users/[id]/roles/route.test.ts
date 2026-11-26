@@ -184,6 +184,7 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     expect(res.status).toBe(200)
     expect(body.success).toBe(true)
     expect(body.data).toEqual([{ role_id: roleId, scope_type: 'org', scope_id: 'org-1' }])
+    expect(validateOrgRoleAssignment).toHaveBeenCalledWith(expect.any(Array), 'org-1', [roleId, roleId], { action: 'replace' })
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
       'admin_replace_org_roles_v1',
       expect.objectContaining({
@@ -216,6 +217,7 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     ['conflict', null, 409, 'ROLE_ASSIGNMENT_CHANGED'],
     ['ineligible', null, 409, 'MEMBER_NOT_ELIGIBLE'],
     [null, { code: 'PGRST202' }, 503, 'ROLE_ASSIGNMENT_UPDATING'],
+    [null, { code: '42501', details: 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN' }, 409, 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN'],
   ])('does not retry a conditional save after %j / %j', async (data, error, status, code) => {
     ;(supabaseAdmin.from as any).mockReturnValueOnce(makeUserLookupQuery({ data: { id: 'member' }, error: null }))
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data, error })

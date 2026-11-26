@@ -293,9 +293,17 @@ export async function loadPublishedModulePermissionKeys(): Promise<string[]> {
 }
 
 export async function loadRoleModulePermissionCatalog(): Promise<PermissionCatalogGroup[]> {
+  const { catalog } = await loadRoleModulePermissionProjection()
+  return catalog
+}
+
+export async function loadRoleModulePermissionProjection() {
   const rows = await readLiveModulePermissionRows()
-  const { published } = getShippingPermissionPublication(rows)
-  return buildPermissionCatalog(rows.filter(row => row && published.has(row.code)).map(fromRow))
+  const publication = getShippingPermissionPublication(rows)
+  return {
+    publication,
+    catalog: buildPermissionCatalog(rows.filter(row => row && publication.published.has(row.code)).map(fromRow)),
+  }
 }
 
 export async function loadPermissionDefinition(id: string): Promise<PermissionDefinition> {

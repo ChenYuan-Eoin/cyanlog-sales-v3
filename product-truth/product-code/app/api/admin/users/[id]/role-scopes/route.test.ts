@@ -77,6 +77,19 @@ describe('scoped role assignment route', () => {
     expect(rpc).not.toHaveBeenCalled()
   })
 
+  it('closes new historical baseline assignments and keeps scope removal available', async () => {
+    vi.mocked(validateOrgRoleAssignment).mockResolvedValueOnce({ ok: false, reason: 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN' })
+    const response = await POST(request('POST'), context())
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN' })
+    expect(rpc).not.toHaveBeenCalled()
+
+    expect((await DELETE(request('DELETE'), context())).status).toBe(200)
+    expect(rpc).toHaveBeenCalledExactlyOnceWith('admin_set_role_scope_assignment_v1', expect.objectContaining({
+      p_role_id: role, p_action: 'revoke',
+    }))
+  })
+
   it('reports a department that became unavailable during assignment without claiming success', async () => {
     rpc.mockResolvedValueOnce({ data: null, error: { code: '23514', details: 'DEPARTMENT_SCOPE_UNAVAILABLE' } })
     const response = await POST(request('POST'), context())
