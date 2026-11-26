@@ -32,7 +32,7 @@ describe('Sidebar navigation projection', () => {
     localStorage.clear()
   })
 
-  it('uses one navigation lookup on mount and does not repeat it on route changes', async () => {
+  it('uses one navigation lookup on mount and keeps ordinary route changes quiet', async () => {
     const fetchMock = vi.fn(async (_url: string) => Response.json({ paths: ['/shipping'] }))
     vi.stubGlobal('fetch', fetchMock)
     const first = render(<Sidebar />)
@@ -47,6 +47,32 @@ describe('Sidebar navigation projection', () => {
     render(<Sidebar />)
     await screen.findByRole('link', { name: '自助收寄' })
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/navigation', '/api/navigation'])
+  })
+
+  it('checks permissions again when leaving a permission-controlled page in the same session', async () => {
+    currentPathname = '/shipping'
+    let finishLookup: (response: Response) => void = () => {}
+    const nextLookup = new Promise<Response>(resolve => { finishLookup = resolve })
+    const fetchMock = vi.fn<(_url: string, _init?: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(Response.json({ paths: ['/shipping', '/configs'], onlyProjectedPaths: true }))
+      .mockReturnValueOnce(nextLookup)
+    vi.stubGlobal('fetch', fetchMock)
+    const token = localStorage.getItem('token')
+    const view = render(<Sidebar />)
+    await screen.findByRole('link', { name: '自助收寄' })
+
+    currentPathname = '/profile'
+    view.rerender(<Sidebar />)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/navigation', expect.objectContaining({
+      cache: 'no-store', headers: { Authorization: `Bearer ${token}` },
+    }))
+    expect(screen.getByRole('link', { name: '配置中心' })).toBeInTheDocument()
+
+    await act(async () => finishLookup(Response.json({ paths: ['/configs'], onlyProjectedPaths: true })))
+    expect(screen.queryByRole('link', { name: '自助收寄' })).toBeNull()
+    expect(screen.getByRole('link', { name: '配置中心' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '个人信息' })).toBeInTheDocument()
   })
 
   it('prefetches only the visible destination on hover or keyboard focus', async () => {

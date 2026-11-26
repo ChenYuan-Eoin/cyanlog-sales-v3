@@ -34,6 +34,8 @@ const navItems = [
   { name: '配置中心', href: '/configs', icon: SettingsIcon },
 ]
 
+const permissionNavigationPaths = ['/shipping/settings', '/shipping', '/configs']
+
 interface NavigationAccess {
   paths: string[]
   onlyProjectedPaths: boolean
@@ -41,6 +43,7 @@ interface NavigationAccess {
 
 export function Sidebar() {
   const pathname = usePathname()
+  const permissionPage = permissionNavigationPaths.find(path => pathname === path || pathname.startsWith(`${path}/`))
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const branding = useBranding()
@@ -86,11 +89,11 @@ export function Sidebar() {
       window.removeEventListener('focus', refreshNavigation)
       window.removeEventListener('storage', refreshSession)
     }
-  }, [])
+  }, [permissionPage])
 
   const visibleNavItems = navItems.filter(item => {
     if (!navigation) return false
-    if (navigation.onlyProjectedPaths || ['/configs', '/shipping', '/shipping/settings'].includes(item.href)) {
+    if (navigation.onlyProjectedPaths || permissionNavigationPaths.includes(item.href)) {
       return navigation.paths.includes(item.href)
     }
     return true
