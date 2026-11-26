@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { assertDepartmentInOrg } from '@/lib/admin/org-membership'
+import { assertDepartmentInOrg, DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN } from '@/lib/admin/org-membership'
 import {
   getDefaultOrgId,
   getFreshUserScopedRoleAssignments,
@@ -82,18 +82,13 @@ export async function POST(
       return NextResponse.json({ error: '不能将主属部门设为兼职部门' }, { status: 400 })
     }
 
-    // 批量添加兼职部门（跳过已存在的）
-    const assignments = validDeptIds.map((deptId: string) => ({
-      user_id: userId,
-      department_id: deptId,
-      is_primary: false,
-    }))
-
-    const { error: insertError } = await supabaseAdmin
-      .from('user_departments')
-      .upsert(assignments, { onConflict: 'user_id,department_id' })
-
-    if (insertError) {
+    const { data: saved, error: insertError } = await supabaseAdmin.rpc('admin_change_manual_department_membership_v1', {
+      p_actor_id: currentUser.id, p_org_id: orgId, p_user_id: userId, p_department_ids: validDeptIds, p_action: 'add',
+    })
+    if (insertError?.details === DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN) {
+      return NextResponse.json({ error: '仅系统超级管理员可以调整已获收寄台账权限的部门成员。', code: DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN }, { status: 403 })
+    }
+    if (insertError || saved !== true) {
       console.error('Add departments error:', insertError)
       return NextResponse.json({ error: '添加兼职部门失败' }, { status: 500 })
     }
@@ -170,15 +165,13 @@ export async function DELETE(
       )
     }
 
-    // 删除兼职部门关联
-    const { error: deleteError } = await supabaseAdmin
-      .from('user_departments')
-      .delete()
-      .eq('user_id', userId)
-      .eq('department_id', targetDeptId)
-      .eq('is_primary', false)
-
-    if (deleteError) {
+    const { data: saved, error: deleteError } = await supabaseAdmin.rpc('admin_change_manual_department_membership_v1', {
+      p_actor_id: currentUser.id, p_org_id: orgId, p_user_id: userId, p_department_ids: [targetDeptId], p_action: 'remove',
+    })
+    if (deleteError?.details === DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN) {
+      return NextResponse.json({ error: '仅系统超级管理员可以调整已获收寄台账权限的部门成员。', code: DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN }, { status: 403 })
+    }
+    if (deleteError || saved !== true) {
       console.error('Delete department error:', deleteError)
       return NextResponse.json({ error: '删除兼职部门失败' }, { status: 500 })
     }

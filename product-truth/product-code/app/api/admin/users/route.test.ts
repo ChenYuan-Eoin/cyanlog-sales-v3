@@ -12,10 +12,11 @@ vi.mock('@/lib/scoped-access', () => ({
   getFreshUserScopedRoleAssignments: vi.fn(),
 }))
 
-vi.mock('@/lib/admin/org-membership', () => ({
+vi.mock('@/lib/admin/org-membership', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/admin/org-membership')>(),
   assertDepartmentInOrg: vi.fn(),
   ensureDefaultOrganizationMembership: vi.fn(),
-  syncPrimaryDepartmentMembership: vi.fn(),
+  initializePrimaryDepartmentMembership: vi.fn(),
   syncUserSalesSpaces: vi.fn(),
 }))
 vi.mock('@/lib/fxiaoke/identity', () => ({
@@ -47,7 +48,7 @@ import {
 import {
   assertDepartmentInOrg,
   ensureDefaultOrganizationMembership,
-  syncPrimaryDepartmentMembership,
+  initializePrimaryDepartmentMembership,
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
 import { validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
@@ -138,7 +139,7 @@ describe('POST /api/admin/users', () => {
     ;(validateOrgRoleAssignment as any).mockResolvedValue({ ok: true, roleIds: [] })
     ;(assertDepartmentInOrg as any).mockResolvedValue({ id: primaryDepartmentId })
     ;(ensureDefaultOrganizationMembership as any).mockResolvedValue(undefined)
-    ;(syncPrimaryDepartmentMembership as any).mockResolvedValue(undefined)
+    ;(initializePrimaryDepartmentMembership as any).mockResolvedValue(undefined)
     ;(syncUserSalesSpaces as any).mockResolvedValue(undefined)
   })
 
@@ -188,7 +189,7 @@ describe('POST /api/admin/users', () => {
     expect(res.status).toBe(201)
     expect(canMutateOrgDepartments).not.toHaveBeenCalled()
     expect(assertDepartmentInOrg).not.toHaveBeenCalled()
-    expect(syncPrimaryDepartmentMembership).not.toHaveBeenCalled()
+    expect(initializePrimaryDepartmentMembership).not.toHaveBeenCalled()
     expect(syncUserSalesSpaces).not.toHaveBeenCalled()
     expect(ensureDefaultOrganizationMembership).toHaveBeenCalledWith(userId, orgId)
     expect(membershipUpdate.update).toHaveBeenCalledWith({
@@ -272,8 +273,24 @@ describe('POST /api/admin/users', () => {
 
     expect(res.status).toBe(201)
     expect(assertDepartmentInOrg).toHaveBeenCalledWith(orgId, primaryDepartmentId)
-    expect(syncPrimaryDepartmentMembership).toHaveBeenCalledWith(userId, primaryDepartmentId, orgId)
+    expect(initializePrimaryDepartmentMembership).toHaveBeenCalledWith('admin-user', orgId, userId, primaryDepartmentId)
     expect(syncUserSalesSpaces).toHaveBeenCalledWith(userId, orgId, primaryDepartmentId)
+  })
+
+  it('初始主部门受到台账授权保护时拒绝并且不创建邀请', async () => {
+    const { invitationInsert } = mockSuccessfulUserInsert()
+    ;(initializePrimaryDepartmentMembership as any).mockRejectedValueOnce({
+      code: '42501', details: 'DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN',
+    })
+    const response = await POST(makeRequest({ primary_dept_id: primaryDepartmentId }))
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ code: 'DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN' })
+    expect(invitationInsert.insert).not.toHaveBeenCalled()
+    expect(syncUserSalesSpaces).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).toHaveBeenLastCalledWith('users')
+    expect(invitationInsert.delete).toHaveBeenCalledOnce()
+    expect(invitationInsert.eq).toHaveBeenCalledWith('id', userId)
+    expect(invitationInsert.eq).toHaveBeenCalledWith('org_id', orgId)
   })
 
   it('关联写失败时补偿删除同时限定用户和组织', async () => {

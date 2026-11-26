@@ -13,7 +13,7 @@ export const SHIPPING_ACTION_DEFINITIONS = {
   'shipping:owner_tracking_refresh': ['同步本人运单物流', '向承运商查询本人运单状态并回写已验证的状态。'],
   'shipping:owner_cancel': ['取消本人工单或运单', '按本人单据的处理状态取消符合条件的工单或运单。'],
   'shipping:owner_change': ['本人运单在途转寄与退回', '对符合条件的本人运单发起在途转寄或退回。'],
-  'shipping:ledger_view': ['查看收寄台账', '查看当前组织的寄件工单和系统已保存的物流。'],
+  'shipping:ledger_view': ['查看收寄台账', '查看授权范围内的寄件工单和系统已保存的物流。'],
   'shipping:record_create': ['录入寄件工单', '在工作台录入或批量提报工单。'],
   'shipping:record_review': ['核对与处理工单', '分配归属、修改、退回或重新核对工单。'],
   'shipping:order_confirm': ['确认并下单', '确认审核后的工单并向顺丰下单。'],

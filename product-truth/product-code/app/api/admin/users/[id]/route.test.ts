@@ -9,9 +9,9 @@ vi.mock('@/lib/scoped-access', () => ({
   getFreshUserScopedRoleAssignments: vi.fn(),
 }))
 
-vi.mock('@/lib/admin/org-membership', () => ({
+vi.mock('@/lib/admin/org-membership', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/admin/org-membership')>(),
   assertDepartmentInOrg: vi.fn(),
-  syncPrimaryDepartmentMembership: vi.fn(),
   syncUserSalesSpaces: vi.fn(),
 }))
 
@@ -386,6 +386,40 @@ describe('/api/admin/users/[id] account lifecycle', () => {
         p_user_id: targetId,
         p_department_id: departmentId,
       }),
+    )
+  })
+
+  it('主部门调岗受到台账授权保护时不写入同请求其他资料', async () => {
+    const lookup = makeQuery({ data: targetUser(), error: null })
+    ;(supabaseAdmin.from as any).mockReturnValue(lookup)
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({
+      data: null, error: { code: '42501', details: 'DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN' },
+    })
+
+    const response = await PATCH(patchRequest({
+      primary_dept_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', display_name: '未保存',
+    }), routeContext)
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ code: 'DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN' })
+    expect(lookup.update).not.toHaveBeenCalled()
+  })
+
+  it('主部门和资料合并提交时使用一次事务，返回数据库回读', async () => {
+    const departmentId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+    const lookup = makeQuery({ data: targetUser(), error: null })
+    ;(supabaseAdmin.from as any).mockReturnValue(lookup)
+    const updated = targetUser({ primary_dept_id: departmentId, display_name: '已更新' })
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: updated, error: null })
+
+    const response = await PATCH(patchRequest({ primary_dept_id: departmentId, display_name: '已更新' }), routeContext)
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ data: updated })
+    expect(lookup.update).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith(
+      'admin_update_member_profile_and_primary_department_v1',
+      expect.objectContaining({ p_department_id: departmentId, p_profile: { display_name: '已更新' } }),
     )
   })
 })

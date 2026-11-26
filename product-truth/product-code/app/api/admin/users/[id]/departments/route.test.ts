@@ -5,7 +5,8 @@ vi.mock('@/lib/auth', () => ({
   requireAuth: vi.fn(),
 }))
 
-vi.mock('@/lib/admin/org-membership', () => ({
+vi.mock('@/lib/admin/org-membership', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/admin/org-membership')>(),
   assertDepartmentInOrg: vi.fn(),
 }))
 
@@ -18,6 +19,7 @@ vi.mock('@/lib/scoped-access', () => ({
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     from: vi.fn(),
+    rpc: vi.fn(),
   },
 }))
 
@@ -45,6 +47,7 @@ function makeRequest(body: unknown, url = 'https://example.test/api/admin/users/
 describe('/api/admin/users/[id]/departments validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
     ;(requireAuth as any).mockResolvedValue({ id: 'admin-user' })
     ;(getDefaultOrgId as any).mockResolvedValue('org-1')
     ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue(['fresh-assignment'])
@@ -133,23 +136,17 @@ describe('/api/admin/users/[id]/departments validation', () => {
       data: departmentIds.map((id) => ({ id })),
       error: null,
     })
-    const upsertQuery = makeQuery({ data: null, error: null })
     ;(supabaseAdmin.from as any)
       .mockReturnValueOnce(userLookup)
       .mockReturnValueOnce(departmentLookup)
-      .mockReturnValueOnce(upsertQuery)
 
     const res = await POST(makeRequest({ department_ids: departmentIds }), routeContext)
 
     expect(res.status).toBe(200)
-    expect(upsertQuery.upsert).toHaveBeenCalledWith(
-      departmentIds.map((departmentId) => ({
-        user_id: '00000000-0000-0000-0000-000000000001',
-        department_id: departmentId,
-        is_primary: false,
-      })),
-      { onConflict: 'user_id,department_id' }
-    )
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_change_manual_department_membership_v1', {
+      p_actor_id: 'admin-user', p_org_id: 'org-1', p_user_id: '00000000-0000-0000-0000-000000000001',
+      p_department_ids: departmentIds, p_action: 'add',
+    })
   })
 
   it('没有当前组织用户写权限时，不访问业务表并拒绝 DELETE', async () => {
@@ -187,7 +184,7 @@ describe('/api/admin/users/[id]/departments validation', () => {
     expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
   })
 
-  it('删除当前组织兼职部门时最终限定 is_primary=false', async () => {
+  it('删除当前组织兼职部门时使用事务服务', async () => {
     const userLookup = makeQuery({
       data: {
         id: '00000000-0000-0000-0000-000000000001',
@@ -197,10 +194,8 @@ describe('/api/admin/users/[id]/departments validation', () => {
       },
       error: null,
     })
-    const deleteQuery = makeQuery({ data: null, error: null })
     ;(supabaseAdmin.from as any)
       .mockReturnValueOnce(userLookup)
-      .mockReturnValueOnce(deleteQuery)
     const departmentId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     ;(assertDepartmentInOrg as any).mockResolvedValue({ id: departmentId })
 
@@ -210,10 +205,28 @@ describe('/api/admin/users/[id]/departments validation', () => {
     ), routeContext)
 
     expect(res.status).toBe(200)
-    expect(deleteQuery.delete).toHaveBeenCalledOnce()
-    expect(deleteQuery.eq).toHaveBeenCalledWith('user_id', '00000000-0000-0000-0000-000000000001')
-    expect(deleteQuery.eq).toHaveBeenCalledWith('department_id', departmentId)
-    expect(deleteQuery.eq).toHaveBeenCalledWith('is_primary', false)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_change_manual_department_membership_v1', {
+      p_actor_id: 'admin-user', p_org_id: 'org-1', p_user_id: '00000000-0000-0000-0000-000000000001',
+      p_department_ids: [departmentId], p_action: 'remove',
+    })
+  })
+
+  it.each([['add', POST], ['remove', DELETE]] as const)('返回台账授权限制 %s', async (action, handler) => {
+    const departmentId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const userLookup = makeQuery({
+      data: { id: '00000000-0000-0000-0000-000000000001', primary_dept_id: null, org_id: 'org-1' }, error: null,
+    })
+    ;(supabaseAdmin.from as any).mockReturnValueOnce(userLookup)
+      .mockReturnValueOnce(makeQuery({ data: [{ id: departmentId }], error: null }))
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({
+      data: null, error: { code: '42501', details: 'DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN' },
+    })
+
+    const response = await handler(makeRequest(
+      action === 'add' ? { department_ids: [departmentId] } : { department_id: departmentId },
+    ), routeContext)
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ code: 'DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN' })
   })
 })
 

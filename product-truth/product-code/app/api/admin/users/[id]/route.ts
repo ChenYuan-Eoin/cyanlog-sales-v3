@@ -9,9 +9,7 @@ import {
   getFreshDefaultOrgId,
   getFreshUserScopedRoleAssignments,
 } from '@/lib/scoped-access'
-import {
-  assertDepartmentInOrg,
-} from '@/lib/admin/org-membership'
+import { assertDepartmentInOrg, DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN } from '@/lib/admin/org-membership'
 import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
 import { canPerformMemberAction } from '@/lib/admin/member-actions'
 import { ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN } from '@/lib/admin/member-action-keys'
@@ -192,15 +190,37 @@ export async function PATCH(
       }
     }
 
-    // 更新数据
     const updateData: Record<string, unknown> = {}
     if (display_name !== undefined) updateData.display_name = display_name
     if (phone !== undefined) updateData.phone = phone
     if (title !== undefined) updateData.title = title
     if (report_to_user_id !== undefined) updateData.report_to_user_id = report_to_user_id || null
+    const hasProfileChanges = Object.keys(updateData).length > 0
 
     let data: Record<string, unknown> = { ...existing }
-    if (Object.keys(updateData).length > 0) {
+    if (primary_dept_id !== undefined) {
+      const args = {
+        p_actor_id: currentUser.id,
+        p_org_id: orgId,
+        p_user_id: id,
+        p_department_id: primary_dept_id,
+        p_reason: 'profile update',
+        p_request_id: req.headers.get('x-request-id'),
+      }
+      const { data: transferred, error: transferError } = hasProfileChanges
+        ? await supabaseAdmin.rpc('admin_update_member_profile_and_primary_department_v1', { ...args, p_profile: updateData })
+        : await supabaseAdmin.rpc('admin_transfer_primary_department_v1', args)
+      if (transferError?.details === DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN) {
+        return NextResponse.json({ error: '仅系统超级管理员可以调整已获收寄台账权限的部门成员。', code: DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN }, { status: 403 })
+      }
+      const updatedMember = hasProfileChanges && transferred && typeof transferred === 'object' && !Array.isArray(transferred)
+        ? transferred as Record<string, unknown> : null
+      if (transferError || (hasProfileChanges ? !updatedMember : transferred !== true)) {
+        console.error('Update user department transaction error:', transferError || 'target_not_updated')
+        return NextResponse.json({ error: '更新成员部门关联失败' }, { status: 500 })
+      }
+      data = updatedMember ?? { ...data, primary_dept_id }
+    } else if (hasProfileChanges) {
       const { data: updated, error } = await supabaseAdmin
         .from('users')
         .update(updateData)
@@ -214,25 +234,6 @@ export async function PATCH(
         return NextResponse.json({ error: '更新用户失败' }, { status: 500 })
       }
       data = updated
-    }
-
-    if (primary_dept_id !== undefined) {
-      const { data: transferred, error: transferError } = await supabaseAdmin.rpc(
-        'admin_transfer_primary_department_v1',
-        {
-          p_actor_id: currentUser.id,
-          p_org_id: orgId,
-          p_user_id: id,
-          p_department_id: primary_dept_id,
-          p_reason: 'profile update',
-          p_request_id: req.headers.get('x-request-id'),
-        },
-      )
-      if (transferError || transferred !== true) {
-        console.error('Update user department transaction error:', transferError || 'target_not_updated')
-        return NextResponse.json({ error: '更新成员部门关联失败' }, { status: 500 })
-      }
-      data = { ...data, primary_dept_id }
     }
 
     return NextResponse.json({

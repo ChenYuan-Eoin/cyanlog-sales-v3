@@ -36,101 +36,16 @@ export async function ensureDefaultOrganizationMembership(userId: string, orgId:
   }
 }
 
-export async function syncPrimaryDepartmentMembership(
-  userId: string,
-  primaryDeptId: string | null,
-  expectedOrgId?: string
+export const DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN = 'DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN'
+
+export async function initializePrimaryDepartmentMembership(
+  actorId: string, orgId: string, userId: string, departmentId: string,
 ) {
-  const { data: user, error: userError } = await supabaseAdmin
-    .from('users')
-    .select('id, org_id, primary_dept_id')
-    .eq('id', userId)
-    .maybeSingle()
-
-  if (userError || !user) {
-    throw new Error('PRIMARY_DEPARTMENT_USER_NOT_FOUND')
-  }
-
-  const authoritativeOrgId = user.org_id as string
-  const authoritativePrimaryDeptId = (user.primary_dept_id as string | null) || null
-  if (expectedOrgId && expectedOrgId !== authoritativeOrgId) {
-    throw new Error('PRIMARY_DEPARTMENT_ORG_MISMATCH')
-  }
-  if (authoritativePrimaryDeptId !== primaryDeptId) {
-    throw new Error('PRIMARY_DEPARTMENT_STATE_MISMATCH')
-  }
-
-  if (primaryDeptId) {
-    const targetDepartment = await assertDepartmentInOrg(authoritativeOrgId, primaryDeptId)
-    if (!targetDepartment) {
-      throw new Error('PRIMARY_DEPARTMENT_INVALID')
-    }
-  }
-
-  const { data: primaryMemberships, error: membershipError } = await supabaseAdmin
-    .from('user_departments')
-    .select('department_id')
-    .eq('user_id', userId)
-    .eq('is_primary', true)
-
-  if (membershipError) {
-    throw new Error('PRIMARY_DEPARTMENT_SYNC_FAILED')
-  }
-
-  const primaryDepartmentIds = Array.from(new Set(
-    (primaryMemberships || [])
-      .map((membership) => membership.department_id as string | null)
-      .filter((departmentId): departmentId is string => Boolean(departmentId))
-  ))
-
-  let currentOrgPrimaryIds: string[] = []
-  if (primaryDepartmentIds.length > 0) {
-    const { data: currentOrgDepartments, error: departmentError } = await supabaseAdmin
-      .from('departments')
-      .select('id')
-      .eq('org_id', authoritativeOrgId)
-      .in('id', primaryDepartmentIds)
-
-    if (departmentError) {
-      throw new Error('PRIMARY_DEPARTMENT_SYNC_FAILED')
-    }
-
-    currentOrgPrimaryIds = (currentOrgDepartments || [])
-      .map((department) => department.id as string)
-      .filter((departmentId) => departmentId !== primaryDeptId)
-  }
-
-  if (currentOrgPrimaryIds.length > 0) {
-    const { error: deleteError } = await supabaseAdmin
-      .from('user_departments')
-      .delete()
-      .eq('user_id', userId)
-      .eq('is_primary', true)
-      .in('department_id', currentOrgPrimaryIds)
-
-    if (deleteError) {
-      throw new Error('PRIMARY_DEPARTMENT_SYNC_FAILED')
-    }
-  }
-
-  if (!primaryDeptId) {
-    return
-  }
-
-  const { error } = await supabaseAdmin
-    .from('user_departments')
-    .upsert(
-      {
-        user_id: userId,
-        department_id: primaryDeptId,
-        is_primary: true,
-      },
-      { onConflict: 'user_id,department_id' }
-    )
-
-  if (error) {
-    throw new Error('PRIMARY_DEPARTMENT_SYNC_FAILED')
-  }
+  const { data, error } = await supabaseAdmin.rpc('admin_change_manual_department_membership_v1', {
+    p_actor_id: actorId, p_org_id: orgId, p_user_id: userId, p_department_ids: [departmentId], p_action: 'initialize',
+  })
+  if (error) throw error
+  if (data !== true) throw new Error('PRIMARY_DEPARTMENT_SYNC_FAILED')
 }
 
 export async function syncUserSalesSpaces(userId: string, orgId: string, primaryDeptId: string | null) {

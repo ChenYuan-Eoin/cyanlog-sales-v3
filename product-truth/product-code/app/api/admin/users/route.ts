@@ -14,8 +14,9 @@ import {
 } from '@/lib/scoped-access'
 import {
   assertDepartmentInOrg,
+  DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN,
   ensureDefaultOrganizationMembership,
-  syncPrimaryDepartmentMembership,
+  initializePrimaryDepartmentMembership,
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
 import { validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
@@ -206,7 +207,7 @@ export async function POST(req: NextRequest) {
         .eq('org_id', orgId)
       if (invitedMembershipError) throw invitedMembershipError
       if (primary_dept_id) {
-        await syncPrimaryDepartmentMembership(user.id, primary_dept_id, orgId)
+        await initializePrimaryDepartmentMembership(currentUser.id, orgId, user.id, primary_dept_id)
         await syncUserSalesSpaces(user.id, orgId, primary_dept_id)
       }
       const { error: invitationError } = await supabaseAdmin
@@ -223,8 +224,12 @@ export async function POST(req: NextRequest) {
         })
       if (invitationError) throw invitationError
     } catch (syncError) {
-      console.error('Create user consistency error:', syncError)
       await supabaseAdmin.from('users').delete().eq('id', user.id).eq('org_id', orgId)
+      if (syncError && typeof syncError === 'object' && 'details' in syncError
+        && syncError.details === DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN) {
+        return NextResponse.json({ error: '仅系统超级管理员可以调整已获收寄台账权限的部门成员。', code: DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN }, { status: 403 })
+      }
+      console.error('Create user consistency error:', syncError)
       return NextResponse.json({ error: '创建用户关联数据失败' }, { status: 500 })
     }
 
