@@ -144,13 +144,22 @@ export async function createAnonymousShipment(args: { orgId: string; key: string
   return { order, receiptToken }
 }
 
-export async function createOwnerShipment(args: { orgId: string; userId: string; key: string; input: ShippingInput; usesDefaultSender?: boolean }) {
+export async function createOwnerShipment(args: {
+  orgId: string
+  userId: string
+  key: string
+  input: ShippingInput
+  usesDefaultSender?: boolean
+  attributedDepartmentId?: string
+}) {
   const receiptToken = createShipmentReceiptToken(args.key)
   requireOrganization(args.orgId)
   // Derived defaults may change after a lost response. The same original input
   // must still retrieve its first work order and sender snapshot without dispatch.
   const payloadHash = hash(JSON.stringify({ ...args.input, sender: args.usesDefaultSender ? null : args.input.sender }))
-  const row = { order_no: newShippingOrderNo(), org_id: args.orgId, carrier_connection_id: null, billing_account_id: null, sender_profile_id: null, connection_environment: null, billing_account_tail: null, shipping_config_snapshot: {}, created_by: args.userId, intake_source: 'owner_web', confirmation_policy: 'scheduled_review', status: 'awaiting_confirmation', sales_ref: null, customer_ref: null, assignment_status: 'unassigned', raw_input: null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: args.key, receipt_token_hash: hash(receiptToken), next_review_at: nextShippingReviewAt() }
+  const row = { order_no: newShippingOrderNo(), org_id: args.orgId, carrier_connection_id: null, billing_account_id: null, sender_profile_id: null, connection_environment: null, billing_account_tail: null, shipping_config_snapshot: {}, created_by: args.userId, intake_source: 'owner_web', confirmation_policy: 'scheduled_review', status: 'awaiting_confirmation', sales_ref: null, customer_ref: null, assignment_status: 'unassigned', raw_input: null, shipment_payload: args.input, payload_hash: payloadHash, idempotency_key: args.key, receipt_token_hash: hash(receiptToken), next_review_at: nextShippingReviewAt(),
+    ...(args.attributedDepartmentId ? { attributed_department_id: args.attributedDepartmentId } : {}),
+  }
   let result = await supabaseAdmin.from('shipping_orders').insert(row).select(select).single()
   if (result.error?.code === '23505') {
     result = await supabaseAdmin.from('shipping_orders').select(select).eq('org_id', args.orgId).eq('created_by', args.userId).eq('intake_source', 'owner_web').eq('idempotency_key', args.key).single()
@@ -225,11 +234,27 @@ function requireOrganization(orgId: string) {
   if (!orgId) throw new ShippingError(403, '当前账号没有可用的组织寄件授权。')
 }
 
-export async function listShipmentLedger(orgId: string, filters: { salesRef?: string; customerRef?: string; contact?: string; status?: ShipmentOrderStatus; cursor?: string; page?: number; submittedFrom?: string; submittedBefore?: string; limit: number }) {
-  requireOrganization(orgId)
-  let query = supabaseAdmin.from('shipping_orders').select(ledgerSelect).eq('org_id', orgId)
-    .order('created_at', { ascending: false }).limit(filters.limit)
+function scopedLedgerRows(orgId: string, departmentIds?: readonly string[]) {
+  const query = supabaseAdmin.from('shipping_orders').select(ledgerSelect).eq('org_id', orgId)
     .order('event_at', { ascending: false, referencedTable: ledgerEvents }).limit(20, { referencedTable: ledgerEvents })
+  return departmentIds ? query.in('attributed_department_id', departmentIds) : query
+}
+
+function mapLedgerOrder(row: ShipmentRow): ShipmentOrder {
+  const order = map(row)
+  const waybills = Array.isArray(row.shipping_waybills) ? row.shipping_waybills : row.shipping_waybills ? [row.shipping_waybills] : []
+  const failure = row.shipping_config_snapshot?.orderFailure as { stage?: unknown } | undefined
+  return {
+    ...order,
+    canCancel: canCancelShipment(row, order.status, waybills, failure?.stage),
+    cancellationState: row.cancel_phase ?? null,
+  }
+}
+
+export async function listShipmentLedger(orgId: string, filters: { salesRef?: string; customerRef?: string; contact?: string; status?: ShipmentOrderStatus; cursor?: string; page?: number; submittedFrom?: string; submittedBefore?: string; limit: number }, departmentIds?: readonly string[]) {
+  requireOrganization(orgId)
+  if (departmentIds?.length === 0) return []
+  let query = scopedLedgerRows(orgId, departmentIds)
   if (filters.salesRef) query = query.eq('sales_ref', filters.salesRef)
   if (filters.customerRef) query = query.eq('customer_ref', filters.customerRef)
   if (filters.status) query = query.eq('status', filters.status)
@@ -246,17 +271,15 @@ export async function listShipmentLedger(orgId: string, filters: { salesRef?: st
   }
   const { data, error } = await query
   if (error) throw new ShippingError(503, '收寄件台账暂不可用。')
-  return (data || []).map(raw => {
-    const row = raw as unknown as ShipmentRow
-    const order = map(row)
-    const waybills = Array.isArray(row.shipping_waybills) ? row.shipping_waybills : row.shipping_waybills ? [row.shipping_waybills] : []
-    const failure = row.shipping_config_snapshot?.orderFailure as { stage?: unknown } | undefined
-    return {
-      ...order,
-      canCancel: canCancelShipment(row, order.status, waybills, failure?.stage),
-      cancellationState: row.cancel_phase ?? null,
-    }
-  })
+  return (data || []).map(raw => mapLedgerOrder(raw as unknown as ShipmentRow))
+}
+
+export async function getScopedShipmentLedgerRecord(orgId: string, id: string, departmentIds?: readonly string[]): Promise<ShipmentOrder | null> {
+  requireOrganization(orgId)
+  if (departmentIds?.length === 0) return null
+  const { data, error } = await scopedLedgerRows(orgId, departmentIds).eq('id', id).maybeSingle()
+  if (error) throw new ShippingError(503, '收寄件台账暂不可用。')
+  return data ? mapLedgerOrder(data as unknown as ShipmentRow) : null
 }
 
 export async function assignShipmentRelation(id: string, orgId: string, salesRef: string, customerRef?: string) {

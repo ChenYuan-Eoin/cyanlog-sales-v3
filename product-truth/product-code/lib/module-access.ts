@@ -106,17 +106,29 @@ export function getPublishedModulePermissionKeys(rows: readonly unknown[]): stri
     return row.status === 'published' && row.kind === 'atomic' && row.resource === 'shipping'
       && row.category === 'shipping' && row.action === code.slice('shipping:'.length)
       && row.enforcement_consumer === consumer
-      && Array.isArray(row.supported_scope_types) && row.supported_scope_types.length === 1
-      && row.supported_scope_types[0] === (isShippingOwnerPermission(code) ? 'self' : 'org')
+      && Array.isArray(row.supported_scope_types)
+      && ((row.supported_scope_types.length === 1
+        && row.supported_scope_types[0] === (isShippingOwnerPermission(code) ? 'self' : 'org'))
+        || (code === 'shipping:ledger_view' && hasDepartmentLedgerScope(row)))
       && Array.isArray(row.dependencies)
       && (dependency ? row.dependencies.length === 1 && row.dependencies[0] === dependency : row.dependencies.length === 0)
   })
 }
 
+function hasDepartmentLedgerScope(row: Record<string, unknown>) {
+  const scopes = row.supported_scope_types
+  return Array.isArray(scopes) && scopes.length === 2 && scopes.includes('org') && scopes.includes('department')
+}
+
 export function getShippingPermissionPublication(rows: readonly unknown[]) {
   const registered = new Set(rows.flatMap(row =>
     row && typeof row === 'object' && 'code' in row && typeof row.code === 'string' ? [row.code] : []))
-  return { registered, published: new Set(getPublishedModulePermissionKeys(rows)) }
+  const published = new Set(getPublishedModulePermissionKeys(rows))
+  const departmentLedgerPublished = published.has('shipping:ledger_view') && rows.some(row => (
+    !!row && typeof row === 'object' && 'code' in row && row.code === 'shipping:ledger_view'
+    && hasDepartmentLedgerScope(row as Record<string, unknown>)
+  ))
+  return { registered, published, departmentLedgerPublished }
 }
 
 /** The legacy registration bridges absent detailed rows, but never a present unpublished row. */

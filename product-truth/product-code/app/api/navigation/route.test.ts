@@ -46,3 +46,12 @@ it('returns no links after the current organization, authorization source, or au
   expect(await unauthenticated.json()).toEqual({ paths: [] })
   expect(resolveShippingEntry).toHaveBeenCalledTimes(2)
 })
+
+it('advertises the shipping ledger for a department grant without exposing settings', async () => {
+  vi.mocked(resolveShippingEntry).mockResolvedValue({
+    orgId: 'org1', canOperate: false, canViewOwn: false, canSubmitOwn: false, canManageConnections: false,
+    canReadLegacyReceipt: false, permissions: [], ownerPermissions: [],
+    departmentLedger: [{ id: 'north', name: '华北', parentId: null }],
+  })
+  expect(await (await GET(request())).json()).toEqual({ paths: ['/shipping'] })
+})

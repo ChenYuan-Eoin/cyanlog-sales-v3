@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { shippingHandler, shippingJson } from '@/lib/shipping/http'
+import { shippingHandler, shippingJson, shippingLedgerRead } from '@/lib/shipping/http'
 import { shipmentLedgerQuerySchema } from '@/lib/shipping/validation'
 import { listShipmentLedger } from '@/lib/shipping/collaboration'
 import { submitShippingWorkorder } from '@/lib/shipping/owner-submission'
@@ -7,9 +7,9 @@ import { submitShippingWorkorder } from '@/lib/shipping/owner-submission'
 export const runtime = 'nodejs'
 
 export async function GET(req: NextRequest) {
-  return shippingHandler(req, async (_user, orgId) => {
-    const filters = shipmentLedgerQuerySchema.parse(Object.fromEntries(req.nextUrl.searchParams.entries()))
-    const records = await listShipmentLedger(orgId, filters)
+  return shippingLedgerRead(req, async ({ orgId, departmentIds, query }) => {
+    const filters = shipmentLedgerQuerySchema.parse(query)
+    const records = await listShipmentLedger(orgId, filters, departmentIds)
     if (filters.page !== undefined) {
       return {
         records: records.slice(0, filters.limit),

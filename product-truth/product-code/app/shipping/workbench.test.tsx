@@ -164,6 +164,40 @@ describe('self-service shipping workbench', () => {
       { limit: '50', page: '1', submittedFrom: '2026-11-18T08:15:00.000Z', submittedBefore: '2026-11-18T09:01:00.000Z' },
     ])
   })
+
+  it('adds the optional department selector to the existing ledger without discarding dates or pagination', async () => {
+    const parent = 'be279d15-5e53-4b46-b0d9-a293654dc145'
+    const child = 'e582bc58-cdf9-4d71-8f50-d21541a17ec3'
+    const ledgerDepartments = [{ id: parent, name: '华南', parentId: null }, { id: child, name: '销售一部', parentId: parent }]
+    fetcher.mockImplementation(async (url: string) => {
+      const params = new URL(url, 'https://example.test').searchParams
+      return Response.json({ records: [], nextPage: params.get('page') === '0' ? 1 : null })
+    })
+    await act(async () => { render(<ShippingWorkbench settings={{ ...settings, permissions: ['shipping:ledger_view'] }} ledgerDepartments={ledgerDepartments} />) })
+    expect(screen.getByRole('option', { name: '全部寄件记录' })).toHaveProperty('value', '')
+    const requests = () => fetcher.mock.calls.map(([url]) => new URL(String(url), 'https://example.test').searchParams)
+    await waitFor(() => expect(requests()).toHaveLength(1))
+    expect(requests()[0].toString()).toBe('limit=50&page=0')
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '本周' })) })
+    await waitFor(() => expect(requests()).toHaveLength(2))
+    const from = requests()[1].get('submittedFrom')
+    const before = requests()[1].get('submittedBefore')
+    expect(from).toBeTruthy()
+    expect(before).toBeTruthy()
+    await act(async () => { fireEvent.change(screen.getByRole('combobox', { name: '查看部门' }), { target: { value: parent } }) })
+    await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: '含下级部门' })) })
+    await waitFor(() => expect(requests()).toHaveLength(4))
+    await waitFor(() => expect(screen.getByRole('button', { name: '下一页' })).toHaveProperty('disabled', false))
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '下一页' })) })
+
+    await waitFor(() => expect(requests()).toHaveLength(5))
+    expect(requests().slice(2).map(query => Object.fromEntries(query))).toEqual([
+      { limit: '50', page: '0', departmentId: parent, includeSubdepartments: 'false', submittedFrom: from, submittedBefore: before },
+      { limit: '50', page: '0', departmentId: parent, includeSubdepartments: 'true', submittedFrom: from, submittedBefore: before },
+      { limit: '50', page: '1', departmentId: parent, includeSubdepartments: 'true', submittedFrom: from, submittedBefore: before },
+    ])
+  })
   it('keeps an external failed query separate from the unrelated selected work order', async () => {
     const order = { ...fixtureOrders[0], status: 'returned' as const, waybill: null }
     fetcher.mockImplementation(async (url: string) => url.endsWith('/tracking') ? Response.json({ error: '请校验运单归属' }, { status: 403 }) : Response.json({ records: [order] }))

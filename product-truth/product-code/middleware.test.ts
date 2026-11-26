@@ -39,7 +39,7 @@ afterEach(() => {
   }
 })
 
-type TestDepartment = { id: string; org_id: string; status: string; leader_id?: string }
+type TestDepartment = { id: string; org_id: string; status: string; leader_id?: string; name?: string; parent_id?: string | null }
 type TestDepartmentAccess = { org_id: string; user_id: string; department_id: string; department: TestDepartment }
 
 function mockExactOrgAuth(options: {
@@ -60,7 +60,8 @@ function mockExactOrgAuth(options: {
   sourceConnectionState?: string
   shippingOperatorStatus?: string
   shippingOperatorScopes?: string[]
-  shippingActions?: Record<string, { status: string; dependencies: string[] }>
+  shippingActions?: Record<string, { status: string; dependencies: string[]; supported_scope_types?: string[] }>
+  userDepartments?: TestDepartmentAccess[]
   organizationStatus?: string
   sessionCreatedAt?: string
   sessionExpiresAt?: string
@@ -94,7 +95,13 @@ function mockExactOrgAuth(options: {
     if (table === 'departments') {
       expect(url.searchParams.get('org_id')).toBe(`eq.${options.orgId}`)
       expect(url.searchParams.get('status')).toBe('eq.active')
-      return Response.json((options.departments ?? []).filter(department => url.searchParams.get('id') === `eq.${department.id}`))
+      const id = url.searchParams.get('id')
+      return Response.json((options.departments ?? []).filter(department => id === null || id === `eq.${department.id}`))
+    }
+    if (table === 'user_departments') {
+      expect(url.searchParams.get('org_id')).toBe(`eq.${options.orgId}`)
+      expect(url.searchParams.get('user_id')).toBe('eq.user-1')
+      return Response.json(options.userDepartments ?? [])
     }
     if (table === 'department_lead_access') {
       expect(url.searchParams.get('org_id')).toBe(`eq.${options.orgId}`)
@@ -652,6 +659,52 @@ describe('role-free federated session boundary', () => {
   })
 })
 
+
+describe('department-scoped shipping ledger admission', () => {
+  const department = { id: 'dept-a', org_id: 'org-a', status: 'active', name: '华南', parent_id: null }
+  const membership = { department_id: department.id, org_id: department.org_id, user_id: 'user-1', department }
+  const options = {
+    token: 'ledger-scope', orgId: 'org-a', roles: [], departments: [department], userDepartments: [membership],
+    settings: { department_permission_grants: { 'dept-a': { permissions: ['shipping:ledger_view'], include_subdepartments: true } } },
+    shippingActions: { 'shipping:ledger_view': { status: 'published', dependencies: [], supported_scope_types: ['org', 'department'] } },
+  }
+  const record = '/api/shipping/ledger/c4a05f87-2940-4991-a409-634ce320640b'
+  const request = (path: string, method = 'GET') => middleware(makeRequest(
+    `https://sales.cyanlog.icu${path}`, { authorization: 'Bearer ledger-scope' }, method,
+  ))
+
+  it('admits only list, detail and entry for an explicitly scoped reader without an organization role', async () => {
+    mockExactOrgAuth(options)
+    expect((await request('/')).headers.get('location')).toBe('https://sales.cyanlog.icu/shipping')
+    for (const path of ['/shipping', '/api/navigation', '/api/shipping/ledger', record]) {
+      expect((await request(path)).status, path).toBe(200)
+    }
+    for (const [path, method] of [
+      ['/api/shipping/settings?workspace=1', 'GET'], ['/api/shipping/contacts', 'GET'],
+      ['/api/shipping/orders', 'GET'], ['/api/shipping/owner/orders', 'GET'], [`${record}/carrier-changes`, 'GET'],
+      ['/api/shipping/ledger', 'POST'], [`${record}/confirm`, 'POST'], [`${record}/amend`, 'POST'],
+    ]) {
+      expect((await request(path, method)).status, path).toBe(403)
+    }
+  })
+
+  it('admits an existing role across the new detail read without treating department reads as broader access', async () => {
+    mockExactOrgAuth({ ...options, roles: [{ roles: { id: 'r-other', code: 'READONLY', permissions: [] } }], authMethod: 'fxiaoke' })
+    expect((await request(record)).status).toBe(200)
+    expect((await request(`${record}/carrier-changes`)).status).toBe(403)
+    expect((await request('/api/shipping/settings?workspace=1')).status).toBe(403)
+    expect((await request('/api/shipping/ledger', 'POST')).status).toBe(403)
+  })
+
+  it('denies the next list and detail after either revocation or lost publication', async () => {
+    mockExactOrgAuth(options)
+    expect((await request('/api/shipping/ledger')).status).toBe(200)
+    mockExactOrgAuth({ ...options, settings: {} })
+    expect((await request(record)).status).toBe(403)
+    mockExactOrgAuth({ ...options, shippingActions: { 'shipping:ledger_view': { status: 'draft', dependencies: [], supported_scope_types: ['org', 'department'] } } })
+    expect((await request('/api/shipping/ledger')).status).toBe(403)
+  })
+})
 
 describe('department-scoped workspace admission', () => {
   const department = { id: 'dept-a', org_id: 'org-a', status: 'active', leader_id: 'user-1' }

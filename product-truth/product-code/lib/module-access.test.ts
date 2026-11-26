@@ -38,6 +38,18 @@ describe('shipping-only registered actions', () => {
     ])).toEqual([])
   })
 
+  it('publishes department scope only for the exact ledger-view definition', () => {
+    const organizationOnly = granularPermission('ledger_view')
+    const scopedLedger = { ...organizationOnly, supported_scope_types: ['org', 'department'] }
+    expect(getShippingPermissionPublication([scopedLedger]).departmentLedgerPublished).toBe(true)
+    expect(getShippingPermissionPublication([organizationOnly]).published.has(organizationOnly.code)).toBe(true)
+    for (const rows of [
+      [organizationOnly], [organizationOnly, scopedLedger], [{ ...scopedLedger, status: 'draft' }],
+      [{ ...scopedLedger, supported_scope_types: ['org', 'space'] }],
+      [{ ...granularPermission('record_review', 'ledger_view'), supported_scope_types: ['org', 'department'] }],
+    ]) expect(getShippingPermissionPublication(rows).departmentLedgerPublished).toBe(false)
+  })
+
   it('makes saved granular grants independent and bridges legacy permissions only while registered', () => {
     const ledger = granularPermission('ledger_view')
     const confirm = granularPermission('order_confirm', 'ledger_view')

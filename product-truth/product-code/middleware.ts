@@ -55,6 +55,7 @@ import {
   type ShippingPermissionKey,
 } from '@/lib/module-access'
 import { sessionDeadline } from '@/lib/auth/fxiaoke-session'
+import { DEPARTMENT_LEDGER_VIEW, isDepartmentLedgerReadPath, loadDepartmentLedgerScope } from '@/lib/shipping/department-ledger-access'
 
 const PUBLIC_PATHS = ['/login', '/accept-invitation']
 const RETIRED_EXACT_PATHS = new Set([
@@ -114,6 +115,7 @@ type MiddlewareAuthContext = {
   ownerShippingPermissions: string[]
   activeMembership: boolean
   departmentWorkspaceAccess: boolean
+  departmentLedgerAccess: boolean
   canManageSystemAuthorizations: boolean
 }
 
@@ -153,6 +155,7 @@ function getRequiredPermission(pathname: string): string | null {
 const DEPARTMENT_WORKSPACE_READ_PATHS = new Set([
   '/', '/api/auth/me', '/api/navigation', '/api/dashboard', '/api/dashboard/department', '/api/dashboard/department/roster',
 ])
+const DEPARTMENT_LEDGER_ENTRY_PATHS = new Set(['/', '/shipping', '/api/auth/me', '/api/navigation'])
 
 const BASELINE_READ_PATHS = new Set([
   '/api/auth/me', '/api/auth/context', '/api/dashboard', '/api/navigation',
@@ -183,6 +186,7 @@ function isSystemAuthorizationPath(pathname: string, request: NextRequest): bool
   if (pathname === '/api/roles') return request.nextUrl.searchParams.get('view') === 'assignable'
   if (pathname.startsWith('/api/roles/') && request.method === 'PATCH') return true
   if (pathname === '/api/admin/departments/leader-access' || pathname === '/api/admin/departments/shipping-intake') return true
+  if (pathname.endsWith('/permissions') && departmentDetailPath.test(pathname.slice(0, -'/permissions'.length))) return true
   const memberPath = memberDetailPath.exec(pathname)?.[1]
   return !!memberPath && memberAuthorizationPaths.has(memberPath)
 }
@@ -285,7 +289,7 @@ async function canEnterDepartmentWorkspace(
   }
 }
 
-async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace: boolean): Promise<MiddlewareAuthContext | null> {
+async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace: boolean, checkDepartmentLedger: boolean): Promise<MiddlewareAuthContext | null> {
   const rest = createMiddlewareRestClient()
   const tokenRows = await rest.selectRows<{
     user_id: string
@@ -367,6 +371,9 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
 
   const departmentWorkspaceAccess = checkDepartmentWorkspace && activeMembership && roleCodes.length === 0
     && await canEnterDepartmentWorkspace(rest, userId, orgId, organization.settings)
+  const departmentLedgerAccess = checkDepartmentLedger && activeMembership
+    && (await readShippingPermissionPublication(new Set([DEPARTMENT_LEDGER_VIEW]))).departmentLedgerPublished
+    && (await loadDepartmentLedgerScope(rest, orgId, userId, organization.settings)).length > 0
 
   return {
     userId,
@@ -379,14 +386,15 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
     ownerShippingPermissions,
     activeMembership,
     departmentWorkspaceAccess,
+    departmentLedgerAccess,
     canManageSystemAuthorizations,
   }
 }
 
-async function getMiddlewareAuthContext(token: string, checkDepartmentWorkspace: boolean): Promise<MiddlewareAuthContext | null> {
+async function getMiddlewareAuthContext(token: string, checkDepartmentWorkspace: boolean, checkDepartmentLedger: boolean): Promise<MiddlewareAuthContext | null> {
   // A disabled user or revoked token must stop working on the next request;
   // an isolate-local cache cannot provide that guarantee.
-  return loadMiddlewareAuthContext(token, checkDepartmentWorkspace)
+  return loadMiddlewareAuthContext(token, checkDepartmentWorkspace, checkDepartmentLedger)
 }
 
 async function readShippingPermissionPublication(codes: ReadonlySet<string>) {
@@ -457,8 +465,11 @@ export async function middleware(request: NextRequest) {
     // Authorization always comes from the exact current-org database context.
     // The signed cookie remains a login warmup artifact, but is not a permission
     // source until default-org changes can invalidate it atomically.
-    const checkDepartmentWorkspace = ['GET', 'HEAD'].includes(request.method) && DEPARTMENT_WORKSPACE_READ_PATHS.has(pathname)
-    const authContext = await getMiddlewareAuthContext(token, checkDepartmentWorkspace)
+    const read = request.method === 'GET' || request.method === 'HEAD'
+    const ledgerPath = read && isDepartmentLedgerReadPath(pathname)
+    const checkDepartmentWorkspace = read && DEPARTMENT_WORKSPACE_READ_PATHS.has(pathname)
+    const checkDepartmentLedger = ledgerPath || (read && DEPARTMENT_LEDGER_ENTRY_PATHS.has(pathname))
+    const authContext = await getMiddlewareAuthContext(token, checkDepartmentWorkspace, checkDepartmentLedger)
 
     if (!authContext) {
       if (pathname.startsWith('/api/')) {
@@ -471,7 +482,11 @@ export async function middleware(request: NextRequest) {
     if (pathname === '/api/auth/activity' && ['GET', 'POST'].includes(request.method)) return NextResponse.next()
 
     // A role-free member can wait for authorization and read their own profile.
-    if (authContext.roleCodes.length === 0 && !authContext.departmentWorkspaceAccess) {
+    if (pathname === '/' && authContext.roleCodes.length === 0
+      && authContext.departmentLedgerAccess && !authContext.departmentWorkspaceAccess) {
+      return NextResponse.redirect(buildRedirectUrl(request, '/shipping'))
+    }
+    if (authContext.roleCodes.length === 0 && !authContext.departmentWorkspaceAccess && !authContext.departmentLedgerAccess) {
       if (pathname === '/pending-access' || pathname === '/api/auth/logout') return NextResponse.next()
       if (pathname === '/api/profile' && ['GET', 'HEAD'].includes(request.method)) return NextResponse.next()
       if (pathname.startsWith('/api/')) {
@@ -483,7 +498,6 @@ export async function middleware(request: NextRequest) {
     // An operational shipping role adds only the matching shipping actions.
     const restrictedMember = (authContext.authMethod === 'fxiaoke' || authContext.roleCodes.includes(SHIPPING_OPERATOR_ROLE_CODE))
       && hasRestrictedShippingRoleSet(authContext.roleCodes)
-    const read = request.method === 'GET' || request.method === 'HEAD'
     const ownerPermission = shippingOwnerPermissionRequirement(pathname, request.method)
     const receiptLookup = read && /^\/api\/shipping\/public\/orders\/[^/]+$/.test(pathname)
     // The receipt handler distinguishes actor-owned orders from old anonymous bearer receipts.
@@ -494,12 +508,14 @@ export async function middleware(request: NextRequest) {
         status: 403, headers: { 'Cache-Control': 'private, no-store' },
       })
     }
-    const shippingPermission = shippingPermissionRequirement(pathname, request.method, request.nextUrl.searchParams.get('workspace') === '1')
+    const shippingPermission = ledgerPath ? DEPARTMENT_LEDGER_VIEW
+      : shippingPermissionRequirement(pathname, request.method, request.nextUrl.searchParams.get('workspace') === '1')
     const shippingSettingsWrite = request.method === 'POST' && pathname === '/api/shipping/settings'
     const requiredShipping: readonly ShippingPermissionKey[] = shippingSettingsWrite
       ? [...SHIPPING_SETTINGS_ACTION_KEYS.slice(1), SHIPPING_MANAGE_CONNECTIONS]
       : shippingPermission ? [shippingPermission] : []
-    if (requiredShipping.length && !await allowsShippingPermission(authContext.shippingPermissions, requiredShipping)) {
+    if (requiredShipping.length && !(ledgerPath && authContext.departmentLedgerAccess)
+      && !await allowsShippingPermission(authContext.shippingPermissions, requiredShipping)) {
       return pathname.startsWith('/api/')
         ? NextResponse.json({ error: 'Forbidden', required: requiredShipping[0] }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } })
         : NextResponse.redirect(buildRedirectUrl(request, '/', '?denied=shipping'))

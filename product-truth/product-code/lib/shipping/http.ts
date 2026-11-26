@@ -4,15 +4,50 @@ import { requireAuth, AuthError, type AuthUser } from '@/lib/auth'
 import { ShippingError } from './config'
 import { requireShippingConnectionManager } from './connection-authorization'
 import { requireShippingOperator } from './operator-access'
-import { resolveShippingOwnerAccess } from './entry-access'
+import { loadShippingLedgerAccess, resolveShippingOwnerAccess } from './entry-access'
+import { selectLedgerDepartments } from './department-ledger-access'
 import { getRequestAuthToken } from '@/lib/auth-token'
 import {
   SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE,
   shippingOwnerPermissionRequirement, shippingPermissionRequirement, type ShippingPermissionKey,
 } from '@/lib/module-access'
-import { ZodError } from 'zod'
+import { z, ZodError } from 'zod'
 
 type ReceiptAccess = { canReadOwnedReceipt: boolean; canReadLegacyReceipt: boolean }
+
+const scopeQuerySchema = z.object({
+  departmentId: z.guid().transform(id => id.toLowerCase()).optional(),
+  includeSubdepartments: z.enum(['true', 'false']).optional(),
+}).refine(query => query.departmentId !== undefined || query.includeSubdepartments === undefined)
+
+type LedgerRead = {
+  orgId: string
+  departmentIds?: string[]
+  query: Record<string, string>
+}
+
+export async function shippingLedgerRead(req: NextRequest, read: (context: LedgerRead) => Promise<unknown>) {
+  const headers = { 'Cache-Control': 'private, no-store' }
+  try {
+    const user = await requireAuth(req)
+    const { departmentId, includeSubdepartments, ...query } = Object.fromEntries(req.nextUrl.searchParams)
+    const selection = scopeQuerySchema.parse({ departmentId, includeSubdepartments })
+    const access = await loadShippingLedgerAccess(user.id, selection.departmentId !== undefined).catch(() => {
+      throw new ShippingError(503, '暂时无法核实收寄台账权限。')
+    })
+    if (!access) throw new ShippingError(403, '当前账号没有收寄台账查看权限。')
+    const departmentIds = access.organizationWide && !selection.departmentId
+      ? undefined
+      : selectLedgerDepartments(access.departments, selection.departmentId, selection.includeSubdepartments === 'true')
+    if (departmentIds === null) throw new ShippingError(403, '当前账号没有所选部门的收寄台账查看权限。')
+    return NextResponse.json(await read({ orgId: access.orgId, departmentIds, query }), { headers })
+  } catch (error) {
+    if (error instanceof AuthError) return NextResponse.json({ error: '请先登录。' }, { status: 401, headers })
+    if (error instanceof ShippingError) return NextResponse.json({ error: error.message }, { status: error.status, headers })
+    if (error instanceof ZodError) return NextResponse.json({ error: '请核对台账筛选条件。' }, { status: 400, headers })
+    return NextResponse.json({ error: '暂时无法读取收寄台账。' }, { status: 500, headers })
+  }
+}
 
 export async function shippingHandler(
   req: NextRequest,

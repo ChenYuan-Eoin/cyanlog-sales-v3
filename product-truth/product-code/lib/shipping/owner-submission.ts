@@ -33,8 +33,10 @@ export async function prepareOwnerSubmission(
 export async function submitShippingWorkorder(user: AuthUser, orgId: string, selfSubmit: boolean, body: unknown) {
   const submission = ownerOrderSchema.parse(body)
   const input = await prepareOwnerSubmission(user, orgId, selfSubmit, submission.input)
+  const attributedDepartmentId = selfSubmit ? input.submittedBy?.departmentId : undefined
   const order = await createOwnerShipment({
     orgId, userId: user.id, key: submission.key, input, usesDefaultSender: !submission.input.sender,
+    ...(attributedDepartmentId ? { attributedDepartmentId } : {}),
   })
   return { ...publicShipmentReceipt(order), orderId: order.id, requestNumber: order.orderNo }
 }

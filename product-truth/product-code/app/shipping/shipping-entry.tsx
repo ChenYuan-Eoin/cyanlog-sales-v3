@@ -10,6 +10,7 @@ import { loadFxiaokeShippingProfile } from '@/lib/shipping/department-access'
 import { FxiaokeShippingProposal } from '@/app/sales-portal/portal'
 import MyWorkorders from '@/app/sales-portal/my-workorders'
 import salesPortalStyles from '@/app/sales-portal/sales-portal.module.css'
+import DepartmentLedger from './department-ledger'
 import ShippingWorkbench from './workbench'
 
 export async function renderShippingEntry(preferOwner = false) {
@@ -17,10 +18,18 @@ export async function renderShippingEntry(preferOwner = false) {
   const user = token ? await getAuthUserByToken(token) : null
   if (!user) redirect('/login')
 
-  const access = await resolveShippingEntry(user, token ?? null)
+  const access = preferOwner
+    ? await resolveShippingEntry(user, token ?? null)
+    : await resolveShippingEntry(user, token ?? null, undefined, true)
   if (access?.canOperate && (!preferOwner || !access.canViewOwn)) {
     const settings = await loadShippingWorkspaceSettings(access.orgId)
-    return <ShippingWorkbench settings={{ ...settings, canOperate: true, canViewOwn: access.canViewOwn, canManageConnections: access.canManageConnections, permissions: access.permissions }} />
+    return <ShippingWorkbench ledgerDepartments={access.organizationLedgerDepartments}
+      settings={{ ...settings, canOperate: true, canViewOwn: access.canViewOwn, canManageConnections: access.canManageConnections, permissions: access.permissions }} />
+  }
+
+  if (!preferOwner && access?.departmentLedger?.length) {
+    return <DepartmentLedger key={access.orgId} departments={access.departmentLedger}
+      canViewOwn={access.canViewOwn} canManageConnections={access.canManageConnections} />
   }
 
   if (access?.canViewOwn) {

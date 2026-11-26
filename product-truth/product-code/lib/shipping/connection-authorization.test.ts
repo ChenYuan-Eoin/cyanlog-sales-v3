@@ -7,7 +7,7 @@ import { requireShippingConnectionManager } from './connection-authorization'
 vi.mock('@/lib/org-role-permissions', () => ({ loadOrgRolePermissionContext: vi.fn() }))
 vi.mock('@/lib/permission-registry', () => ({ loadShippingModulePermissionState: vi.fn() }))
 
-const publication = (keys: string[]) => ({ published: new Set(keys), registered: new Set(keys) })
+const publication = (keys: string[]) => ({ published: new Set(keys), registered: new Set(keys), departmentLedgerPublished: false })
 const context = { orgId: 'org-a', settings: {}, canRead: false, canEdit: false, canEditPlatformRoot: false }
 
 describe('shipping connection effective authority', () => {

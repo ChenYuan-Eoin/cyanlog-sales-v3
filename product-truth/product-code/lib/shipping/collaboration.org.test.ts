@@ -5,7 +5,7 @@ import type { ShippingInput } from './types'
 const mocks = vi.hoisted(() => ({ from: vi.fn(), recipients: vi.fn() }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from } }))
 vi.mock('./operator-access', () => ({ listShippingOperatorRecipients: mocks.recipients }))
-import { assignShipmentRelation, createAnonymousShipment, createOwnerShipment, createDueShipmentReviewReminders, listShipmentLedger, listEmployeeShipmentReceipts, listOwnerShipmentReceipts, listPublicShipmentReceipts } from './collaboration'
+import { assignShipmentRelation, createAnonymousShipment, createOwnerShipment, createDueShipmentReviewReminders, getScopedShipmentLedgerRecord, listShipmentLedger, listEmployeeShipmentReceipts, listOwnerShipmentReceipts, listPublicShipmentReceipts } from './collaboration'
 
 type Row = Record<string, unknown>
 let tables: Record<string, Row[]>
@@ -86,6 +86,30 @@ describe('shipping collaboration organization boundary', () => {
     expect((await listShipmentLedger('org-A', { ...filters, page: 0 })).map(item => item.id)).toEqual(['C-order', 'B-order', 'A-order'])
     expect((await listShipmentLedger('org-A', { ...filters, page: 1 })).map(item => item.id)).toEqual(['A-order'])
   })
+  it('applies the same exact organization and immutable department boundary to pages and details', async () => {
+    const otherInput = { ...input, submittedBy: { departmentId: 'dept-A' } }
+    tables.shipping_orders = [
+      { ...row('foreign', 'org-B'), attributed_department_id: 'dept-A', created_at: '2026-11-20T00:00:00Z' },
+      { ...row('historical', 'org-A'), attributed_department_id: null, shipment_payload: otherInput, created_at: '2026-11-19T00:00:00Z' },
+      { ...row('sibling', 'org-A'), attributed_department_id: 'dept-B', shipment_payload: otherInput, created_at: '2026-11-18T00:00:00Z' },
+      { ...row('recent', 'org-A'), attributed_department_id: 'dept-A', created_at: '2026-11-17T00:00:00Z' },
+      { ...row('older', 'org-A'), attributed_department_id: 'dept-C', created_at: '2026-11-16T00:00:00Z' },
+    ]
+    const departments = ['dept-A', 'dept-C'] as const
+    expect((await listShipmentLedger('org-A', { page: 0, limit: 1 }, departments)).map(item => item.id)).toEqual(['recent', 'older'])
+    expect((await listShipmentLedger('org-A', { page: 1, limit: 1 }, departments)).map(item => item.id)).toEqual(['older'])
+    await expect(getScopedShipmentLedgerRecord('org-A', 'older', departments)).resolves.toMatchObject({ id: 'older' })
+    for (const excluded of ['sibling', 'foreign', 'historical', 'missing']) {
+      await expect(getScopedShipmentLedgerRecord('org-A', excluded, departments)).resolves.toBeNull()
+    }
+    await expect(getScopedShipmentLedgerRecord('org-A', 'historical')).resolves.toMatchObject({ id: 'historical' })
+    await expect(getScopedShipmentLedgerRecord('org-A', 'foreign')).resolves.toBeNull()
+  })
+  it('returns an empty result without querying when department access is empty', async () => {
+    await expect(listShipmentLedger('org-A', { limit: 50 }, [])).resolves.toEqual([])
+    await expect(getScopedShipmentLedgerRecord('org-A', 'A-order', [])).resolves.toBeNull()
+    expect(mocks.from).not.toHaveBeenCalled()
+  })
   it('does not assign a foreign or unassigned order to the caller', async () => {
     await expect(assignShipmentRelation('B-order', 'org-A', 'new-sales')).rejects.toThrow()
     await expect(assignShipmentRelation('legacy-order', 'org-A', 'new-sales')).rejects.toThrow()
@@ -152,6 +176,17 @@ describe('shipping collaboration organization boundary', () => {
     await expect(createOwnerShipment(args)).resolves.toMatchObject({ id: first.id, revision: 2, input: amended })
     await expect(createOwnerShipment({ ...args, input: amended })).rejects.toMatchObject({ status: 409 })
     expect(tables.shipping_orders.filter(order => order.idempotency_key === args.key)).toHaveLength(1)
+  })
+  it('persists verified creation attribution independently of the submitted or revised input', async () => {
+    const verified = await createOwnerShipment({ orgId: 'org-A', userId: 'owner-A', key: 'verified-attribution', input, attributedDepartmentId: 'dept-A' })
+    const submittedBy = { name: '示例员工', phone: '13800000000', team: '示例团队', departmentId: 'dept-B' }
+    const manual = await createOwnerShipment({ orgId: 'org-A', userId: 'operator-A', key: 'manual-input', input: { ...input, submittedBy } })
+    const stored = tables.shipping_orders.find(item => item.id === verified.id)!
+    stored.shipment_payload = { ...input, submittedBy }
+    expect(stored.attributed_department_id).toBe('dept-A')
+    expect(tables.shipping_orders.find(item => item.id === manual.id)).not.toHaveProperty('attributed_department_id')
+    await expect(getScopedShipmentLedgerRecord('org-A', verified.id, ['dept-A'])).resolves.toMatchObject({ id: verified.id })
+    await expect(getScopedShipmentLedgerRecord('org-A', verified.id, ['dept-B'])).resolves.toBeNull()
   })
   it('returns the current state of a previously submitted work order without resetting or recreating it', async () => {
     const first = await createOwnerShipment({ orgId: 'org-A', userId: 'owner-A', key: 'finished-intake-key', input })

@@ -20,6 +20,7 @@ vi.mock('@/lib/shipping/department-access', () => ({ loadFxiaokeShippingProfile:
 vi.mock('@/app/sales-portal/portal', () => ({ FxiaokeShippingProposal: function FxiaokeShippingProposal() { return null }, AuthenticatedReceiptRoute: function AuthenticatedReceiptRoute() { return null } }))
 vi.mock('@/app/sales-portal/my-workorders', () => ({ default: function MyWorkorders() { return null } }))
 vi.mock('./workbench', () => ({ default: function ShippingWorkbench() { return null } }))
+vi.mock('./department-ledger', () => ({ default: function DepartmentLedger() { return null } }))
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }))
 
 import ShippingPage from './page'
@@ -28,6 +29,7 @@ import SalesPortalPage from '@/app/sales-portal/page'
 const user = { id: 'member' }
 const rules = { teamOptions: [] }
 const access = { orgId: 'active-org', canOperate: false, canViewOwn: false, canSubmitOwn: false, canManageConnections: false, ownerPermissions: [] }
+const departmentLedger = [{ id: 'department', name: '业务部', parentId: null }]
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -61,7 +63,7 @@ describe('self-service shipping entry', () => {
     expect(navigation).toBe(false)
     expect(proposal.type.name).toBe('FxiaokeShippingProposal')
     expect(proposal.props.profile).toEqual({ id: 'member', fxiaoke: true })
-    expect(mocks.access).toHaveBeenCalledWith(user, 'token')
+    expect(mocks.access).toHaveBeenCalledWith(user, 'token', undefined, true)
     expect(mocks.options).toHaveBeenCalledWith('active-org')
     expect(mocks.profile).toHaveBeenCalledWith(user, 'active-org', rules)
     expect(mocks.settings).not.toHaveBeenCalled()
@@ -97,12 +99,30 @@ describe('self-service shipping entry', () => {
   })
 
   it.each([false, true])('opens the operator workbench before employee intake with manager grant %s', async (canManageConnections) => {
-    mocks.access.mockResolvedValue({ ...access, canOperate: true, canViewOwn: true, canSubmitOwn: true, canManageConnections })
+    mocks.access.mockResolvedValue({ ...access, canOperate: true, canViewOwn: true, canSubmitOwn: true, canManageConnections, organizationLedgerDepartments: departmentLedger })
     const page = await ShippingPage()
     expect(page.type.name).toBe('ShippingWorkbench')
+    expect(page.props.ledgerDepartments).toEqual(departmentLedger)
     expect(page.props.settings).toEqual({ environment: 'sandbox', ready: false, canOperate: true, canViewOwn: true, canManageConnections })
     expect(mocks.settings).toHaveBeenCalledWith('active-org')
     expect(mocks.options).not.toHaveBeenCalled()
+  })
+
+  it('opens the department ledger without loading organization workbench settings or owner forms', async () => {
+    mocks.access.mockResolvedValue({ ...access, departmentLedger, canViewOwn: true, canManageConnections: true })
+    const page = await ShippingPage()
+    expect(page.type.name).toBe('DepartmentLedger')
+    expect(page.props).toEqual({ departments: departmentLedger, canViewOwn: true, canManageConnections: true })
+    expect(mocks.settings).not.toHaveBeenCalled()
+    expect(mocks.options).not.toHaveBeenCalled()
+    const owner = await SalesPortalPage()
+    expect(owner.props.children.props.children[1].props.children.props.children[2].type.name).toBe('MyWorkorders')
+  })
+
+  it('keeps the owner-preferred route separate when the actor only has a department ledger', async () => {
+    mocks.access.mockResolvedValue({ ...access, departmentLedger })
+    await expect(SalesPortalPage()).rejects.toThrow('redirect:/?denied=shipping:operate')
+    expect(mocks.settings).not.toHaveBeenCalled()
   })
 })
 
@@ -117,6 +137,6 @@ it('offers operator and explicitly preferred owner entries for the same verified
   const employee = await SalesPortalPage()
   expect(employee.type.name).toBe('AuthenticatedReceiptRoute')
   expect(employee.props.children.props.children[1].type.name).toBe('FxiaokeShippingProposal')
-  expect(mocks.access).toHaveBeenNthCalledWith(1, user, 'token')
+  expect(mocks.access).toHaveBeenNthCalledWith(1, user, 'token', undefined, true)
   expect(mocks.access).toHaveBeenNthCalledWith(2, user, 'token')
 })

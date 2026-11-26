@@ -35,6 +35,7 @@ it('persists the current verified department and identity rather than submitted 
   expect(m.departments).toHaveBeenCalledWith('employee-1', 'org-1', expect.objectContaining({ allowedDepartmentIds: [deptId] }))
   expect(m.resolve).toHaveBeenCalledWith([selected], deptId, '伪造部门')
   expect(m.create.mock.calls[0][0].input.submittedBy).toEqual({ name: '真实员工', phone: '13600000000', team: '真实销售部', departmentId: deptId })
+  expect(m.create.mock.calls[0][0].attributedDepartmentId).toBe(deptId)
 })
 
 it('blocks a revoked department before creating a work order', async () => {

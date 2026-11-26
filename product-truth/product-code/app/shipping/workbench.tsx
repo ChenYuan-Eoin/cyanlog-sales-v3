@@ -12,7 +12,9 @@ import { parseAddress } from '@/lib/shipping/address'
 import { normalizeTrackingTime } from '@/lib/shipping/tracking-status'
 import { DEFAULT_INTAKE_RULES, intakeFieldSchema } from '@/lib/shipping/intake-rules'
 import type { LedgerDateRange } from '@/lib/shipping/ledger-date-range'
+import type { LedgerDepartment } from '@/lib/shipping/department-ledger-access'
 import { CarrierChanges } from './carrier-changes'
+import { allLedgerDepartments, DepartmentLedgerFilter, ledgerDepartmentQuery, type LedgerDepartmentSelection } from './department-ledger-filter'
 import { LedgerDateFilter } from './ledger-date-filter'
 import styles from './workbench.module.css'
 
@@ -58,10 +60,11 @@ const sfWaybillPattern = /^(?:SF)?\d{10,15}$/
 type LedgerPage = { records: ShipmentOrder[]; nextPage?: number | null }
 const workspaceSettingsUrl = '/api/shipping/settings?workspace=1'
 
-function ledgerPageUrl(page: number, range: LedgerDateRange) {
+function ledgerPageUrl(page: number, range: LedgerDateRange, department: LedgerDepartmentSelection) {
   const query = new URLSearchParams({ limit: '50', page: String(page) })
   if (range.submittedFrom) query.set('submittedFrom', range.submittedFrom)
   if (range.submittedBefore) query.set('submittedBefore', range.submittedBefore)
+  for (const [key, value] of ledgerDepartmentQuery(department)) query.set(key, value)
   return `/api/shipping/ledger?${query}`
 }
 const trackingTimeFormat = new Intl.DateTimeFormat('zh-CN', {
@@ -87,7 +90,9 @@ function verifiedTrackingStatus(result: TrackingResult, waybill: string) {
   return result.shipmentStatus
 }
 
-export default function ShippingWorkbench({ settings: initialSettings, simulation }: { settings: ShippingSettings; simulation?: ShippingSimulation }) {
+export default function ShippingWorkbench({ settings: initialSettings, simulation, ledgerDepartments }: {
+  settings: ShippingSettings; simulation?: ShippingSimulation; ledgerDepartments?: LedgerDepartment[]
+}) {
   const [accessDenied, setAccessDenied] = useState(false)
   const deniedRequest = useRef<ShippingWorkbenchRequestError | null>(null)
   const request: ShippingWorkbenchRequest = useCallback(async <T,>(url: string, init?: RequestInit) => {
@@ -97,7 +102,7 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     } catch (error) {
       const isProtectedRead = (!init?.method || init.method === 'GET')
         && (url === workspaceSettingsUrl || url.split('?')[0] === '/api/shipping/ledger')
-      if (isProtectedRead && error instanceof ShippingWorkbenchRequestError && (error.status === 401 || error.status === 403)) {
+      if (isProtectedRead && !init?.signal?.aborted && error instanceof ShippingWorkbenchRequestError && (error.status === 401 || error.status === 403)) {
         deniedRequest.current = error
         setAccessDenied(true)
       }
@@ -113,13 +118,15 @@ export default function ShippingWorkbench({ settings: initialSettings, simulatio
     </main>
   }
 
-  return <ShippingWorkbenchContent settings={initialSettings} simulation={simulation} request={simulation?.request ?? request} />
+  return <ShippingWorkbenchContent settings={initialSettings} simulation={simulation} ledgerDepartments={ledgerDepartments}
+    request={simulation?.request ?? request} />
 }
 
-function ShippingWorkbenchContent({ settings: initialSettings, simulation, request }: {
+function ShippingWorkbenchContent({ settings: initialSettings, simulation, request, ledgerDepartments }: {
   settings: ShippingSettings
   simulation?: ShippingSimulation
   request: ShippingWorkbenchRequest
+  ledgerDepartments?: LedgerDepartment[]
 }) {
   const [settings, setSettings] = useState(initialSettings)
   useEffect(() => { setSettings(initialSettings) }, [initialSettings])
@@ -200,13 +207,13 @@ function ShippingWorkbenchContent({ settings: initialSettings, simulation, reque
   const trackingRequest = useRef(0)
   const reconciliationRequests = useRef(new Set<string>())
   const batchRunning = useRef(false)
-  const [ledgerQuery, setLedgerQuery] = useState({ page: 0, range: {} as LedgerDateRange })
+  const [ledgerQuery, setLedgerQuery] = useState({ page: 0, range: {} as LedgerDateRange, department: allLedgerDepartments })
   const [nextLedgerPage, setNextLedgerPage] = useState<number | null>(null)
-  const ledgerUrl = ledgerPageUrl(ledgerQuery.page, ledgerQuery.range)
+  const ledgerUrl = ledgerPageUrl(ledgerQuery.page, ledgerQuery.range, ledgerQuery.department)
   const ledgerNavigationLocked = Boolean(busy) || batchBusy || confirmationBusy
 
-  function goToLedgerPage(page: number, range = ledgerQuery.range) {
-    if (ledgerNavigationLocked || ledgerPageUrl(page, range) === ledgerUrl) return
+  function goToLedgerPage(page: number, range = ledgerQuery.range, department = ledgerQuery.department) {
+    if (ledgerNavigationLocked || ledgerPageUrl(page, range, department) === ledgerUrl) return
     setLedgerLoading(true)
     setOrders([])
     setNextLedgerPage(null)
@@ -220,12 +227,13 @@ function ShippingWorkbenchContent({ settings: initialSettings, simulation, reque
     setManualWaybill('')
     setTrackingBusy(false)
     trackingRequest.current += 1
-    setLedgerQuery({ page, range })
+    setLedgerQuery({ page, range, department })
   }
 
   useEffect(() => {
     let active = true
-    void request<LedgerPage>(ledgerUrl).then(async result => {
+    const controller = new AbortController()
+    void request<LedgerPage>(ledgerUrl, { signal: controller.signal }).then(async result => {
       if (!active) return
       setOrders(result.records)
       setNextLedgerPage(result.nextPage ?? null)
@@ -237,7 +245,7 @@ function ShippingWorkbenchContent({ settings: initialSettings, simulation, reque
       }
     }).catch(error => { if (active) setMessage(`收寄件台账读取失败：${(error as Error).message}`) })
       .finally(() => { if (active) setLedgerLoading(false) })
-    return () => { active = false }
+    return () => { active = false; controller.abort() }
   }, [request, isSimulation, ledgerUrl])
 
   const activeWaybills = [...new Set(orders.filter(order => needsTracking(order) && sfWaybillPattern.test(order.waybill || '')).map(order => order.waybill!))].sort().join(',')
@@ -847,6 +855,9 @@ function ShippingWorkbenchContent({ settings: initialSettings, simulation, reque
         <div className={styles.filters}>
           <div className={styles.segmented}><button className={type === 'all' ? styles.active : ''} onClick={() => setType('all')}>全部</button><button className={type === 'outbound' ? styles.active : ''} onClick={() => setType('outbound')}>寄出件</button><button className={type === 'inbound' ? styles.active : ''} onClick={() => setType('inbound')}>收到件</button></div>
           <LedgerDateFilter disabled={ledgerNavigationLocked} onChange={range => goToLedgerPage(0, range)} />
+          {!isSimulation && !!ledgerDepartments?.length && <DepartmentLedgerFilter
+            departments={ledgerDepartments} selection={ledgerQuery.department} disabled={ledgerNavigationLocked}
+            allLabel="全部寄件记录" onChange={department => goToLedgerPage(0, ledgerQuery.range, department)} />}
           <select aria-label="状态筛选" value={status} onChange={event => setStatus(event.target.value as typeof status)}><option value="all">全部状态</option><option value="awaiting_confirmation">待审核工单</option><option value="returned">已退回工单</option><option value="resubmitted">已重提</option><option value="order_unknown">下单结果待确认</option><option value="ordering">下单中</option><option value="waybill_created">已出单/待揽收</option><option value="in_transit">运输中</option><option value="delivered">已签收</option><option value="cancelled">已取消</option><option value="order_failed">异常件</option></select>
           <label className={styles.search}><Search size={14}/><input aria-label="搜索台账" value={search} onChange={event => setSearch(event.target.value)} placeholder="提报人、客户、收件人、运单号"/></label>
         </div>

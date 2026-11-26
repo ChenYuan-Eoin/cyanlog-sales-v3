@@ -27,6 +27,7 @@ import Fuse from 'fuse.js'
 import { success, error, confirmAction } from '@/lib/toast'
 import { buildDepartmentOptions, resolveDepartmentSpaceIds } from '@/lib/department-spaces'
 import { ShippingDepartmentAuthorization } from '@/app/shipping/intake-configuration'
+import { DepartmentPermissions } from './DepartmentPermissions'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
@@ -1045,6 +1046,7 @@ export default function OrgStructureTab({
   const canEditDepartments = departmentAccess?.canEdit ?? actions.manageDepartments
   const canDeleteDepartments = departmentAccess?.canDelete ?? actions.manageDepartments
   const isEmptyState = departments.length === 0 && users.length === 0
+  const orgId = orgSummary?.organization?.id
 
   if (orgSummary?.member_access === false) {
     return (
@@ -1150,7 +1152,7 @@ export default function OrgStructureTab({
         </div>
 
         {/* 中间成员列表 */}
-        <div className="min-w-0">
+        <div className="min-w-0 space-y-4">
           <div className="rounded-lg border bg-white">
             <div className="border-b px-6 py-4">
               <div className="flex items-center justify-between">
@@ -1207,6 +1209,14 @@ export default function OrgStructureTab({
               />}
             </div>
           </div>
+          {currentUserId && orgId && selectedDept && orgDepartmentIds.includes(selectedDept.id) && (
+            <DepartmentPermissions
+              key={JSON.stringify([orgId, currentUserId, selectedDept.id])}
+              orgId={orgId}
+              departmentId={selectedDept.id}
+              authHeaders={buildAuthHeaders}
+            />
+          )}
         </div>
 
         <div className="min-w-0 space-y-4">

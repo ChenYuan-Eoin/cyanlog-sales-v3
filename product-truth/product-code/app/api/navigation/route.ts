@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const shipping = await resolveShippingEntry(user, getRequestAuthToken(req))
     if (!shipping) return NextResponse.json({ paths: [] }, { status: 403, headers })
     const paths: string[] = []
-    if (shipping.canOperate || shipping.canViewOwn) paths.push('/shipping')
+    if (shipping.canOperate || shipping.canViewOwn || shipping.departmentLedger?.length) paths.push('/shipping')
     if (shipping.canManageConnections) paths.push('/shipping/settings')
     return NextResponse.json({ paths }, { headers })
   } catch (error) {

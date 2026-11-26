@@ -45,6 +45,110 @@ it('shows department shipping grants only after the current organization endpoin
 })
 
 const appliedAt = '2026-11-09T07:54:14Z'
+const permissionDepartmentId = 'd3e767ac-0fb4-4f20-947f-a5ad0870b23d'
+const permissionOrganizationId = '267550ba-359e-4259-873d-844538fa52a1'
+const departmentPermissionsPath = `/api/admin/departments/${permissionDepartmentId}/permissions`
+const shippingLedger = 'shipping:ledger_view'
+const departmentPermissionPayload: OrgSummaryPayload = {
+  organization: { id: permissionOrganizationId, name: '测试组织' },
+  users: [], roles: [], spaces: [],
+  departments: [{ id: permissionDepartmentId, name: '测试销售部', status: 'active', parent_name: null }],
+}
+
+function departmentPermissionResponse(overrides: Record<string, unknown> = {}) {
+  return Response.json({
+    org_id: permissionOrganizationId,
+    department_id: permissionDepartmentId,
+    permissions: [],
+    available_permissions: [shippingLedger],
+    permissions_editable: true,
+    include_subdepartments: false,
+    ...overrides,
+  })
+}
+
+async function openDepartmentPermissions() {
+  render(<OrgStructureTab orgSummary={departmentPermissionPayload} currentUserId="actor" />)
+  fireEvent.click(screen.getByRole('button', { name: /^测试销售部/ }))
+  fireEvent.click(await screen.findByText('部门权限设置'))
+}
+
+it('saves department grants with their original scope and shows success after a verified read', async () => {
+  let finishReadback!: (value: Response) => void
+  const readback = new Promise<Response>(resolve => { finishReadback = resolve })
+  const departmentRequests = vi.fn()
+    .mockResolvedValueOnce(departmentPermissionResponse())
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockReturnValueOnce(readback)
+  vi.mocked(fetch).mockImplementation(async (url, init) => url === departmentPermissionsPath
+    ? departmentRequests(init) : new Response(null, { status: 403 }))
+  await openDepartmentPermissions()
+
+  const action = screen.getByRole('checkbox', { name: '查看收寄台账' })
+  const subtree = screen.getByRole('checkbox', { name: '授权范围包含下级部门' })
+  expect(action).not.toBeChecked()
+  expect(subtree).toBeDisabled()
+  expect(screen.queryByRole('checkbox', { name: '确认并下单' })).not.toBeInTheDocument()
+  fireEvent.click(action)
+  fireEvent.click(subtree)
+  fireEvent.click(screen.getByRole('button', { name: '保存部门授权' }))
+
+  await waitFor(() => expect(departmentRequests).toHaveBeenCalledTimes(3))
+  expect(departmentRequests.mock.calls[1][0].method).toBe('PATCH')
+  expect(JSON.parse(departmentRequests.mock.calls[1][0].body)).toEqual({
+    expected_org_id: permissionOrganizationId, expected_permissions: [], expected_include_subdepartments: false,
+    permissions: [shippingLedger], include_subdepartments: true,
+  })
+  expect(departmentRequests.mock.calls[2][0]).toMatchObject({ cache: 'no-store' })
+  expect(screen.queryByText('部门授权已保存。')).not.toBeInTheDocument()
+  finishReadback(departmentPermissionResponse({ permissions: [shippingLedger], include_subdepartments: true }))
+  expect(await screen.findByText('部门授权已保存。')).toBeInTheDocument()
+  expect(action).toBeChecked()
+  expect(subtree).toBeChecked()
+  expect(screen.getByRole('button', { name: '保存部门授权' })).toBeDisabled()
+})
+
+it('withholds department editing when the server denies this actor', async () => {
+  const fetchMock = vi.mocked(fetch)
+  render(<OrgStructureTab orgSummary={departmentPermissionPayload} currentUserId="department-editor" />)
+  fireEvent.click(screen.getByRole('button', { name: /^测试销售部/ }))
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(departmentPermissionsPath, expect.anything()))
+  expect(screen.queryByText('部门权限设置')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '保存部门授权' })).not.toBeInTheDocument()
+})
+
+it('lets a valid editor revoke a formerly available grant and clears the inherited scope', async () => {
+  const departmentRequests = vi.fn().mockResolvedValueOnce(departmentPermissionResponse({
+    permissions: [shippingLedger], available_permissions: [], include_subdepartments: true,
+  })).mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(departmentPermissionResponse({ available_permissions: [] }))
+  vi.mocked(fetch).mockImplementation(async (url, init) => url === departmentPermissionsPath
+    ? departmentRequests(init) : new Response(null, { status: 403 }))
+  await openDepartmentPermissions()
+  expect(screen.queryByRole('checkbox', { name: '查看收寄台账' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '撤销不可用授权' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存部门授权' }))
+  expect(await screen.findByText('部门授权已保存。')).toBeInTheDocument()
+  expect(JSON.parse(departmentRequests.mock.calls[1][0].body)).toEqual({
+    expected_org_id: permissionOrganizationId, expected_permissions: [shippingLedger], expected_include_subdepartments: true,
+    permissions: [], include_subdepartments: false,
+  })
+})
+
+it('rejects cross-department readback after a department permission write', async () => {
+  const departmentRequests = vi.fn().mockResolvedValueOnce(departmentPermissionResponse())
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(departmentPermissionResponse({ department_id: 'other-department', permissions: [shippingLedger] }))
+  vi.mocked(fetch).mockImplementation(async (url, init) => url === departmentPermissionsPath
+    ? departmentRequests(init) : new Response(null, { status: 403 }))
+  await openDepartmentPermissions()
+  fireEvent.click(screen.getByRole('checkbox', { name: '查看收寄台账' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存部门授权' }))
+  expect(await screen.findByText('未能确认保存结果，请重新读取部门授权。')).toBeInTheDocument()
+  expect(screen.queryByText('部门授权已保存。')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '保存部门授权' })).not.toBeInTheDocument()
+})
+
 const adminActions = {
   edit: true, assignRoles: true, invite: true, manageLogin: true, manageEmployment: true,
   removeMembership: true, manageDepartments: true, bindExternalIdentity: true,
