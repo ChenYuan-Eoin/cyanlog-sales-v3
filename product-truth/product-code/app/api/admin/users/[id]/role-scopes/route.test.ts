@@ -113,6 +113,20 @@ describe('scoped role assignment route', () => {
     })
   })
 
+  it.each(['department', 'space'] as const)('revokes only an ordinary %s binding for another system administrator', async scopeType => {
+    const ordinaryRole = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+    vi.mocked(userHasOrgRoleCode).mockResolvedValue(true)
+    vi.mocked(validateOrgRoleAssignment).mockResolvedValue({ ok: true, roleIds: [ordinaryRole] })
+
+    const response = await DELETE(request('DELETE', { role_id: ordinaryRole, scope_type: scopeType, scope_id: scope }), context())
+    expect(response.status).toBe(200)
+    expect(validateOrgRoleAssignment).toHaveBeenCalledExactlyOnceWith([systemGrant], org, [ordinaryRole], { scopeType, action: 'revoke' })
+    expect(rpc).toHaveBeenCalledExactlyOnceWith('admin_set_role_scope_assignment_v1', {
+      p_actor_id: actor, p_org_id: org, p_user_id: target, p_role_id: ordinaryRole,
+      p_scope_type: scopeType, p_scope_id: scope, p_action: 'revoke', p_reason: null, p_request_id: 'test-request',
+    })
+  })
+
   it('rejects organization-only role creation at department scope without running the RPC', async () => {
     vi.mocked(validateOrgRoleAssignment).mockResolvedValueOnce({ ok: false, reason: 'ROLE_SCOPE_NOT_SUPPORTED' })
     const response = await POST(request('POST'), context())
@@ -153,6 +167,8 @@ describe('scoped role assignment route', () => {
     const protectedRole = await POST(request('POST'), context())
     expect(protectedRole.status).toBe(403)
     expect(await protectedRole.json()).toMatchObject({ code: 'ROLE_ESCALATION_FORBIDDEN' })
+    vi.mocked(validateOrgRoleAssignment).mockResolvedValueOnce({ ok: false, reason: 'ROLE_ESCALATION_FORBIDDEN' })
+    expect((await DELETE(request('DELETE'), context())).status).toBe(403)
     expect(rpc).not.toHaveBeenCalled()
   })
 

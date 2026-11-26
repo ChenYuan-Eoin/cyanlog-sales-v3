@@ -18,6 +18,8 @@ const administratorMigrations = [
   '20261126054302_immutable_system_super_admin.sql',
 ].map(file => readFileSync(join(process.cwd(), 'supabase/migrations', file), 'utf8'))
 
+const sql = (file: string) => readFileSync(join(process.cwd(), 'supabase/migrations', file), 'utf8')
+
 const organization = '11111111-1111-4111-8111-111111111111'
 const otherOrganization = '22222222-2222-4222-8222-222222222222'
 const root = '33333333-3333-4333-8333-333333333333'
@@ -286,5 +288,95 @@ describe('system super administrator migration', () => {
       insert into public.personnel_invitations(org_id, user_id, token_hash, role_ids, expires_at, created_by)
       values ($1, $2, 'test-invitation', array[$3]::uuid[], now() + interval '1 day', $4)
     `, [organization, candidate, rootRole, root])).rejects.toMatchObject({ code: '42501' })
+  })
+
+  it('revokes only an exact ordinary scoped assignment from another active system administrator', async () => {
+    await db.exec(sql('20261126054700_guard_ordinary_role_assignments.sql'))
+    const retiredRoleMigration = sql('20261126060000_retire_new_fxiaoke_baseline_grants.sql')
+    await db.exec(retiredRoleMigration.slice(
+      retiredRoleMigration.indexOf('create or replace function public.admin_set_role_scope_assignment_v1('),
+      retiredRoleMigration.indexOf('create function private.reject_fxiaoke_baseline_invitation_v1()'),
+    ))
+    await db.exec(`
+      alter table public.roles add column created_at timestamptz default now();
+      create function public.get_org_admin_payload_v1(p_org_id uuid) returns jsonb language sql
+        as $$ select '{"users":[]}'::jsonb $$;
+    `)
+    await db.exec(sql('20261126061431_org_owned_ordinary_roles.sql'))
+
+    const siblingDepartment = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+    const foreignDepartment = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+    const legacySpace = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+    const foreignRole = '12121212-1212-4212-8212-121212121212'
+    await db.query('insert into public.departments(id,org_id) values ($1,$2),($3,$4)', [
+      siblingDepartment, organization, foreignDepartment, otherOrganization,
+    ])
+    await db.query('insert into public.sales_spaces(id,org_id) values ($1,$2)', [legacySpace, organization])
+    await db.query("insert into public.roles(id,code,name,owner_org_id) values ($1,'FOREIGN','Foreign role',$2)", [
+      foreignRole, otherOrganization,
+    ])
+    await db.query(`
+      insert into public.user_roles (user_id, org_id, role_id, scope_type, scope_id)
+      values ($1,$2,$3,'department',$4), ($1,$2,$3,'department',$5), ($1,$2,$3,'space',$6)
+    `, [candidate, organization, salesRole, department, siblingDepartment, legacySpace])
+    expect(await setAssigned(true, false)).toBe(true)
+
+    const scoped = 'select public.admin_set_role_scope_assignment_v1($1,$2,$3,$4,$5,$6,$7,$8,$9) as saved'
+    const revoke = (scopeId: string, scopeType = 'department') => db.query(scoped, [
+      root, organization, candidate, salesRole, scopeType, scopeId, 'revoke', 'test reason', 'scoped-revoke-test',
+    ])
+    await db.exec('set role service_role')
+    await expect(revoke(department)).rejects.toMatchObject({ code: '42501' })
+    await db.exec('reset role')
+    await db.exec(sql('20261126113407_allow_super_admin_scoped_ordinary_role_revoke.sql'))
+
+    for (const role of ['anon', 'authenticated']) {
+      await db.exec(`set role ${role}`)
+      await expect(revoke(department)).rejects.toMatchObject({ code: '42501' })
+      await db.exec('reset role')
+    }
+    await db.exec('set role service_role')
+    for (const attempt of [
+      [root, organization, candidate, salesRole, 'department', department, 'assign'],
+      [root, organization, candidate, salesRole, 'department', department, null],
+      [root, organization, root, salesRole, 'department', department, 'revoke'],
+      [candidate, otherOrganization, outsider, salesRole, 'department', foreignDepartment, 'revoke'],
+      [outsider, organization, candidate, salesRole, 'department', department, 'revoke'],
+      [root, organization, candidate, rootRole, 'department', department, 'revoke'],
+    ]) {
+      await expect(db.query(scoped, [...attempt, null, 'scoped-revoke-test'])).rejects.toMatchObject({ code: '42501' })
+    }
+    await expect(revoke(foreignDepartment)).rejects.toMatchObject({ code: '23514' })
+    await expect(db.query(scoped, [
+      root, organization, candidate, foreignRole, 'department', department, 'revoke', null, 'scoped-revoke-test',
+    ])).rejects.toMatchObject({ code: '23503', detail: 'ORG_ROLE_NOT_FOUND' })
+
+    expect((await revoke(department)).rows).toEqual([{ saved: true }])
+    expect((await revoke(legacySpace, 'space')).rows).toEqual([{ saved: true }])
+    expect(await assigned()).toBe(true)
+    await db.exec('reset role')
+
+    await db.query('update public.users set login_enabled = false where id = $1', [candidate])
+    await db.exec('set role service_role')
+    await expect(revoke(siblingDepartment)).rejects.toMatchObject({ code: '42501' })
+    await db.exec('reset role')
+
+    expect((await db.query(`
+      select role_id, scope_type, scope_id from public.user_roles
+      where user_id = $1 order by scope_type, role_id
+    `, [candidate])).rows).toEqual([
+      { role_id: salesRole, scope_type: 'department', scope_id: siblingDepartment },
+      { role_id: rootRole, scope_type: 'org', scope_id: organization },
+      { role_id: salesRole, scope_type: 'org', scope_id: organization },
+    ])
+    expect((await db.query(`
+      select before_state, after_state, reason, request_id from public.personnel_lifecycle_events
+      where target_user_id = $1 and command = 'revoke_scoped_role' order by occurred_at
+    `, [candidate])).rows).toEqual([['department', department], ['space', legacySpace]].map(([type, scope_id]) => ({
+      before_state: { role_id: salesRole, scope_type: type, scope_id, assigned: true },
+      after_state: { role_id: salesRole, scope_type: type, scope_id, assigned: false },
+      reason: 'test reason',
+      request_id: 'scoped-revoke-test',
+    })))
   })
 })

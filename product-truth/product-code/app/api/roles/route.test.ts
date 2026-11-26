@@ -54,7 +54,9 @@ function database({
       selectedRoles = globalRoles.filter(role => !excludedCodes.includes((role as { code: string }).code))
       return roleQuery
     }),
-    range: vi.fn(async () => ({ data: selectedRoles, error: null, count: selectedRoles.length })),
+    range: vi.fn(async (start: number, end: number) => ({
+      data: selectedRoles.slice(start, end + 1), error: null, count: selectedRoles.length,
+    })),
   }
   const permissionQuery = {
     select: vi.fn(() => permissionQuery),
@@ -230,6 +232,37 @@ describe('GET /api/roles organization permissions', () => {
     expect(supabaseAdmin.from).not.toHaveBeenCalledWith('roles')
   })
 
+  it('hides both retired roles before computing the directory count and page, while retaining the system administrator', async () => {
+    const { roleQuery } = database({
+      assignments: [root],
+      globalRoles: [
+        { id: 'delegated', code: 'ORG_SUPER_ADMIN', name: '组织超管', permissions: ['role:manage'] },
+        { id: 'baseline', code: 'FXIAOKE_BASELINE', name: '纷享基础', permissions: ['quote:view'] },
+        root.role,
+        roles[1],
+      ],
+    })
+    const response = await GET(makeRequest('https://example.test/api/roles?limit=1&offset=1'))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      data: { roles: [{ code: 'SALES' }] },
+      meta: { total: 2, limit: 1, offset: 1, hasMore: false },
+    })
+    expect(roleQuery.not).toHaveBeenCalledWith('code', 'in', '(ORG_SUPER_ADMIN,FXIAOKE_BASELINE)')
+    expect(roleQuery.range.mock.invocationCallOrder[0]).toBeGreaterThan(roleQuery.not.mock.invocationCallOrder[0])
+  })
+
+  it('withholds an exact retired role lookup from an ordinary directory reader', async () => {
+    const { roleQuery } = database({
+      globalRoles: [{ id: 'baseline', code: 'FXIAOKE_BASELINE', name: '纷享基础', permissions: ['quote:view'] }],
+    })
+    const response = await GET(makeRequest('https://example.test/api/roles?role_id=baseline'))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ data: { roles: [] }, meta: { total: 0 } })
+    expect(roleQuery.not).toHaveBeenCalledWith('code', 'in', '(ORG_SUPER_ADMIN,FXIAOKE_BASELINE)')
+    expect(roleQuery.eq).toHaveBeenCalledWith('id', 'baseline')
+  })
+
   it('单角色回读可过滤角色 ID，纷享基础角色返回只读说明', async () => {
     const { roleQuery } = database({
       assignments: [root], globalRoles: [{ id: 'baseline', code: 'FXIAOKE_BASELINE', name: '纷享基础', permissions: ['quote:view'] }],
@@ -246,6 +279,7 @@ describe('GET /api/roles organization permissions', () => {
       }],
     })
     expect(roleQuery.eq).toHaveBeenCalledWith('id', 'baseline')
+    expect(roleQuery.not).not.toHaveBeenCalled()
   })
 
   it('separates appointment authority from a system role definition that cannot be edited', async () => {

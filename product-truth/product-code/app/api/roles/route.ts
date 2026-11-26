@@ -29,8 +29,11 @@ export async function GET(req: NextRequest) {
     const offset = Math.max(Number.parseInt(searchParams.get('offset') || '0', 10) || 0, 0)
 
     let query = queryOrgRoles(orgId, 'exact')
-    if (assignable) {
-      query = query.not('code', 'in', `(SUPER_ADMIN,${ORG_SUPER_ADMIN_ROLE_CODE},${FXIAOKE_BASELINE_ROLE_CODE})`)
+    // Only an exact lookup by a system administrator may read a retired role for audit.
+    if (assignable || roleId === null || !canEdit) {
+      const excludedCodes = [ORG_SUPER_ADMIN_ROLE_CODE, FXIAOKE_BASELINE_ROLE_CODE]
+      if (assignable) excludedCodes.unshift('SUPER_ADMIN')
+      query = query.not('code', 'in', `(${excludedCodes.join(',')})`)
     }
     if (roleId !== null) query = query.eq('id', roleId)
     const { data, error, count } = await query.order('sort_order').order('id').range(offset, offset + limit - 1)

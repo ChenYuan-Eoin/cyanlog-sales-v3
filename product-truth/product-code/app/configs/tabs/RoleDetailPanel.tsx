@@ -57,7 +57,6 @@ import {
   editableCurrentOrgBusinessRoleIds,
   editableOrgRoleIds,
   getMemberRoleMutationRestriction,
-  userHasProtectedPlatformRole,
   userHasSystemAdminAssignment,
 } from './role-assignment-policy'
 import { PermissionSettingTable } from './PermissionSettingTable'
@@ -475,7 +474,6 @@ function MemberAssignmentTab({
     if (roleMutationRestriction(user)) return []
 
     const choices: RoleRemoval[] = currentBusinessRoleIds(user).includes(roleId) ? [orgBinding] : []
-    if (userHasProtectedPlatformRole(user)) return choices
     for (const binding of user.scoped_roles ?? []) {
       if (binding.roleId !== roleId || binding.scopeType === 'org' || !binding.scopeId) continue
       choices.push({ label: binding.scopeName, scopeType: binding.scopeType, scopeId: binding.scopeId })

@@ -34,8 +34,8 @@ async function changeScope(req: NextRequest, userId: string, action: 'assign' | 
     if (action === 'assign' && input.data.scope_type === 'space') {
       return failure('请按部门分配角色，历史范围授权仅可撤销', 'LEGACY_SCOPE_ASSIGNMENT_FORBIDDEN', 409)
     }
-    if (await userHasOrgRoleCode(targetId, orgId, 'SUPER_ADMIN')) {
-      return failure('平台超级管理员的角色不能通过组织接口变更', 'PROTECTED_ROLE_MUTATION_FORBIDDEN', 403)
+    if (action === 'assign' && await userHasOrgRoleCode(targetId, orgId, 'SUPER_ADMIN')) {
+      return failure('请在全组织范围为此成员分配角色', 'PROTECTED_ROLE_MUTATION_FORBIDDEN', 403)
     }
     const validation = await validateOrgRoleAssignment(
       assignments, orgId, [input.data.role_id], { scopeType: input.data.scope_type, action },

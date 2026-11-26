@@ -212,22 +212,33 @@ it('removes an appointed administrator’s selected business role while retainin
   }))
 })
 
-it('revokes only the selected department binding when a member has multiple role bindings', async () => {
+it.each([false, true])('revokes only the selected department binding (appointed administrator: %s)', async appointed => {
   const sales = { id: 'sales-role', code: 'SALES', name: '销售', description: null, permissions: [] }
+  const orgId = 'org-a'
   const member = {
     id: 'sales-member', display_name: '销售员工', email: '', title: '', primary_dept_name: '华南',
-    role_names: '销售', role_ids: [sales.id], status: 'active',
+    role_names: '销售', role_ids: appointed ? [sales.id, role.id] : [sales.id], status: 'active',
     scoped_roles: [
       { scopeType: 'org' as const, scopeId: 'org-a', scopeName: '组织' },
       { scopeType: 'department' as const, scopeId: 'south', scopeName: '华南' },
       { scopeType: 'department' as const, scopeId: 'east', scopeName: '华东' },
     ].map(binding => ({ ...binding, roleId: sales.id, roleCode: sales.code, roleName: sales.name, grantedAt: null })),
   }
-  const send = vi.fn().mockResolvedValueOnce(Response.json({ success: true }))
+  if (appointed) member.scoped_roles.push({
+    roleId: role.id, roleCode: role.code, roleName: role.name,
+    scopeType: 'org', scopeId: orgId, scopeName: '组织', grantedAt: null,
+  })
+  const send = vi.fn().mockImplementation(async (url: string) => url.endsWith('/role-scopes')
+    ? Response.json({ success: true })
+    : Response.json({
+      org_id: orgId, user_id: member.id, permissions: [], departments: [],
+      shipping_permission_publication: { registered: [], published: [] },
+    }))
   vi.stubGlobal('fetch', send)
   vi.mocked(confirmAction).mockResolvedValueOnce(true)
   const onRefresh = vi.fn()
-  render(<RoleDetailPanel {...defaults} role={sales} users={[member]} onRefresh={onRefresh} onSave={vi.fn()} />)
+  render(<RoleDetailPanel {...defaults} role={sales} users={[member]} onRefresh={onRefresh} onSave={vi.fn()}
+    systemSuperAdminAuthority={appointed ? { orgId } : undefined} />)
 
   const action = within(screen.getByRole('table')).getByRole('button', { name: '从角色中移除 销售员工' })
   fireEvent.pointerDown(action, { button: 0, ctrlKey: false })
@@ -238,7 +249,8 @@ it('revokes only the selected department binding when a member has multiple role
 
   await waitFor(() => expect(onRefresh).toHaveBeenCalledOnce())
   expect(confirmAction).toHaveBeenLastCalledWith(expect.stringContaining('「华南」'), { confirmText: '移除', danger: true })
-  expect(send).toHaveBeenCalledExactlyOnceWith(`/api/admin/users/${member.id}/role-scopes`, expect.objectContaining({
+  expect(send.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1)
+  expect(send).toHaveBeenLastCalledWith(`/api/admin/users/${member.id}/role-scopes`, expect.objectContaining({
     method: 'DELETE', body: JSON.stringify({ role_id: sales.id, scope_type: 'department', scope_id: 'south' }),
   }))
 })
