@@ -23,6 +23,7 @@ interface RoleAssignmentDialogProps {
   userId: string
   userName: string
   pendingRoles?: { id: string }[]
+  removePendingOnly?: boolean
   organizationOnly?: boolean
   currentSystemAdmin?: boolean
   departmentAssignmentRestricted?: boolean
@@ -43,6 +44,7 @@ export function RoleAssignmentDialog({
   userName,
   currentRoles,
   pendingRoles,
+  removePendingOnly = false,
   organizationOnly = false,
   currentSystemAdmin,
   departmentAssignmentRestricted = currentSystemAdmin === true,
@@ -73,7 +75,8 @@ export function RoleAssignmentDialog({
   const showSystemAdmin = scopeType === 'org' && !organizationOnly && currentSystemAdmin !== undefined
   const [scopeId, setScopeId] = useState('')
   const [revokingKey, setRevokingKey] = useState<string | null>(null)
-  const assignableRoles = roles.filter(role => isRoleAssignableInScope(role.code, scopeType, role.department_scope_available === true))
+  const assignableRoles = roles.filter(role => isRoleAssignableInScope(role.code, scopeType, role.department_scope_available === true)
+    && (!removePendingOnly || currentRoles.includes(role.id)))
   const selectedScopedRole = assignableRoles.find(role => role.id === selectedScopedRoleId)
   const assignableDepartments = departments.filter(department => department.status === 'active')
   const selectedDepartment = assignableDepartments.find(department => department.id === scopeId)
@@ -233,7 +236,9 @@ export function RoleAssignmentDialog({
                     className="flex items-center gap-2 cursor-pointer"
                   >
                     <span className="font-medium">{role.name}</span>
-                    {pendingRoles?.some(pending => pending.id === role.id) && <Badge variant="outline">待首次登录生效</Badge>}
+                    {pendingRoles?.some(pending => pending.id === role.id) && (
+                      <Badge variant="outline">{removePendingOnly ? '首次登录已停用' : '待首次登录生效'}</Badge>
+                    )}
                     {!isRoleAssignableInScope(role.code, 'department', role.department_scope_available === true) &&
                       <Badge variant="outline">仅整个组织</Badge>}
                     <Badge variant="outline" className="text-xs">

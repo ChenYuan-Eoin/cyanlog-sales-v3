@@ -258,14 +258,19 @@ it('does not reuse a role list after the assignment projection is denied', async
   expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument()
 })
 
-it('keeps a preassigned role selected and allows its removal at organization scope before login', async () => {
+it.each([true, false])('allows removal of stored roles (first login allowed: %s)', async eligible => {
   const onSubmit = vi.fn(async () => undefined)
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ success: true, data: { roles: [
+    { id: 'role-1', code: 'SALES', name: '销售' },
+    { id: 'role-2', code: 'LEGAL', name: '法务' },
+  ] } }))
   render(<RoleAssignmentDialog userId="employee" userName="待登录员工" currentRoles={['role-1']}
-    pendingRoles={[{ id: 'role-1' }]} organizationOnly open onOpenChange={vi.fn()}
+    pendingRoles={[{ id: 'role-1' }]} organizationOnly removePendingOnly={!eligible} open onOpenChange={vi.fn()}
     departments={[]} onSubmit={onSubmit} />)
-  const role = await screen.findByRole('checkbox')
+  const role = await screen.findByRole('checkbox', { name: /销售/ })
   expect(role).toBeChecked()
-  expect(screen.getByText('待首次登录生效')).toBeInTheDocument()
+  expect(screen.getByText(eligible ? '待首次登录生效' : '首次登录已停用')).toBeInTheDocument()
+  expect(Boolean(screen.queryByRole('checkbox', { name: /法务/ }))).toBe(eligible)
   expect(screen.getByRole('combobox', { name: '角色作用域类型' })).toBeDisabled()
   fireEvent.click(role)
   fireEvent.click(screen.getByRole('button', { name: '保存' }))

@@ -60,6 +60,11 @@ export function userHasPendingOrgRole(user: OrgSummaryUser, roleId: string): boo
   return user.pending_org_roles?.some(role => role.id === roleId) ?? false
 }
 
+export function canOnlyRevokePendingOrgRoles(user: OrgSummaryUser): boolean {
+  return user.membership_status === 'invited' && user.can_preassign_org_roles === false
+    && user.can_revoke_pending_org_roles === true
+}
+
 export function userHasProtectedPlatformRole(user: OrgSummaryUser): boolean {
   return Boolean(
     user.role_codes?.includes('SUPER_ADMIN')
@@ -100,6 +105,7 @@ export function getMemberRoleMutationRestriction(
   if (user.id === currentUserId) return SELF_ROLE_MUTATION_RESTRICTION
   if (currentUserId && systemAdminOrgId && userHasSystemAdminAssignment(user, systemAdminOrgId)) return null
   const restriction = getRoleMutationRestriction(user, currentUserId)
+  if (restriction?.code === 'MEMBER_NOT_ELIGIBLE' && canOnlyRevokePendingOrgRoles(user)) return null
   return restriction?.code === 'PROTECTED_ROLE_MUTATION_FORBIDDEN'
     ? { ...restriction, label: '系统超级管理员', reason: '请在角色权限中核对该成员的系统超管身份。' }
     : restriction

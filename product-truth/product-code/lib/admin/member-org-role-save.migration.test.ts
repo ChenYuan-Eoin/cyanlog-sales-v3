@@ -25,6 +25,7 @@ const firstLogin = '20261118095000_fxiaoke_prelogin_role_assignment.sql'
 const accountState = '20260715142428_atomic_admin_user_account_state.sql'
 const activation = '20261029100000_remove_local_password_auth.sql'
 const batchMigration = '20261126103435_admin_add_member_org_roles.sql'
+const stoppedRoleMigration = '20261126120100_allow_revoke_stopped_fxiaoke_pending_roles.sql'
 
 const org = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const otherOrg = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -177,7 +178,7 @@ async function bindings() {
 }
 
 async function events() {
-  return (await db.query<{ command: string }>('select command, before_state, after_state, request_id from public.personnel_lifecycle_events order by command')).rows
+  return (await db.query<{ command: string; request_id: string | null }>('select command, before_state, after_state, request_id from public.personnel_lifecycle_events order by command')).rows
 }
 
 async function batch(action: string, userIds: string[], roles: string[] = [], actorId = actor) {
@@ -330,6 +331,126 @@ it('stops verified first login and leaves active employment unchanged when disab
   expect(eligible).toEqual([{ user_id: ordinary, outcome: 'MEMBER_NOT_ELIGIBLE' }])
   expect((await db.query('select status, employment_status from public.user_organizations where user_id = $1', [ordinary])).rows)
     .toEqual([{ status: 'invited', employment_status: 'active' }])
+})
+
+it('lets a super admin revoke only verified dormant role reservations while first login stays stopped', async () => {
+  await installBatchMigration()
+  await prepareDirectoryFirstLogin()
+  await addInvitation()
+  await db.exec(`
+    alter table private.org_role_metadata add column updated_by uuid, add unique (org_id, role_id);
+    create function public.get_org_admin_directory_payload_v1(p_org_id uuid)
+    returns jsonb language sql stable security definer set search_path = ''
+    as $$
+      select jsonb_build_object('users', jsonb_agg(jsonb_build_object('id', id)))
+      from public.users where org_id = p_org_id;
+    $$;
+  `)
+  for (const name of ['org_role_is_referenced_v1', 'admin_list_org_roles_v1', 'admin_mutate_org_role_v1',
+    'get_org_admin_directory_payload_v2']) {
+    await db.exec(functionDefinition(roleCatalog, name, name.startsWith('org_role_') ? 'private' : 'public'))
+  }
+  await db.exec(functionDefinition(firstLogin, 'admin_replace_org_roles_v1', 'public')
+    .replace('function public.', 'function private.'))
+  await db.exec(functionDefinition(organizationAdmin, 'admin_replace_org_roles_v1', 'public')
+    .replace('function public.admin_replace_org_roles_v1(', 'function private.admin_replace_org_roles_before_system_actor_v1('))
+  const baselineRetirement = '20261126060000_retire_new_fxiaoke_baseline_grants.sql'
+  await db.exec(functionDefinition(baselineRetirement, 'admin_replace_org_roles_v1', 'public'))
+  await db.exec(functionDefinition(organizationAdmin, 'admin_replace_org_roles_if_current_v1', 'public')
+    .replace('function public.admin_replace_org_roles_if_current_v1(', 'function private.admin_replace_org_roles_if_current_before_system_actor_v1('))
+  await db.exec(functionDefinition(assignmentGuard, 'admin_replace_org_roles_if_current_v1', 'public'))
+  await db.exec(migration(stoppedRoleMigration))
+
+  async function roster() {
+    const { rows } = await db.query<{ user: {
+      can_preassign_org_roles: boolean; can_revoke_pending_org_roles: boolean; pending_org_roles: Array<{ id: string }>;
+    } }>(`
+      select member.value as "user"
+      from jsonb_array_elements(public.get_org_admin_directory_payload_v2($1)->'users') member(value)
+      where member.value->>'id' = $2
+    `, [org, ordinary])
+    return rows[0].user
+  }
+  async function replacePending(wanted: string[], expected: string[], actorId = actor) {
+    const { rows } = await db.query<{ result: string }>(
+      'select public.admin_replace_org_roles_if_current_v1($1,$2,$3,$4,$5,null,$6) as result',
+      [actorId, org, ordinary, wanted, expected, request],
+    )
+    return rows[0].result
+  }
+  // The invitation is for the other retained role so it does not block this archive.
+  await db.query("update public.personnel_invitations set role_ids = $1 where token_hash = 'fixture-invite'", [[retained]])
+  const archive = () => db.query(
+    "select archived_at from public.admin_mutate_org_role_v1($1,$2,'archive',$3,null,null,0)",
+    [org, actor, added],
+  )
+
+  expect(await batch('assign_roles', [ordinary], [added, retained])).toEqual([{ user_id: ordinary, outcome: 'pending' }])
+  expect(await roster()).toMatchObject({
+    can_preassign_org_roles: true, pending_org_roles: [{ id: retained }, { id: added }],
+  })
+  expect(await replacePending([added], [added, retained])).toBe('saved')
+  expect(await replacePending([added, retained], [added])).toBe('saved')
+  expect(await batch('suspend', [ordinary])).toEqual([{ user_id: ordinary, outcome: 'saved' }])
+  await db.query(`
+    insert into public.external_identities values
+      ($1, $2, $3, null, 'stale-directory-identity', 'unresolved', '{}')
+  `, [otherMember, org, department])
+  await db.query(`
+    insert into public.fxiaoke_pending_org_roles (org_id,user_id,role_id,source_id,external_identity_id,external_user_id)
+    values
+      ($1,$2,$3,$4,$5,'fixture-external-id'),
+      ($1,$2,$6,$4,$5,'fixture-external-id'),
+      ($1,$2,$7,$4,$8,'stale-directory-identity')
+  `, [org, ordinary, retired, department, archived, archived, removed, otherMember])
+  expect(await roster()).toMatchObject({
+    can_preassign_org_roles: false, can_revoke_pending_org_roles: true,
+    pending_org_roles: [{ id: retained }, { id: added }],
+  })
+
+  await expect(archive()).rejects.toMatchObject({ code: '23514', detail: 'ORG_ROLE_IN_USE' })
+  await expect(replacePending([retained], [retained, added], ordinary))
+    .rejects.toMatchObject({ code: '42501' })
+  expect(await replacePending([retained], [retained])).toBe('conflict')
+  expect(await replacePending([retained, added, removed], [retained, added])).toBe('ineligible')
+  expect(await replacePending([retained], [added, retained])).toBe('saved')
+  expect(await roster()).toMatchObject({
+    can_preassign_org_roles: false, can_revoke_pending_org_roles: true,
+    pending_org_roles: [{ id: retained }],
+  })
+  expect((await archive()).rows).toEqual([{ archived_at: expect.any(Date) }])
+  expect(await replacePending([], [retained])).toBe('saved')
+  expect(await roster()).toMatchObject({
+    can_preassign_org_roles: false, can_revoke_pending_org_roles: false, pending_org_roles: [],
+  })
+  expect((await db.query('select * from public.fxiaoke_prelogin_role_targets_v1($1,$2)', [org, ordinary])).rows).toEqual([])
+  expect((await db.query("select public.accept_personnel_invitation_v1('fixture-invite') as accepted")).rows)
+    .toEqual([{ accepted: null }])
+  expect((await db.query('select role_id from public.user_roles where user_id = $1', [ordinary])).rows).toEqual([])
+  expect((await db.query('select role_id from public.fxiaoke_pending_org_roles where user_id = $1 order by role_id', [ordinary])).rows)
+    .toEqual([{ role_id: removed }, { role_id: retired }, { role_id: archived }])
+  expect((await db.query('select status,login_enabled from public.users where id = $1', [ordinary])).rows)
+    .toEqual([{ status: 'inactive', login_enabled: false }])
+  expect((await events()).filter(event => event.request_id === request)).toContainEqual({
+    command: 'assign_org_roles', before_state: { pending_role_ids: [retained, added] },
+    after_state: { pending_role_ids: [retained] }, request_id: request,
+  })
+
+  const privileges = await db.query(`
+    select has_function_privilege('anon', signature, 'execute') as anon,
+      has_function_privilege('authenticated', signature, 'execute') as authenticated,
+      has_function_privilege('service_role', signature, 'execute') as server
+    from (values
+      ('public.admin_replace_org_roles_if_current_v1(uuid,uuid,uuid,uuid[],uuid[],text,text)'),
+      ('public.get_org_admin_directory_payload_v2(uuid)'),
+      ('private.fxiaoke_prelogin_directory_members_v1(uuid,uuid)')
+    ) as routines(signature)
+  `)
+  expect(privileges.rows).toEqual([
+    { anon: false, authenticated: false, server: true },
+    { anon: false, authenticated: false, server: true },
+    { anon: false, authenticated: false, server: false },
+  ])
 })
 
 it('offboards linked members and retired-role holders, keeps audit and rejects unsafe changes to active administrators', async () => {

@@ -564,11 +564,12 @@ it('keeps retired role names out of active member role badges', () => {
   expect(within(row).queryByText('纷享基础查看')).not.toBeInTheDocument()
 })
 
-it('renders pending role separately on the organization member row', () => {
-  const user = { ...statusPayload.users[0], can_preassign_org_roles: true, pending_org_roles: [{ id: 'ship', code: 'SHIP', name: '寄件' }] }
+it.each([true, false])('shows stored preassignments on the organization row (first login allowed: %s)', eligible => {
+  const user = { ...statusPayload.users[0], can_preassign_org_roles: eligible, can_revoke_pending_org_roles: !eligible,
+    pending_org_roles: [{ id: 'ship', code: 'SHIP', name: '寄件' }] }
   render(<OrgStructureTab orgSummary={{ ...statusPayload, users: [user] }} currentUserId="actor" />)
   const row = screen.getByText(user.display_name).closest('tr')!
-  expect(within(row).getByText('寄件 · 待首次登录生效')).toBeInTheDocument()
+  expect(within(row).getByText(eligible ? '寄件 · 待首次登录生效' : '寄件 · 首次登录已停用')).toBeInTheDocument()
 })
 
 it('opens the employee permission table before the first login of a verified directory member', async () => {
@@ -610,8 +611,9 @@ it.each([
   expect(send).toHaveBeenCalledWith(endpoint, expect.objectContaining({ method, body: JSON.stringify(body) }))
 })
 
-it('checks the original roles when the directory refreshes while a member is being edited', async () => {
-  const user = { ...statusPayload.users[0], can_preassign_org_roles: true, pending_org_roles: [{ id: 'ship', code: 'SHIP', name: '寄件' }] }
+it.each([true, false])('checks original preassignments on directory refresh (first login allowed: %s)', async eligible => {
+  const user = { ...statusPayload.users[0], can_preassign_org_roles: eligible, can_revoke_pending_org_roles: !eligible,
+    pending_org_roles: [{ id: 'ship', code: 'SHIP', name: '寄件' }] }
   const latest = { ...user, pending_org_roles: [] }
   const send = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ code: 'ROLE_ASSIGNMENT_CHANGED', error: '请重新选择' }) })
   vi.stubGlobal('fetch', send)

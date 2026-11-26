@@ -1,6 +1,6 @@
 import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
 import type { OrgSummaryPayload, OrgSummaryUser } from '../types'
-import { userHasPendingOrgRole } from './role-assignment-policy'
+import { canOnlyRevokePendingOrgRoles, userHasPendingOrgRole } from './role-assignment-policy'
 
 export interface RoleMember {
   user: OrgSummaryUser
@@ -43,7 +43,7 @@ export function getRoleMembershipStats(
     const pending = user.membership_status === 'invited'
       && user.status === 'inactive'
       && (!user.employment_status || user.employment_status === 'active')
-      && user.can_preassign_org_roles === true
+      && (user.can_preassign_org_roles === true || canOnlyRevokePendingOrgRoles(user))
       && userHasPendingOrgRole(user, roleId)
     if (!hasOrgAssignment && !pending && bindings.length === 0) continue
 
@@ -84,7 +84,7 @@ export function getRoleMembershipStats(
       effectiveMemberCount += 1
       effectiveBindingCount += bindings.size
     }
-    if (member.pending) pendingMemberCount += 1
+    if (member.pending && member.user.can_preassign_org_roles === true) pendingMemberCount += 1
     members.push(member)
   }
 

@@ -54,6 +54,7 @@ import {
   type ShippingDirectoryEntry,
 } from '../permission-directory'
 import {
+  canOnlyRevokePendingOrgRoles,
   editableCurrentOrgBusinessRoleIds,
   editableOrgRoleIds,
   getMemberRoleMutationRestriction,
@@ -365,7 +366,7 @@ function MemberRoleStatus({ member, roleId }: { member: RoleMember; roleId: stri
   if (hasOrgAssignment && !pending && effective !== false && !hasLegacyBinding) return null
   return (
     <div className="flex flex-wrap gap-1">
-      {pending && <Badge variant="outline">待首次登录生效</Badge>}
+      {pending && <Badge variant="outline">{canOnlyRevokePendingOrgRoles(user) ? '首次登录已停用' : '待首次登录生效'}</Badge>}
       {!hasOrgAssignment && !pending && user.scoped_roles?.some(role => role.roleId === roleId && role.scopeType === 'department') && (
         <Badge variant="outline">部门绑定</Badge>
       )}
@@ -438,7 +439,7 @@ function MemberAssignmentTab({
     if (systemSuperAdminMemberIds) {
       return unassignedUsers.filter(user => user.id !== currentUserId && systemSuperAdminMemberIds.has(user.id))
     }
-    return unassignedUsers.filter(user => !roleMutationRestriction(user))
+    return unassignedUsers.filter(user => !canOnlyRevokePendingOrgRoles(user) && !roleMutationRestriction(user))
   }, [orgAssignedUserIds, systemSuperAdminMemberIds, currentUserId, roleMutationRestriction, users])
 
   function appointedAdminOrg(user: OrgSummaryUser) {

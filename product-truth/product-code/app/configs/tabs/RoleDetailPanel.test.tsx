@@ -125,12 +125,13 @@ describe('RoleDetailPanel explicit permission editing', () => {
   })
 })
 
-it('lists a pending member and revokes only this role before first login', async () => {
+it.each([true, false])('lists a stored preassignment and revokes only this role (first login allowed: %s)', async eligible => {
   const shipping = { id: 'ship', code: 'SHIPPING', name: '寄件', description: null, permissions: [] }
   const user = {
     id: 'employee', display_name: '待登录成员', email: '', title: '', primary_dept_name: '行政组',
     role_names: '', role_ids: [], role_codes: [], status: 'inactive', membership_status: 'invited' as const,
-    can_preassign_org_roles: true, pending_org_roles: [shipping, { id: 'another', code: 'OTHER', name: '其他' }],
+    can_preassign_org_roles: eligible, can_revoke_pending_org_roles: !eligible,
+    pending_org_roles: [shipping, { id: 'another', code: 'OTHER', name: '其他' }],
   }
   const send = vi.fn().mockResolvedValue({ ok: true })
   vi.stubGlobal('fetch', send)
@@ -139,7 +140,7 @@ it('lists a pending member and revokes only this role before first login', async
   render(<RoleDetailPanel {...defaults} role={shipping} users={[user]} onSave={vi.fn()} onRefresh={onRefresh}
     systemSuperAdminAuthority={{ orgId: 'org-a' }} />)
   expect(screen.getByRole('tab', { name: '员工分配 (1)' })).toBeInTheDocument()
-  expect(screen.getAllByText('待首次登录生效').length).toBeGreaterThan(0)
+  expect(screen.getAllByText(eligible ? '待首次登录生效' : '首次登录已停用').length).toBeGreaterThan(0)
   fireEvent.click(screen.getAllByRole('button', { name: '从角色中移除 待登录成员' })[0])
   await waitFor(() => expect(onRefresh).toHaveBeenCalled())
   expect(JSON.parse(send.mock.calls[0][1].body)).toEqual({ role_ids: ['another'], expected_role_ids: ['ship', 'another'] })

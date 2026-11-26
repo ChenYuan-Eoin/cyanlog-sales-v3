@@ -37,7 +37,8 @@ import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
 import { IdentityBindingDialog } from './components/IdentityBindingDialog'
 import { MemberBatchActions } from './components/MemberBatchActions'
 import {
-  editableCurrentOrgBusinessRoleIds, editableOrgRoleIds, getMemberRoleMutationRestriction, getRoleMutationRestriction, isGenericallyAssignableRole,
+  canOnlyRevokePendingOrgRoles, editableCurrentOrgBusinessRoleIds, editableOrgRoleIds, getMemberRoleMutationRestriction,
+  getRoleMutationRestriction, isGenericallyAssignableRole,
   userHasSystemAdminAssignment,
 } from './role-assignment-policy'
 import {
@@ -630,9 +631,10 @@ function MemberTable({
           .map(role => role.scopeType === 'org' ? role.roleName : `${role.roleName}（${role.scopeName}）`)
           ?? (user.role_names ?? '').split(',').map(role => role.trim()).filter(Boolean)
         const pendingRoles = user.pending_org_roles?.filter(role => !isRetiredRoleCode(role.code)) ?? []
+        const pendingStatus = canOnlyRevokePendingOrgRoles(user) ? '首次登录已停用' : '待首次登录生效'
         return <div className="flex flex-wrap gap-1 max-w-[170px]">
           {[...new Set(roleNames)].map(role => <Badge key={role} variant="secondary" className="text-xs">{role}</Badge>)}
-          {pendingRoles.map(role => <Badge key={role.id} variant="outline" className="text-xs">{role.name} · 待首次登录生效</Badge>)}
+          {pendingRoles.map(role => <Badge key={role.id} variant="outline" className="text-xs">{role.name} · {pendingStatus}</Badge>)}
           {roleNames.length === 0 && pendingRoles.length === 0 && <span className="text-slate-400">-</span>}
         </div>
       },
@@ -1561,6 +1563,7 @@ export default function OrgStructureTab({
           userName={assignment.user.display_name}
           currentRoles={assignment.roleIds}
           pendingRoles={assignment.user.pending_org_roles}
+          removePendingOnly={canOnlyRevokePendingOrgRoles(assignment.user)}
           currentSystemAdmin={assignment.systemAdmin}
           organizationOnly={assignment.user.membership_status === 'invited'}
           departmentAssignmentRestricted={departmentAssignmentRestricted}
@@ -1593,7 +1596,8 @@ export default function OrgStructureTab({
               }
               throw new Error(message)
             }
-            success(result.pending_role_ids?.length ? '组织角色已预分配，首次登录后生效' : '角色已保存')
+            const preassigned = !canOnlyRevokePendingOrgRoles(assignment.user) && result.pending_role_ids?.length
+            success(preassigned ? '组织角色已预分配，首次登录后生效' : '角色已保存')
             await onRefresh?.()
           }}
           onSubmitScoped={departmentAssignmentRestricted ? undefined : async (roleId, departmentId) => {
