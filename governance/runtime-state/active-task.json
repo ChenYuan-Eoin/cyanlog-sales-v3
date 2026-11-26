@@ -282,6 +282,8 @@
       "product-truth/product-code/lib/fxiaoke/identity.ts",
       "product-truth/product-code/lib/fxiaoke/identity.test.ts",
       "product-truth/product-code/lib/organization-connections/fxiaoke-baseline-view-migration.test.ts",
+      "product-truth/product-code/lib/organization-connections/directory-cutover.ts",
+      "product-truth/product-code/lib/organization-connections/directory-cutover-read.test.ts",
       "product-truth/product-code/app/pending-access/page.tsx",
       "product-truth/product-code/components/layout/AppShell.tsx",
       "product-truth/product-code/components/layout/AppShell.test.tsx",

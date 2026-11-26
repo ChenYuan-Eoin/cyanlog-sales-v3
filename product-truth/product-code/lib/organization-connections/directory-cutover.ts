@@ -981,7 +981,14 @@ function assertUuid(value: unknown, label: string) {
   return value
 }
 
-function safeRpcFailure(error: { message?: string } | null) {
+function safeRpcFailure(error: { code?: string; details?: string; message?: string } | null) {
+  if (error?.code === '23514' && error.details === 'LAST_SYSTEM_SUPER_ADMIN_PROTECTED') {
+    return new OrganizationConnectionError(
+      'LAST_SYSTEM_SUPER_ADMIN_PROTECTED',
+      '本次目录变更会使组织失去最后一名有效系统超管。请先任命另一名可登录的系统超管，再重试。',
+      409,
+    )
+  }
   const message = error?.message || ''
   if (/not found/i.test(message)) return new OrganizationConnectionError('PLAN_NOT_FOUND', '切源计划不存在或不属于当前组织。', 404)
   if (/stale|changed|expired/i.test(message)) return new OrganizationConnectionError('PLAN_STALE', '目录、连接或来源已发生变化，请重新预览差异。', 409)

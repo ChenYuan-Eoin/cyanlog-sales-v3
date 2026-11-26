@@ -90,7 +90,7 @@ vi.mock('./service', () => ({
 }))
 vi.mock('./storage', () => ({ assertDirectoryCutoverStorage: vi.fn() }))
 
-import { applyDirectoryCutoverPlan, loadLatestDirectoryCutoverPlan, prepareDirectoryCutoverPlan } from './directory-cutover'
+import { applyDirectoryCutoverPlan, loadLatestDirectoryCutoverPlan, prepareDirectoryCutoverPlan, rollbackDirectoryCutover } from './directory-cutover'
 import { OrganizationConnectionError } from './errors'
 
 beforeEach(() => {
@@ -116,6 +116,27 @@ describe('latest directory cutover plan selection', () => {
       sourceRevisions: [{}] as never,
     })).rejects.toMatchObject({ code: 'SOURCE_DISABLED' })
     expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['apply', () => applyDirectoryCutoverPlan({
+      orgId: 'org-1', actorId: 'admin-1', planId: '00000000-0000-4000-8000-000000000030',
+      planHash: 'a'.repeat(64), connectionRevision: '00000000-0000-4000-8000-000000000021',
+      sourceRevisions: [{}] as never,
+    })],
+    ['rollback', () => rollbackDirectoryCutover({
+      orgId: 'org-1', actorId: 'admin-1', planId: '00000000-0000-4000-8000-000000000030',
+    })],
+  ])('explains when %s would disable the last effective super administrator', async (_operation, activate) => {
+    mocks.loadVerifiedConnection.mockResolvedValueOnce({ revision: '00000000-0000-4000-8000-000000000021' })
+    mocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: '23514', details: 'LAST_SYSTEM_SUPER_ADMIN_PROTECTED', message: 'constraint conflict' },
+    })
+    await expect(activate()).rejects.toMatchObject({
+      status: 409, code: 'LAST_SYSTEM_SUPER_ADMIN_PROTECTED', message: expect.stringContaining('先任命另一名'),
+    })
+    expect(mocks.rpc).toHaveBeenCalledOnce()
   })
   it('keeps the previous plan readable and performs no writes when source reads are unavailable', async () => {
     const unavailable = new OrganizationConnectionError('DIRECTORY_SOURCE_UNAVAILABLE', '来源暂不可用，请重试。', 503)
