@@ -4,26 +4,33 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ConfigRoleRecord } from '@/lib/org-role-permission-readback'
 import type { ConfigTabId, OrgSummaryPayload } from './types'
+import type { RoleMetadataChange } from './tabs/role-metadata'
 import ConfigsClient from './ConfigsClient'
 
 vi.mock('next/dynamic', () => ({ default: () => () => null }))
 vi.mock('./tabs/TabsContent', async () => {
   const { RoleDetailPanel } = await import('./tabs/RoleDetailPanel')
   return {
-    default: ({ activeTab, roles, orgSummary, savingRoleId, permissionsEditable, onSaveRole }: {
+    default: ({ activeTab, roles, orgSummary, savingRoleId, permissionsEditable, onSaveRole, onMaintainRole }: {
       activeTab: ConfigTabId
       roles: ConfigRoleRecord[]
       orgSummary: OrgSummaryPayload | null
       savingRoleId: string | null
       permissionsEditable: boolean
       onSaveRole: (roleId: string, permissions: string[]) => void
+      onMaintainRole: (change: RoleMetadataChange) => Promise<string>
     }) => {
       if (activeTab !== 'role-access') return null
       const role = roles[0]
       if (!role) return null
-      return <RoleDetailPanel key={orgSummary?.organization?.id} role={role} currentUserId="actor"
-        saving={savingRoleId === role.id} permissionsEditable={permissionsEditable}
-        departments={[]} users={[]} onSave={permissions => onSaveRole(role.id, permissions)} />
+      return <>
+        <button type="button" onClick={() => void onMaintainRole({ type: 'create', name: '测试新角色', description: '' })}>提交角色维护</button>
+        <output aria-label="组织角色清单">{orgSummary?.roles.map(role => role.name).join(',')}</output>
+        <output aria-label="成员角色标签">{orgSummary?.users.flatMap(user => user.scoped_roles?.map(role => role.roleName) ?? []).join(',')}</output>
+        <RoleDetailPanel key={orgSummary?.organization?.id} role={role} currentUserId="actor"
+          saving={savingRoleId === role.id} permissionsEditable={permissionsEditable}
+          departments={[]} users={[]} onSave={permissions => onSaveRole(role.id, permissions)} />
+      </>
     },
   }
 })
@@ -62,6 +69,33 @@ async function openEditor() {
   fireEvent.click(await screen.findByRole('tab', { name: '权限设置' }))
   return screen.getByRole('checkbox', { name: /配置发布/ })
 }
+
+it('reflects verified role maintenance in the same-session organization read and refreshes binding labels', async () => {
+  const created = { id: 'created', code: 'CUSTOM_CREATED', name: '测试新角色', description: null, permissions: [], metadata_revision: 1 }
+  const directory = deferredResponse()
+  const readDirectory = vi.fn().mockResolvedValueOnce(organizationResponse()).mockReturnValueOnce(directory.promise)
+  const sendRoles = (roles: unknown[]) => Response.json({ success: true, data: {
+    org_id: organization, roles, permissions_editable: true, can_appoint_system_super_admin: true,
+  } })
+  fetcher.mockImplementation(async (input, init) => {
+    if (input === '/api/admin/org') return readDirectory()
+    if (input === roleList && init?.method === 'POST') return Response.json({ success: true, data: { org_id: organization, role: created } })
+    if (input === roleList) return sendRoles([role(existingPermissions)])
+    if (input === '/api/roles?role_id=created') return sendRoles([created])
+    throw new Error('Unexpected fetch')
+  })
+  await openEditor()
+  fireEvent.click(screen.getByRole('button', { name: '提交角色维护' }))
+  await waitFor(() => expect(screen.getByLabelText('组织角色清单')).toHaveTextContent('测试新角色'))
+  expect(screen.getByRole('tab', { name: '权限设置' })).toHaveAttribute('aria-selected', 'true')
+  expect(readDirectory).toHaveBeenCalledTimes(2)
+  await act(async () => directory.resolve(Response.json({
+    organization: { id: organization }, roles: [created], departments: [], spaces: [],
+    users: [{ id: 'member', scoped_roles: [{ roleId: created.id, roleName: created.name }] }],
+  })))
+  expect(screen.getByLabelText('成员角色标签')).toHaveTextContent('测试新角色')
+  expect(screen.getByRole('tab', { name: '权限设置' })).toHaveAttribute('aria-selected', 'true')
+})
 
 beforeEach(() => {
   window.history.replaceState({}, '', '/configs?tab=role-access')

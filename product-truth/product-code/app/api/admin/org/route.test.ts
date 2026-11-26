@@ -18,7 +18,7 @@ vi.mock('@/lib/scoped-access', () => ({
 }))
 
 vi.mock('@/lib/org-role-permissions', () => ({
-  loadOrgRolePermissionContext: vi.fn(),
+  loadOrgRolePermissionContext: vi.fn(), queryOrgRoles: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -29,7 +29,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { canAccessOrgAdmin } from '@/lib/permissions'
-import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
+import { loadOrgRolePermissionContext, queryOrgRoles } from '@/lib/org-role-permissions'
 import { getFreshDefaultOrgId } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import { GET, POST } from './route'
@@ -66,6 +66,9 @@ describe('GET /api/admin/org', () => {
     ;(canAccessOrgAdmin as any).mockReturnValue(true)
     ;(getFreshDefaultOrgId as any).mockResolvedValue('org-1')
     vi.mocked(loadOrgRolePermissionContext).mockResolvedValue(null)
+    vi.mocked(queryOrgRoles).mockReturnValue(makeQuery({
+      data: [{ id: 'r-1', code: 'ADMIN', name: '管理员', sort_order: 1 }], error: null,
+    }))
   })
 
   it('RPC 成功时返回聚合数据和分段耗时头', async () => {
@@ -241,10 +244,6 @@ describe('GET /api/admin/org', () => {
             parent_id: null,
             leader_id: null,
           }],
-          error: null,
-        },
-        roles: {
-          data: [{ id: 'r-1', code: 'ADMIN', name: '管理员', sort_order: 1 }],
           error: null,
         },
         sales_spaces: { data: [], error: null },

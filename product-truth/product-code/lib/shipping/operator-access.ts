@@ -13,7 +13,7 @@ type RecipientAssignment = {
   org_id: string
   scope_type: string
   scope_id: string | null
-  role: { id: string; code: string; name: string; permissions: unknown } | null
+  role: { id: string; code: string; name: string; permissions: unknown; owner_org_id: string | null } | null
   user: { id: string; status: string; login_enabled: boolean | null } | null
   membership: {
     user_id: string
@@ -55,7 +55,7 @@ function getOperatorRecipient(
     || membership?.user_id !== userId || membership.org_id !== orgId || membership.status !== 'active'
     || membership.employment_status !== 'active' || membership.is_default !== true || membership.left_at !== null
     || membership.organization?.id !== orgId || membership.organization.status !== 'active'
-    || !role?.id || !role.code || !role.name) return null
+    || !role?.id || !role.code || !role.name || (role.owner_org_id !== null && role.owner_org_id !== orgId)) return null
 
   const { permissions } = resolveRolePermissions(membership.organization.settings, role)
   // Workbench access can inherit platform authority. Reminders go to explicitly assigned shipping operators.
@@ -73,7 +73,7 @@ export async function listShippingOperatorRecipients() {
     for (let offset = 0; ; offset += REMINDER_PAGE_SIZE) {
       const { data, error } = await supabaseAdmin.from('user_roles')
         .select(`user_id,org_id,scope_type,scope_id,
-          role:roles!user_roles_role_id_fkey(id,code,name,permissions),
+          role:roles!user_roles_role_id_fkey(id,code,name,permissions,owner_org_id),
           user:users!user_roles_user_id_fkey!inner(id,status,login_enabled),
           membership:user_organizations!user_roles_org_user_membership_fk!inner(
             user_id,org_id,status,employment_status,is_default,left_at,

@@ -9,7 +9,7 @@ import { requireAuth } from '@/lib/auth'
 import { buildDepartmentSpaces } from '@/lib/department-spaces'
 import { readDirectoryRosterSource, verifyDirectoryRoster } from '@/lib/organization-directory-roster'
 import { canAccessOrgAdmin } from '@/lib/permissions'
-import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
+import { loadOrgRolePermissionContext, queryOrgRoles } from '@/lib/org-role-permissions'
 import { getMemberActionAvailability, getScopedMemberActionAvailability, type MemberActionAvailability } from '@/lib/admin/member-actions'
 import { evaluateDepartmentStructureAccess, getDepartmentStructureAccess } from '@/lib/admin/department-actions'
 import {
@@ -188,11 +188,10 @@ async function getOrgDepartments(orgId: string): Promise<OrgDepartmentRow[]> {
   return (data || []) as OrgDepartmentRow[]
 }
 
-async function getOrgRoles(): Promise<RoleLookup[]> {
-  const { data, error } = await supabaseAdmin
-    .from('roles')
+async function getOrgRoles(orgId: string): Promise<RoleLookup[]> {
+  const { data, error } = await queryOrgRoles(orgId)
     .select('id, code, name, sort_order')
-    .order('sort_order', { ascending: true })
+    .order('sort_order').order('id')
 
   if (error) {
     throw new Error('ROLES_FETCH_FAILED')
@@ -259,7 +258,7 @@ async function getOrgUserRoles(orgId: string, orgUserIds?: string[]) {
 
   const { data, error } = await supabaseAdmin
     .from('user_roles')
-    .select('user_id, scope_type, scope_id, granted_at, role_id, role:roles(id, name, code)')
+    .select('user_id, scope_type, scope_id, granted_at, role_id')
     .eq('org_id', orgId)
     .in('user_id', ids)
 
@@ -345,7 +344,7 @@ async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
 async function listOrgPayload(orgId: string) {
   const [departments, roles, spaces, organization, orgUserIds] = await Promise.all([
     getOrgDepartments(orgId),
-    getOrgRoles(),
+    getOrgRoles(orgId),
     getOrgSalesSpaces(orgId),
     getOrganization(orgId),
     getOrgUserIds(orgId),
@@ -393,7 +392,7 @@ async function listOrgPayload(orgId: string) {
 
   // 构建角色映射
   // 角色映射（预留，用于后续扩展）
-  // const _roleById = new Map(roles.map((r) => [r.id, r]))
+  const roleById = new Map(roles.map(role => [role.id, role]))
 
   // 构建用户角色映射
   const userRolesMap = new Map<string, typeof userRolesData>()
@@ -428,9 +427,9 @@ async function listOrgPayload(orgId: string) {
           scope_type: string
           scope_id: string | null
           granted_at: string | null
-          role: { id: string; name: string; code: string } | null
+          role_id: string
         }
-        const role = entry.role
+        const role = roleById.get(entry.role_id)
         if (!role?.code) return null
 
         let scopeName = '组织'

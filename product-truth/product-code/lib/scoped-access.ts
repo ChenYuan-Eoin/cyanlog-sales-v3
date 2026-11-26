@@ -16,6 +16,7 @@ type RoleJoinRow = {
   code?: string | null
   name?: string | null
   permissions?: string[] | null
+  owner_org_id: string | null
 }
 
 type UserRoleRow = {
@@ -201,9 +202,6 @@ const ORG_CACHE_TTL_MS = 15_000
 const defaultOrgCache = new Map<string, { orgId: string; expiresAt: number }>()
 const defaultOrgInflight = new Map<string, Promise<string>>()
 const defaultOrgGeneration = new Map<string, number>()
-const scopedRoleCache = new Map<string, { assignments: ScopedRoleAssignment[]; expiresAt: number }>()
-const scopedRoleInflight = new Map<string, Promise<ScopedRoleAssignment[]>>()
-const scopedRoleGeneration = new Map<string, number>()
 const salesSpacesCache = new Map<string, { value: { assignments: ScopedRoleAssignment[]; spaces: SalesSpaceSummary[] }; expiresAt: number }>()
 const salesSpacesInflight = new Map<string, Promise<{ assignments: ScopedRoleAssignment[]; spaces: SalesSpaceSummary[] }>>()
 
@@ -330,8 +328,9 @@ async function listDepartmentSubtreeIds(orgId: string, rootDepartmentIds: string
 }
 
 function isSystemAdministratorBinding(row: UserRoleRow, userId: string): boolean {
+  const role = unwrapExact(row.role)
   return row.user_id === userId && Boolean(row.org_id) && row.scope_type === 'org' && row.scope_id === row.org_id
-    && unwrapExact(row.role)?.code === 'SUPER_ADMIN'
+    && role?.code === 'SUPER_ADMIN' && role.owner_org_id === null
 }
 
 async function loadActiveSystemAdministratorOrgId(userId: string): Promise<string | null> {
@@ -354,7 +353,7 @@ async function loadActiveSystemAdministratorOrgId(userId: string): Promise<strin
 async function loadUserScopedRoleAssignments(userId: string): Promise<ScopedRoleAssignment[]> {
   const { data, error } = await supabaseAdmin
     .from('user_roles')
-    .select('user_id, org_id, scope_type, scope_id, granted_at, role:roles(id, code, name, permissions)')
+    .select('user_id, org_id, scope_type, scope_id, granted_at, role:roles(id, code, name, permissions, owner_org_id)')
     .eq('user_id', userId)
 
   if (error) {
@@ -377,16 +376,20 @@ async function loadUserScopedRoleAssignments(userId: string): Promise<ScopedRole
   }
 
   return rows
-    .map((row) => {
-      const role = unwrapOne(row.role)
-      if (!role?.id || !role.code || !role.name || role.code === FXIAOKE_BASELINE_ROLE_CODE) {
+    .map((row): ScopedRoleAssignment | null => {
+      const role = unwrapExact(row.role)
+      if (!role?.id || !role.code || !role.name || role.code === FXIAOKE_BASELINE_ROLE_CODE
+        || row.user_id !== userId || !row.org_id || !row.scope_id
+        || (row.scope_type === 'org' && row.scope_id !== row.org_id)
+        || (role.owner_org_id !== null && role.owner_org_id !== row.org_id)) {
         return null
       }
       if (role.code === 'SUPER_ADMIN' && (row.org_id !== activeSystemAdminOrgId || !isSystemAdministratorBinding(row, userId))) {
         return null
       }
       if (role.code === ORG_SUPER_ADMIN_ROLE_CODE && (
-        !activeAdminOrgId || row.org_id !== activeAdminOrgId || row.scope_type !== 'org' || row.scope_id !== activeAdminOrgId
+        role.owner_org_id !== null || !activeAdminOrgId || row.org_id !== activeAdminOrgId
+        || row.scope_type !== 'org' || row.scope_id !== activeAdminOrgId
       )) return null
 
       return {
@@ -397,7 +400,7 @@ async function loadUserScopedRoleAssignments(userId: string): Promise<ScopedRole
         roleCode: role.code,
         roleName: role.name,
         permissions: normalizePermissions(role.permissions),
-      } satisfies ScopedRoleAssignment
+      }
     })
     .filter((assignment): assignment is ScopedRoleAssignment => Boolean(assignment))
 }
@@ -439,70 +442,13 @@ async function applyCurrentRolePermissionOverrides(assignments: ScopedRoleAssign
   })
 }
 
-/**
- * Load role assignments directly from the database for authorization checks
- * that guard a state-changing operation. Read-oriented callers may use the
- * short-lived cached variant below, but writes must observe revocations
- * immediately.
- */
-export async function getFreshUserScopedRoleAssignments(
-  userId: string
-): Promise<ScopedRoleAssignment[]> {
-  const requestGeneration = (scopedRoleGeneration.get(userId) ?? 0) + 1
-  scopedRoleGeneration.set(userId, requestGeneration)
-  scopedRoleCache.delete(userId)
-  scopedRoleInflight.delete(userId)
-
-  const assignments = await loadUserScopedRoleAssignments(userId)
-  if (scopedRoleGeneration.get(userId) === requestGeneration) {
-    scopedRoleGeneration.set(userId, requestGeneration + 1)
-    scopedRoleCache.set(userId, {
-      assignments,
-      expiresAt: Date.now() + ORG_CACHE_TTL_MS,
-    })
-  }
-
-  return applyCurrentRolePermissionOverrides(assignments)
-}
-
-async function getCachedRoleTemplates(userId: string): Promise<ScopedRoleAssignment[]> {
-  const cached = scopedRoleCache.get(userId)
-  if (cached && cached.expiresAt >= Date.now()) {
-    return cached.assignments
-  }
-  if (cached) {
-    scopedRoleCache.delete(userId)
-  }
-
-  const inflight = scopedRoleInflight.get(userId)
-  if (inflight) return inflight
-
-  const generation = scopedRoleGeneration.get(userId) ?? 0
-  const promise = loadUserScopedRoleAssignments(userId)
-    .then((assignments) => {
-      if ((scopedRoleGeneration.get(userId) ?? 0) === generation) {
-        scopedRoleCache.set(userId, {
-          assignments,
-          expiresAt: Date.now() + ORG_CACHE_TTL_MS,
-        })
-      }
-      return assignments
-    })
-    .finally(() => {
-      scopedRoleInflight.delete(userId)
-    })
-
-  scopedRoleInflight.set(userId, promise)
-  return promise
+/** Every authorization read observes current bindings and permission overrides. */
+export async function getFreshUserScopedRoleAssignments(userId: string): Promise<ScopedRoleAssignment[]> {
+  return applyCurrentRolePermissionOverrides(await loadUserScopedRoleAssignments(userId))
 }
 
 export async function getUserScopedRoleAssignments(userId: string): Promise<ScopedRoleAssignment[]> {
-  const assignments = await getCachedRoleTemplates(userId)
-  // A previous privileged assignment only signals that a fresh check is needed.
-  if (assignments.some(assignment => assignment.roleCode === 'SUPER_ADMIN' || assignment.roleCode === ORG_SUPER_ADMIN_ROLE_CODE)) {
-    return getFreshUserScopedRoleAssignments(userId)
-  }
-  return applyCurrentRolePermissionOverrides(assignments)
+  return getFreshUserScopedRoleAssignments(userId)
 }
 
 export function getOrgScopedAssignments(

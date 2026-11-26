@@ -26,6 +26,7 @@ import { isMaskedApiKey } from '@/lib/configs/runtime'
 import { isResolvedRuleContractComplete } from '@/lib/rules/rule-contract'
 import TabsContent from './tabs/TabsContent'
 import { isGenericallyAssignableRole } from './tabs/role-assignment-policy'
+import { isRoleMetadataEditable, saveAndReadRoleMetadata, type RoleMetadataChange } from './tabs/role-metadata'
 import { confirmAction } from '@/lib/toast'
 import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
 import {
@@ -1080,6 +1081,69 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
     }
   }
 
+  async function handleRoleMetadata(change: RoleMetadataChange): Promise<string> {
+    const orgId = roleAuthority?.orgId
+    const token = localStorage.getItem('token')
+    if (roleSaveRef.current || !orgId || orgSummary?.organization?.id !== orgId
+      || !roleAuthority.canAppointSystemSuperAdmin || roleViewRef.current?.orgId !== orgId
+      || roleViewRef.current.token !== token) {
+      throw new RolePermissionRequestError('当前无法确认角色维护权限，请刷新后重试。', 403)
+    }
+    if (change.type !== 'create') {
+      const target = roles.find(role => role.id === change.roleId)
+      if (!target || !isRoleMetadataEditable(target)) {
+        throw new RolePermissionRequestError('此角色当前不可维护。', 403)
+      }
+    }
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+    const epoch = ++roleRequestEpochRef.current
+    const isCurrent = () => epoch === roleRequestEpochRef.current && roleViewRef.current?.orgId === orgId
+      && token === localStorage.getItem('token')
+    roleSaveRef.current = true
+    setError('')
+    try {
+      const { roleId, role, snapshot } = await saveAndReadRoleMetadata(headers, orgId, change)
+      if (!isCurrent()) throw new RolePermissionRequestError('当前组织已变化，请核对角色列表。', 409)
+      const { roles: _verified, ...authority } = snapshot
+      setRoleAuthority(authority)
+      setRoles(current => {
+        if (!role) return current.filter(candidate => candidate.id !== roleId)
+        const [verified] = preserveUnchangedRolePermissions([role], current)
+        return current.some(candidate => candidate.id === roleId)
+          ? current.map(candidate => candidate.id === roleId ? verified : candidate)
+          : [...current, verified]
+      })
+      clearOrgAccessBrowserCache(token)
+      setOrgSummary(current => {
+        if (current?.organization?.id !== orgId) return current
+        if (!role) return { ...current, roles: current.roles.filter(candidate => candidate.id !== roleId) }
+        const { id, code, name } = role
+        const listEntry = { id, code, name }
+        const nextRoles = current.roles.some(candidate => candidate.id === id)
+          ? current.roles.map(candidate => candidate.id === id ? listEntry : candidate)
+          : [...current.roles, listEntry]
+        return { ...current, roles: nextRoles }
+      })
+      // Refresh labels on existing scoped and pending bindings without reloading the open role detail.
+      const orgEpoch = ++orgRequestEpochRef.current
+      void readOrgSummary(headers).then(summary => {
+        if (isCurrent() && orgEpoch === orgRequestEpochRef.current && summary.organization?.id === orgId) setOrgSummary(summary)
+      }).catch(() => {
+        // The verified role metadata already updated both current role lists.
+      })
+      return roleId
+    } catch (error) {
+      if (isCurrent() && accessDenied(error)) handleRoleReadFailure(error)
+      if (isCurrent() && error instanceof RolePermissionRequestError && error.requiresRefresh) {
+        clearOrgAccessBrowserCache(token)
+        void loadTabData('role-access', { force: true })
+      }
+      throw error
+    } finally {
+      roleSaveRef.current = false
+    }
+  }
+
   async function handleSaveRule(rule: Partial<ContractPolicyRule>, id?: string) {
     if (!rule.name) {
       setError('请填写规则名称')
@@ -1865,6 +1929,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
                 systemSuperAdminAuthority={roleAuthority?.canAppointSystemSuperAdmin && roleAuthority.orgId === orgSummary?.organization?.id
                   ? { orgId: roleAuthority.orgId } : undefined}
                 onSaveRole={handleSaveRole}
+                onMaintainRole={handleRoleMetadata}
               />
             </div>
           </main>

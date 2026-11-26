@@ -2,6 +2,7 @@
 // 服务端获取数据，避免客户端并发请求
 
 import { supabaseAdmin } from '@/lib/supabase'
+import { queryOrgRoles } from '@/lib/org-role-permissions'
 import { isSchemaDriftError } from '@/lib/db-compat'
 import { unstable_cache } from 'next/cache'
 
@@ -61,20 +62,14 @@ export const fetchRules = unstable_cache(
   { revalidate: 120, tags: ['rules'] }
 )
 
-// 角色数据获取
-export const fetchRoles = unstable_cache(
-  async (orgId: string): Promise<TimedResult<unknown[]>> => {
-    return withTiming(async () => {
-      const result = await supabaseAdmin
-        .from('roles')
-        .select('id, code, name, description, permissions, sort_order, created_at')
-        .eq('org_id', orgId)
-      return { data: result.data || [], error: result.error }
-    })
-  },
-  ['roles-by-org'],
-  { revalidate: 300, tags: ['roles'] }
-)
+// Read the current organization role catalog without returning archived roles.
+export async function fetchRoles(orgId: string): Promise<TimedResult<unknown[]>> {
+  return withTiming(async () => {
+    const result = await queryOrgRoles(orgId)
+      .select('id, code, name, description, permissions, sort_order, created_at').order('sort_order').order('id')
+    return { data: Array.isArray(result.data) ? result.data : [], error: result.error }
+  })
+}
 
 // 配置数据获取
 export const fetchConfigs = unstable_cache(

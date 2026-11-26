@@ -90,7 +90,12 @@ function mockExactOrgAuth(options: {
     if (table === 'user_roles') {
       expect(url.searchParams.get('org_id')).toBe(`eq.${options.orgId}`)
       expect(url.searchParams.get('user_id')).toBe('eq.user-1')
-      return Response.json(options.roles.map(role => ({ org_id: options.orgId, user_id: 'user-1', scope_type: 'org', scope_id: options.orgId, ...role })))
+      expect(url.searchParams.get('select')).toContain('owner_org_id')
+      const withOwner = (role: unknown) => role && typeof role === 'object' ? { owner_org_id: null, ...role } : role
+      return Response.json(options.roles.map(binding => ({
+        org_id: options.orgId, user_id: 'user-1', scope_type: 'org', scope_id: options.orgId, ...binding,
+        roles: Array.isArray(binding.roles) ? binding.roles.map(withOwner) : withOwner(binding.roles),
+      })))
     }
     if (table === 'departments') {
       expect(url.searchParams.get('org_id')).toBe(`eq.${options.orgId}`)
@@ -390,7 +395,8 @@ describe('role-free federated session boundary', () => {
       `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
     ))
     const authorizationPaths = [
-      ['/api/roles?view=assignable', 'GET'], ['/api/roles/role-id', 'PATCH'],
+      ['/api/roles?view=assignable', 'GET'], ['/api/roles', 'POST'], ['/api/roles/role-id', 'PATCH'],
+      ['/api/roles/role-id/metadata', 'PATCH'], ['/api/roles/role-id/metadata', 'DELETE'],
       [`/api/admin/users/${id}/roles`, 'POST'], [`/api/admin/users/${id}/role-scopes`, 'DELETE'],
       [`/api/admin/users/${id}/system-super-admin`, 'PATCH'],
       [`/api/admin/users/${id}/org-super-admin`, 'PATCH'],
@@ -411,6 +417,20 @@ describe('role-free federated session boundary', () => {
     mockExactOrgAuth({ token, orgId: 'org-a', roles: [{ roles: root }, { roles: { ...role, permissions: ['role:manage'] } }],
       settings: { role_permission_overrides: { 'root-role': ['admin:access'] } } })
     for (const [path, method] of authorizationPaths) expect((await request(path, method)).status, path).toBe(200)
+  })
+
+  it('applies an organization-owned grant only in its home organization and keeps role creation system-only', async () => {
+    const token = 'organization-owned-role'
+    const role = { id: 'custom', code: 'ORG_CUSTOM', permissions: ['config:read', 'role:manage'] }
+    const request = (path: string, method = 'GET') => middleware(makeRequest(
+      `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
+    ))
+    mockExactOrgAuth({ token, orgId: 'org-a', roles: [{ roles: { ...role, owner_org_id: 'org-a' } }] })
+    expect((await request('/configs')).status).toBe(200)
+    expect((await request('/api/roles', 'POST')).status).toBe(403)
+    mockExactOrgAuth({ token, orgId: 'org-a', roles: [{ roles: { ...role, owner_org_id: 'org-b' } }] })
+    expect((await request('/configs')).headers.get('location')).toBe('https://sales.cyanlog.icu/pending-access')
+    expect((await request('/api/configs')).status).toBe(403)
   })
 
   it('admits settings-only viewers to both settings entries while preserving the generic config boundary', async () => {
@@ -811,6 +831,7 @@ describe('department-scoped workspace admission', () => {
     { name: 'unconfirmed department leader', departments: [department] },
     { name: 'revoked department role', roles: [departmentRole], settings: { role_permission_overrides: { 'dept-viewer': [] } }, departments: [department] },
     { name: 'foreign department role binding', roles: [{ ...departmentRole, org_id: 'org-b' }], departments: [department] },
+    { name: 'department role owned by another organization', roles: [{ ...departmentRole, roles: { ...departmentRole.roles, owner_org_id: 'org-b' } }], departments: [department] },
     { name: 'foreign department', roles: [departmentRole], departments: [{ ...department, org_id: 'org-b' }] },
     { name: 'disabled department role scope', roles: [departmentRole], departments: [{ ...department, status: 'inactive' }] },
     { name: 'invalid department role', roles: [{ ...departmentRole, roles: { ...departmentRole.roles, code: 'SHIPPING_OPERATOR' } }], departments: [department] },
@@ -1078,6 +1099,7 @@ describe('middleware exact organization authorization', () => {
       { roles: [{ ...grant, scope_type: 'department' }] },
       { roles: [{ ...grant, scope_type: 'space' }] },
       { roles: [{ ...grant, scope_id: null }] },
+      { roles: [{ roles: { ...role, owner_org_id: 'org-a' } }] },
       { roles: [{ roles: [role, role] }] },
       { loginEnabled: false },
       { organizationStatus: 'inactive' },

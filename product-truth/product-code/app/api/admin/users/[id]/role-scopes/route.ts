@@ -62,6 +62,9 @@ async function changeScope(req: NextRequest, userId: string, action: 'assign' | 
       p_reason: input.data.reason ?? null,
       p_request_id: req.headers.get('x-request-id')?.slice(0, 128) ?? null,
     })
+    if (error?.code === '23503' && error.details === 'ORG_ROLE_NOT_FOUND') {
+      return failure('角色已变更，请刷新角色列表后重试。', 'ROLE_ASSIGNMENT_CHANGED', 409)
+    }
     if (error?.code === '42501' && error.details === 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN') {
       return failure('历史纷享基础角色仅可撤销', error.details, 409)
     }

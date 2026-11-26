@@ -15,7 +15,7 @@ type SubjectRow = { org_id: string; user_id: string; department_id: string }
 type LeadRow = SubjectRow & { department: { id: string; org_id: string; leader_id: string; status: string } | null }
 type RoleRow = {
   org_id: string; user_id: string; scope_type: string; scope_id: string
-  roles: { id: string; code: string; permissions: unknown } | null
+  roles: { id: string; code: string; permissions: unknown; owner_org_id: string | null } | null
 }
 type ScopeRoot = { id: string; descendants: boolean }
 
@@ -67,7 +67,7 @@ export async function loadDepartmentLedgerScope(
   const subject = { org_id: orgId, user_id: userId }
   const [roles, memberships, leads] = await Promise.all([
     rest.selectRows<RoleRow>('user_roles', { ...subject, scope_type: 'department' },
-      'org_id,user_id,scope_type,scope_id,roles:roles(id,code,permissions)', MAX_SCOPE_ROWS),
+      'org_id,user_id,scope_type,scope_id,roles:roles(id,code,permissions,owner_org_id)', MAX_SCOPE_ROWS),
     grants.size ? rest.selectRows<SubjectRow>('user_departments', subject, 'org_id,user_id,department_id', MAX_SCOPE_ROWS) : [],
     grants.size ? rest.selectRows<LeadRow>('department_lead_access', {
       ...subject, 'department.org_id': orgId, 'department.status': 'active', 'department.leader_id': userId,
@@ -85,6 +85,7 @@ export async function loadDepartmentLedgerScope(
   for (const row of roles) {
     const role = row.roles
     if (row.org_id !== orgId || row.user_id !== userId || row.scope_type !== 'department' || !role?.id
+      || (role.owner_org_id !== null && role.owner_org_id !== orgId)
       || !role.code || ['SUPER_ADMIN', ORG_SUPER_ADMIN_ROLE_CODE].includes(role.code)
       || !isRoleAssignableInScope(role.code, 'department')) continue
     if (resolveRolePermissions(settings, role).permissions.includes(DEPARTMENT_LEDGER_VIEW)) {

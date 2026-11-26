@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { useState } from 'react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import RoleAccessTab from './RoleAccessTab'
 import type { OrgSummaryPayload, OrgSummaryUser, ScopedRoleAssignment } from '../types'
+import type { RoleMetadataChange } from './role-metadata'
 
 vi.mock('@/lib/toast', () => ({ success: vi.fn(), error: vi.fn(), confirmAction: vi.fn() }))
 vi.mock('./PermissionRegistryPanel', () => ({ PermissionRegistryPanel: () => null }))
@@ -118,4 +120,84 @@ it('only lets verified system super administrators appoint the canonical role', 
     orgSummary={{ ...orgSummary, role_membership_stats: undefined }} />)
   expect(screen.getByText('当前组织的在职成员暂无法核对，请刷新后重试。')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '添加成员' })).not.toBeInTheDocument()
+})
+
+const metadataRole = { id: 'sales', code: 'SALES', name: '销售', description: '保留说明', permissions: [], sort_order: 2, metadata_revision: 4 }
+const metadataOrg: OrgSummaryPayload = {
+  organization: { id: 'org-1', name: '当前组织' }, roles: [metadataRole], users: [], departments: [], spaces: [],
+}
+const metadataAuthority = { orgId: 'org-1' }
+
+it('only offers metadata controls to an exact-organization system administrator and locks special roles', () => {
+  const retired = { ...metadataRole, id: 'retired', code: 'FXIAOKE_BASELINE', name: '历史角色', metadata_editable: true }
+  const props = { ...defaults, roles: [...roles, retired, metadataRole], orgSummary: metadataOrg, onMaintainRole: vi.fn() }
+  const view = render(<RoleAccessTab {...props} systemSuperAdminAuthority={{ orgId: 'other' }} />)
+  expect(screen.queryByRole('button', { name: '新建角色' })).not.toBeInTheDocument()
+  view.rerender(<RoleAccessTab {...props} systemSuperAdminAuthority={metadataAuthority} />)
+  expect(screen.getByRole('button', { name: '新建角色' })).toBeEnabled()
+  expect(screen.queryByRole('button', { name: '改名' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /历史角色 FXIAOKE_BASELINE/ }))
+  expect(screen.queryByRole('button', { name: '归档' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /销售 SALES/ }))
+  expect(screen.getByRole('button', { name: '改名' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: '归档' })).toBeEnabled()
+})
+
+it('selects a created role and keeps the same selection when its metadata changes', async () => {
+  const calls = vi.fn()
+  function EditableRoles() {
+    const [records, update] = useState([metadataRole])
+    async function maintain(change: RoleMetadataChange) {
+      calls(change)
+      if (change.type === 'create') {
+        update(current => [...current, { ...metadataRole, id: 'new', code: 'CUSTOM_CREATED', name: change.name, description: change.description, metadata_revision: 0 }])
+        return 'new'
+      }
+      if (change.type === 'rename') {
+        update(current => current.map(role => role.id === change.roleId ? { ...role, name: change.name } : role))
+      }
+      return change.roleId
+    }
+    return <RoleAccessTab {...defaults} roles={records} orgSummary={metadataOrg} systemSuperAdminAuthority={metadataAuthority} onMaintainRole={maintain} />
+  }
+  render(<EditableRoles />)
+  fireEvent.click(screen.getByRole('button', { name: '新建角色' }))
+  const create = within(screen.getByRole('dialog', { name: '新建角色' }))
+  fireEvent.change(create.getByRole('textbox', { name: '角色名称' }), { target: { value: '  收寄审核  ' } })
+  fireEvent.change(create.getByRole('textbox', { name: '角色说明' }), { target: { value: '审核预提报' } })
+  fireEvent.click(create.getByRole('button', { name: '保存' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: /收寄审核 CUSTOM_CREATED/ })).toHaveAttribute('aria-pressed', 'true'))
+  expect(calls).toHaveBeenCalledWith({ type: 'create', name: '收寄审核', description: '审核预提报' })
+
+  fireEvent.click(screen.getByRole('button', { name: '改名' }))
+  const rename = within(screen.getByRole('dialog', { name: '修改角色资料' }))
+  expect(rename.getByRole('textbox', { name: '角色说明' })).toHaveValue('审核预提报')
+  fireEvent.change(rename.getByRole('textbox', { name: '角色名称' }), { target: { value: '收寄核对' } })
+  fireEvent.click(rename.getByRole('button', { name: '保存' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: /收寄核对 CUSTOM_CREATED/ })).toHaveAttribute('aria-pressed', 'true'))
+  expect(calls).toHaveBeenLastCalledWith({ type: 'rename', roleId: 'new', expectedRevision: 0, name: '收寄核对', description: '审核预提报' })
+})
+
+it('confirms archive and keeps the role visible on a binding conflict', async () => {
+  const maintain = vi.fn().mockRejectedValue(new Error('此角色仍有成员或待生效绑定，请解除绑定后再归档。'))
+  render(<RoleAccessTab {...defaults} roles={[metadataRole]} orgSummary={metadataOrg} systemSuperAdminAuthority={metadataAuthority} onMaintainRole={maintain} />)
+  fireEvent.click(screen.getByRole('button', { name: '归档' }))
+  const dialog = within(screen.getByRole('dialog', { name: '归档角色' }))
+  expect(maintain).not.toHaveBeenCalled()
+  fireEvent.click(dialog.getByRole('button', { name: '确认归档' }))
+  expect(await dialog.findByRole('alert')).toHaveTextContent('此角色仍有成员或待生效绑定')
+  expect(maintain).toHaveBeenCalledExactlyOnceWith({ type: 'archive', roleId: 'sales', expectedRevision: 4 })
+  fireEvent.click(dialog.getByRole('button', { name: '取消' }))
+  expect(screen.getByRole('button', { name: /销售 SALES/ })).toHaveAttribute('aria-pressed', 'true')
+})
+
+it('keeps metadata actions disabled while the current permission draft is unsaved', async () => {
+  render(<RoleAccessTab {...defaults} roles={[metadataRole]} orgSummary={metadataOrg} permissionsEditable
+    systemSuperAdminAuthority={metadataAuthority} onMaintainRole={vi.fn()} />)
+  fireEvent.click(screen.getByRole('tab', { name: '权限设置' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: '配置发布' }))
+  expect(await screen.findByText('请先保存当前角色的权限改动。')).toBeVisible()
+  expect(screen.getByRole('button', { name: '新建角色' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '改名' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '归档' })).toBeDisabled()
 })

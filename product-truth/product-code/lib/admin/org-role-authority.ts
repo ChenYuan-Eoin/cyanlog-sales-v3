@@ -4,7 +4,7 @@ import {
   type ScopedRoleAssignment,
 } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
-import { loadOrgRolePermissionSettings } from '@/lib/org-role-permissions'
+import { loadOrgRolePermissionSettings, queryOrgRoles } from '@/lib/org-role-permissions'
 import { resolveRolePermissions } from '@/lib/role-permission-policy'
 import { FXIAOKE_BASELINE_ROLE_CODE, isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
 
@@ -61,8 +61,7 @@ export async function validateOrgRoleAssignment(
     return { ok: true, roleIds: [] }
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('roles')
+  const { data, error } = await queryOrgRoles(orgId)
     .select('id, code, permissions')
     .in('id', uniqueRoleIds)
 

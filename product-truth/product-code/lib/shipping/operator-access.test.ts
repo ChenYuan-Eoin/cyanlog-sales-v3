@@ -27,7 +27,10 @@ vi.mock('@/lib/permission-registry', () => ({
 
 const userId = 'user-1'
 const orgId = 'org-1'
-const establishedRole = { id: 'shipping-role', code: 'SHIPPING_OPERATOR', name: '寄件操作员', permissions: ['shipping:operate'] }
+const establishedRole = {
+  id: 'shipping-role', code: 'SHIPPING_OPERATOR', name: '寄件操作员', permissions: ['shipping:operate'],
+  owner_org_id: null as string | null,
+}
 
 function operatorAssignment({
   user = userId, org = orgId, role = establishedRole,
@@ -123,7 +126,7 @@ describe('organization-scoped shipping operator access', () => {
   })
 
   it('uses fixed shipping authority only for an eligible system super administrator', async () => {
-    m.tables.user_roles[0].role = { id: 'root-role', code: 'SUPER_ADMIN', name: '系统超管', permissions: [] }
+    m.tables.user_roles[0].role = { ...establishedRole, id: 'root-role', code: 'SUPER_ADMIN', name: '系统超管', permissions: [] }
     m.tables.organizations[0].settings = { role_permission_overrides: { 'root-role': [] } }
     await expect(requireShippingOperator(userId)).resolves.toBe(orgId)
     m.tables.user_organizations[0].account = { id: userId, status: 'active', login_enabled: false }
@@ -178,10 +181,11 @@ describe('organization-scoped shipping operator access', () => {
 describe('shipping reminder recipients', () => {
   it('deduplicates explicit exact-org grants and excludes implicit-only platform authority', async () => {
     m.tables.user_roles.push(
-      operatorAssignment({ role: { ...establishedRole, id: 'custom-role', code: 'CUSTOM', permissions: ['shipping:*'] } }),
+      operatorAssignment({ role: { ...establishedRole, id: 'custom-role', code: 'CUSTOM', permissions: ['shipping:*'], owner_org_id: orgId } }),
       operatorAssignment({ user: 'tenant-b-operator', org: 'org-b' }),
-      operatorAssignment({ user: 'platform-root', role: { id: 'root-role', code: 'SUPER_ADMIN', name: '平台超管', permissions: ['*'] } }),
-      operatorAssignment({ user: 'connection-manager', role: { id: 'manager-role', code: 'CONNECTION_MANAGER', name: '连接管理员', permissions: ['shipping:manage_connections'] } }),
+      operatorAssignment({ user: 'platform-root', role: { ...establishedRole, id: 'root-role', code: 'SUPER_ADMIN', name: '平台超管', permissions: ['*'] } }),
+      operatorAssignment({ user: 'connection-manager', role: { ...establishedRole, id: 'manager-role', code: 'CONNECTION_MANAGER', name: '连接管理员', permissions: ['shipping:manage_connections'] } }),
+      operatorAssignment({ user: 'foreign-role-recipient', role: { ...establishedRole, id: 'foreign-operator', code: 'ORG_FOREIGN', owner_org_id: 'another-org' } }),
     )
     await expect(listShippingOperatorRecipients()).resolves.toEqual([
       { userId, orgId },

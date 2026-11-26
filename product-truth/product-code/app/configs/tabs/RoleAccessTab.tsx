@@ -1,8 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { SearchIcon, UsersIcon, ShieldIcon, ChevronRightIcon } from 'lucide-react'
 import { getRoleMembershipStats, type RoleMembershipStats } from './role-membership-stats'
 import { RoleDetailPanel } from './RoleDetailPanel'
@@ -10,6 +13,7 @@ import { PermissionRegistryPanel } from './PermissionRegistryPanel'
 import type { OrgSummaryPayload } from '../types'
 import type { ConfigRoleRecord, RoleModulePermissionCatalog, ShippingPermissionPublication } from '@/lib/org-role-permission-readback'
 import { ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
+import { isRoleMetadataEditable, type RoleMetadataChange } from './role-metadata'
 
 interface RoleAccessTabProps {
   roles: ConfigRoleRecord[]
@@ -22,6 +26,7 @@ interface RoleAccessTabProps {
   systemSuperAdminAuthority?: { orgId: string }
   orgSummary: OrgSummaryPayload | null
   onSaveRole: (roleId: string, newPerms: string[], ownerShippingPermissions?: string[]) => void
+  onMaintainRole?: (change: RoleMetadataChange) => Promise<string>
   onRefresh: () => void | Promise<void>
 }
 
@@ -42,6 +47,7 @@ export default function RoleAccessTab({
   systemSuperAdminAuthority,
   orgSummary,
   onSaveRole,
+  onMaintainRole,
   onRefresh,
 }: RoleAccessTabProps) {
   const users = orgSummary?.users ?? []
@@ -55,6 +61,17 @@ export default function RoleAccessTab({
 
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
   const [roleSearchQuery, setRoleSearchQuery] = useState('')
+  const [dirtyRoleId, setDirtyRoleId] = useState<string | null>(null)
+  const [editor, setEditor] = useState<{ orgId: string; change: RoleMetadataChange; archiveLabel?: string } | null>(null)
+  const [metadataBusy, setMetadataBusy] = useState(false)
+  const [metadataError, setMetadataError] = useState('')
+  const canMaintainRoles = Boolean(systemSuperAdminEditor && onMaintainRole)
+  const metadataDisabled = savingRoleId !== null || metadataBusy || dirtyRoleId === selectedRoleId && dirtyRoleId !== null
+  const currentEditor = canMaintainRoles && editor?.orgId === orgId ? editor : null
+
+  const onPermissionDraftChange = useCallback((roleId: string, changed: boolean) => {
+    setDirtyRoleId(previous => changed ? roleId : previous === roleId ? null : previous)
+  }, [])
 
   const rolesWithStats: RoleWithStats[] = useMemo(() => {
     const users = orgSummary?.users ?? []
@@ -101,6 +118,35 @@ export default function RoleAccessTab({
     }
   }, [rolesWithStats, selectedRole, selectedRoleId])
 
+  function openMetadata(change: RoleMetadataChange, archiveLabel?: string) {
+    if (!canMaintainRoles || !orgId || metadataDisabled) return
+    setMetadataError('')
+    setEditor({ orgId, change, archiveLabel })
+  }
+
+  async function submitMetadata(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!currentEditor || !onMaintainRole || metadataDisabled) return
+    const change = currentEditor.change.type === 'archive' ? currentEditor.change : {
+      ...currentEditor.change, name: currentEditor.change.name.trim(), description: currentEditor.change.description.trim(),
+    }
+    if (change.type !== 'archive' && !change.name) return
+    setMetadataBusy(true)
+    setMetadataError('')
+    try {
+      const roleId = await onMaintainRole(change)
+      if (change.type === 'create') {
+        setRoleSearchQuery('')
+        setSelectedRoleId(roleId)
+      }
+      setEditor(null)
+    } catch (error) {
+      setMetadataError(error instanceof Error ? error.message : '角色维护失败，请重试。')
+    } finally {
+      setMetadataBusy(false)
+    }
+  }
+
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_300px]">
       <div className="col-span-full">
@@ -111,8 +157,17 @@ export default function RoleAccessTab({
       <div className="min-w-0">
         <div className="rounded-lg border bg-white">
           <div className="border-b px-4 py-3">
-            <h3 className="font-medium text-slate-900">角色列表</h3>
-            <p className="text-xs text-slate-500 mt-1">选择角色查看详情</p>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-medium text-slate-900">角色列表</h3>
+                <p className="mt-1 text-xs text-slate-500">选择角色查看详情</p>
+              </div>
+              {canMaintainRoles && <Button type="button" size="sm" variant="outline" disabled={metadataDisabled}
+                onClick={() => openMetadata({ type: 'create', name: '', description: '' })}>新建角色</Button>}
+            </div>
+            {canMaintainRoles && dirtyRoleId !== null && dirtyRoleId === selectedRoleId && (
+              <p className="mt-2 text-xs text-slate-600">请先保存当前角色的权限改动。</p>
+            )}
           </div>
 
           {/* 搜索框 */}
@@ -191,7 +246,14 @@ export default function RoleAccessTab({
             permissionsEditBlockReason={permissionsEditBlockReason}
             canAssignBusinessRoles={orgSummary?.member_actions?.assignRoles === true}
             currentUserId={currentUserId}
-            saving={savingRoleId === selectedRole.id}
+            saving={savingRoleId === selectedRole.id || metadataBusy}
+            onPermissionDraftChange={onPermissionDraftChange}
+            metadataActions={canMaintainRoles && isRoleMetadataEditable(selectedRole) ? {
+              disabled: metadataDisabled,
+              rename: () => openMetadata({ type: 'rename', roleId: selectedRole.id, expectedRevision: selectedRole.metadata_revision ?? 0,
+                name: selectedRole.name, description: selectedRole.description ?? '' }),
+              archive: () => openMetadata({ type: 'archive', roleId: selectedRole.id, expectedRevision: selectedRole.metadata_revision ?? 0 }, selectedRole.name),
+            } : undefined}
             onSave={(perms, ownerShippingPermissions) => {
               if (ownerShippingPermissions === undefined) onSaveRole(selectedRole.id, perms)
               else onSaveRole(selectedRole.id, perms, ownerShippingPermissions)
@@ -269,6 +331,50 @@ export default function RoleAccessTab({
           </button>
         </div>
       </div>
+      <Dialog open={Boolean(currentEditor)} onOpenChange={open => { if (!open && !metadataBusy) setEditor(null) }}>
+        {currentEditor && (
+          <DialogContent showCloseButton={!metadataBusy}>
+            <form onSubmit={submitMetadata} className="space-y-4">
+              <DialogHeader>
+                <DialogTitle>{currentEditor.change.type === 'create' ? '新建角色' : currentEditor.change.type === 'rename' ? '修改角色资料' : '归档角色'}</DialogTitle>
+                {currentEditor.change.type === 'archive' && (
+                  <DialogDescription>归档「{currentEditor.archiveLabel}」后，将从本组织的角色列表移除。</DialogDescription>
+                )}
+              </DialogHeader>
+              {currentEditor.change.type !== 'archive' && (
+                <fieldset disabled={metadataBusy} className="space-y-3">
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium">角色名称</span>
+                    <Input value={currentEditor.change.name} maxLength={80} required
+                      onChange={event => {
+                        if (currentEditor.change.type !== 'archive') {
+                          setEditor({ ...currentEditor, change: { ...currentEditor.change, name: event.target.value } })
+                        }
+                      }} />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium">角色说明</span>
+                    <Textarea value={currentEditor.change.description} maxLength={300} rows={3}
+                      onChange={event => {
+                        if (currentEditor.change.type !== 'archive') {
+                          setEditor({ ...currentEditor, change: { ...currentEditor.change, description: event.target.value } })
+                        }
+                      }} />
+                  </label>
+                </fieldset>
+              )}
+              {metadataError && <p role="alert" className="text-sm text-red-700">{metadataError}</p>}
+              <DialogFooter>
+                <Button type="button" variant="outline" disabled={metadataBusy} onClick={() => setEditor(null)}>取消</Button>
+                <Button type="submit" disabled={metadataDisabled || (currentEditor.change.type !== 'archive' && !currentEditor.change.name.trim())}
+                  variant={currentEditor.change.type === 'archive' ? 'destructive' : 'default'}>
+                  {metadataBusy ? '处理中…' : currentEditor.change.type === 'archive' ? '确认归档' : '保存'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        )}
+      </Dialog>
     </div>
   )
 }

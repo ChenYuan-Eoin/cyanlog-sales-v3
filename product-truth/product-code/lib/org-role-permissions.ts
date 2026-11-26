@@ -50,7 +50,18 @@ type OrgRoleRow = {
   role: OrgRoleTemplate | OrgRoleTemplate[] | null
 }
 
-type OrgRoleTemplate = { id: string; code: string; name: string; permissions: unknown }
+type OrgRoleTemplate = { id: string; code: string; name: string; permissions: unknown; owner_org_id: string | null }
+
+export type OrgVisibleRole = OrgRoleTemplate & {
+  description: string | null
+  sort_order: number | null
+  created_at: string
+  role_revision: number
+}
+
+export function queryOrgRoles(orgId: string, count?: 'exact') {
+  return supabaseAdmin.rpc('admin_list_org_roles_v1', { p_org_id: orgId }, { count })
+}
 
 /** Reads current membership and role bindings from the same active organization. */
 export async function loadCurrentOrganizationRoleAssignments(userId: string, includeScoped = false) {
@@ -64,7 +75,7 @@ export async function loadCurrentOrganizationRoleAssignments(userId: string, inc
 
   const orgId = member.org_id
   const roles = supabaseAdmin.from('user_roles')
-    .select('org_id,user_id,scope_type,scope_id,granted_at,role:roles(id,code,name,permissions)')
+    .select('org_id,user_id,scope_type,scope_id,granted_at,role:roles(id,code,name,permissions,owner_org_id)')
     .eq('org_id', orgId).eq('user_id', userId)
   const [organization, orgRoles] = await Promise.all([
     supabaseAdmin.from('organizations').select('id,status,settings').eq('id', orgId).maybeSingle(),
@@ -81,8 +92,9 @@ export async function loadCurrentOrganizationRoleAssignments(userId: string, inc
   const assignments = ((orgRoles.data ?? []) as OrgRoleRow[]).flatMap((row): ScopedRoleAssignment[] => {
     const role = Array.isArray(row.role) ? (row.role.length === 1 ? row.role[0] : null) : row.role
     if (row.org_id !== orgId || row.user_id !== userId || !row.scope_id
-      || !role?.id || !role.code || !role.name || role.code === FXIAOKE_BASELINE_ROLE_CODE) return []
-    if (role.code === 'SUPER_ADMIN' && !activeAccount) return []
+      || !role?.id || !role.code || !role.name || role.code === FXIAOKE_BASELINE_ROLE_CODE
+      || (role.owner_org_id !== null && role.owner_org_id !== orgId)) return []
+    if (role.code === 'SUPER_ADMIN' && (!activeAccount || role.owner_org_id !== null)) return []
     const scopeType = row.scope_type
     if (scopeType === 'org') {
       if (row.scope_id !== orgId) return []
@@ -158,10 +170,10 @@ export async function saveOrgRolePermissions(
 ): Promise<SaveResult> {
   if (!permissionList(permissions) || !permissionList(expectedPermissions)
     || permissions.some(isShippingOwnerPermission)) return { ok: false, reason: 'invalid' }
-  const { data: role, error } = await supabaseAdmin.from('roles')
-    .select('id, code, name, description, permissions, sort_order').eq('id', roleId).maybeSingle()
+  const { data, error } = await queryOrgRoles(orgId).eq('id', roleId).maybeSingle()
   if (error) throw error
-  if (!role) return { ok: false, reason: 'not_found' }
+  if (!data) return { ok: false, reason: 'not_found' }
+  const role = data as OrgVisibleRole
   const fixedRoleReason = rolePermissionsEditBlockReason(role.code)
   const settings = authorizedSnapshot ? authorizedSnapshot.settings : await loadOrgRolePermissionSettings(orgId)
   if (settings !== null && !record(settings)) throw new Error('Invalid organization settings')
@@ -186,7 +198,7 @@ export async function saveOrgRolePermissions(
   const known = new Set<string>([...PERMISSION_KEYS, ...current.permissions])
   if (permissions.some((key) => !known.has(key))) return { ok: false, reason: 'invalid' }
   const newGrants = permissions.filter(key => !current.permissions.includes(key))
-  if (newGrants.includes(ORG_BUSINESS_ROLE_ASSIGN)) return { ok: false, reason: 'invalid' }
+  if (newGrants.includes('*') || newGrants.includes(ORG_BUSINESS_ROLE_ASSIGN)) return { ok: false, reason: 'invalid' }
   if (permissions.some(key => key === ORG_MEMBER_EDIT || key === ORG_BUSINESS_ROLE_ASSIGN || key === ROLE_DIRECTORY_VIEW
     || ORG_MEMBER_LIFECYCLE_ACTIONS.some(action => action === key))
     && !hasPermission(permissions, 'user:view')) return { ok: false, reason: 'invalid' }

@@ -39,7 +39,15 @@ function database(options: { settings?: any; code?: string; permissions?: string
     }
     return query
   }) as any)
-  vi.mocked(supabaseAdmin.rpc).mockImplementation((async (name: string, input: any) => {
+  vi.mocked(supabaseAdmin.rpc).mockImplementation(((name: string, input: any) => {
+    if (name === 'admin_list_org_roles_v1') {
+      return { eq: (_column: string, roleId: string) => ({
+        maybeSingle: async () => ({ data: structuredClone(state.roles.find(role => role.id === roleId) ?? null), error: null }),
+      }) }
+    }
+    return saveRolePermissions(name, input)
+  }) as never)
+  async function saveRolePermissions(name: string, input: any) {
     expect(name).toBe('admin_save_org_role_permissions_v1')
     expect(input.p_actor_id).toBe('actor-1')
     state.beforeUpdate?.()
@@ -59,7 +67,7 @@ function database(options: { settings?: any; code?: string; permissions?: string
       org.settings = next
     }
     return { data: 'saved', error: null }
-  }) as never)
+  }
   return state
 }
 
@@ -80,7 +88,7 @@ describe('organization role permission storage', () => {
     expect(state.organizations[1]).toEqual(otherOrg)
     expect(state.roles).toEqual(template)
     expect(state.operations.filter((entry) => entry.patch).map((entry) => entry.table)).toEqual(['organizations'])
-    expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith('admin_save_org_role_permissions_v1', {
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_save_org_role_permissions_v1', {
       p_actor_id: 'actor-1', p_org_id: 'org-1', p_role_id: 'role-1',
       p_expected_settings: { locale: 'zh', role_permission_overrides: { 'role-other': ['config:read'] } },
       p_expected_role_code: 'SALES', p_expected_role_template: ['quote:create'],
@@ -148,7 +156,7 @@ describe('organization role permission storage', () => {
         permissions, expected: [],
       })).toMatchObject({ ok: false, reason: 'fixed_role' })
     }
-    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalledWith('admin_save_org_role_permissions_v1', expect.anything())
     expect(state.organizations[0].settings).toEqual(before)
   })
 
@@ -214,6 +222,17 @@ describe('organization role permission storage', () => {
     expect(canEditRolePermissions([{ ...root, permissions: [] }], 'org-1')).toBe(false)
     expect(canEditRolePermissions([{ ...root, permissionsOverridden: true, permissions: [] }], 'org-1')).toBe(false)
     expect(canEditRolePermissions([{ ...root, permissionsOverridden: true, permissions: ['role:manage'] }], 'org-1')).toBe(true)
+  })
+
+  it('prevents new full-platform wildcard grants and allows previously stored ones to be removed', async () => {
+    database({ permissions: [] })
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', ['*'], []))
+      .toEqual({ ok: false, reason: 'invalid' })
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalledWith('admin_save_org_role_permissions_v1', expect.anything())
+
+    database({ permissions: ['*'] })
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [], ['*']))
+      .toMatchObject({ ok: true, role: { permissions: [] } })
   })
 
   it('does not add role assignment to an ordinary role, but can remove a stored legacy key', async () => {

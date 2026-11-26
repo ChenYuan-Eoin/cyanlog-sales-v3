@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: vi.fn() } }))
+vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: vi.fn(), rpc: vi.fn() } }))
 vi.mock('@/lib/auth', () => ({ requireAuth: vi.fn(async () => ({ id: 'user-1' })) }))
 import { supabaseAdmin } from '@/lib/supabase'
 import { REGISTERED_MODULE_PERMISSION_KEYS } from '@/lib/module-access'
-import { GET } from './route'
+import { GET, POST } from './route'
+import { DELETE, PATCH } from './[id]/metadata/route'
 
 function makeRequest(url = 'https://example.test/api/roles'): any {
   return { method: 'GET', url, headers: new Headers() }
@@ -22,14 +23,14 @@ const currentMember = {
 }
 const assignment = {
   scope_type: 'org', scope_id: 'org-1', org_id: 'org-1', user_id: 'user-1', granted_at: null,
-  role: { id: 'reader', code: 'READ_ONLY', name: '角色只读', permissions: ['role:view', 'user:view'] },
+  role: { owner_org_id: null, id: 'reader', code: 'READ_ONLY', name: '角色只读', permissions: ['role:view', 'user:view'] },
 }
-const root = { ...assignment, role: { id: 'root', code: 'SUPER_ADMIN', name: '超管', permissions: ['*'] } }
+const root = { ...assignment, role: { owner_org_id: null, id: 'root', code: 'SUPER_ADMIN', name: '超管', permissions: ['*'] } }
 
 function database({
   settings = {}, error = null, members = [currentMember], assignments = [assignment], globalRoles = roles,
-  organizationStatus = 'active', permissionRows = [], permissionError = null,
-}: { settings?: unknown; error?: Error | null; members?: unknown[]; assignments?: unknown[]; globalRoles?: unknown[]; organizationStatus?: string; permissionRows?: unknown[]; permissionError?: Error | null } = {}) {
+  organizationStatus = 'active', permissionRows = [], permissionError = null, mutationData = null, mutationError = null,
+}: { settings?: unknown; error?: Error | null; members?: unknown[]; assignments?: unknown[]; globalRoles?: unknown[]; organizationStatus?: string; permissionRows?: unknown[]; permissionError?: Error | null; mutationData?: unknown; mutationError?: { code: string } | null } = {}) {
   const membershipQuery: any = {
     select: vi.fn(() => membershipQuery), eq: vi.fn(() => membershipQuery),
     limit: vi.fn(async () => ({ data: members, error: null })),
@@ -60,10 +61,16 @@ function database({
     if (table === 'user_organizations') return membershipQuery
     if (table === 'organizations') return orgQuery
     if (table === 'user_roles') return assignmentsQuery
-    if (table === 'roles') return roleQuery
     if (table === 'permission_points') return permissionQuery
     throw new Error(`Unexpected table ${table}`)
   }) as any)
+  vi.mocked(supabaseAdmin.rpc).mockImplementation(((name: string) => {
+    if (name === 'admin_list_org_roles_v1') return roleQuery
+    if (name === 'admin_mutate_org_role_v1') {
+      return { single: vi.fn(async () => ({ data: mutationData, error: mutationError })) }
+    }
+    throw new Error(`Unexpected RPC ${name}`)
+  }) as never)
   return { roleQuery, orgQuery, assignmentsQuery, membershipQuery, permissionQuery }
 }
 
@@ -109,7 +116,7 @@ describe('GET /api/roles organization permissions', () => {
     const res = await GET(makeRequest('https://example.test/api/roles?view=assignable'))
     expect(res.status).toBe(200)
     expect((await res.json()).data).toEqual({ roles: [{ id: 'role-2', code: 'SALES', name: '销售' }] })
-    expect(roleQuery.select).toHaveBeenCalledExactlyOnceWith('id, code, name', { count: 'exact' })
+    expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith('admin_list_org_roles_v1', { p_org_id: 'org-1' }, { count: 'exact' })
     expect(roleQuery.not).toHaveBeenCalledWith('code', 'in', '(SUPER_ADMIN,ORG_SUPER_ADMIN,FXIAOKE_BASELINE)')
     expect(supabaseAdmin.from).not.toHaveBeenCalledWith('permission_points')
   })
@@ -260,5 +267,81 @@ it.each([false, true])('advertises the shipping bundle only when both actions ar
   })
   expect(data.permission_catalog[0]).toMatchObject({
     id: 'shipping', items: expect.arrayContaining([expect.objectContaining({ key: 'shipping:operate', selectable: true })]),
+  })
+})
+
+describe('organization role metadata mutations', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const context = { params: Promise.resolve({ id: 'role-created' }) }
+  const org = { expected_org_id: 'org-1' }
+  const revision = { expected_metadata_revision: 0 }
+  const created = { id: 'role-created', code: 'CUSTOM_1', name: '收寄审阅', description: null, role_revision: 0 }
+
+  function request(body: object): any {
+    return { json: vi.fn(async () => body) }
+  }
+
+  it('creates an ordinary role through the current root with metadata-only input', async () => {
+    database({ assignments: [root], mutationData: created })
+    const response = await POST(request({ ...org, name: '  收寄审阅  ' }))
+    expect(response.status).toBe(200)
+    expect((await response.json()).data).toEqual({
+      org_id: 'org-1',
+      role: { id: 'role-created', code: 'CUSTOM_1', name: '收寄审阅', description: null, metadata_revision: 0, metadata_editable: true },
+    })
+    expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith('admin_mutate_org_role_v1', {
+      p_org_id: 'org-1', p_actor_id: 'user-1', p_operation: 'create',
+      p_role_id: null, p_name: '收寄审阅', p_description: null, p_expected_revision: null,
+    })
+  })
+
+  it('denies metadata mutation to readers, a non-system administrator, and invalid owner bindings', async () => {
+    for (const invalid of [
+      assignment,
+      { ...root, role: { ...root.role, code: 'ADMIN' } },
+      { ...root, role: { ...root.role, owner_org_id: 'org-2' } },
+      { ...root, role: { ...root.role, owner_org_id: 'org-1' } },
+    ]) {
+      database({ assignments: [invalid] })
+      expect((await POST(request({ ...org, name: '收寄审阅' }))).status).toBe(403)
+      expect((await DELETE(request({ ...org, ...revision }), context)).status).toBe(403)
+    }
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it('fails closed on a stale organization, missing revision, or permission fields', async () => {
+    database({ assignments: [root] })
+    expect((await POST(request({ expected_org_id: 'org-2', name: '收寄审阅' }))).status).toBe(409)
+    expect((await PATCH(request({ ...org, name: '收寄审阅' }), context)).status).toBe(400)
+    expect((await POST(request({ ...org, name: '收寄审阅', permissions: ['*'] }))).status).toBe(400)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it('submits the exact selected revision when renaming or archiving', async () => {
+    database({ assignments: [root], mutationData: { ...created, name: '寄件审阅', role_revision: 1 } })
+    const renamed = await PATCH(request({ ...org, ...revision, name: '寄件审阅' }), context)
+    expect((await renamed.json()).data.role).toMatchObject({ id: 'role-created', name: '寄件审阅', metadata_revision: 1 })
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_mutate_org_role_v1', expect.objectContaining({
+      p_operation: 'rename', p_expected_revision: 0, p_role_id: 'role-created',
+    }))
+    const archived = await DELETE(request({ ...org, expected_metadata_revision: 1 }), context)
+    expect((await archived.json()).data.role.metadata_editable).toBe(false)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_mutate_org_role_v1', expect.objectContaining({
+      p_operation: 'archive', p_expected_revision: 1, p_role_id: 'role-created', p_name: null,
+    }))
+  })
+
+  it.each([
+    ['42501', 403, undefined],
+    ['23503', 404, undefined],
+    ['23505', 409, undefined],
+    ['40001', 409, 'ROLE_METADATA_CHANGED'],
+    ['23514', 409, 'ROLE_HAS_BINDINGS'],
+  ])('maps locked database rejection %s', async (code, status, reason) => {
+    database({ assignments: [root], mutationError: { code } })
+    const response = await DELETE(request({ ...org, ...revision }), context)
+    expect(response.status).toBe(status)
+    if (reason) expect((await response.json()).error.details.reason).toBe(reason)
   })
 })

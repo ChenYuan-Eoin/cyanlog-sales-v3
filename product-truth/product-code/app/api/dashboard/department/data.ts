@@ -5,7 +5,7 @@ import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, resolveRolePermissi
 import { supabaseAdmin } from '@/lib/supabase'
 
 type ScopeType = 'org' | 'department' | 'space'
-type Role = { id: string; code: string; permissions: unknown }
+type Role = { id: string; code: string; permissions: unknown; owner_org_id: string | null }
 type RoleAssignment = {
   user_id: string
   org_id: string
@@ -65,7 +65,7 @@ export async function getPersonalDashboardOrg(userId: string): Promise<string> {
 async function getCurrentGrants(userId: string, orgId: string): Promise<ActiveGrant[]> {
   const [activeOrganization, assignments] = await Promise.all([
     getActiveOrganization(orgId),
-    supabaseAdmin.from('user_roles').select('user_id,org_id,scope_type,scope_id,role:roles(id,code,permissions)')
+    supabaseAdmin.from('user_roles').select('user_id,org_id,scope_type,scope_id,role:roles(id,code,permissions,owner_org_id)')
       .eq('org_id', orgId).eq('user_id', userId),
   ])
   if (assignments.error) throw assignments.error
@@ -74,8 +74,10 @@ async function getCurrentGrants(userId: string, orgId: string): Promise<ActiveGr
     const role = Array.isArray(assignment.role)
       ? (assignment.role.length === 1 ? assignment.role[0] : null)
       : assignment.role
-    if (!role?.id || !role.code || assignment.user_id !== userId || assignment.org_id !== orgId || !assignment.scope_id) return []
+    if (!role?.id || !role.code || assignment.user_id !== userId || assignment.org_id !== orgId || !assignment.scope_id
+      || (role.owner_org_id !== null && role.owner_org_id !== orgId)) return []
     if (assignment.scope_type === 'org' && assignment.scope_id !== orgId) return []
+    if (role.code === 'SUPER_ADMIN' && role.owner_org_id !== null) return []
     if (assignment.scope_type !== 'org' && (role.code === 'SUPER_ADMIN' || role.code === ORG_SUPER_ADMIN_ROLE_CODE)) return []
     if (!isRoleAssignableInScope(role.code, assignment.scope_type)) return []
     const { permissions } = resolveRolePermissions(activeOrganization.settings, role)

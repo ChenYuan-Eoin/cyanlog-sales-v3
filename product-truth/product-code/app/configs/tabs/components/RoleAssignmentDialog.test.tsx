@@ -18,6 +18,22 @@ beforeEach(() => {
 })
 
 describe('RoleAssignmentDialog scoped assignment', () => {
+  it('loads later pages before exposing assignable roles', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(Response.json({
+      success: true, data: { roles: [{ id: 'first', code: 'SALES', name: '第一页角色' }] },
+      meta: { offset: 0, limit: 50, hasMore: true },
+    })).mockResolvedValueOnce(Response.json({
+      success: true, data: { roles: [{ id: 'last', code: 'CUSTOM_LAST', name: '后页普通角色' }] },
+      meta: { offset: 50, limit: 50, hasMore: false },
+    }))
+    vi.stubGlobal('fetch', fetch)
+    render(<RoleAssignmentDialog userId="employee" userName="成员" currentRoles={[]} departments={[]}
+      onSubmit={vi.fn()} open onOpenChange={vi.fn()} />)
+    expect(await screen.findByText('后页普通角色')).toBeVisible()
+    expect(screen.getByText('第一页角色')).toBeVisible()
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual(['/api/roles?view=assignable', '/api/roles?view=assignable&offset=50'])
+  })
+
   it('assigns one role at an explicit department scope', async () => {
     const onSubmit = vi.fn(async () => undefined)
     const onSubmitScoped = vi.fn(async () => undefined)

@@ -90,6 +90,8 @@ interface RoleDetailPanelProps {
   membershipStats?: RoleMembershipStats
   departments: OrgSummaryDepartment[]
   onRefresh?: () => void | Promise<void>
+  onPermissionDraftChange?: (roleId: string, changed: boolean) => void
+  metadataActions?: { disabled: boolean; rename: () => void; archive: () => void }
 }
 
 // ============ 主组件 ============
@@ -109,6 +111,8 @@ export function RoleDetailPanel({
   membershipStats,
   departments,
   onRefresh,
+  onPermissionDraftChange,
+  metadataActions,
 }: RoleDetailPanelProps) {
   const [activeTab, setActiveTab] = useState('members')
   const [perms, setPerms] = useState<string[]>(role.permissions ?? [])
@@ -142,6 +146,10 @@ export function RoleDetailPanel({
 
   const hasChanges = JSON.stringify([...perms].sort()) !== JSON.stringify([...(role.permissions ?? [])].sort())
   const hasOwnerChanges = JSON.stringify([...ownerPerms].sort()) !== JSON.stringify([...(role.owner_shipping_permissions ?? [])].sort())
+  const hasEditableDraft = canEditPermissions && hasChanges || canEditOwnerPermissions && hasOwnerChanges
+  useEffect(() => {
+    onPermissionDraftChange?.(role.id, hasEditableDraft)
+  }, [hasEditableDraft, onPermissionDraftChange, role.id])
   const catalogKeys = useMemo(() => new Set(
     modulePermissionCatalog?.flatMap(group => group.items
       .filter(item => !('selectable' in item) || item.selectable !== false)
@@ -227,7 +235,7 @@ export function RoleDetailPanel({
     <div className="rounded-lg border bg-white overflow-hidden">
       {/* 头部信息 */}
       <div className="border-b px-6 py-4">
-        <div className="flex items-start justify-between">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-4">
             <div
               className={`flex h-12 w-12 items-center justify-center rounded-xl ${
@@ -253,17 +261,23 @@ export function RoleDetailPanel({
               )}
             </div>
           </div>
-          {(canEditPermissions || canEditOwnerPermissions) && activeTab === 'permissions' && (
-            <Button
-              onClick={() => {
-                if (hasOwnerChanges && canEditOwnerPermissions) onSave(canEditPermissions ? perms : role.permissions ?? [], ownerPerms)
-                else if (hasChanges && canEditPermissions) onSave(perms)
-              }}
-              disabled={saving || !(canEditPermissions && hasChanges) && !(canEditOwnerPermissions && hasOwnerChanges)}
-            >
-              {saving ? '正在保存授权…' : (canEditPermissions && hasChanges) || (canEditOwnerPermissions && hasOwnerChanges) ? '保存授权' : '授权已保存'}
-            </Button>
-          )}
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            {metadataActions && <>
+              <Button type="button" variant="outline" size="sm" onClick={metadataActions.rename} disabled={metadataActions.disabled || hasEditableDraft}>改名</Button>
+              <Button type="button" variant="ghost" size="sm" onClick={metadataActions.archive} disabled={metadataActions.disabled || hasEditableDraft}>归档</Button>
+            </>}
+            {(canEditPermissions || canEditOwnerPermissions) && activeTab === 'permissions' && (
+              <Button
+                onClick={() => {
+                  if (hasOwnerChanges && canEditOwnerPermissions) onSave(canEditPermissions ? perms : role.permissions ?? [], ownerPerms)
+                  else if (hasChanges && canEditPermissions) onSave(perms)
+                }}
+                disabled={saving || !hasEditableDraft}
+              >
+                {saving ? '正在保存授权…' : hasEditableDraft ? '保存授权' : '授权已保存'}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

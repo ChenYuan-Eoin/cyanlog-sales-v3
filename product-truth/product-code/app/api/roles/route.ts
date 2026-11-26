@@ -1,17 +1,17 @@
 // REQ: F003 自主可控 + RBAC
-// PURPOSE: 角色管理 API - 列出角色权限
+// PURPOSE: 当前组织的角色列表、权限和角色创建
 
 import { NextRequest } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
 import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
-import { rolePermissionsEditBlockReason } from '@/lib/org-role-permissions'
+import { queryOrgRoles, rolePermissionsEditBlockReason, type OrgVisibleRole } from '@/lib/org-role-permissions'
 import { hasPublishedShippingBundle, REGISTERED_MODULE_PERMISSION_KEYS, SHIPPING_BUNDLE } from '@/lib/module-access'
 import { loadRoleModulePermissionProjection } from '@/lib/permission-registry'
 import { PERMISSION_KEYS } from '@/lib/role-permission-policy'
 import { ORG_BUSINESS_ROLE_ASSIGN } from '@/lib/permissions'
 import { FXIAOKE_BASELINE_ROLE_CODE, ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions, resolveRolePermissions } from '@/lib/role-permission-resolution'
 import { isRoleId, withRolePermissionContext } from './context'
+import { mutateOrgRoleMetadata, roleMetadata } from './metadata'
 
 export async function GET(req: NextRequest) {
   return withRolePermissionContext(req, async ({
@@ -28,39 +28,30 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(Math.max(Number.parseInt(searchParams.get('limit') || '50', 10) || 50, 1), 100)
     const offset = Math.max(Number.parseInt(searchParams.get('offset') || '0', 10) || 0, 0)
 
+    let query = queryOrgRoles(orgId, 'exact')
     if (assignable) {
-      let query = supabaseAdmin
-        .from('roles')
-        .select('id, code, name', { count: 'exact' })
-        .not('code', 'in', `(SUPER_ADMIN,${ORG_SUPER_ADMIN_ROLE_CODE},${FXIAOKE_BASELINE_ROLE_CODE})`)
-      if (roleId !== null) query = query.eq('id', roleId)
-      const { data, error, count } = await query.order('sort_order', { ascending: true }).range(offset, offset + limit - 1)
-      if (error) {
-        console.error('List assignable roles error:', error)
-        return errorResponse(createApiError('DB_ERROR', '查询失败'))
-      }
-      return successResponse({
-        roles: (data ?? []).map(({ id, code, name }) => ({ id, code, name })),
-      }, { total: count || 0, limit, offset, hasMore: (count || 0) > offset + limit })
+      query = query.not('code', 'in', `(SUPER_ADMIN,${ORG_SUPER_ADMIN_ROLE_CODE},${FXIAOKE_BASELINE_ROLE_CODE})`)
     }
-
-    let query = supabaseAdmin
-      .from('roles')
-      .select('id, code, name, description, permissions, sort_order, created_at', { count: 'exact' })
     if (roleId !== null) query = query.eq('id', roleId)
-    const { data, error, count } = await query
-      .order('sort_order', { ascending: true })
-      .range(offset, offset + limit - 1)
-
+    const { data, error, count } = await query.order('sort_order').order('id').range(offset, offset + limit - 1)
+    if (error?.code === '22P02') return errorResponse(createApiError('VALIDATION_ERROR'))
     if (error) {
-      console.error('List roles error:', error)
+      console.error('List organization roles error:', error)
       return errorResponse(createApiError('DB_ERROR', '查询失败'))
     }
+    const rows = (data ?? []) as OrgVisibleRole[]
+    const total = count ?? 0
+    const pagination = { total, limit, offset, hasMore: total > offset + limit }
+    if (assignable) {
+      return successResponse({ roles: rows.map(({ id, code, name }) => ({ id, code, name })) }, pagination)
+    }
 
-    const roles = (data || []).map((role) => {
+    const roles = rows.map((role) => {
       const effective = resolveRolePermissions(settings, role)
       return {
-        ...role,
+        ...roleMetadata(role, canEdit),
+        sort_order: role.sort_order,
+        created_at: role.created_at,
         permissions: effective.permissions,
         permissions_overridden: effective.overridden,
         owner_shipping_permissions: resolveOwnerShippingPermissions(settings, role),
@@ -71,7 +62,7 @@ export async function GET(req: NextRequest) {
     const publishedModuleKeys = [...publication.published].sort()
     const shippingBundleAvailable = hasPublishedShippingBundle(new Set(publishedModuleKeys))
     const permissionKeys = [
-      ...PERMISSION_KEYS.filter(key => key !== ORG_BUSINESS_ROLE_ASSIGN && !REGISTERED_MODULE_PERMISSION_KEYS.some(registered => registered === key)
+      ...PERMISSION_KEYS.filter(key => key !== '*' && key !== ORG_BUSINESS_ROLE_ASSIGN && !REGISTERED_MODULE_PERMISSION_KEYS.some(registered => registered === key)
         && (key !== SHIPPING_BUNDLE || shippingBundleAvailable)),
       ...publishedModuleKeys,
     ].sort()
@@ -86,12 +77,11 @@ export async function GET(req: NextRequest) {
         can_appoint_system_super_admin: canEdit,
         permissions_edit_block_reason: canEdit ? null : '仅系统超管可以保存角色授权。',
       },
-      {
-        total: count || 0,
-        limit,
-        offset,
-        hasMore: (count || 0) > offset + limit,
-      }
+      pagination,
     )
   })
+}
+
+export async function POST(req: NextRequest) {
+  return mutateOrgRoleMetadata(req, 'create')
 }

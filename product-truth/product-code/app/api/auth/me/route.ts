@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getRequestAuthToken } from '@/lib/auth-token'
+import { queryOrgRoles } from '@/lib/org-role-permissions'
 import { canEnterConfigurationCenter } from '@/lib/permissions'
 import {
   canManageOrg,
@@ -40,9 +41,18 @@ export async function GET(req: NextRequest) {
     }
 
     const organizationRoles = getOrgScopedAssignments(scopedAssignments, orgId)
-    const roles = organizationRoles.map((assignment) => ({
+    const roleIds = [...new Set(organizationRoles.map(assignment => assignment.roleId))]
+    const names = new Map<string, string>()
+    if (roleIds.length) {
+      const { data: definitions, error } = await queryOrgRoles(orgId).select('id,name').in('id', roleIds)
+      if (error || !Array.isArray(definitions)) {
+        return errorResponse('读取角色失败', 500, 'ROLE_FETCH_FAILED')
+      }
+      for (const definition of definitions) names.set(definition.id, definition.name)
+    }
+    const roles = organizationRoles.map(assignment => ({
       code: assignment.roleCode,
-      name: assignment.roleName,
+      name: names.get(assignment.roleId) ?? assignment.roleName,
     }))
 
     return NextResponse.json({

@@ -5,6 +5,8 @@ export type ConfigRoleRecord = {
   description: string | null
   permissions: string[] | null
   sort_order: number | null
+  metadata_editable?: boolean
+  metadata_revision?: number
   permissions_edit_block_reason?: string | null
   permissions_overridden?: boolean
   owner_shipping_permissions?: string[]
@@ -61,6 +63,9 @@ function parseRole(value: unknown): ConfigRoleRecord | null {
     description: typeof value.description === 'string' ? value.description : null,
     permissions: value.permissions,
     sort_order: typeof value.sort_order === 'number' ? value.sort_order : null,
+    ...(typeof value.metadata_editable === 'boolean' ? { metadata_editable: value.metadata_editable } : {}),
+    ...(typeof value.metadata_revision === 'number' && Number.isSafeInteger(value.metadata_revision) && value.metadata_revision >= 0
+      ? { metadata_revision: value.metadata_revision } : {}),
     permissions_edit_block_reason: typeof value.permissions_edit_block_reason === 'string' ? value.permissions_edit_block_reason : null,
     ...(typeof value.permissions_overridden === 'boolean' ? { permissions_overridden: value.permissions_overridden } : {}),
     ...(permissionList(value.owner_shipping_permissions) ? { owner_shipping_permissions: value.owner_shipping_permissions } : {}),
@@ -89,7 +94,7 @@ function parseModuleCatalog(value: unknown): RoleModulePermissionCatalog {
   })
 }
 
-async function readData(response: Response, fallback: string): Promise<Record<string, unknown>> {
+async function readData(response: Response, fallback: string) {
   const body: unknown = await response.json().catch(() => null)
   if (!response.ok) {
     const error = isObject(body) ? body.error : null
@@ -99,7 +104,7 @@ async function readData(response: Response, fallback: string): Promise<Record<st
   if (!isObject(body) || body.success !== true || !isObject(body.data)) {
     throw new RolePermissionRequestError(fallback, response.status)
   }
-  return body.data
+  return { data: body.data, meta: isObject(body.meta) ? body.meta : null }
 }
 
 export async function loadOrgRolePermissionSnapshot(
@@ -107,17 +112,44 @@ export async function loadOrgRolePermissionSnapshot(
   roleId?: string,
 ): Promise<OrgRolePermissionSnapshot> {
   const url = roleId ? `/api/roles?role_id=${encodeURIComponent(roleId)}` : '/api/roles'
-  const response = await fetch(url, { headers, cache: 'no-store' })
-  const data = await readData(response, '角色权限加载失败，请刷新后重试。')
-  const roles = Array.isArray(data.roles) ? data.roles.map(parseRole) : null
-  if (typeof data.org_id !== 'string' || !data.org_id || typeof data.permissions_editable !== 'boolean'
-    || !roles || roles.some(role => role === null)) {
-    throw new RolePermissionRequestError('角色权限响应不完整，请刷新后重试。', response.status)
+  const loadPage = async (path: string) => {
+    const response = await fetch(path, { headers, cache: 'no-store' })
+    const { data, meta } = await readData(response, '角色权限加载失败，请刷新后重试。')
+    const roles = Array.isArray(data.roles) ? data.roles.map(parseRole) : null
+    if (typeof data.org_id !== 'string' || !data.org_id || typeof data.permissions_editable !== 'boolean'
+      || !roles || roles.some(role => role === null)) {
+      throw new RolePermissionRequestError('角色权限响应不完整，请刷新后重试。', response.status)
+    }
+    return {
+      data, meta, orgId: data.org_id, permissionsEditable: data.permissions_editable,
+      roles: roles.filter((role): role is ConfigRoleRecord => role !== null),
+    }
+  }
+  const { data, roles, meta, orgId, permissionsEditable } = await loadPage(url)
+  if (!roleId) {
+    let page = meta
+    let offset = 0
+    const seen = new Set(roles.map(role => role.id))
+    while (page?.hasMore === true) {
+      if (page.offset !== offset || typeof page.limit !== 'number' || !Number.isSafeInteger(page.limit)
+        || page.limit < 1 || page.limit > 100) {
+        throw new RolePermissionRequestError('角色列表分页不完整，请刷新后重试。', 409)
+      }
+      offset += page.limit
+      const next = await loadPage(`${url}?offset=${offset}`)
+      if (next.orgId !== orgId || next.permissionsEditable !== permissionsEditable
+        || next.roles.length === 0 || next.roles.some(role => seen.has(role.id))) {
+        throw new RolePermissionRequestError('角色列表已变化，请刷新后重试。', 409)
+      }
+      next.roles.forEach(role => seen.add(role.id))
+      roles.push(...next.roles)
+      page = next.meta
+    }
   }
   return {
-    orgId: data.org_id,
-    roles: roles.filter((role): role is ConfigRoleRecord => role !== null),
-    permissionsEditable: data.permissions_editable,
+    orgId,
+    roles,
+    permissionsEditable,
     modulePermissionCatalog: parseModuleCatalog(data.permission_catalog),
     shippingPermissionPublication: parseShippingPublication(data.shipping_permission_publication),
     canAppointSystemSuperAdmin: data.can_appoint_system_super_admin === true,
@@ -150,7 +182,7 @@ export async function saveAndReadOrgRolePermissions(
       } : {}),
     }),
   })
-  const receipt = await readData(response, '角色权限保存失败，请刷新后重试。')
+  const { data: receipt } = await readData(response, '角色权限保存失败，请刷新后重试。')
   const receiptRole = parseRole(receipt.role)
   if (receipt.org_id !== input.orgId || receiptRole?.id !== input.roleId
     || !samePermissions(receiptRole.permissions, input.permissions)

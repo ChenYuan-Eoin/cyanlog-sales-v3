@@ -22,7 +22,7 @@ import {
 import { validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
 import { canPerformMemberAction } from '@/lib/admin/member-actions'
 import { ORG_MEMBER_INVITE } from '@/lib/admin/member-action-keys'
-import { canManageSystemAuthorizations, loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
+import { canManageSystemAuthorizations, loadCurrentOrganizationRoleAssignments, queryOrgRoles } from '@/lib/org-role-permissions'
 import { normalizeIdentityPhone } from '@/lib/fxiaoke/identity'
 
 const createUserSchema = z.object({
@@ -56,10 +56,11 @@ export async function GET(req: NextRequest) {
         status,
         created_at,
         user_roles!user_roles_user_id_fkey(
-          role:role_id(name, code)
+          role_id
         )
       `)
       .eq('org_id', orgId)
+      .eq('user_roles.org_id', orgId)
       .neq('status', 'inactive')
 
     if (deptId) {
@@ -73,15 +74,25 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: '获取用户列表失败' }, { status: 500 })
     }
 
-    // 格式化返回数据
-    const formattedUsers = (users || []).map((u: Record<string, unknown>) => ({
-      ...u,
-      primary_dept_name: (u.departments as { name?: string } | null)?.name || null,
-      role_names: ((u.user_roles as Array<{ role?: { name?: string } | null }> | undefined) || [])
-        .map((ur) => ur.role?.name)
-        .filter((name): name is string => Boolean(name))
-        .join(', ') || '',
-    }))
+    const { data: roles, error: roleError } = await queryOrgRoles(orgId).select('id,name,code')
+    if (roleError || !Array.isArray(roles)) {
+      console.error('Fetch user role labels error:', roleError)
+      return NextResponse.json({ error: '获取用户角色失败' }, { status: 500 })
+    }
+    const rolesById = new Map(roles.map(({ id, name, code }) => [id, { name, code }]))
+    const formattedUsers = (users || []).map(({ user_roles, ...user }) => {
+      const bindings = (user_roles ?? []) as Array<{ role_id: string }>
+      const resolvedRoles = bindings.flatMap(({ role_id }) => {
+        const role = rolesById.get(role_id)
+        return role ? [{ role }] : []
+      })
+      return {
+        ...user,
+        user_roles: resolvedRoles,
+        primary_dept_name: (user.departments as { name?: string } | null)?.name || null,
+        role_names: resolvedRoles.map(({ role }) => role.name).join(', '),
+      }
+    })
 
     return NextResponse.json({
       success: true,

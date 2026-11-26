@@ -5,15 +5,16 @@ const orgId = 'org-a'
 const userId = 'user-a'
 const subject = { org_id: orgId, user_id: userId }
 const dept = (id: string, parent_id: string | null = null) => ({ id, name: id, org_id: orgId, status: 'active', parent_id })
-const roleAt = (scope_id: string, code: string, permissions: string[]) => ({
-  ...subject, scope_type: 'department', scope_id, roles: { id: code, code, permissions },
+const roleAt = (scope_id: string, code: string, permissions: string[], owner_org_id: string | null = null) => ({
+  ...subject, scope_type: 'department', scope_id, roles: { id: code, code, permissions, owner_org_id },
 })
 const grant = (include_subdepartments: boolean) => ({ permissions: ['shipping:ledger_view'], include_subdepartments })
 
 function source() {
   const rows: Record<string, unknown[]> = {
     user_roles: [
-      roleAt('west', 'ORDINARY', ['shipping:ledger_view']),
+      roleAt('west', 'ORDINARY', ['shipping:ledger_view'], orgId),
+      roleAt('no-authorization', 'FOREIGN_OWNED', ['shipping:ledger_view'], 'org-b'),
       roleAt('no-authorization', 'ADMIN', ['shipping:*']),
       roleAt('no-authorization', 'SUPER_ADMIN', ['shipping:ledger_view']),
       { ...roleAt('foreign', 'OTHER', ['shipping:ledger_view']), org_id: 'org-b' },

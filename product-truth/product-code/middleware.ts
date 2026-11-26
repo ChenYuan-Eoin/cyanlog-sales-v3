@@ -187,8 +187,12 @@ const memberPathPermissions: Partial<Record<string, readonly string[]>> = {
 }
 
 function isSystemAuthorizationPath(pathname: string, request: NextRequest): boolean {
-  if (pathname === '/api/roles') return request.nextUrl.searchParams.get('view') === 'assignable'
-  if (pathname.startsWith('/api/roles/') && request.method === 'PATCH') return true
+  if (pathname === '/api/roles') {
+    return request.method === 'POST' || (['GET', 'HEAD'].includes(request.method)
+      && request.nextUrl.searchParams.get('view') === 'assignable')
+  }
+  if (pathname.startsWith('/api/roles/') && (request.method === 'PATCH'
+    || (request.method === 'DELETE' && pathname.endsWith('/metadata')))) return true
   if (pathname === '/api/admin/departments/leader-access' || pathname === '/api/admin/departments/shipping-intake') return true
   if (pathname.endsWith('/permissions') && departmentDetailPath.test(pathname.slice(0, -'/permissions'.length))) return true
   const memberPath = memberDetailPath.exec(pathname)?.[1]
@@ -236,12 +240,14 @@ function buildRedirectUrl(request: NextRequest, pathname: string, search = ''): 
   return url
 }
 
-function roleRecordOf(value: unknown): { id: string; code: string; permissions: string[] | null } | null {
+type AuthorizationRoleRow = { id: string; code: string; permissions: string[] | null; owner_org_id: string | null }
+
+function roleRecordOf(value: unknown): AuthorizationRoleRow | null {
   if (Array.isArray(value)) {
     return value.length === 1 ? roleRecordOf(value[0]) : null
   }
   if (!value || typeof value !== 'object') return null
-  return value as { id: string; code: string; permissions: string[] | null }
+  return value as AuthorizationRoleRow
 }
 
 type DepartmentScopeRow = { id: string; org_id: string; status: string; leader_id?: string }
@@ -256,14 +262,15 @@ async function canEnterDepartmentWorkspace(
     org_id: string; user_id: string; scope_type: string; scope_id: string | null; roles: unknown
   }>(
     'user_roles', { user_id: userId, org_id: orgId, scope_type: 'department' },
-    'org_id,user_id,scope_type,scope_id,roles:roles(id,code,permissions)', 1000,
+    'org_id,user_id,scope_type,scope_id,roles:roles(id,code,permissions,owner_org_id)', 1000,
   )
   const departmentIds = new Set<string>()
   for (const assignment of assignments) {
     if (assignment.org_id !== orgId || assignment.user_id !== userId || assignment.scope_type !== 'department' || !assignment.scope_id) continue
     if (Array.isArray(assignment.roles) && assignment.roles.length !== 1) continue
     const role = roleRecordOf(assignment.roles)
-    if (!role?.id || !role.code || ['SUPER_ADMIN', ORG_SUPER_ADMIN_ROLE_CODE, FXIAOKE_BASELINE_ROLE_CODE].includes(role.code)
+    if (!role?.id || !role.code || (role.owner_org_id !== null && role.owner_org_id !== orgId)
+      || ['SUPER_ADMIN', ORG_SUPER_ADMIN_ROLE_CODE, FXIAOKE_BASELINE_ROLE_CODE].includes(role.code)
       || !isRoleAssignableInScope(role.code, 'department')) continue
     const { permissions } = resolveRolePermissions(organizationSettings, role)
     if (permissions.includes('dept:view') || permissions.includes('report:dept')) departmentIds.add(assignment.scope_id)
@@ -331,7 +338,7 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
     rest.selectRows<{ org_id: string; user_id: string; scope_type: string; scope_id: string | null; roles: unknown }>(
       'user_roles',
       { user_id: userId, org_id: orgId, scope_type: 'org', scope_id: orgId },
-      'org_id,user_id,scope_type,scope_id,roles:roles(id,code,permissions)',
+      'org_id,user_id,scope_type,scope_id,roles:roles(id,code,permissions,owner_org_id)',
       100,
     ),
     rest.selectRows<{ status: string; settings: unknown }>('organizations', { id: orgId }, 'status,settings'),
@@ -360,6 +367,8 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
     if (ur.org_id !== orgId || ur.user_id !== userId || ur.scope_type !== 'org' || ur.scope_id !== orgId) continue
     const r = roleRecordOf(ur.roles)
     if (r?.id && r.code) {
+      if (r.owner_org_id !== null && r.owner_org_id !== orgId) continue
+      if (r.owner_org_id !== null && ['SUPER_ADMIN', ORG_SUPER_ADMIN_ROLE_CODE].includes(r.code)) continue
       if (r.code === FXIAOKE_BASELINE_ROLE_CODE) continue
       if (!activeMembership && ['SUPER_ADMIN', ORG_SUPER_ADMIN_ROLE_CODE, SHIPPING_OPERATOR_ROLE_CODE].includes(r.code)) continue
       const effective = resolveRolePermissions(organization.settings, r)
@@ -589,7 +598,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // 路径级权限校验
-    const allowed = pathname === '/api/roles' ? rolesIndexAccess
+    const allowed = pathname === '/api/roles' ? systemAuthorizationPath || rolesIndexAccess
       : specificConfigurationAccess || (required === 'admin:access'
       ? canAccessOrgAdmin(authContext.allPermissions, authContext.authorizationRoleCodes)
       : required === 'config:read' ? (pathname !== '/configs' && hasConfigurationReadPermission(authContext.allPermissions))

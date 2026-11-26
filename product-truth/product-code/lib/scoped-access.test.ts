@@ -25,7 +25,6 @@ import {
   getOrgRoleCodes,
   getOrgScopedAssignments,
   listAccessibleUserIds,
-  listFreshAccessibleUserIds,
   type ScopedRoleAssignment,
 } from './scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -55,7 +54,7 @@ function makeCollectionQuery(result: unknown) {
 function rootBinding(userId: string, orgId: string) {
   return {
     user_id: userId, org_id: orgId, scope_type: 'org', scope_id: orgId, granted_at: null,
-    role: { id: 'system-admin', code: 'SUPER_ADMIN', name: '系统超管', permissions: ['*'] },
+    role: { id: 'system-admin', code: 'SUPER_ADMIN', name: '系统超管', permissions: ['*'], owner_org_id: null },
   }
 }
 
@@ -261,16 +260,19 @@ describe('fresh mutation access scope', () => {
     vi.clearAllMocks()
   })
 
-  it('bypasses a cached administrator role after revocation', async () => {
+  it('rereads ordinary administrator grants and scope after revocation', async () => {
     const oldRoleQuery = makeCollectionQuery({
       data: [{
         scope_type: 'org',
         scope_id: 'org-fresh-access',
+        org_id: 'org-fresh-access',
+        user_id: 'fresh-access-user',
         granted_at: null,
         role: {
           id: 'role-admin',
           code: 'ADMIN',
           name: '管理员',
+          owner_org_id: null,
           permissions: ['admin:access'],
         },
       }],
@@ -291,7 +293,7 @@ describe('fresh mutation access scope', () => {
 
     await expect(listAccessibleUserIds('fresh-access-user', 'org-fresh-access'))
       .resolves.toMatchObject({ userIds: ['fresh-access-user', 'another-user'] })
-    await expect(listFreshAccessibleUserIds('fresh-access-user', 'org-fresh-access'))
+    await expect(listAccessibleUserIds('fresh-access-user', 'org-fresh-access'))
       .resolves.toMatchObject({ userIds: ['fresh-access-user'] })
     expect(supabaseAdmin.from).toHaveBeenCalledTimes(4)
   })
@@ -317,8 +319,8 @@ describe('organization role permission overrides', () => {
 
   it('validates the organization administrator binding and rereads it after revocation on ordinary read paths', async () => {
     const orgId = 'org-with-delegation'
-    const role = { id: 'org-management', code: 'ORG_SUPER_ADMIN', name: '组织超级管理员', permissions: ['*'] }
-    const exact = { org_id: orgId, scope_type: 'org', scope_id: orgId, granted_at: null, role }
+    const role = { id: 'org-management', code: 'ORG_SUPER_ADMIN', name: '组织超级管理员', permissions: ['*'], owner_org_id: null }
+    const exact = { user_id: 'org-delegated-user', org_id: orgId, scope_type: 'org', scope_id: orgId, granted_at: null, role }
     const foreign = { ...exact, org_id: 'other' }
     const department = { ...exact, scope_type: 'department' }
     const member = makeDefaultOrgQuery({ data: { org_id: orgId }, error: null })
@@ -344,10 +346,10 @@ describe('organization role permission overrides', () => {
     const orgId = 'retired-baseline-org'
     const common = { user_id: userId, org_id: orgId, scope_type: 'org', scope_id: orgId, granted_at: null }
     const oldBaseline = {
-      ...common, role: { id: 'old-role', code: 'FXIAOKE_BASELINE', name: '历史纷享基础', permissions: ['quote:view'] },
+      ...common, role: { id: 'old-role', code: 'FXIAOKE_BASELINE', name: '历史纷享基础', permissions: ['quote:view'], owner_org_id: null },
     }
     const assigned = {
-      ...common, role: { id: 'explicit-role', code: 'PRICING_EDITOR', name: '定价维护', permissions: ['config:write'] },
+      ...common, role: { id: 'explicit-role', code: 'PRICING_EDITOR', name: '定价维护', permissions: ['config:write'], owner_org_id: null },
     }
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(makeCollectionQuery({ data: [oldBaseline], error: null }))
     expect(await getFreshUserScopedRoleAssignments(userId)).toEqual([])
@@ -434,10 +436,11 @@ describe('organization role permission overrides', () => {
     await expect(getUserScopedRoleAssignments(userId)).rejects.toThrow('root eligibility unavailable')
   })
 
-  it('角色模板被缓存时仍每次读取当前组织覆盖，并保留组织隔离', async () => {
+  it('每次读取当前角色绑定与组织覆盖，并保留组织隔离', async () => {
+    const role = { id: 'same-role', code: 'CUSTOM', name: '普通角色', permissions: ['config:read'], owner_org_id: null }
     vi.mocked(supabaseAdmin.from).mockReturnValue(makeCollectionQuery({ data: [
-      {scope_type:'org',scope_id:'org-override-a',granted_at:null,role:{id:'same-role',code:'CUSTOM',name:'普通角色',permissions:['config:read']}},
-      {scope_type:'org',scope_id:'org-override-b',granted_at:null,role:{id:'same-role',code:'CUSTOM',name:'普通角色',permissions:['config:read']}},
+      { user_id: 'override-cache-user', org_id: 'org-override-a', scope_type: 'org', scope_id: 'org-override-a', granted_at: null, role },
+      { user_id: 'override-cache-user', org_id: 'org-override-b', scope_type: 'org', scope_id: 'org-override-b', granted_at: null, role },
     ],error:null}))
     let revoked = false
     vi.mocked(loadOrgRolePermissionSettings).mockImplementation(async orgId => (
@@ -449,17 +452,41 @@ describe('organization role permission overrides', () => {
     const after = await getUserScopedRoleAssignments('override-cache-user')
     expect(getOrgPermissions(after,'org-override-a')).toEqual([])
     expect(getOrgPermissions(after,'org-override-b')).toEqual(['config:read'])
-    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
     expect(loadOrgRolePermissionSettings).toHaveBeenCalledTimes(4)
   })
 
-  it('已缓存模板不会在组织覆盖读取失败时恢复授权', async () => {
-    vi.mocked(supabaseAdmin.from).mockReturnValue(makeCollectionQuery({data:[
-      {scope_type:'org',scope_id:'org-unavailable',granted_at:null,role:{id:'r',code:'ADMIN',name:'管理员',permissions:['config:read']}},
-    ],error:null}))
+  it('组织覆盖读取失败时不会使用先前授权', async () => {
+    vi.mocked(supabaseAdmin.from).mockReturnValue(makeCollectionQuery({ data: [{
+      user_id: 'override-failure-user', org_id: 'org-unavailable', scope_type: 'org', scope_id: 'org-unavailable', granted_at: null,
+      role: { id: 'r', code: 'ADMIN', name: '管理员', permissions: ['config:read'], owner_org_id: null },
+    }], error: null }))
     await getUserScopedRoleAssignments('override-failure-user')
     vi.mocked(loadOrgRolePermissionSettings).mockRejectedValueOnce(new Error('permission store unavailable'))
     await expect(getUserScopedRoleAssignments('override-failure-user')).rejects.toThrow('permission store unavailable')
+  })
+
+  it('checks the binding tenant and current role ownership even when a separate role remains after revocation', async () => {
+    const userId = 'scoped-ordinary-revocation'
+    const orgId = 'org-owner'
+    const root = { user_id: userId, org_id: orgId, scope_type: 'org', scope_id: orgId, granted_at: null }
+    const custom = { id: 'owned', code: 'ORG_OWNED', name: '本组织角色', permissions: ['config:write'], owner_org_id: orgId }
+    const ordinary = { id: 'shared', code: 'ORDINARY', name: '普通角色', permissions: ['user:view'], owner_org_id: null }
+    const invalid = [
+      { ...root, role: { ...custom, id: 'foreign-owned', owner_org_id: 'other-org' } },
+      { ...root, role: { ...custom, id: 'unverified-owner', owner_org_id: undefined } },
+      { ...root, scope_id: 'other-org', role: ordinary },
+      { ...root, user_id: 'other-user', role: ordinary },
+    ]
+    const remaining = { ...root, role: ordinary }
+    vi.mocked(supabaseAdmin.from)
+      .mockReturnValueOnce(makeCollectionQuery({ data: [...invalid, { ...root, role: custom }, remaining], error: null }))
+      .mockReturnValueOnce(makeCollectionQuery({ data: [...invalid, remaining], error: null }))
+
+    const before = await getUserScopedRoleAssignments(userId)
+    expect(before.map(assignment => assignment.roleId)).toEqual(['owned', 'shared'])
+    expect(getOrgPermissions(before, orgId)).toEqual(['config:write', 'user:view'])
+    expect(getOrgPermissions(await getUserScopedRoleAssignments(userId), orgId)).toEqual(['user:view'])
   })
 
   it('部门和空间作用域根据其实际组织读取覆盖', async () => {

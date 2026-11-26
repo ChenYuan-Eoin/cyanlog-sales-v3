@@ -118,3 +118,17 @@ it('preserves runtime publication and override provenance separately from select
   expect(snapshot.roles[0].permissions_overridden).toBe(true)
   expect(snapshot.modulePermissionCatalog).toEqual([])
 })
+
+it('reads later pages for the same organization and preserves role metadata revisions', async () => {
+  const laterRole = { ...role, id: 'later', metadata_editable: true, metadata_revision: 1 }
+  const request = vi.fn().mockResolvedValueOnce(Response.json({
+    success: true,
+    data: { org_id: 'org-a', roles: [role], permissions_editable: true },
+    meta: { offset: 0, limit: 50, hasMore: true },
+  })).mockResolvedValueOnce(readback({ roles: [laterRole] }))
+  vi.stubGlobal('fetch', request)
+  const result = await loadOrgRolePermissionSnapshot({})
+  expect(request.mock.calls.map(([url]) => url)).toEqual(['/api/roles', '/api/roles?offset=50'])
+  expect(result.roles).toHaveLength(2)
+  expect(result.roles[1]).toMatchObject(laterRole)
+})

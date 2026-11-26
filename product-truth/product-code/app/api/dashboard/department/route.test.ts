@@ -68,7 +68,7 @@ const space = (id: string, departmentId: string, status = 'active', org = orgId)
   id, department_id: departmentId, org_id: org, name: id, description: null, owner_id: userId, status,
 })
 
-const role = (id: string, permissions: string[], code = id) => ({ id, code, permissions })
+const role = (id: string, permissions: string[], code = id, owner_org_id: string | null = null) => ({ id, code, permissions, owner_org_id })
 const grant = (scopeType: string, scopeId: string, assignedRole: ReturnType<typeof role>, org = orgId) => ({
   user_id: userId, org_id: org, scope_type: scopeType, scope_id: scopeId, role: assignedRole,
 })

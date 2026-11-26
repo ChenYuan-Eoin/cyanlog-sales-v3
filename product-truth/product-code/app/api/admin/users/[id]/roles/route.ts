@@ -98,6 +98,9 @@ export async function POST(
         p_expected_role_ids: [...new Set(expected_role_ids)],
       })
     if (replaceError) {
+      if (replaceError.code === '23503' && replaceError.details === 'ORG_ROLE_NOT_FOUND') {
+        return NextResponse.json({ error: '角色已变更，请刷新角色列表后重试。', code: 'ROLE_ASSIGNMENT_CHANGED' }, { status: 409 })
+      }
       if (replaceError.code === '42501' && replaceError.details === 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN') {
         return NextResponse.json({
           error: '历史纷享基础角色仅可撤销', code: replaceError.details,

@@ -17,7 +17,7 @@ const routeContext: any = { params: Promise.resolve({ id: 'role-1' }) }
 const salesPermissions = ['quote:create']
 const root = {
   org_id: 'org-fresh', user_id: 'user-1', scope_type: 'org', scope_id: 'org-fresh', granted_at: null,
-  role: { id: 'root-role', code: 'SUPER_ADMIN', name: '超管', permissions: ['*'] },
+  role: { owner_org_id: null, id: 'root-role', code: 'SUPER_ADMIN', name: '超管', permissions: ['*'] },
 }
 const currentMember = {
   org_id: 'org-fresh', status: 'active', employment_status: 'active', is_default: true, left_at: null,
@@ -49,11 +49,14 @@ function database(options: {
     }
     return query
   }) as any)
-  vi.mocked(supabaseAdmin.rpc).mockImplementation((async (_name: string, payload: unknown) => {
-    if (options.writeDenied) return { data: null, error: { code: '42501' } }
-    if (options.conflict) return { data: 'conflict', error: null }
+  vi.mocked(supabaseAdmin.rpc).mockImplementation(((name: string, payload: unknown) => {
+    if (name === 'admin_list_org_roles_v1') {
+      return { eq: () => ({ maybeSingle: async () => ({ data: role, error: null }) }) }
+    }
+    if (options.writeDenied) return Promise.resolve({ data: null, error: { code: '42501' } })
+    if (options.conflict) return Promise.resolve({ data: 'conflict', error: null })
     operations.push({ table: 'rpc', patch: payload, filters: [] })
-    return { data: 'saved', error: null }
+    return Promise.resolve({ data: 'saved', error: null })
   }) as never)
   return { role, operations }
 }
@@ -106,7 +109,7 @@ describe('PATCH /api/roles/[id] organization role permissions', () => {
       ['org_id', 'org-fresh'], ['user_id', 'user-1'], ['scope_type', 'org'], ['scope_id', 'org-fresh'],
     ])
     expect(operations.filter((operation) => operation.table === 'organizations').every((operation) => operation.filters.some(([key, value]: any[]) => key === 'id' && value === 'org-fresh'))).toBe(true)
-    expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith('admin_save_org_role_permissions_v1', {
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_save_org_role_permissions_v1', {
       p_actor_id: 'user-1', p_org_id: 'org-fresh', p_role_id: 'role-1',
       p_expected_settings: { theme: 'dark', role_permission_overrides: { 'role-other': ['config:read'] } },
       p_expected_role_code: 'SALES', p_expected_role_template: ['quote:create'],

@@ -75,17 +75,31 @@ export function RoleAssignmentDialog({
       setRolesError(false)
       try {
         const token = localStorage.getItem('token')
-        const res = await fetch('/api/roles?view=assignable', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          cache: 'no-store',
-          signal: controller.signal,
-        })
-        if (!res.ok) throw new Error('无法读取可分配角色')
-        const result = await res.json()
-        if (!result.success || !Array.isArray(result.data?.roles)) throw new Error('无效的角色列表')
-        if (!controller.signal.aborted) {
-          setRoles(result.data.roles.filter((role: OrgSummaryRole) => isGenericallyAssignableRole(role.code)))
+        const collected = new Map<string, OrgSummaryRole>()
+        let offset = 0
+        while (!controller.signal.aborted) {
+          const res = await fetch(
+            offset === 0 ? '/api/roles?view=assignable' : `/api/roles?view=assignable&offset=${offset}`,
+            {
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+              cache: 'no-store',
+              signal: controller.signal,
+            },
+          )
+          if (!res.ok) throw new Error('无法读取可分配角色')
+          const result = await res.json()
+          if (!result.success || !Array.isArray(result.data?.roles)) throw new Error('无效的角色列表')
+          for (const role of result.data.roles as OrgSummaryRole[]) {
+            if (isGenericallyAssignableRole(role.code)) collected.set(role.id, role)
+          }
+          if (result.meta?.hasMore !== true) break
+          const { offset: pageOffset, limit } = result.meta
+          if (pageOffset !== offset || !Number.isSafeInteger(limit) || limit <= 0 || !result.data.roles.length) {
+            throw new Error('无效的角色列表分页')
+          }
+          offset += limit
         }
+        if (!controller.signal.aborted) setRoles([...collected.values()])
       } catch {
         if (!controller.signal.aborted) setRolesError(true)
       } finally {

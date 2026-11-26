@@ -8,7 +8,7 @@ vi.mock('@/lib/org-role-permissions', async importOriginal => ({
 
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
-    from: vi.fn(),
+    from: vi.fn(), rpc: vi.fn(),
   },
 }))
 
@@ -33,7 +33,7 @@ function mockRoles(data: unknown[], error: unknown = null) {
   const query: any = {}
   query.select = vi.fn().mockReturnValue(query)
   query.in = vi.fn().mockResolvedValue({ data, error })
-  ;(supabaseAdmin.from as any).mockReturnValue(query)
+  ;(supabaseAdmin.rpc as any).mockReturnValue(query)
   return query
 }
 

@@ -8,6 +8,7 @@ import type { AIPlatformAssetKind } from '@/lib/configs/types'
 
 import { TableSkeleton, StatsSkeleton, CardSkeleton } from '@/components/ui/skeleton'
 import type { ConfigRoleRecord, RoleModulePermissionCatalog, ShippingPermissionPublication } from '@/lib/org-role-permission-readback'
+import type { RoleMetadataChange } from './role-metadata'
 
 const ShippingConfigDrawer = dynamic(() => import('@/app/shipping/config-drawer'), {
   loading: () => <CardSkeleton />,
@@ -100,6 +101,7 @@ export interface TabsContentProps {
   permissionsEditBlockReason?: string | null
   systemSuperAdminAuthority?: { orgId: string }
   onSaveRole: (roleId: string, newPerms: string[], ownerShippingPermissions?: string[]) => void
+  onMaintainRole?: (change: RoleMetadataChange) => Promise<string>
 }
 
 export default function TabsContent({
@@ -138,6 +140,7 @@ export default function TabsContent({
   permissionsEditBlockReason,
   systemSuperAdminAuthority,
   onSaveRole,
+  onMaintainRole,
 }: TabsContentProps) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
@@ -323,6 +326,7 @@ export default function TabsContent({
           systemSuperAdminAuthority={systemSuperAdminAuthority}
           orgSummary={orgSummary}
           onSaveRole={onSaveRole}
+          onMaintainRole={onMaintainRole}
           onRefresh={onRefreshOrg}
         />
       )
