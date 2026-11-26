@@ -270,11 +270,6 @@ async function getOrgUserRoles(orgId: string, orgUserIds?: string[]) {
   return data || []
 }
 
-function hasMemberAction(actions: MemberActionAvailability) {
-  return actions.edit || actions.assignRoles || actions.invite || actions.manageLogin
-    || actions.manageEmployment || actions.removeMembership
-}
-
 async function canAssignOrganizationRoles(userId: string, orgId: string, roleCodes: string[]) {
   if (!roleCodes.includes('SUPER_ADMIN')) return false
   // Projection only: missing authority should hide the authorization controls,
@@ -297,12 +292,10 @@ async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
       .map((permission) => permission.trim())
       .filter(Boolean)
 
-    const authorizationRoleCodes = (req.headers.get('x-user-authorization-role-codes') ?? roleCodes.join(','))
-      .split(',').map((code) => code.trim()).filter(Boolean)
     const assignRoles = await canAssignOrganizationRoles(headerUserId, headerOrgId, roleCodes)
-    const memberActions = getMemberActionAvailability(permissions, authorizationRoleCodes, assignRoles)
-    const memberAccess = canAccessOrgAdmin(permissions, authorizationRoleCodes) || hasMemberAction(memberActions)
-    const departmentAccess = evaluateDepartmentStructureAccess(permissions, authorizationRoleCodes)
+    const memberActions = getMemberActionAvailability(permissions, assignRoles)
+    const memberAccess = canAccessOrgAdmin(permissions)
+    const departmentAccess = evaluateDepartmentStructureAccess(permissions)
     if (!memberAccess && !departmentAccess.canRead) return null
 
     return {
@@ -326,7 +319,7 @@ async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
   const roleCodes = getOrgRoleCodes(assignments, orgId)
   const assignRoles = await canAssignOrganizationRoles(user.id, orgId, roleCodes)
   const memberActions = getScopedMemberActionAvailability(assignments, orgId, assignRoles)
-  const memberAccess = canManageOrg(assignments, orgId) || hasMemberAction(memberActions)
+  const memberAccess = canManageOrg(assignments, orgId)
   const departmentAccess = getDepartmentStructureAccess(assignments, orgId)
   if (!memberAccess && !departmentAccess.canRead) return null
 

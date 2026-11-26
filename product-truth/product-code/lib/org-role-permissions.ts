@@ -9,7 +9,7 @@ import {
   ROLE_DIRECTORY_VIEW,
 } from '@/lib/permissions'
 import { PERMISSION_KEYS, resolveRolePermissions } from '@/lib/role-permission-policy'
-import { FXIAOKE_BASELINE_ROLE_CODE, isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions } from '@/lib/role-permission-resolution'
+import { FXIAOKE_BASELINE_ROLE_CODE, isRetiredRoleCode, isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions } from '@/lib/role-permission-resolution'
 import type { ScopedRoleAssignment } from '@/lib/scoped-access'
 import { ORG_MEMBER_LIFECYCLE_ACTIONS } from '@/lib/admin/member-action-keys'
 import { isShippingOwnerPermission, SHIPPING_OWNER_VIEW } from '@/lib/shipping/owner-permission-keys'
@@ -92,14 +92,14 @@ export async function loadCurrentOrganizationRoleAssignments(userId: string, inc
   const assignments = ((orgRoles.data ?? []) as OrgRoleRow[]).flatMap((row): ScopedRoleAssignment[] => {
     const role = Array.isArray(row.role) ? (row.role.length === 1 ? row.role[0] : null) : row.role
     if (row.org_id !== orgId || row.user_id !== userId || !row.scope_id
-      || !role?.id || !role.code || !role.name || role.code === FXIAOKE_BASELINE_ROLE_CODE
+      || !role?.id || !role.code || !role.name || isRetiredRoleCode(role.code)
       || (role.owner_org_id !== null && role.owner_org_id !== orgId)) return []
     if (role.code === 'SUPER_ADMIN' && (!activeAccount || role.owner_org_id !== null)) return []
     const scopeType = row.scope_type
     if (scopeType === 'org') {
       if (row.scope_id !== orgId) return []
     } else if (!includeScoped || (scopeType !== 'department' && scopeType !== 'space')
-      || ['SUPER_ADMIN', ORG_SUPER_ADMIN_ROLE_CODE].includes(role.code)
+      || role.code === 'SUPER_ADMIN'
       || !isRoleAssignableInScope(role.code, scopeType)) return []
     const effective = resolveRolePermissions(settings, role)
     return [{
@@ -117,8 +117,6 @@ export async function loadOrgRolePermissionContext(userId: string): Promise<Role
   if (!context) return null
   const { orgId, settings, assignments } = context
   const permissions = assignments.flatMap(assignment => assignment.permissions)
-  const legacyRoleCodes = assignments.filter(assignment => !assignment.permissionsOverridden)
-    .map(assignment => assignment.roleCode)
   const canEdit = canEditRolePermissions(assignments, orgId)
   return {
     orgId,
@@ -126,14 +124,14 @@ export async function loadOrgRolePermissionContext(userId: string): Promise<Role
     canEdit,
     canEditPlatformRoot: canEdit,
     actorPermissions: permissions,
-    canRead: canReadRoleDirectory(permissions, legacyRoleCodes),
+    canRead: canReadRoleDirectory(permissions),
     canListAssignableRoles: canEdit,
   }
 }
 
 export function rolePermissionsEditBlockReason(roleCode: string): string | null {
   if (roleCode === FXIAOKE_BASELINE_ROLE_CODE) return '历史纷享基础角色已停止授予业务权限，仅可核对和撤销成员绑定。'
-  if (roleCode === ORG_SUPER_ADMIN_ROLE_CODE) return '历史组织治理授权仅可撤销。'
+  if (roleCode === ORG_SUPER_ADMIN_ROLE_CODE) return '历史组织治理角色已停用，仅可核对和撤销成员绑定。'
   if (roleCode === 'SUPER_ADMIN') return '系统超管的权限由系统固定，可在员工分配中任免成员。'
   return null
 }

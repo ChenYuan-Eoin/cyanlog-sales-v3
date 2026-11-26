@@ -77,13 +77,15 @@ export async function POST(req: NextRequest) {
     }
     if (body.action === 'preview' && typeof body.revision === 'string' && UUID.test(body.revision)) {
       if (!access.connect) throw new OrganizationConnectionError('FORBIDDEN', '无权验证此组织的外部连接。', 403)
-      return response(await previewOrganizationConnection({ orgId, actorId, provider, revision: body.revision }))
+      const { connection, preview } = await previewOrganizationConnection({ orgId, actorId, provider, revision: body.revision })
+      return response({ connection, preview: access.preview ? preview : null })
     }
     if (body.action === 'activate_directory' && typeof body.revision === 'string' && UUID.test(body.revision)) {
       if (!access.apply) throw new OrganizationConnectionError('FORBIDDEN', '无权启用此组织的目录连接。', 403)
-      return response({ connection: await activateDirectoryConnection({
+      const connection = await activateDirectoryConnection({
         orgId, actorId, provider, configurationRevision: body.revision,
-      }) })
+      })
+      return response({ connection: access.connect ? connection : { ...connection, metadata: {} } })
     }
     throw new OrganizationConnectionError('INVALID_ACTION', '请选择保存配置、检查连接或启用目录连接。', 400)
   })

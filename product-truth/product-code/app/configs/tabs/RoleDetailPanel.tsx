@@ -41,7 +41,7 @@ import {
 import { getConfigsTabAccess, hasConfigsTabAccess } from '@/lib/configs/tab-access'
 import { isShippingOwnerPermission } from '@/lib/shipping/owner-permission-keys'
 import { success, error, confirmAction } from '@/lib/toast'
-import { FXIAOKE_BASELINE_ROLE_CODE, ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
+import { FXIAOKE_BASELINE_ROLE_CODE, isRetiredRoleCode, ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
 import type { RoleModulePermissionCatalog, ShippingPermissionPublication } from '@/lib/org-role-permission-readback'
 import type { OrgSummaryUser, OrgSummaryDepartment } from '../types'
 import {
@@ -176,8 +176,7 @@ export function RoleDetailPanel({
     'shipping-settings': { checked: settingsEntry, canClear: !saving && settingsEntry && canClearOrdinaryEntry },
     config: hasConfigsTabAccess(getConfigsTabAccess({
       permissions: perms,
-      roleCodes: [role.code],
-      authorizationRoleCodes: !hasChanges && role.permissions_overridden === false ? [role.code] : [],
+      systemAdministrator: isSuperAdmin,
       shippingSettingsView: settingsEntry,
     })),
   }
@@ -254,7 +253,8 @@ export function RoleDetailPanel({
                 )}
               </div>
               <div className="text-sm text-slate-500 mt-1">
-                {role.code} · 已生效 {stats.effectiveMemberCount ?? '待核对'} · 待生效 {stats.pendingMemberCount ?? '待核对'} · 生效作用域绑定 {stats.effectiveBindingCount ?? '待核对'}
+                {isRetiredRoleCode(role.code) ? `${role.code} · 历史角色已停用`
+                  : `${role.code} · 已生效 ${stats.effectiveMemberCount ?? '待核对'} · 待生效 ${stats.pendingMemberCount ?? '待核对'} · 生效作用域绑定 ${stats.effectiveBindingCount ?? '待核对'}`}
               </div>
               {role.description && (
                 <p className="text-sm text-slate-600 mt-2">{role.description}</p>
@@ -333,7 +333,7 @@ export function RoleDetailPanel({
             ownerReadOnly={!canEditOwnerPermissions || saving}
             blockReason={isSuperAdmin
               ? '超级管理员的权限由系统固定。'
-              : isOrgSuperAdmin ? '此历史角色保留只读记录。' : role.permissions_edit_block_reason ?? permissionsEditBlockReason}
+              : isOrgSuperAdmin ? '此历史角色已停用，成员绑定仅可核对和撤销。' : role.permissions_edit_block_reason ?? permissionsEditBlockReason}
             onToggle={togglePermission}
             onSetGroup={setPermissionGroup}
             onClearEntry={clearPermissionEntry}

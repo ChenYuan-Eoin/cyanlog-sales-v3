@@ -424,6 +424,7 @@ function getVisibleConfigSections(tabAccess?: ConfigsTabAccess) {
 }
 
 export default function ConfigsClient({ initialData, routeState, tabAccess }: ConfigsClientProps) {
+  const canReadOrganization = tabAccess?.organization ?? true
   const visibleSections = useMemo(() => getVisibleConfigSections(tabAccess), [tabAccess])
   const allowedTabs = useMemo(() => new Set(visibleSections.flatMap(section => section.tabs)), [visibleSections])
   const defaultTab = visibleSections[0]?.tabs[0] ?? 'price-list'
@@ -471,10 +472,12 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
   const roleRequestEpochRef = useRef(0)
   const roleViewRef = useRef<{ orgId: string; token: string | null } | null>(null)
   const orgRequestEpochRef = useRef(0)
-  const [orgSummary, setOrgSummary] = useState<OrgSummaryPayload | null>(null)
+  const previousOrganizationAccess = useRef(canReadOrganization)
+  const [loadedOrgSummary, setOrgSummary] = useState<OrgSummaryPayload | null>(null)
+  const orgSummary = canReadOrganization ? loadedOrgSummary : null
   const [roleAuthority, setRoleAuthority] = useState<Omit<OrgRolePermissionSnapshot, 'roles'> | null>(null)
   const [roleLoadError, setRoleLoadError] = useState<string | null>(null)
-  const permissionsEditable = roleAuthority?.permissionsEditable === true
+  const permissionsEditable = canReadOrganization && roleAuthority?.permissionsEditable === true
   const permissionsEditBlockReason = roleLoadError ?? (roleAuthority
     ? roleAuthority.permissionsEditBlockReason
     : '正在确认当前组织的角色管理权限。')
@@ -739,11 +742,15 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
             setRoleLoadError(null)
             handleOrgReadFailure()
           }
-          const [roleResult, orgResult] = await Promise.allSettled([readRoleSnapshot(headers), readOrgSummary(headers)])
+          const [roleResult, orgResult] = await Promise.allSettled([
+            readRoleSnapshot(headers),
+            canReadOrganization ? readOrgSummary(headers) : null,
+          ])
           if (roleEpoch !== roleRequestEpochRef.current || orgEpoch !== orgRequestEpochRef.current) break
           const sessionChanged = token !== localStorage.getItem('token')
-          const organizationMismatch = roleResult.status === 'fulfilled' && orgResult.status === 'fulfilled'
-            && roleResult.value.orgId !== orgResult.value.organization?.id
+          const summary = orgResult.status === 'fulfilled' ? orgResult.value : null
+          const organizationMismatch = summary && roleResult.status === 'fulfilled'
+            && roleResult.value.orgId !== summary.organization?.id
           if (sessionChanged || organizationMismatch) {
             const reason = new ConfigsRequestError(sessionChanged
               ? '当前登录会话已变化，请重新载入角色权限。'
@@ -760,10 +767,10 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
             handleRoleReadFailure(roleResult.reason)
             setError(requestMessage(roleResult.reason, '角色权限加载失败'))
           }
-          if (orgResult.status === 'fulfilled') {
-            setOrgSummary(orgResult.value)
+          if (summary) {
+            setOrgSummary(summary)
             setLoadedTabs(prev => new Set(prev).add('org-structure'))
-          } else {
+          } else if (orgResult.status === 'rejected') {
             handleOrgReadFailure()
             if (didLoad) setError(requestMessage(orgResult.reason, '组织架构加载失败'))
           }
@@ -815,7 +822,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
         loadingTabRef.current = null
       }
     }
-  }, [allowedTabs, applyRoleSnapshot, clearRoleView, handleOrgReadFailure, handleRoleReadFailure, readOrgSummary, readRoleSnapshot])
+  }, [allowedTabs, applyRoleSnapshot, canReadOrganization, clearRoleView, handleOrgReadFailure, handleRoleReadFailure, readOrgSummary, readRoleSnapshot])
 
   const refreshTabData = useCallback(async (tab: ConfigTabId) => {
     const token = localStorage.getItem('token')
@@ -867,6 +874,18 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
   }, [allowedTabs, defaultTab, hasInitialData, loadTabData, routeState])
 
   useEffect(() => {
+    const organizationAccessChanged = previousOrganizationAccess.current !== canReadOrganization
+    if (organizationAccessChanged) {
+      previousOrganizationAccess.current = canReadOrganization
+      orgRequestEpochRef.current += 1
+      setOrgSummary(null)
+      setLoadedTabs(current => {
+        if (!current.has('org-structure')) return current
+        const next = new Set(current)
+        next.delete('org-structure')
+        return next
+      })
+    }
     if (!tabReady) return
     const url = new URL(window.location.href)
     url.searchParams.set('tab', activeTab)
@@ -876,12 +895,13 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
     }
     window.history.replaceState({}, '', url)
     // 按需加载：切换 tab 时加载对应数据（如果还没加载过，且不在加载中）
-    if ((activeTab === 'role-access' || activeTab === 'org-structure') && loadingTabRef.current !== activeTab) {
+    if ((activeTab === 'role-access' || activeTab === 'org-structure')
+      && (organizationAccessChanged || loadingTabRef.current !== activeTab)) {
       void loadTabData(activeTab, { force: true })
     } else if (!loadedTabsRef.current.has(activeTab) && loadingTabRef.current !== activeTab) {
       void loadTabData(activeTab)
     }
-  }, [activeTab, tabReady, loadTabData])
+  }, [activeTab, canReadOrganization, tabReady, loadTabData])
 
   const refreshOrgSummary = useCallback(async () => {
     await loadTabData(allowedTabs.has('role-access') ? 'role-access' : 'org-structure', { force: true })
@@ -1030,7 +1050,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
     const ownerProjection = role?.owner_shipping_permissions
     const ownerChange = newOwnerPermissions && ownerProjection
       ? { expected: ownerProjection, permissions: newOwnerPermissions } : undefined
-    if (!roleAuthority?.permissionsEditable || !role || !isGenericallyAssignableRole(role.code) || !Array.isArray(role.permissions)
+    if (!permissionsEditable || !roleAuthority || !role || !isGenericallyAssignableRole(role.code) || !Array.isArray(role.permissions)
       || (newOwnerPermissions && !ownerChange)
       || role.permissions_edit_block_reason) {
       setError('无法确认当前组织的角色编辑权限，请刷新后重试。')

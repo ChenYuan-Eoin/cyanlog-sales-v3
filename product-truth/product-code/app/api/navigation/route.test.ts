@@ -49,6 +49,14 @@ it('returns no links after the current organization, authorization source, or au
   expect(resolveShippingEntry).toHaveBeenCalledTimes(2)
 })
 
+it('projects only the department workbench when the session has no other business entry', async () => {
+  const response = await GET(request({ 'x-user-navigation-scope': 'department-workbench' }))
+  expect(response.status).toBe(200)
+  expect(response.headers.get('cache-control')).toBe('private, no-store')
+  expect(await response.json()).toEqual({ paths: ['/'], onlyProjectedPaths: true })
+  expect(resolveShippingEntry).not.toHaveBeenCalled()
+})
+
 it.each([
   ['department-ledger', ['/shipping']],
   ['workbench-and-ledger', ['/', '/shipping']],

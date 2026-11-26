@@ -1,9 +1,7 @@
 // F003 / WP94: an explicit tenant administrator action controls SSO identity authority.
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
+import { loadOrganizationSourceAccess } from '@/lib/admin/organization-source-access'
 import { isLocalAccountLoginEnabled } from '@/lib/auth/local-account-config'
-import { getFreshDefaultOrgId } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export const runtime = 'nodejs'
@@ -21,11 +19,11 @@ export async function PATCH(request: NextRequest) {
     if (!request.headers.get('content-type')?.toLowerCase().startsWith('application/json')) {
       return response({ error: '请求必须使用 JSON。' }, 415)
     }
-    const actor = await requireAuth(request)
-    const orgId = await getFreshDefaultOrgId(actor.id)
-    if (!await userHasOrgRoleCode(actor.id, orgId, 'SUPER_ADMIN')) {
+    const context = await loadOrganizationSourceAccess(request)
+    if (!context?.access.enterpriseLogin) {
       return response({ error: '只有当前组织的超级管理员可以开关企业登录。' }, 403)
     }
+    const { actor, orgId } = context
     const raw = await request.text()
     if (raw.length > 1024) return response({ error: '请求过长。' }, 400)
     let body: unknown

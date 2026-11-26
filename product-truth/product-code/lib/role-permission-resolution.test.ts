@@ -36,8 +36,8 @@ describe('explicit personal shipping grants', () => {
 })
 
 describe('catalog-free role permission resolution', () => {
-  it('does not apply retired Fxiaoke baseline templates or either stored permission override', () => {
-    const role = { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view', 'contract:view', 'customer:view'] }
+  it.each(['FXIAOKE_BASELINE', 'ORG_SUPER_ADMIN'])('ignores both stored grant types for retired %s', code => {
+    const role = { id: 'baseline', code, permissions: ['quote:view', 'contract:view', 'customer:view'] }
     const settings = {
       role_permission_overrides: { baseline: ['*', 'admin:access'] },
       shipping_owner_permission_overrides: { baseline: ['shipping:owner_view', 'shipping:owner_submit'] },
@@ -46,13 +46,13 @@ describe('catalog-free role permission resolution', () => {
     expect(resolveRolePermissions(settings, role)).toEqual({ permissions: [], overridden: true })
     expect(resolveOwnerShippingPermissions(settings, role)).toEqual([])
   })
-  it('uses the role template until the tenant creates an override', () => {
+  it('retains stored template permissions without deriving organization actions from the code', () => {
     expect(resolveRolePermissions({}, {
       id: 'admin-role',
       code: 'ADMIN',
       permissions: ['quote:view'],
     })).toEqual({
-      permissions: expect.arrayContaining(['quote:view', 'admin:access', 'user:write', 'dept:write']),
+      permissions: ['quote:view', 'contract:write'],
       overridden: false,
     })
   })

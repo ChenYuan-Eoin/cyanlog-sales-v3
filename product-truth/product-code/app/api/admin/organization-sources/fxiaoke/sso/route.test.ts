@@ -5,13 +5,15 @@ import { NextRequest } from 'next/server'
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   org: vi.fn(),
-  superAdmin: vi.fn(),
+  assignments: vi.fn(),
   rpc: vi.fn(),
   localLogin: vi.fn(),
 }))
 vi.mock('@/lib/auth', () => ({ requireAuth: mocks.auth }))
-vi.mock('@/lib/scoped-access', () => ({ getFreshDefaultOrgId: mocks.org }))
-vi.mock('@/lib/admin/org-role-authority', () => ({ userHasOrgRoleCode: mocks.superAdmin }))
+vi.mock('@/lib/scoped-access', () => ({
+  getFreshDefaultOrgId: mocks.org,
+  getFreshUserScopedRoleAssignments: mocks.assignments,
+}))
 vi.mock('@/lib/auth/local-account-config', () => ({ isLocalAccountLoginEnabled: mocks.localLogin }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: mocks.rpc } }))
 
@@ -20,6 +22,7 @@ import { PATCH } from './route'
 const orgId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const actorId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const revision = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+const systemGrant = { scopeType: 'org', scopeId: orgId, roleCode: 'SUPER_ADMIN', permissions: ['*'] }
 
 function request(enabled = true, origin = 'https://sales.cyanlog.icu') {
   return new NextRequest('https://sales.cyanlog.icu/api/admin/organization-sources/fxiaoke/sso', {
@@ -34,7 +37,7 @@ describe('Fxiaoke SSO authority action', () => {
     vi.clearAllMocks()
     mocks.auth.mockResolvedValue({ id: actorId })
     mocks.org.mockResolvedValue(orgId)
-    mocks.superAdmin.mockResolvedValue(true)
+    mocks.assignments.mockResolvedValue([systemGrant])
     mocks.rpc.mockResolvedValue({ data: true, error: null })
     mocks.localLogin.mockReturnValue(true)
   })
@@ -50,11 +53,19 @@ describe('Fxiaoke SSO authority action', () => {
     })
   })
 
-  it('rejects a non-admin and a cross-origin request without changing authority', async () => {
-    mocks.superAdmin.mockResolvedValue(false)
+  it.each([
+    { ...systemGrant, roleCode: 'ORG_SUPER_ADMIN' },
+    { ...systemGrant, roleCode: 'ADMIN', permissions: ['org:source_view', 'org:source_connect', 'org:source_preview', 'org:source_apply'] },
+    { ...systemGrant, scopeId: 'foreign-org' },
+    { ...systemGrant, scopeType: 'department' },
+    { ...systemGrant, permissions: [] },
+  ])('rejects a noncanonical system grant without changing authority %#', async (grant) => {
+    mocks.assignments.mockResolvedValue([grant])
     expect((await PATCH(request())).status).toBe(403)
     expect(mocks.rpc).not.toHaveBeenCalled()
-    mocks.superAdmin.mockResolvedValue(true)
+  })
+
+  it('rejects a cross-origin request without changing authority', async () => {
     expect((await PATCH(request(true, 'https://attacker.example'))).status).toBe(403)
     expect(mocks.rpc).not.toHaveBeenCalled()
   })

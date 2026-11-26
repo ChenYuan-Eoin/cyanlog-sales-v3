@@ -2,7 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { buildDepartmentSpaces, resolveDepartmentSpaceIds } from '@/lib/department-spaces'
 import { loadOrgRolePermissionSettings } from '@/lib/org-role-permissions'
 import { resolveRolePermissions } from '@/lib/role-permission-policy'
-import { FXIAOKE_BASELINE_ROLE_CODE, ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
+import { isRetiredRoleCode } from '@/lib/role-permission-resolution'
 import {
   canAccessOrgAdmin,
   canReviewContracts as canReviewContractsByPermission,
@@ -363,22 +363,11 @@ async function loadUserScopedRoleAssignments(userId: string): Promise<ScopedRole
   const rows = (data || []) as UserRoleRow[]
   const activeSystemAdminOrgId = rows.some(row => isSystemAdministratorBinding(row, userId))
     ? await loadActiveSystemAdministratorOrgId(userId) : null
-  const hasOrgSuperAdmin = rows.some(row => unwrapOne(row.role)?.code === ORG_SUPER_ADMIN_ROLE_CODE)
-  let activeAdminOrgId: string | null = null
-  if (hasOrgSuperAdmin) {
-    const membership = await supabaseAdmin.from('user_organizations')
-      .select('org_id, organization:organizations!inner(status)')
-      .eq('user_id', userId).eq('is_default', true).eq('status', 'active')
-      .eq('employment_status', 'active').is('left_at', null).eq('organization.status', 'active')
-      .maybeSingle()
-    if (membership.error) throw membership.error
-    activeAdminOrgId = membership.data?.org_id ?? null
-  }
 
   return rows
     .map((row): ScopedRoleAssignment | null => {
       const role = unwrapExact(row.role)
-      if (!role?.id || !role.code || !role.name || role.code === FXIAOKE_BASELINE_ROLE_CODE
+      if (!role?.id || !role.code || !role.name || isRetiredRoleCode(role.code)
         || row.user_id !== userId || !row.org_id || !row.scope_id
         || (row.scope_type === 'org' && row.scope_id !== row.org_id)
         || (role.owner_org_id !== null && role.owner_org_id !== row.org_id)) {
@@ -387,10 +376,7 @@ async function loadUserScopedRoleAssignments(userId: string): Promise<ScopedRole
       if (role.code === 'SUPER_ADMIN' && (row.org_id !== activeSystemAdminOrgId || !isSystemAdministratorBinding(row, userId))) {
         return null
       }
-      if (role.code === ORG_SUPER_ADMIN_ROLE_CODE && (
-        role.owner_org_id !== null || !activeAdminOrgId || row.org_id !== activeAdminOrgId
-        || row.scope_type !== 'org' || row.scope_id !== activeAdminOrgId
-      )) return null
+
 
       return {
         scopeType: row.scope_type,
@@ -467,7 +453,7 @@ export function getOrgRoleCodes(assignments: ScopedRoleAssignment[], orgId: stri
   ))
 }
 
-/** Role identities are retained; legacy role-code grants only apply to untouched templates. */
+/** Role codes are retained for legacy business consumers of untouched templates. */
 export function getOrgAuthorizationRoleCodes(assignments: ScopedRoleAssignment[], orgId: string): string[] {
   return Array.from(new Set(getOrgScopedAssignments(assignments, orgId)
     .filter((assignment) => !assignment.permissionsOverridden)
@@ -481,24 +467,15 @@ export function getOrgPermissions(assignments: ScopedRoleAssignment[], orgId: st
 }
 
 export function canManageOrg(assignments: ScopedRoleAssignment[], orgId: string): boolean {
-  return canAccessOrgAdmin(
-    getOrgPermissions(assignments, orgId),
-    getOrgAuthorizationRoleCodes(assignments, orgId)
-  )
+  return canAccessOrgAdmin(getOrgPermissions(assignments, orgId))
 }
 
 export function canMutateOrgUsers(assignments: ScopedRoleAssignment[], orgId: string): boolean {
-  const permissions = getOrgPermissions(assignments, orgId)
-  const roleCodes = getOrgAuthorizationRoleCodes(assignments, orgId)
-
-  return hasLegacyOrgMemberWrite(permissions, roleCodes)
+  return hasLegacyOrgMemberWrite(getOrgPermissions(assignments, orgId))
 }
 
 export function canMutateOrgDepartments(assignments: ScopedRoleAssignment[], orgId: string): boolean {
-  const permissions = getOrgPermissions(assignments, orgId)
-  const roleCodes = getOrgAuthorizationRoleCodes(assignments, orgId)
-
-  return hasLegacyDepartmentStructureWrite(permissions, roleCodes)
+  return hasLegacyDepartmentStructureWrite(getOrgPermissions(assignments, orgId))
 }
 
 async function loadAccessibleSalesSpaces(userId: string, orgId: string, currentAssignments: ScopedRoleAssignment[]): Promise<{

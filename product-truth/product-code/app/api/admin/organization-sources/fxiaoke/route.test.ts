@@ -34,6 +34,21 @@ it('rechecks fresh management authority for every request', async () => {
   expect((await POST(request({ action: 'preview', revision: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }))).status).toBe(403)
   expect(mocks.roles).toHaveBeenCalledTimes(2); expect(mocks.preview).not.toHaveBeenCalled()
 })
+it('verifies the legacy connection without exposing directory data to connect-only access', async () => {
+  const preview = { departments: [{ name: '目录部门' }], employees: [{ name: '目录员工' }] }
+  const revision = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  mocks.preview.mockResolvedValue(preview)
+  const connectionOnly = await POST(request({ action: 'preview', revision }))
+  expect(connectionOnly.status).toBe(200)
+  expect(await connectionOnly.json()).toEqual({ data: { preview: null } })
+
+  mocks.roles.mockResolvedValue([{
+    scopeType: 'org', scopeId: 'org-a', permissions: ['org:source_connect', 'org:source_preview'],
+  }])
+  const directoryPreview = await POST(request({ action: 'preview', revision }))
+  expect(directoryPreview.status).toBe(200)
+  expect(await directoryPreview.json()).toEqual({ data: { preview } })
+})
 it('returns only status and revision from the legacy connection view', async () => {
   mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', permissions: ['org:source_view'] }])
   mocks.load.mockResolvedValue({ appId: 'app', apiUserId: 'api-user', configured: true, revision: 'revision' })

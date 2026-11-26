@@ -1,5 +1,5 @@
 import {
-  canAccessOrgAdmin,
+  canReadOrgDepartmentDirectory,
   hasLegacyDepartmentStructureWrite,
   hasOrgDepartmentDirectoryPermission,
   hasPermission,
@@ -9,26 +9,22 @@ import {
 import {
   getFreshDefaultOrgId,
   getFreshUserScopedRoleAssignments,
-  getOrgAuthorizationRoleCodes,
   getOrgPermissions,
   type ScopedRoleAssignment,
 } from '@/lib/scoped-access'
 
-export function evaluateDepartmentStructureAccess(permissions: string[], authorizationRoleCodes: string[]) {
-  const legacyWrite = hasLegacyDepartmentStructureWrite(permissions, authorizationRoleCodes)
+export function evaluateDepartmentStructureAccess(permissions: string[]) {
+  const legacyWrite = hasLegacyDepartmentStructureWrite(permissions)
   const hasDirectoryView = hasOrgDepartmentDirectoryPermission(permissions)
   return {
-    canRead: legacyWrite || canAccessOrgAdmin(permissions, authorizationRoleCodes) || hasDirectoryView,
+    canRead: canReadOrgDepartmentDirectory(permissions),
     canEdit: legacyWrite || (hasDirectoryView && hasPermission(permissions, ORG_DEPARTMENT_STRUCTURE_EDIT)),
     canDelete: legacyWrite || (hasDirectoryView && hasPermission(permissions, ORG_DEPARTMENT_STRUCTURE_DELETE)),
   }
 }
 
 export function getDepartmentStructureAccess(assignments: ScopedRoleAssignment[], orgId: string) {
-  return evaluateDepartmentStructureAccess(
-    getOrgPermissions(assignments, orgId),
-    getOrgAuthorizationRoleCodes(assignments, orgId),
-  )
+  return evaluateDepartmentStructureAccess(getOrgPermissions(assignments, orgId))
 }
 
 export async function loadDepartmentStructureContext(userId: string) {

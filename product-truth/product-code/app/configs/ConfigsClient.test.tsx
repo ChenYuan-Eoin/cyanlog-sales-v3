@@ -24,7 +24,9 @@ vi.mock('./tabs/TabsContent', async () => {
       const role = roles[0]
       if (!role) return null
       return <>
-        <button type="button" onClick={() => void onMaintainRole({ type: 'create', name: '测试新角色', description: '' })}>提交角色维护</button>
+        {permissionsEditable && orgSummary && (
+          <button type="button" onClick={() => void onMaintainRole({ type: 'create', name: '测试新角色', description: '' })}>提交角色维护</button>
+        )}
         <output aria-label="组织角色清单">{orgSummary?.roles.map(role => role.name).join(',')}</output>
         <output aria-label="成员角色标签">{orgSummary?.users.flatMap(user => user.scoped_roles?.map(role => role.roleName) ?? []).join(',')}</output>
         <RoleDetailPanel key={orgSummary?.organization?.id} role={role} currentUserId="actor"
@@ -57,6 +59,8 @@ function rolesResponse(permissions = existingPermissions, orgId = organization, 
 function organizationResponse(id = organization) {
   return Response.json({ organization: { id }, users: [], roles: [], departments: [], spaces: [] })
 }
+
+const roleDirectoryOnly = { general: false, organization: false, integrations: false, roles: true, shipping: false }
 
 function deferredResponse() {
   let resolve!: (value: Response) => void
@@ -258,6 +262,53 @@ it('opens the organization directory when member-only access requests the role t
   expect(screen.getByRole('combobox', { name: '组织与权限视图' })).toHaveValue('org-structure')
   expect(screen.queryByRole('option', { name: '角色' })).not.toBeInTheDocument()
   expect(window.location.search).toBe('?tab=org-structure')
+})
+
+it('opens only the standalone role directory without requesting the organization roster', async () => {
+  fetcher.mockImplementation(async input => {
+    if (input === roleList) return rolesResponse(existingPermissions, organization, false)
+    throw new Error('Unexpected fetch')
+  })
+  render(<ConfigsClient tabAccess={roleDirectoryOnly} />)
+
+  expect(await screen.findByRole('tab', { name: '权限设置' })).toBeVisible()
+  expect(screen.getByRole('combobox', { name: '组织与权限视图' })).toHaveValue('role-access')
+  expect(screen.queryByRole('option', { name: '组织架构' })).not.toBeInTheDocument()
+  expect(screen.getByLabelText('成员角色标签')).toBeEmptyDOMElement()
+  expect(screen.queryByRole('button', { name: '提交角色维护' })).not.toBeInTheDocument()
+  expect(screen.queryByText('组织架构加载失败')).not.toBeInTheDocument()
+
+  fireEvent(window, new Event('focus'))
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual([roleList, roleList])
+})
+
+it('clears the roster when organization access is removed and ignores its in-flight response', async () => {
+  const pendingDirectory = deferredResponse()
+  const summary = (label: string) => Response.json({
+    organization: { id: organization }, roles: [], departments: [], spaces: [],
+    users: [{ id: 'member', scoped_roles: [{ roleId, roleName: label }] }],
+  })
+  const readDirectory = vi.fn().mockResolvedValueOnce(summary('旧成员授权')).mockReturnValueOnce(pendingDirectory.promise)
+  let editable = true
+  fetcher.mockImplementation(async input => {
+    if (input === '/api/admin/org') return readDirectory()
+    if (input === roleList) return rolesResponse(existingPermissions, organization, editable)
+    throw new Error('Unexpected fetch')
+  })
+  const view = render(<ConfigsClient tabAccess={{ ...roleDirectoryOnly, organization: true }} />)
+  expect(await screen.findByLabelText('成员角色标签')).toHaveTextContent('旧成员授权')
+  expect(screen.getByRole('button', { name: '提交角色维护' })).toBeVisible()
+
+  fireEvent(window, new Event('focus'))
+  await waitFor(() => expect(readDirectory).toHaveBeenCalledTimes(2))
+  editable = false
+  view.rerender(<ConfigsClient tabAccess={roleDirectoryOnly} />)
+  expect(await screen.findByLabelText('成员角色标签')).toBeEmptyDOMElement()
+  expect(screen.queryByRole('button', { name: '提交角色维护' })).not.toBeInTheDocument()
+  await act(async () => pendingDirectory.resolve(summary('迟到的成员授权')))
+  expect(screen.getByLabelText('成员角色标签')).toBeEmptyDOMElement()
+  expect(readDirectory).toHaveBeenCalledTimes(2)
 })
 
 it('switches organization and roles through a single selector and keeps integrations separate', async () => {

@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getRequestAuthToken } from '@/lib/auth-token'
-import { queryOrgRoles } from '@/lib/org-role-permissions'
-import { canEnterConfigurationCenter } from '@/lib/permissions'
+import { canManageSystemAuthorizations, queryOrgRoles } from '@/lib/org-role-permissions'
+import { getConfigsTabAccess, hasConfigsTabAccess } from '@/lib/configs/tab-access'
 import {
   canManageOrg,
   getDefaultOrgId,
@@ -61,10 +61,11 @@ export async function GET(req: NextRequest) {
         roles,
         scopedRoles: scopedAssignments,
         canManageOrg: canManageOrg(scopedAssignments, orgId),
-        canViewConfigs: canEnterConfigurationCenter(
-          organizationRoles.flatMap(assignment => assignment.permissions ?? []),
-          organizationRoles.filter(assignment => !assignment.permissionsOverridden).map(assignment => assignment.roleCode),
-        ),
+        canViewConfigs: hasConfigsTabAccess(getConfigsTabAccess({
+          permissions: organizationRoles.flatMap(assignment => assignment.permissions),
+          systemAdministrator: canManageSystemAuthorizations(organizationRoles, orgId),
+          shippingSettingsView: req.headers.get('x-user-shipping-settings-view') === '1',
+        })),
         authMethod: sessionResult.data?.user_id === user.id ? sessionResult.data.auth_method : null,
       },
     })

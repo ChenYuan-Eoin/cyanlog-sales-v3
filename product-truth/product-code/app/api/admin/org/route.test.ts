@@ -34,13 +34,13 @@ import { getFreshDefaultOrgId } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import { GET, POST } from './route'
 
-function makeRequest(orgId = 'org-1', roleCode = 'ADMIN'): any {
+function makeRequest(orgId = 'org-1', roleCode = 'ADMIN', permissions = 'admin:access,user:write,dept:write'): any {
   return new Request('https://example.test/api/admin/org', {
     headers: {
       'x-user-id': 'u-1',
       'x-org-id': orgId,
       'x-user-role-codes': roleCode,
-      'x-user-permissions': 'admin:access',
+      'x-user-permissions': permissions,
     },
   })
 }
@@ -318,6 +318,20 @@ describe('GET /api/admin/org', () => {
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
+  it('保存的旧部门维护权限只开放组织部门，角色码不会补发成员维护权限', async () => {
+    const actual = await vi.importActual<typeof import('@/lib/permissions')>('@/lib/permissions')
+    vi.mocked(canAccessOrgAdmin).mockImplementation(actual.canAccessOrgAdmin)
+    const departments = makeQuery({ data: [], error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValue(departments)
+    const response = await GET(makeRequest('org-1', 'ADMIN', 'dept:write'))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      users: [], roles: [], member_access: false, department_access: { canRead: true, canEdit: true, canDelete: true },
+      member_actions: { edit: false, invite: false, assignRoles: false },
+    })
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
   it('显式空授权角色不能回退到原 SUPER_ADMIN 身份重新获得访问', async () => {
     const actual = await vi.importActual<typeof import('@/lib/permissions')>('@/lib/permissions')
     vi.mocked(canAccessOrgAdmin).mockImplementation(actual.canAccessOrgAdmin)
@@ -334,7 +348,7 @@ describe('GET /api/admin/org', () => {
     const res = await GET(req)
 
     expect(res.status).toBe(403)
-    expect(canAccessOrgAdmin).toHaveBeenCalledWith([], [])
+    expect(canAccessOrgAdmin).toHaveBeenCalledWith([])
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })

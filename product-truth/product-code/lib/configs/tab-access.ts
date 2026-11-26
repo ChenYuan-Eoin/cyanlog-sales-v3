@@ -1,8 +1,7 @@
 import {
-  canAccessOrgAdmin, canReadRoleDirectory, hasConfigurationReadPermission,
-  hasOrgDepartmentDirectoryPermission, hasOrganizationSourcePermission, hasPermission,
+  canReadOrgDepartmentDirectory, canReadRoleDirectory, hasConfigurationReadPermission,
+  hasOrganizationSourcePermission, isSystemAuthorizationGrant,
 } from '@/lib/permissions'
-import { ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
 
 export interface ConfigsTabAccess {
   general: boolean
@@ -13,20 +12,17 @@ export interface ConfigsTabAccess {
 }
 
 export function getConfigsTabAccess({
-  permissions, roleCodes = [], authorizationRoleCodes = [], shippingSettingsView = false,
+  permissions, systemAdministrator = false, shippingSettingsView = false,
 }: {
   permissions: string[]
-  roleCodes?: string[]
-  authorizationRoleCodes?: string[]
+  systemAdministrator?: boolean
   shippingSettingsView?: boolean
 }): ConfigsTabAccess {
   return {
     general: hasConfigurationReadPermission(permissions),
-    organization: canAccessOrgAdmin(permissions, authorizationRoleCodes) || hasOrgDepartmentDirectoryPermission(permissions),
-    integrations: hasOrganizationSourcePermission(permissions) || authorizationRoleCodes.includes('ADMIN')
-      || roleCodes.includes('SUPER_ADMIN')
-      || (roleCodes.includes(ORG_SUPER_ADMIN_ROLE_CODE) && hasPermission(permissions, 'role:manage')),
-    roles: canReadRoleDirectory(permissions, authorizationRoleCodes),
+    organization: canReadOrgDepartmentDirectory(permissions),
+    integrations: hasOrganizationSourcePermission(permissions, systemAdministrator),
+    roles: canReadRoleDirectory(permissions),
     shipping: shippingSettingsView,
   }
 }
@@ -40,10 +36,10 @@ export function readConfigsTabAccess(
   shippingSettingsView = headers.get('x-user-shipping-settings-view') === '1',
 ): ConfigsTabAccess {
   const list = (key: string) => (headers.get(key) ?? '').split(',').filter(Boolean)
+  const permissions = list('x-user-permissions')
   return getConfigsTabAccess({
-    permissions: list('x-user-permissions'),
-    roleCodes: list('x-user-role-codes'),
-    authorizationRoleCodes: list('x-user-authorization-role-codes'),
+    permissions,
+    systemAdministrator: list('x-user-role-codes').some(code => isSystemAuthorizationGrant(code, permissions)),
     shippingSettingsView,
   })
 }

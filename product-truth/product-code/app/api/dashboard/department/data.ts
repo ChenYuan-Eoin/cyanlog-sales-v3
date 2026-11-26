@@ -1,7 +1,7 @@
 import type { DashboardPayload } from '@/lib/dashboard-data'
 import { attachHistoricalSpaceIds, buildDepartmentOptions, resolveDepartmentSpaceIds, type DepartmentOption, type DepartmentSpace } from '@/lib/department-spaces'
 import { hasPermission } from '@/lib/permissions'
-import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, resolveRolePermissions } from '@/lib/role-permission-resolution'
+import { isRetiredRoleCode, isRoleAssignableInScope, resolveRolePermissions } from '@/lib/role-permission-resolution'
 import { supabaseAdmin } from '@/lib/supabase'
 
 type ScopeType = 'org' | 'department' | 'space'
@@ -74,11 +74,11 @@ async function getCurrentGrants(userId: string, orgId: string): Promise<ActiveGr
     const role = Array.isArray(assignment.role)
       ? (assignment.role.length === 1 ? assignment.role[0] : null)
       : assignment.role
-    if (!role?.id || !role.code || assignment.user_id !== userId || assignment.org_id !== orgId || !assignment.scope_id
+    if (!role?.id || !role.code || isRetiredRoleCode(role.code) || assignment.user_id !== userId || assignment.org_id !== orgId || !assignment.scope_id
       || (role.owner_org_id !== null && role.owner_org_id !== orgId)) return []
     if (assignment.scope_type === 'org' && assignment.scope_id !== orgId) return []
     if (role.code === 'SUPER_ADMIN' && role.owner_org_id !== null) return []
-    if (assignment.scope_type !== 'org' && (role.code === 'SUPER_ADMIN' || role.code === ORG_SUPER_ADMIN_ROLE_CODE)) return []
+    if (assignment.scope_type !== 'org' && role.code === 'SUPER_ADMIN') return []
     if (!isRoleAssignableInScope(role.code, assignment.scope_type)) return []
     const { permissions } = resolveRolePermissions(activeOrganization.settings, role)
     return [{ scopeType: assignment.scope_type, scopeId: assignment.scope_id, code: role.code, permissions }]
@@ -181,8 +181,7 @@ export async function getDepartmentDashboardScope(userId: string, selection: Dep
   const grants = await getCurrentGrants(userId, orgId)
   const organizationGrants = grants.filter(grant => grant.scopeType === 'org'
     && hasPermission(grant.permissions, 'role:manage'))
-  const orgOversight = organizationGrants.some(grant => grant.code === ORG_SUPER_ADMIN_ROLE_CODE)
-  const allDepartmentsVisible = orgOversight || organizationGrants.some(grant => grant.code === 'SUPER_ADMIN')
+  const allDepartmentsVisible = organizationGrants.some(grant => grant.code === 'SUPER_ADMIN')
   const departmentGrants = grants.filter(grant => grant.scopeType === 'department'
     && (grant.permissions.includes('dept:view') || grant.permissions.includes('report:dept')))
   const approvedLeadDepartments = allDepartmentsVisible ? new Set<string>() : await getApprovedLeadDepartments(userId, orgId)
@@ -215,14 +214,14 @@ export async function getDepartmentDashboardScope(userId: string, selection: Dep
   const selectedDepartmentIds = selection.departmentId
     ? resolveDepartmentSpaceIds(departmentSpaces, roots, { ...selection, departmentId: selection.departmentId })
     : visibleIds
-  return { orgId, departmentSpaces, selection, selectedDepartmentIds, allDepartments, grants, orgOversight }
+  return { orgId, departmentSpaces, selection, selectedDepartmentIds, allDepartments, grants }
 }
 
 export async function getDepartmentDashboard(userId: string, requestedSelection: DepartmentSelection): Promise<DepartmentDashboardPayload> {
-  const { orgId, departmentSpaces, selection, selectedDepartmentIds, allDepartments, grants, orgOversight } =
+  const { orgId, departmentSpaces, selection, selectedDepartmentIds, allDepartments, grants } =
     await getDepartmentDashboardScope(userId, requestedSelection)
   const overview = { organizationId: orgId, departmentSpaces, selection }
-  const canReadOpportunities = orgOversight || grants.some(grant => grant.permissions.some(
+  const canReadOpportunities = grants.some(grant => grant.permissions.some(
     permission => permission === '*' || permission === 'opportunity:*' || permission === 'opportunity:own',
   ))
   if (selectedDepartmentIds.size === 0 || !canReadOpportunities) {
@@ -235,10 +234,7 @@ export async function getDepartmentDashboard(userId: string, requestedSelection:
   if (historical.error) throw historical.error
   const selectedOptions = departmentSpaces.filter(department => selectedDepartmentIds.has(department.department_id))
   const selectedDepartments = attachHistoricalSpaceIds(selectedOptions, historical.data ?? [])
-  // Organization management includes this workbench's selected-department overview.
-  const fullSpaces = new Set(orgOversight
-    ? selectedDepartments.flatMap(department => department.sales_space_ids)
-    : spacesForPermission(grants, 'opportunity:*', allDepartments, selectedDepartments))
+  const fullSpaces = new Set(spacesForPermission(grants, 'opportunity:*', allDepartments, selectedDepartments))
   const ownSpaceIds = spacesForPermission(grants, 'opportunity:own', allDepartments, selectedDepartments)
     .filter(spaceId => !fullSpaces.has(spaceId))
   const rows = await getDashboardRows(userId, orgId, [...fullSpaces], ownSpaceIds)

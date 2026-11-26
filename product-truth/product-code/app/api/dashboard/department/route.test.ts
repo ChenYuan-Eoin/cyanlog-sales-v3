@@ -224,30 +224,18 @@ describe('GET /api/dashboard/department', () => {
     })
   })
 
-  it('组织超级管理员可切换各启用部门并仅查看所选部门范围的业务总览', async () => {
-    tables.user_roles = [grant('org', orgId, role('tenant-admin', [], 'ORG_SUPER_ADMIN'))]
-    const parent = await request('?departmentId=sales-a&includeSubdepartments=false')
-    expect(parent.status).toBe(200)
-    expect(await parent.json()).toMatchObject({
-      departmentSpaces: [
-        expect.objectContaining({ department_id: 'parent' }),
-        expect.objectContaining({ department_id: 'sales-a' }),
-        expect.objectContaining({ department_id: 'sales-a-child' }),
-        expect.objectContaining({ department_id: 'sales-b' }),
-        expect.objectContaining({ department_id: 'sales-c' }),
-        expect.objectContaining({ department_id: 'new-department' }),
-      ],
-      opportunities: [expect.objectContaining({ id: 'a-opp' })],
-      milestones: [],
-    })
-    const otherBranch = await request('?departmentId=sales-b')
-    expect(otherBranch.status).toBe(200)
-    expect((await otherBranch.json()).opportunities.map((row: Row) => row.id)).toEqual(['b-owned', 'b-teammate'])
-    expect((await request('?departmentId=inactive-department')).status).toBe(403)
-    expect((await request('?departmentId=foreign-department')).status).toBe(403)
+  it('停用的组织治理角色不再提供部门或商机权限，独立授权仍然可用', async () => {
+    const legacy = grant('org', orgId, role('tenant-admin', ['*'], 'ORG_SUPER_ADMIN'))
+    tables.user_roles = [legacy]
+    expect((await request('?departmentId=sales-a')).status).toBe(403)
+    expect(mocks.from).not.toHaveBeenCalledWith('opportunities')
 
-    tables.user_roles = []
+    tables.user_roles.push(grant('department', 'sales-a', role('local', ['dept:view', 'opportunity:*'])))
+    const selected = await request('?departmentId=sales-a&includeSubdepartments=false')
+    expect(selected.status).toBe(200)
+    expect((await selected.json()).opportunities.map((row: Row) => row.id)).toEqual(['a-opp'])
     expect((await request('?departmentId=sales-b')).status).toBe(403)
+    expect((await request('?departmentId=foreign-department')).status).toBe(403)
   })
 
   it('拒绝其他组织、非组织级或非当前活跃成员的组织超级管理员任命', async () => {

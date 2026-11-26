@@ -29,6 +29,21 @@ it('keeps connection write and activation controls separate', async () => {
   expect(screen.queryByRole('button', { name: '保存配置草稿' })).not.toBeInTheDocument()
 })
 
+it('displays a successful connection check without inventing an empty directory report', async () => {
+  const fetcher = vi.fn(async (_url: string, options?: RequestInit) => Response.json({
+    data: options?.method === 'POST' ? { connection: draft, preview: null } : { connection: draft },
+  }))
+  vi.stubGlobal('fetch', fetcher)
+  const onChanged = vi.fn()
+  render(<OrganizationConnectionForm provider={provider} canConnect canApply={false} onChanged={onChanged} />)
+  await screen.findByText('配置检查通过')
+  fireEvent.click(screen.getByRole('button', { name: '检查连接与读取范围' }))
+  expect(await screen.findByText('配置检查通过，当前配置待启用。')).toBeInTheDocument()
+  expect(screen.queryByText(/读取范围检查/)).not.toBeInTheDocument()
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(onChanged).toHaveBeenCalledOnce()
+})
+
 it('explicitly activates a verified draft and retains the effective state when reopened', async () => {
   let persisted = draft
   const fetcher = vi.fn(async (_url: string, options?: RequestInit) => {

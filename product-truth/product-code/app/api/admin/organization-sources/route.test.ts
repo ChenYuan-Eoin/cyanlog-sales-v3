@@ -90,20 +90,35 @@ describe('/api/admin/organization-sources', () => {
     expect(mocks.load).not.toHaveBeenCalled()
   })
 
-  it('preserves an unchanged existing administrator and respects an explicit permission override', async () => {
-    const administrator = { scopeType: 'org', scopeId: 'org-1', roleCode: 'ADMIN' }
-    mocks.assignments.mockResolvedValueOnce([{ ...administrator, permissions: ['admin:access'] }])
-    const existing = await GET(request())
-    expect((await existing.json()).data.permissions).toEqual({
-      view: true, connect: true, preview: true, apply: true, enterpriseLogin: false,
-    })
+  it.each([
+    ['ADMIN', ['admin:access', 'org:*']],
+    ['SALES_OPS', ['config:*']],
+    ['ORG_SUPER_ADMIN', ['*', 'org:source_view']],
+    ['FXIAOKE_BASELINE', ['org:source_view']],
+    ['CUSTOM', ['*']],
+  ] as const)('ignores the legacy role code and broad grants %s for source access', async (roleCode, permissions) => {
+    mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1', roleCode, permissions }])
+    expect((await GET(request())).status).toBe(403)
+    expect(mocks.load).not.toHaveBeenCalled()
+  })
 
-    mocks.assignments.mockResolvedValueOnce([{
-      ...administrator, permissionsOverridden: true, permissions: ['org:source_view'],
+  it.each(['view', 'connect', 'preview', 'apply'])('projects only the explicit source %s action with status read', async (action) => {
+    mocks.assignments.mockResolvedValue([{
+      scopeType: 'org', scopeId: 'org-1', roleCode: 'ADMIN', permissions: ['org:*', 'org:source_' + action],
     }])
-    const overridden = await GET(request())
-    expect((await overridden.json()).data.permissions).toEqual({
-      view: true, connect: false, preview: false, apply: false, enterpriseLogin: false,
+    const response = await GET(request())
+    expect(response.status).toBe(200)
+    expect((await response.json()).data.permissions).toEqual({
+      view: true, connect: action === 'connect', preview: action === 'preview', apply: action === 'apply', enterpriseLogin: false,
+    })
+  })
+
+  it('gives the active same-organization system root protected and business actions', async () => {
+    mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1', roleCode: 'SUPER_ADMIN', permissions: ['*'] }])
+    const response = await GET(request())
+    expect(response.status).toBe(200)
+    expect((await response.json()).data.permissions).toEqual({
+      view: true, connect: true, preview: true, apply: true, enterpriseLogin: true,
     })
   })
 

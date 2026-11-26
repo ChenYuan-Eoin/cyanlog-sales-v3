@@ -33,7 +33,7 @@ beforeEach(() => {
   vi.resetAllMocks()
   mocks.auth.mockResolvedValue({ id: 'admin' })
   mocks.org.mockResolvedValue('org-a')
-  mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', roleCode: 'ADMIN', permissions: [] }])
+  mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', roleCode: 'ADMIN', permissions: ['org:write'] }])
   mocks.credentials.mockResolvedValue(credentials)
   mocks.transport.mockReturnValue('fixed-transport')
   mocks.inspect.mockResolvedValue({
@@ -75,7 +75,7 @@ it('rejects another organization before decrypting saved credentials', async () 
   expect(mocks.credentials).not.toHaveBeenCalled()
 })
 
-it.each(['org:source_view', 'org:source_connect', 'org:source_preview', 'org:source_apply', 'user:view'])(
+it.each(['org:source_view', 'org:source_connect', 'org:source_preview', 'org:source_apply', 'user:view', 'org:*', 'user:*', 'admin:*', '*'])(
   'denies CRM metadata to an actor with only %s before accessing the provider',
   async (permission) => {
     mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', permissions: [permission] }])
@@ -86,9 +86,9 @@ it.each(['org:source_view', 'org:source_connect', 'org:source_preview', 'org:sou
   },
 )
 
-it.each(['ADMIN', 'SALES_OPS'])('honors overridden %s permissions', async (roleCode) => {
+it.each(['ADMIN', 'SALES_OPS', 'ORG_SUPER_ADMIN', 'FXIAOKE_BASELINE'])('does not admit %s by role code', async (roleCode) => {
   mocks.roles.mockResolvedValue([{
-    scopeType: 'org', scopeId: 'org-a', roleCode, permissionsOverridden: true, permissions: ['org:source_preview'],
+    scopeType: 'org', scopeId: 'org-a', roleCode, permissions: ['org:source_preview'],
   }])
   expect((await GET(request())).status).toBe(403)
   expect(mocks.credentials).not.toHaveBeenCalled()
@@ -100,8 +100,8 @@ it('does not use a department management grant for its organization', async () =
   expect(mocks.credentials).not.toHaveBeenCalled()
 })
 
-it('lets an existing sales operations role describe an object through fixed egress', async () => {
-  mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', roleCode: 'SALES_OPS', permissions: [] }])
+it('lets a role with a stored CRM metadata grant describe an object through fixed egress', async () => {
+  mocks.roles.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-a', roleCode: 'SALES_OPS', permissions: ['admin:access'] }])
   mocks.inspect.mockResolvedValue({
     ea: 'ea-test',
     operation: 'describe',

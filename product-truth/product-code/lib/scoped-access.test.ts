@@ -179,9 +179,16 @@ describe('exact organization role scope', () => {
     ], 'org-a')).toBe(false)
   })
 
+  it.each(['ADMIN', 'SALES_OPS'])('does not infer organization read or write from %s', roleCode => {
+    const grants = [assignment('org-a', roleCode, ['quote:view'])]
+    expect(canManageOrg(grants, 'org-a')).toBe(false)
+    expect(canMutateOrgUsers(grants, 'org-a')).toBe(false)
+    expect(canMutateOrgDepartments(grants, 'org-a')).toBe(false)
+  })
+
   it.each([
-    ['SUPER_ADMIN', []],
-    ['ADMIN', []],
+    ['SUPER_ADMIN', ['*']],
+    ['ADMIN', ['dept:write']],
     ['DEPARTMENT_OPERATOR', ['dept:write']],
     ['DEPARTMENT_OPERATOR', ['dept:*']],
     ['ORG_OPERATOR', ['org:write']],
@@ -317,28 +324,26 @@ describe('organization role permission overrides', () => {
     expect(canAccessContractAction(overridden, 'org-a', 'review')).toBe(false)
   })
 
-  it('validates the organization administrator binding and rereads it after revocation on ordinary read paths', async () => {
-    const orgId = 'org-with-delegation'
-    const role = { id: 'org-management', code: 'ORG_SUPER_ADMIN', name: '组织超级管理员', permissions: ['*'], owner_org_id: null }
-    const exact = { user_id: 'org-delegated-user', org_id: orgId, scope_type: 'org', scope_id: orgId, granted_at: null, role }
-    const foreign = { ...exact, org_id: 'other' }
-    const department = { ...exact, scope_type: 'department' }
-    const member = makeDefaultOrgQuery({ data: { org_id: orgId }, error: null })
-    let granted = true
-    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => table === 'user_organizations' ? member
-      : makeCollectionQuery({ data: [...(granted ? [exact] : []), foreign, department], error: null }))
+  it('drops retired organization governance even when its template and override both claim authority', async () => {
+    const userId = 'former-organization-admin'
+    const orgId = 'retired-governance-org'
+    const binding = { user_id: userId, org_id: orgId, scope_type: 'org', scope_id: orgId, granted_at: null }
+    const retired = {
+      ...binding, role: { id: 'retired', code: 'ORG_SUPER_ADMIN', name: '旧治理角色', permissions: ['*'], owner_org_id: null },
+    }
+    const independent = {
+      ...binding, role: { id: 'editor', code: 'EDITOR', name: '独立授权', permissions: ['user:view'], owner_org_id: null },
+    }
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(makeCollectionQuery({ data: [retired], error: null }))
+    expect(await getUserScopedRoleAssignments(userId)).toEqual([])
+    expect(loadOrgRolePermissionSettings).not.toHaveBeenCalled()
 
-    const before = await getUserScopedRoleAssignments('org-delegated-user')
-    expect(before).toHaveLength(1)
-    expect(canManageOrg(before, orgId)).toBe(true)
-    expect(canReviewContracts(before, orgId)).toBe(false)
-    expect(getOrgAuthorizationRoleCodes(before, orgId)).toEqual([])
-    expect(getOrgPermissions(before, orgId)).not.toContain('*')
-    expect(member.eq).toHaveBeenCalledWith('organization.status', 'active')
-    expect(member.is).toHaveBeenCalledWith('left_at', null)
-
-    granted = false
-    expect(await getUserScopedRoleAssignments('org-delegated-user')).toEqual([])
+    vi.mocked(loadOrgRolePermissionSettings).mockResolvedValueOnce({ role_permission_overrides: { retired: ['*'] } })
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(makeCollectionQuery({ data: [retired, independent], error: null }))
+    const assignments = await getUserScopedRoleAssignments(userId)
+    expect(getOrgRoleCodes(assignments, orgId)).toEqual(['EDITOR'])
+    expect(getOrgPermissions(assignments, orgId)).toEqual(['user:view'])
+    expect(canMutateOrgUsers(assignments, orgId)).toBe(false)
   })
 
   it('excludes the historical Fxiaoke baseline from actor permissions while preserving independent grants', async () => {

@@ -47,7 +47,8 @@ export async function POST(req: NextRequest) {
       return { enterprise: { ea: enterprise.ea } }
     }
     if (body.action === 'preview' && typeof body.revision === 'string' && /^[0-9a-f-]{36}$/i.test(body.revision)) {
-      return { preview: await previewSavedConnection(orgId, body.revision, actorId) }
+      const preview = await previewSavedConnection(orgId, body.revision, actorId)
+      return { preview: access.preview ? preview : null }
     }
     throw new FxiaokeError('INVALID_ACTION', '请选择保存配置或预览通讯录。')
   })

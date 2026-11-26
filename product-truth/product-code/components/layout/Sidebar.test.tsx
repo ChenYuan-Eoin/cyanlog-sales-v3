@@ -62,13 +62,19 @@ describe('Sidebar navigation projection', () => {
   })
 
   it.each([
-    { paths: ['/shipping'], showsWorkbench: false },
-    { paths: ['/', '/shipping'], showsWorkbench: true },
-  ])('shows only projected department work with $paths', async ({ paths, showsWorkbench }) => {
+    { paths: ['/shipping'], showsWorkbench: false, showsShipping: true },
+    { paths: ['/', '/shipping'], showsWorkbench: true, showsShipping: true },
+    { paths: ['/'], showsWorkbench: true, showsShipping: false },
+  ])('shows only projected department work with $paths', async ({ paths, showsWorkbench, showsShipping }) => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ paths, onlyProjectedPaths: true })))
     render(<Sidebar />)
-    expect(await screen.findByRole('link', { name: '自助收寄' })).toHaveAttribute('href', '/shipping')
+    if (showsWorkbench) {
+      expect(await screen.findByRole('link', { name: '工作台' })).toHaveAttribute('href', '/')
+    } else {
+      expect(await screen.findByRole('link', { name: '自助收寄' })).toHaveAttribute('href', '/shipping')
+    }
     expect(Boolean(screen.queryByRole('link', { name: '工作台' }))).toBe(showsWorkbench)
+    expect(Boolean(screen.queryByRole('link', { name: '自助收寄' }))).toBe(showsShipping)
     for (const name of ['报价中心', '合同审核', '标书中心', '知识库', '日程', '寄件设置', '配置中心']) {
       expect(screen.queryByRole('link', { name })).toBeNull()
     }

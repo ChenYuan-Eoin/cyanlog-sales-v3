@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ORG_MEMBER_LIFECYCLE_ACTIONS } from '@/lib/admin/member-action-keys'
 import { getEffectiveOwnerShippingPermissions, getEffectiveShippingPermissions, legacyShippingPermission } from '@/lib/module-access'
-import { ORG_BUSINESS_ROLE_ASSIGN, ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ORG_MEMBER_EDIT } from '@/lib/permissions'
+import { isOrganizationSourcePermissionKey, ORG_BUSINESS_ROLE_ASSIGN, ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ORG_MEMBER_EDIT } from '@/lib/permissions'
 import { canRevokeShippingAction, getPermissionGrantSource, isRolePermissionEnabled, isRolePermissionExplicitlyGranted } from '@/lib/role-permission-policy'
 import { isShippingOwnerPermission } from '@/lib/shipping/owner-permission-keys'
 import {
@@ -58,6 +58,7 @@ export function PermissionSettingTable({
 
   function isEffective(key: string): boolean {
     if (isShippingOwnerPermission(key)) return effectiveOwnerKeys.has(key)
+    if (isSuperAdmin && isOrganizationSourcePermissionKey(key)) return true
     return legacyShippingPermission(key)
       ? effectiveShippingKeys.has(key)
       : isRolePermissionEnabled(perms, key)
@@ -187,7 +188,7 @@ export function PermissionSettingTable({
                 const shippingAction = legacyShippingPermission(item.key) !== null
                 const inheritedLegacy = hasRetainedLegacyGrant(item.key)
                 const checked = isSuperAdmin || ownerAction || shippingAction || inheritedLegacy ? effective : explicit
-                const source = effective && !ownerAction ? getPermissionGrantSource(perms, item.key) : null
+                const source = effective && !ownerAction ? getPermissionGrantSource(perms, item.key, undefined, isSuperAdmin) : null
                 const dependent = explicit && actions.find(action =>
                   action.available && action.dependencies?.includes(item.key) && isEffective(action.key))
                 const missingDependency = item.dependencies?.find(key => !isEffective(key))

@@ -789,6 +789,17 @@ describe('department-scoped workspace admission', () => {
     `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
   ))
 
+  it('projects only the verified workbench for an authorized department leader without ledger access', async () => {
+    bind({ departmentLeads: [leaderGrant] })
+    const navigation = await request('/api/navigation')
+    expect(navigation.status).toBe(200)
+    expect(navigation.headers.get('x-middleware-request-x-user-navigation-scope')).toBe('department-workbench')
+    expect((await request('/')).status).toBe(200)
+    expect((await request('/api/dashboard/department')).status).toBe(200)
+    expect((await request('/api/shipping/ledger')).status).toBe(403)
+    expect((await request('/quotes')).headers.get('location')).toBe('https://sales.cyanlog.icu/pending-access')
+  })
+
   it.each([
     { name: 'confirmed department leader', departmentLeads: [leaderGrant] },
     { name: 'active department view role', roles: [departmentRole], departments: [department] },
@@ -986,29 +997,37 @@ describe('middleware public API routing', () => {
 })
 
 describe('middleware exact organization authorization', () => {
-  it('uses finite delegated admin authority only for the exact active organization', async () => {
-    const token = 'delegated-org-admin'
+  it('treats the historical organization governance role as cleanup-only across entries', async () => {
+    const token = 'retired-org-admin'
     const role = { roles: { id: 'org-admin', code: 'ORG_SUPER_ADMIN', permissions: ['*'] } }
-    const request = () => middleware(makeRequest('https://sales.cyanlog.icu/configs', { authorization: `Bearer ${token}` }))
+    const request = (path: string) => middleware(makeRequest(`https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }))
 
-    mockExactOrgAuth({ token, orgId: 'org-a', roles: [role] })
-    const granted = await request()
-    expect(granted.status).toBe(200)
-    const permissions = granted.headers.get('x-middleware-request-x-user-permissions')?.split(',')
-    expect(permissions).toContain('role:manage')
-    expect(permissions).not.toContain('*')
-
-    for (const state of [
-      { roles: [{ ...role, org_id: 'org-b' }] },
-      { roles: [{ ...role, scope_type: 'department' }] },
-      { organizationStatus: 'inactive' },
-      { memberships: [{ org_id: 'org-a', employment_status: 'active', left_at: '2026-11-01' }] },
-    ]) {
-      mockExactOrgAuth({ token, orgId: 'org-a', roles: [role], ...state })
-      const denied = await request()
-      expect(denied.headers.get('location')).toBe('https://sales.cyanlog.icu/pending-access')
-      expect(denied.headers.get('x-middleware-request-x-user-permissions')).toBeNull()
+    mockExactOrgAuth({ token, orgId: 'org-a', roles: [role], settings: {
+      role_permission_overrides: { 'org-admin': ['org:source_apply'] },
+      shipping_owner_permission_overrides: { 'org-admin': ['shipping:owner_view'] },
+    } })
+    expect((await request('/configs')).headers.get('location')).toBe('https://sales.cyanlog.icu/pending-access')
+    for (const path of ['/api/admin/org', '/api/roles', '/api/admin/organization-sources', '/api/shipping/owner/orders']) {
+      expect((await request(path)).status, path).toBe(403)
     }
+
+    mockExactOrgAuth({ token, orgId: 'org-a', roles: [role, { roles: {
+      id: 'department-grant', code: 'DEPARTMENT_EDITOR', permissions: ['dept:write'],
+    } }] })
+    expect((await request('/configs')).status).toBe(200)
+    expect((await request('/api/admin/departments')).status).toBe(200)
+    expect((await request('/api/roles')).status).toBe(403)
+    expect((await request('/api/admin/users')).status).toBe(403)
+  })
+
+  it.each(['ADMIN', 'SALES_OPS'])('keeps organization and role access off when %s only has a saved business grant', async code => {
+    const token = 'untouched-old-role'
+    const request = (path: string) => middleware(makeRequest(`https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }))
+    mockExactOrgAuth({ token, orgId: 'org-a', roles: [{ roles: { id: 'plain-old-role', code, permissions: ['quote:view'] } }] })
+    expect((await request('/configs')).status).toBe(307)
+    expect((await request('/api/admin/org')).status).toBe(403)
+    expect((await request('/api/admin/organization-sources')).status).toBe(403)
+    expect((await request('/api/roles')).status).toBe(403)
   })
 
   it('只把 default org 的权限写入可信下游请求头', async () => {

@@ -1,4 +1,4 @@
-import { hasLegacyOrgMemberWrite, hasPermission, ORG_MEMBER_EDIT } from '@/lib/permissions'
+import { hasLegacyDepartmentStructureWrite, hasLegacyOrgMemberWrite, hasPermission, ORG_MEMBER_EDIT } from '@/lib/permissions'
 import { canMutateOrgUsers, type ScopedRoleAssignment } from '@/lib/scoped-access'
 import {
   ORG_MEMBER_INVITE, ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN,
@@ -9,8 +9,8 @@ type MemberAction =
   | typeof ORG_MEMBER_EDIT
   | typeof ORG_MEMBER_LIFECYCLE_ACTIONS[number]
 
-export function getMemberActionAvailability(permissions: string[], roleCodes: string[], assignRoles = false) {
-  const legacyWrite = hasLegacyOrgMemberWrite(permissions, roleCodes)
+export function getMemberActionAvailability(permissions: string[], assignRoles = false) {
+  const legacyWrite = hasLegacyOrgMemberWrite(permissions)
   return {
     edit: legacyWrite || hasPermission(permissions, ORG_MEMBER_EDIT),
     assignRoles,
@@ -18,9 +18,8 @@ export function getMemberActionAvailability(permissions: string[], roleCodes: st
     manageLogin: legacyWrite || hasPermission(permissions, ORG_MEMBER_MANAGE_LOGIN),
     manageEmployment: legacyWrite || hasPermission(permissions, ORG_MEMBER_MANAGE_EMPLOYMENT),
     removeMembership: legacyWrite || hasPermission(permissions, ORG_MEMBER_REMOVE_MEMBERSHIP),
-    manageDepartments: roleCodes.includes('SUPER_ADMIN') || roleCodes.includes('ADMIN')
-      || hasPermission(permissions, 'dept:write') || hasPermission(permissions, 'org:write'),
-    bindExternalIdentity: legacyWrite && roleCodes.includes('SUPER_ADMIN'),
+    manageDepartments: hasLegacyDepartmentStructureWrite(permissions),
+    bindExternalIdentity: assignRoles,
   }
 }
 
@@ -30,12 +29,11 @@ export function getScopedMemberActionAvailability(assignments: ScopedRoleAssignm
   const organizationRoles = assignments.filter(assignment => assignment.scopeType === 'org' && assignment.scopeId === orgId)
   return getMemberActionAvailability(
     organizationRoles.flatMap(assignment => assignment.permissions ?? []),
-    organizationRoles.filter(assignment => !assignment.permissionsOverridden).map(assignment => assignment.roleCode),
     assignRoles,
   )
 }
 
-/** Older administrator grants remain valid while explicit actions are configured. */
+/** Explicit legacy write keys remain supported alongside individual member actions. */
 export function canPerformMemberAction(
   assignments: ScopedRoleAssignment[],
   orgId: string,

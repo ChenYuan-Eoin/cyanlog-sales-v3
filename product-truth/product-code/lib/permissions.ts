@@ -19,40 +19,38 @@ export function hasConfigurationReadPermission(permissions: string[]): boolean {
   return ['config:read', 'config:write', 'config:publish'].some(key => hasPermission(permissions, key))
 }
 
-export function canReadRoleDirectory(permissions: string[], authorizationRoleCodes: string[]): boolean {
+export function canReadRoleDirectory(permissions: string[]): boolean {
   return hasPermission(permissions, 'role:manage')
     || (hasPermission(permissions, ROLE_DIRECTORY_VIEW) && hasPermission(permissions, 'user:view'))
-    || authorizationRoleCodes.some(code => code === 'ADMIN' || code === 'SALES_OPS' || code === 'SUPER_ADMIN')
 }
 
 export function isSystemAuthorizationGrant(roleCode: string, permissions: string[]): boolean {
   return roleCode === 'SUPER_ADMIN' && hasPermission(permissions, 'role:manage')
 }
 
-export function hasOrganizationSourcePermission(permissions: string[]): boolean {
-  return ORGANIZATION_SOURCE_PERMISSION_KEYS.some(key => hasPermission(permissions, key))
+export function isOrganizationSourcePermissionKey(key: string) {
+  return ORGANIZATION_SOURCE_PERMISSION_KEYS.some(permission => permission === key)
+}
+
+export function hasOrganizationSourcePermission(permissions: string[], systemAdministrator = false): boolean {
+  return systemAdministrator || permissions.some(isOrganizationSourcePermissionKey)
 }
 
 export function hasOrgDepartmentDirectoryPermission(permissions: string[]): boolean {
   return hasPermission(permissions, ORG_DEPARTMENT_DIRECTORY_VIEW)
 }
 
-export function canEnterConfigurationCenter(permissions: string[], authorizationRoleCodes: string[]): boolean {
-  return hasConfigurationReadPermission(permissions)
-    || canAccessOrgAdmin(permissions, authorizationRoleCodes)
-    || hasOrganizationSourcePermission(permissions)
-    || hasOrgDepartmentDirectoryPermission(permissions)
-    || canReadRoleDirectory(permissions, authorizationRoleCodes)
+export function canReadOrgDepartmentDirectory(permissions: string[]): boolean {
+  return hasOrgDepartmentDirectoryPermission(permissions) || hasLegacyDepartmentStructureWrite(permissions)
+    || canAccessOrgAdmin(permissions)
 }
 
-export function hasLegacyOrgMemberWrite(permissions: string[], authorizationRoleCodes: string[]): boolean {
-  return authorizationRoleCodes.includes('SUPER_ADMIN') || authorizationRoleCodes.includes('ADMIN')
-    || hasPermission(permissions, 'user:write') || hasPermission(permissions, 'org:write')
+export function hasLegacyOrgMemberWrite(permissions: string[]): boolean {
+  return hasPermission(permissions, 'user:write') || hasPermission(permissions, 'org:write')
 }
 
-export function hasLegacyDepartmentStructureWrite(permissions: string[], authorizationRoleCodes: string[]): boolean {
-  return authorizationRoleCodes.includes('SUPER_ADMIN') || authorizationRoleCodes.includes('ADMIN')
-    || hasPermission(permissions, 'dept:write') || hasPermission(permissions, 'org:write')
+export function hasLegacyDepartmentStructureWrite(permissions: string[]): boolean {
+  return hasPermission(permissions, 'dept:write') || hasPermission(permissions, 'org:write')
 }
 
 export function isOrgDelegationSensitivePermission(permission: string): boolean {
@@ -78,15 +76,7 @@ export function hasPermission(allPermissions: string[], required: string): boole
   })
 }
 
-export function canAccessOrgAdmin(allPermissions: string[], roleCodes: string[]): boolean {
-  if (
-    roleCodes.includes('SUPER_ADMIN')
-    || roleCodes.includes('SALES_OPS')
-    || roleCodes.includes('ADMIN')
-  ) {
-    return true
-  }
-
+export function canAccessOrgAdmin(allPermissions: string[]): boolean {
   return (
     hasPermission(allPermissions, '*')
     || hasPermission(allPermissions, 'admin:access')

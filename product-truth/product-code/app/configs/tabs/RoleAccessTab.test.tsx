@@ -112,6 +112,7 @@ it('only lets verified system super administrators appoint the canonical role', 
   expect(screen.getByRole('button', { name: '添加成员' })).toBeEnabled()
   fireEvent.click(screen.getByRole('button', { name: /组织超级管理员 ORG_SUPER_ADMIN/ }))
   expect(screen.getByText('历史角色')).toBeInTheDocument()
+  expect(screen.getByText('ORG_SUPER_ADMIN · 历史角色已停用')).toBeInTheDocument()
   expect(screen.getByText('旧授权仅可撤销')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '添加成员' })).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: /^超级管理员 SUPER_ADMIN/ }))

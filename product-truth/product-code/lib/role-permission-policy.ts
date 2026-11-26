@@ -1,5 +1,5 @@
 import {
-  canAccessOrgAdmin, hasLegacyDepartmentStructureWrite, hasLegacyOrgMemberWrite, hasPermission,
+  canAccessOrgAdmin, hasLegacyDepartmentStructureWrite, hasLegacyOrgMemberWrite, hasPermission, isOrganizationSourcePermissionKey,
   ORGANIZATION_SOURCE_PERMISSION_KEYS, ORG_BUSINESS_ROLE_ASSIGN, ORG_DEPARTMENT_DIRECTORY_VIEW,
   ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ORG_MEMBER_EDIT, ROLE_DIRECTORY_VIEW,
 } from '@/lib/permissions'
@@ -56,15 +56,16 @@ function permissionSources(key: string): string[] {
 
 function getLegacyOrganizationGrant(permissions: string[], key: string): string | undefined {
   if (key === ORG_MEMBER_EDIT || key === ORG_BUSINESS_ROLE_ASSIGN || ORG_MEMBER_LIFECYCLE_ACTIONS.some(action => action === key)) {
-    return permissions.find(grant => hasLegacyOrgMemberWrite([grant], []))
+    return permissions.find(grant => hasLegacyOrgMemberWrite([grant]))
   }
   if (ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS.some(permission => permission === key)) {
-    return permissions.find(grant => hasLegacyDepartmentStructureWrite([grant], [])
-      || (key === ORG_DEPARTMENT_DIRECTORY_VIEW && canAccessOrgAdmin([grant], [])))
+    return permissions.find(grant => hasLegacyDepartmentStructureWrite([grant])
+      || (key === ORG_DEPARTMENT_DIRECTORY_VIEW && canAccessOrgAdmin([grant])))
   }
 }
 
 export function isRolePermissionEnabled(permissions: string[], key: string): boolean {
+  if (isOrganizationSourcePermissionKey(key)) return permissionSources(key).some(source => permissions.includes(source))
   if (permissionSources(key).some(source => hasPermission(permissions, source))) return true
   if (getLegacyOrganizationGrant(permissions, key)) return true
   const legacyShipping = legacyShippingPermission(key)
@@ -93,10 +94,17 @@ export function getPermissionGrantSource(
   permissions: string[],
   key: string,
   impliedBy?: string[],
+  systemAdministrator = false,
 ): PermissionGrantSource | null {
   const exact = permissions.find((permission) => permission === key)
   if (exact) {
     return { grant: exact, via: 'direct', label: exact }
+  }
+
+  if (isOrganizationSourcePermissionKey(key)) {
+    if (systemAdministrator) return { grant: '*', via: 'bundle', label: '*' }
+    const source = (impliedBy ?? IMPLIED_PERMISSION_SOURCES[key] ?? []).find(permission => permissions.includes(permission))
+    return source ? { grant: source, via: 'dependency', label: source } : null
   }
 
   const wildcard = permissions.find((permission) => {
@@ -178,10 +186,13 @@ function revokeEffectiveRolePermission(
   canExpand: (key: string) => boolean,
 ): string[] {
   if (protectedPermissions.includes(key)) return permissions
+  if (isOrganizationSourcePermissionKey(key)) {
+    return permissions.filter(permission => !permissionSources(key).includes(permission) || protectedPermissions.includes(permission))
+  }
   let next = [...permissions]
   // Keep other currently effective leaves when revoking their broader grant.
   for (const implied of Object.keys(IMPLIED_PERMISSION_SOURCES)) {
-    if (isRolePermissionEnabled(permissions, implied)) next.push(implied)
+    if (!isOrganizationSourcePermissionKey(implied) && isRolePermissionEnabled(permissions, implied)) next.push(implied)
   }
   const allKnown = PERMISSION_KEYS.filter(candidate => candidate !== '*' && canExpand(candidate))
   if (next.includes('*')) next = [...next.filter(candidate => candidate !== '*'), ...allKnown]
@@ -210,9 +221,9 @@ export function revokeRolePermissions(
   availableModuleKeys?: ReadonlySet<string>,
 ): string[] {
   const shippingBundleAvailable = !availableModuleKeys || hasPublishedShippingBundle(availableModuleKeys)
-  const canExpand = (key: string) => key === SHIPPING_BUNDLE
-    ? shippingBundleAvailable
-    : !availableModuleKeys || !registeredModuleKeys.has(key) || availableModuleKeys.has(key)
+  const canExpand = (key: string) => !isOrganizationSourcePermissionKey(key)
+    && (key === SHIPPING_BUNDLE ? shippingBundleAvailable
+      : !availableModuleKeys || !registeredModuleKeys.has(key) || availableModuleKeys.has(key))
   const next = Array.from(new Set(keys)).reduce((draft, key) => {
     if (protectedPermissions.includes(key) || (!isRolePermissionEnabled(draft, key) && !draft.includes(key))) return draft
     if (getLegacyOrganizationGrant(draft, key)) {

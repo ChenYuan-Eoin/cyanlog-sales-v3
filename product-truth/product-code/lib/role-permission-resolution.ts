@@ -1,7 +1,3 @@
-import {
-  ORGANIZATION_SOURCE_PERMISSION_KEYS, ORG_BUSINESS_ROLE_ASSIGN, ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ORG_MEMBER_EDIT,
-} from './permissions'
-import { ORG_MEMBER_LIFECYCLE_ACTIONS } from './admin/member-action-keys'
 import { isShippingOwnerPermission, SHIPPING_OWNER_ACTION_KEYS, SHIPPING_OWNER_VIEW } from './shipping/owner-permission-keys'
 
 export const ORG_SUPER_ADMIN_ROLE_CODE = 'ORG_SUPER_ADMIN'
@@ -12,12 +8,9 @@ export function isRoleAssignableInScope(code: string, scopeType: 'org' | 'depart
   return code !== SHIPPING_OPERATOR_ROLE_CODE || scopeType === 'org'
 }
 
-const ORG_SUPER_ADMIN_PERMISSIONS = [
-  'admin:access', 'org:write', 'user:view', 'user:write', 'dept:view', 'dept:write',
-  'config:read', 'config:write', 'config:publish', 'role:manage',
-  ORG_MEMBER_EDIT, ORG_BUSINESS_ROLE_ASSIGN, ...ORG_MEMBER_LIFECYCLE_ACTIONS,
-  ...ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ...ORGANIZATION_SOURCE_PERMISSION_KEYS,
-]
+export function isRetiredRoleCode(code: string): boolean {
+  return code === FXIAOKE_BASELINE_ROLE_CODE || code === ORG_SUPER_ADMIN_ROLE_CODE
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -31,7 +24,7 @@ function normalizePermissions(value: unknown): string[] {
 
 export function resolveOwnerShippingPermissions(settings: unknown, role: { id: string; code: string; permissions: unknown }): string[] {
   if (role.code === 'SUPER_ADMIN') return [...SHIPPING_OWNER_ACTION_KEYS]
-  if (role.code === FXIAOKE_BASELINE_ROLE_CODE) return []
+  if (isRetiredRoleCode(role.code)) return []
   if (settings != null && !isRecord(settings)) return []
   if (isRecord(settings) && Object.hasOwn(settings, 'shipping_owner_permission_overrides')) {
     const overrides = settings.shipping_owner_permission_overrides
@@ -46,13 +39,11 @@ export function resolveOwnerShippingPermissions(settings: unknown, role: { id: s
 }
 
 function templatePermissions(role: { code: string; permissions: unknown }): string[] {
-  // Preserve capabilities that existing authorization granted by role code before the first edit.
-  const legacyCapabilities: Record<string, string[]> = {
-    ADMIN: ['admin:access', 'user:write', 'dept:write', 'contract:write', ...ORGANIZATION_SOURCE_PERMISSION_KEYS],
-    SALES_OPS: ['admin:access'],
-    LEGAL: ['contract:review'],
-  }
-  return Array.from(new Set([...normalizePermissions(role.permissions), ...(legacyCapabilities[role.code] ?? [])]))
+  // Contract authorization still consumes historical roles pending its action-by-action cutover.
+  const legacyContractPermission = role.code === 'ADMIN' ? 'contract:write' : role.code === 'LEGAL' ? 'contract:review' : null
+  const stored = normalizePermissions(role.permissions)
+  if (legacyContractPermission && !stored.includes(legacyContractPermission)) stored.push(legacyContractPermission)
+  return stored
 }
 
 /** Resolves a role definition. Callers must validate the actor's binding before applying it. */
@@ -61,12 +52,7 @@ export function resolveRolePermissions(
   role: { id: string; code: string; permissions: unknown },
 ): { permissions: string[]; overridden: boolean } {
   if (role.code === 'SUPER_ADMIN') return { permissions: ['*'], overridden: false }
-  if (role.code === FXIAOKE_BASELINE_ROLE_CODE) {
-    return { permissions: [], overridden: true }
-  }
-  if (role.code === ORG_SUPER_ADMIN_ROLE_CODE) {
-    return { permissions: [...ORG_SUPER_ADMIN_PERMISSIONS], overridden: true }
-  }
+  if (isRetiredRoleCode(role.code)) return { permissions: [], overridden: true }
   if (settings != null && !isRecord(settings)) return { permissions: [], overridden: true }
   if (!isRecord(settings) || !Object.prototype.hasOwnProperty.call(settings, 'role_permission_overrides')) {
     return { permissions: templatePermissions(role), overridden: false }

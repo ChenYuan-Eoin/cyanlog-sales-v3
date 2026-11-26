@@ -181,6 +181,22 @@ describe('/api/admin/organization-sources/connection', () => {
     })
   })
 
+  it('returns directory details only when the verifier also has directory preview access', async () => {
+    const preview = { departments: [{ name: '目录部门' }], employees: [{ name: '目录员工' }], warnings: ['目录警告'] }
+    mocks.preview.mockResolvedValue({ connection, preview })
+    const body = { action: 'preview', provider: 'feishu', revision: '00000000-0000-4000-8000-000000000001' }
+    const connectionOnly = await POST(request('POST', { body }))
+    expect(connectionOnly.status).toBe(200)
+    expect((await connectionOnly.json()).data).toEqual({ connection, preview: null })
+
+    mocks.assignments.mockResolvedValue([{
+      scopeType: 'org', scopeId: 'org-1', permissions: ['org:source_connect', 'org:source_preview'],
+    }])
+    const directoryPreview = await POST(request('POST', { body }))
+    expect(directoryPreview.status).toBe(200)
+    expect((await directoryPreview.json()).data).toEqual({ connection, preview })
+  })
+
   it('rejects malformed, oversized and unknown requests before calling the service', async () => {
     const malformed = await POST(request('POST', { rawBody: '{' }))
     const oversized = await POST(request('POST', { rawBody: 'x'.repeat(16_385) }))
@@ -218,6 +234,15 @@ describe('/api/admin/organization-sources/connection', () => {
     mocks.activate.mockClear()
     expect((await POST(request('POST', { body, orgId: 'foreign-org' }))).status).toBe(403)
     expect(mocks.activate).not.toHaveBeenCalled()
+  })
+
+  it('returns activation status without connection configuration to an apply-only actor', async () => {
+    mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1', permissions: ['org:source_apply'] }])
+    mocks.activate.mockResolvedValue({ ...connection, metadata: { appId: 'configured-provider-app' } })
+    const body = { action: 'activate_directory', provider: 'fxiaoke', revision: '00000000-0000-4000-8000-000000000001' }
+    const result = await POST(request('POST', { body }))
+    expect(result.status).toBe(200)
+    expect((await result.json()).data).toEqual({ connection: { ...connection, metadata: {} } })
   })
 
   it.each([

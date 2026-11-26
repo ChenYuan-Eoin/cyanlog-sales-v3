@@ -9,11 +9,15 @@ const headers = { 'Cache-Control': 'private, no-store' }
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
+    // Middleware overwrites this hint from the verified current organization.
+    const scope = req.headers.get('x-user-navigation-scope')
+    if (scope === 'department-workbench') {
+      return NextResponse.json({ paths: ['/'], onlyProjectedPaths: true }, { headers })
+    }
+
     const shipping = await resolveShippingEntry(user, getRequestAuthToken(req))
     if (!shipping) return NextResponse.json({ paths: [] }, { status: 403, headers })
 
-    // Middleware overwrites this hint from the verified current organization.
-    const scope = req.headers.get('x-user-navigation-scope')
     if (scope === 'department-ledger' || scope === 'workbench-and-ledger') {
       const paths: string[] = []
       if (scope === 'workbench-and-ledger') paths.push('/')

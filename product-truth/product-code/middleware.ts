@@ -34,13 +34,13 @@ import { getRequestAuthToken } from '@/lib/auth-token'
 import { getConfigsTabAccess, hasConfigsTabAccess } from '@/lib/configs/tab-access'
 import { createMiddlewareRestClient, type MiddlewareRestClient } from '@/lib/middleware-rest-client'
 import {
-  canAccessOrgAdmin, canReadRoleDirectory, hasConfigurationReadPermission, hasOrganizationSourcePermission,
-  hasOrgDepartmentDirectoryPermission, hasPermission, isSystemAuthorizationGrant, ORG_MEMBER_EDIT,
+  canAccessOrgAdmin, canReadOrgDepartmentDirectory, canReadRoleDirectory, hasConfigurationReadPermission, hasOrganizationSourcePermission,
+  hasPermission, isSystemAuthorizationGrant, ORG_MEMBER_EDIT,
 } from '@/lib/permissions'
 import {
   ORG_MEMBER_INVITE, ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_REMOVE_MEMBERSHIP,
 } from '@/lib/admin/member-action-keys'
-import { FXIAOKE_BASELINE_ROLE_CODE, isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions, resolveRolePermissions, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
+import { isRetiredRoleCode, isRoleAssignableInScope, resolveOwnerShippingPermissions, resolveRolePermissions, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
 import {
   getEffectiveOwnerShippingPermissions,
   getEffectiveShippingPermissions,
@@ -270,7 +270,7 @@ async function canEnterDepartmentWorkspace(
     if (Array.isArray(assignment.roles) && assignment.roles.length !== 1) continue
     const role = roleRecordOf(assignment.roles)
     if (!role?.id || !role.code || (role.owner_org_id !== null && role.owner_org_id !== orgId)
-      || ['SUPER_ADMIN', ORG_SUPER_ADMIN_ROLE_CODE, FXIAOKE_BASELINE_ROLE_CODE].includes(role.code)
+      || (role.code === 'SUPER_ADMIN' || isRetiredRoleCode(role.code))
       || !isRoleAssignableInScope(role.code, 'department')) continue
     const { permissions } = resolveRolePermissions(organizationSettings, role)
     if (permissions.includes('dept:view') || permissions.includes('report:dept')) departmentIds.add(assignment.scope_id)
@@ -368,9 +368,9 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
     const r = roleRecordOf(ur.roles)
     if (r?.id && r.code) {
       if (r.owner_org_id !== null && r.owner_org_id !== orgId) continue
-      if (r.owner_org_id !== null && ['SUPER_ADMIN', ORG_SUPER_ADMIN_ROLE_CODE].includes(r.code)) continue
-      if (r.code === FXIAOKE_BASELINE_ROLE_CODE) continue
-      if (!activeMembership && ['SUPER_ADMIN', ORG_SUPER_ADMIN_ROLE_CODE, SHIPPING_OPERATOR_ROLE_CODE].includes(r.code)) continue
+      if (r.owner_org_id !== null && r.code === 'SUPER_ADMIN') continue
+      if (isRetiredRoleCode(r.code)) continue
+      if (!activeMembership && ['SUPER_ADMIN', SHIPPING_OPERATOR_ROLE_CODE].includes(r.code)) continue
       const effective = resolveRolePermissions(organization.settings, r)
       const ownerPermissions = usesFxiaoke && activeMembership ? resolveOwnerShippingPermissions(organization.settings, r) : []
       if (!effective.permissions.length && !ownerPermissions.length) continue
@@ -536,32 +536,31 @@ export async function middleware(request: NextRequest) {
         : NextResponse.redirect(buildRedirectUrl(request, '/', '?denied=shipping'))
     }
 
-    const configurationTabs = pathname === '/configs' ? getConfigsTabAccess({
+    const configurationTabs = pathname === '/configs' || pathname === '/api/auth/me' ? getConfigsTabAccess({
       permissions: authContext.allPermissions,
-      roleCodes: authContext.roleCodes,
-      authorizationRoleCodes: authContext.authorizationRoleCodes,
+      systemAdministrator: authContext.canManageSystemAuthorizations,
     }) : null
     const shippingSettingsView = configurationTabs !== null
       && await allowsShippingPermission(authContext.shippingPermissions, ['shipping:settings_view']).catch(error => {
         if (hasConfigsTabAccess(configurationTabs)) return false
         throw error
       })
-    const configurationShell = configurationTabs !== null
+    const configurationShell = pathname === '/configs' && configurationTabs !== null
       && hasConfigsTabAccess({ ...configurationTabs, shipping: shippingSettingsView })
     const organizationSourcePath = pathname === '/api/admin/organization-sources'
       || pathname.startsWith('/api/admin/organization-sources/')
-    const organizationSourceAccess = organizationSourcePath && hasOrganizationSourcePermission(authContext.allPermissions)
+    const organizationSourceAccess = organizationSourcePath && hasOrganizationSourcePermission(authContext.allPermissions, authContext.canManageSystemAuthorizations)
     const systemAuthorizationPath = isSystemAuthorizationPath(pathname, request)
     if (systemAuthorizationPath && !authContext.canManageSystemAuthorizations) {
       return NextResponse.json({ error: '仅系统超级管理员可管理授权', code: 'NO_PERMISSION' }, { status: 403 })
     }
     const rolesIndexAccess = read && pathname === '/api/roles'
-      && (systemAuthorizationPath || canReadRoleDirectory(authContext.allPermissions, authContext.authorizationRoleCodes))
+      && (systemAuthorizationPath || canReadRoleDirectory(authContext.allPermissions))
     // Department write handlers independently enforce the exact edit/delete action.
     const departmentDirectoryPath = (read && pathname === '/api/admin/org')
       || (pathname === '/api/admin/departments' && (read || request.method === 'POST'))
       || (departmentDetailPath.test(pathname) && (request.method === 'PATCH' || request.method === 'DELETE'))
-    const departmentDirectoryAccess = departmentDirectoryPath && hasOrgDepartmentDirectoryPermission(authContext.allPermissions)
+    const departmentDirectoryAccess = departmentDirectoryPath && canReadOrgDepartmentDirectory(authContext.allPermissions)
     const memberAccess = hasMemberRoutePermission(pathname, request.method, authContext.allPermissions)
     const specificConfigurationAccess = configurationShell || organizationSourceAccess || rolesIndexAccess
       || departmentDirectoryAccess || memberAccess || systemAuthorizationPath
@@ -600,7 +599,7 @@ export async function middleware(request: NextRequest) {
     // 路径级权限校验
     const allowed = pathname === '/api/roles' ? systemAuthorizationPath || rolesIndexAccess
       : specificConfigurationAccess || (required === 'admin:access'
-      ? canAccessOrgAdmin(authContext.allPermissions, authContext.authorizationRoleCodes)
+      ? canAccessOrgAdmin(authContext.allPermissions)
       : required === 'config:read' ? (pathname !== '/configs' && hasConfigurationReadPermission(authContext.allPermissions))
         : (!required || hasPermission(authContext.allPermissions, required)))
 
@@ -618,8 +617,11 @@ export async function middleware(request: NextRequest) {
     requestHeaders.delete('x-user-navigation-scope')
     if (pathname === '/api/navigation') {
       if (shippingOnly) requestHeaders.set('x-user-navigation-scope', 'shipping-only')
-      if (authContext.roleCodes.length === 0 && authContext.departmentLedgerAccess) {
-        requestHeaders.set('x-user-navigation-scope', authContext.departmentWorkspaceAccess ? 'workbench-and-ledger' : 'department-ledger')
+      if (authContext.roleCodes.length === 0 && (authContext.departmentWorkspaceAccess || authContext.departmentLedgerAccess)) {
+        const scope = authContext.departmentLedgerAccess
+          ? (authContext.departmentWorkspaceAccess ? 'workbench-and-ledger' : 'department-ledger')
+          : 'department-workbench'
+        requestHeaders.set('x-user-navigation-scope', scope)
       }
     }
     requestHeaders.set('x-user-id', authContext.userId)

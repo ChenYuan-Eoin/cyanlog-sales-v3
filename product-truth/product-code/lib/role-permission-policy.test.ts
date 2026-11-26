@@ -40,12 +40,10 @@ describe('organization role permission policy', () => {
     expect(resolveRolePermissions({ role_permission_overrides: { [role.id]: ['future:read'] } }, role).permissions)
       .toEqual(['future:read'])
   })
-  it('preserves legacy role-code capabilities only until the organization saves an override', () => {
+  it('limits untouched role-code compatibility to the existing contract actions', () => {
     const admin = { id: 'admin', code: 'ADMIN', permissions: ['quote:view'] }
     const defaults = resolveRolePermissions(null, admin)
-    expect(defaults.permissions).toEqual(expect.arrayContaining([
-      'quote:view', 'admin:access', 'user:write', 'dept:write', 'contract:write',
-    ]))
+    expect(defaults.permissions).toEqual(['quote:view', 'contract:write'])
     expect(defaults.permissions).not.toContain('shipping:manage_connections')
     expect(resolveRolePermissions({ role_permission_overrides: { admin: ['quote:view'] } }, admin))
       .toEqual({ permissions: ['quote:view'], overridden: true })
@@ -53,6 +51,21 @@ describe('organization role permission policy', () => {
       'contract:review',
     ])
   })
+  it('uses exact directory-source actions in the editor and never creates them when clearing a wildcard', () => {
+    const keys = ['org:source_view', 'org:source_connect', 'org:source_preview', 'org:source_apply']
+    for (const key of keys) {
+      expect(isRolePermissionEnabled(['org:*'], key)).toBe(false)
+      expect(getPermissionGrantSource(['org:*'], key)).toBeNull()
+      expect(revokeRolePermissions(['org:*'], ['org:write'])).not.toContain(key)
+      expect(revokeRolePermissions(['*'], ['org:write'])).not.toContain(key)
+    }
+    expect(isRolePermissionEnabled(['org:source_connect'], 'org:source_view')).toBe(true)
+    expect(isRolePermissionEnabled(['org:source_connect'], 'org:source_preview')).toBe(false)
+    expect(getPermissionGrantSource(['org:*', 'org:source_connect'], 'org:source_view')?.grant).toBe('org:source_connect')
+    expect(revokeRolePermissions(['org:*', 'org:source_connect', 'org:source_preview'], ['org:source_connect']))
+      .toEqual(['org:*', 'org:source_preview'])
+  })
+
   it('removes a leaf from global or resource wildcards without removing other reports', () => {
     for (const original of [['*'], ['report:*', 'future:read']]) {
       const permissions = revokeRolePermissions(original, ['report:finance'])
@@ -96,7 +109,7 @@ describe('organization role permission policy', () => {
       if (original.includes('future:read')) expect(permissions).toContain('future:read')
     }
     expect(isRolePermissionEnabled(['user:*'], 'admin:access')).toBe(true)
-    expect(canAccessOrgAdmin(revokeRolePermissions(['org:*', 'user:*'], ['admin:access']), [])).toBe(false)
+    expect(canAccessOrgAdmin(revokeRolePermissions(['org:*', 'user:*'], ['admin:access']))).toBe(false)
     expect(isRolePermissionEnabled(revokeRolePermissions(['contract:*'], ['contract:view']), 'contract:view')).toBe(false)
     expect(isRolePermissionEnabled(revokeRolePermissions(['org:*', 'dept:*'], ['dept:write']), 'dept:write')).toBe(false)
   })

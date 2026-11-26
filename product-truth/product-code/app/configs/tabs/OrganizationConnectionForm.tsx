@@ -201,17 +201,23 @@ export function OrganizationConnectionForm({ provider, canConnect, canApply, onC
         }),
       })
       const body = await response.json().catch(() => ({})) as {
-        data?: { connection?: ConnectionSummary; preview?: DirectoryPreview }
+        data?: { connection?: ConnectionSummary; preview?: DirectoryPreview | null }
         error?: string
       }
-      if (!response.ok || !body.data?.preview || !body.data.connection) {
+      if (!response.ok || !body.data?.connection) {
         throw new Error(body.error || '通讯录验证失败。')
       }
       applyConnection(body.data.connection)
-      setPreview(body.data.preview)
-      setMessage(connectionPresentation(body.data.connection).currentConfigurationEnabled
-        ? '配置检查通过，当前目录连接已启用。可继续读取组织目录差异；本次检查没有写入组织。'
-        : '配置检查通过。下一步启用或应用当前配置，再读取组织目录差异；本次检查没有写入组织。')
+      const verifiedPreview = body.data.preview ?? null
+      setPreview(verifiedPreview)
+      const enabled = connectionPresentation(body.data.connection).currentConfigurationEnabled
+      if (!verifiedPreview) {
+        setMessage(enabled ? '配置检查通过，当前目录连接已启用。' : '配置检查通过，当前配置待启用。')
+      } else {
+        setMessage(enabled
+          ? '配置检查通过，当前目录连接已启用。可继续读取组织目录差异；本次检查没有写入组织。'
+          : '配置检查通过。下一步启用或应用当前配置，再读取组织目录差异；本次检查没有写入组织。')
+      }
       await onChanged?.()
     } catch (error) {
       setFailure(error instanceof Error ? error.message : '通讯录验证失败。')
