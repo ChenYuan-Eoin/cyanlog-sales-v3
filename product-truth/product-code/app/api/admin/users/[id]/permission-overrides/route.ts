@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { AuthError, requireAuth } from '@/lib/auth'
 import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
 import type { AsyncRouteParams } from '@/lib/route-params'
-import { employeeShippingPermissionKeys } from '@/lib/shipping/employee-permission-overrides'
+import { employeePermissionAllowsScope, employeeShippingPermissionKeys } from '@/lib/shipping/employee-permission-scope'
 import { loadEmployeeShippingPermissionTable } from '@/lib/shipping/entry-access'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -29,8 +29,7 @@ type PermissionCode = z.infer<typeof permissionCodeSchema>
 type Override = z.infer<typeof overrideSchema>
 
 function supportsScope(key: PermissionCode, override: Override): boolean {
-  if (override?.effect !== 'ALLOW') return true
-  return key === 'shipping:owner_view' ? override.scope.type === 'self' : override.scope.type !== 'self'
+  return override?.effect !== 'ALLOW' || employeePermissionAllowsScope(key, override.scope.type)
 }
 
 const patchSchema = z.strictObject({

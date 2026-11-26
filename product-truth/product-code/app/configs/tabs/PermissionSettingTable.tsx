@@ -8,6 +8,9 @@ import { ORG_MEMBER_LIFECYCLE_ACTIONS } from '@/lib/admin/member-action-keys'
 import { getEffectiveOwnerShippingPermissions, getEffectiveShippingPermissions, legacyShippingPermission, SHIPPING_RECORD_RETURN } from '@/lib/module-access'
 import { isOrganizationSourcePermissionKey, ORG_BUSINESS_ROLE_ASSIGN, ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ORG_MEMBER_EDIT } from '@/lib/permissions'
 import { canRevokeShippingAction, getPermissionGrantSource, isRolePermissionEnabled, isRolePermissionExplicitlyGranted } from '@/lib/role-permission-policy'
+import {
+  employeePermissionAllowsScope, type EmployeePermissionScope, type EmployeePermissionOverride as SavedEmployeePermissionOverride,
+} from '@/lib/shipping/employee-permission-scope'
 import { isShippingOwnerPermission } from '@/lib/shipping/owner-permission-keys'
 import {
   getDirectoryActions,
@@ -22,11 +25,11 @@ const retainedLegacyGrantKeys = new Set<string>([
   ORG_BUSINESS_ROLE_ASSIGN, ORG_MEMBER_EDIT, ...ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ...ORG_MEMBER_LIFECYCLE_ACTIONS,
 ])
 
-export type EmployeeDepartmentRange = { department_id: string; include_subdepartments: boolean }
-export type EmployeePermissionScope = { type: 'self' } | { type: 'org' }
-  | { type: 'department'; departments: EmployeeDepartmentRange[] }
-export type EmployeePermissionOverride = { effect: 'DENY'; scope: null }
-  | { effect: 'ALLOW'; scope: EmployeePermissionScope } | null
+type EmployeeDepartmentRanges = Extract<EmployeePermissionScope, { type: 'department' }>['departments']
+type EmployeeScopeType = EmployeePermissionScope['type']
+const employeeScopeTypes = ['self', 'org', 'department'] as const
+const employeeScopeLabels = { self: '本人', org: '全组织', department: '指定部门' }
+export type EmployeePermissionOverride = SavedEmployeePermissionOverride | null
 
 export type EmployeePermissionDepartment = { id: string; name: string; parent_id: string | null }
 
@@ -102,15 +105,16 @@ function EmployeePermissionControls({ state, label, employee }: {
 }) {
   const [effect, setEffect] = useState(state.override?.effect ?? '')
   const initialScope = state.override?.scope ?? state.base_scope
-  const [scopeType, setScopeType] = useState<EmployeePermissionScope['type'] | ''>(initialScope?.type ?? '')
-  const [ranges, setRanges] = useState<EmployeeDepartmentRange[]>(initialScope?.type === 'department' ? initialScope.departments : [])
-  const selfOnly = isShippingOwnerPermission(state.key)
-  const scope: EmployeePermissionScope | null = selfOnly ? { type: 'self' }
-    : scopeType === 'department' && ranges.length > 0 ? { type: 'department', departments: ranges }
-      : scopeType === 'org' ? { type: 'org' } : null
+  const [chosenScopeType, setChosenScopeType] = useState<EmployeeScopeType | ''>(initialScope?.type ?? '')
+  const [ranges, setRanges] = useState<EmployeeDepartmentRanges>(initialScope?.type === 'department' ? initialScope.departments : [])
+  const scopes = employeeScopeTypes.filter(type => employeePermissionAllowsScope(state.key, type))
+  const fixedScope = scopes.length === 1 ? scopes[0] : null
+  const scopeType = fixedScope ?? (chosenScopeType && scopes.includes(chosenScopeType) ? chosenScopeType : '')
+  const scope: EmployeePermissionScope | null = scopeType === 'self' || scopeType === 'org' ? { type: scopeType }
+    : scopeType === 'department' && ranges.length > 0 ? { type: scopeType, departments: ranges } : null
   const next: EmployeePermissionOverride = effect === 'DENY' ? { effect, scope: null }
     : effect === 'ALLOW' && scope ? { effect, scope } : null
-  const canSetOverride = state.can_edit && employee.published.has(state.key)
+  const canSetOverride = state.can_edit && employee.published.has(state.key) && scopes.length > 0
   const valid = effect === '' ? state.can_edit
     : canSetOverride && (effect === 'DENY' || scope !== null)
   const selectClass = 'rounded-md border border-slate-200 bg-white px-2 py-1 text-sm disabled:opacity-60'
@@ -143,14 +147,13 @@ function EmployeePermissionControls({ state, label, employee }: {
               </select>
             </label>
             {effect === 'ALLOW' && (
-              selfOnly ? <span>数据范围 本人</span> : (
+              fixedScope ? <span>数据范围 {employeeScopeLabels[fixedScope]}</span> : (
                 <label className="inline-flex flex-wrap items-center gap-2">
                   数据范围
                   <select aria-label={label + ' 数据范围'} className={selectClass} value={scopeType}
-                    onChange={event => setScopeType(event.currentTarget.value as 'org' | 'department' | '')}>
+                    onChange={event => setChosenScopeType(event.currentTarget.value as EmployeeScopeType | '')}>
                     <option value="">请选择</option>
-                    <option value="org">全组织</option>
-                    <option value="department">指定部门</option>
+                    {scopes.map(type => <option value={type} key={type}>{employeeScopeLabels[type]}</option>)}
                   </select>
                 </label>
               )
@@ -160,7 +163,7 @@ function EmployeePermissionControls({ state, label, employee }: {
               保存{label}
             </Button>
           </div>
-          {effect === 'ALLOW' && !selfOnly && scopeType === 'department' && (
+          {effect === 'ALLOW' && scopeType === 'department' && (
             <div className="space-y-1.5">
               {ranges.map(range => {
                 const name = departmentName(employee.departments, range.department_id)

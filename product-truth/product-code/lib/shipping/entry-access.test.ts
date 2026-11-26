@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadShippingLedgerAccess, resolveShippingEntry } from './entry-access'
+import { loadPublishedShippingAccess, loadShippingLedgerAccess, resolveShippingEntry } from './entry-access'
 import { resolveOwnerShippingPermissions } from '@/lib/role-permission-resolution'
-import { SHIPPING_OWNER_ACTION_KEYS } from '@/lib/module-access'
+import { SHIPPING_OPERATE, SHIPPING_OWNER_ACTION_KEYS, SHIPPING_RECORD_RETURN, SHIPPING_WORKBENCH_ACTION_KEYS } from '@/lib/module-access'
 
 const db = vi.hoisted(() => ({
   from: vi.fn(), select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn(),
@@ -30,6 +30,31 @@ const assignment = (roleCode: string, permissions: string[] = [], ownerGrant?: r
   ),
 })
 const activeOrg = { orgId: 'org-a', assignments: [assignment('EMPLOYEE_SHIPPING', [], SHIPPING_OWNER_ACTION_KEYS)] }
+
+const orgOnlyWorkbenchActions = SHIPPING_WORKBENCH_ACTION_KEYS
+  .filter(key => key !== 'shipping:ledger_view' && key !== SHIPPING_RECORD_RETURN)
+const workbenchPublication = [SHIPPING_OPERATE, ...SHIPPING_WORKBENCH_ACTION_KEYS]
+const employeeOverridesEnabled = { employee_permission_overrides_enabled: true }
+
+function mockEmployeeWorkbenchState(overrides: object[], inheritedLedger: boolean, orgWideLedger: boolean) {
+  const scopes = [
+    {
+      permission_code: 'shipping:ledger_view',
+      base_organization_wide: inheritedLedger,
+      base_department_ids: [],
+      organization_wide: orgWideLedger,
+      department_ids: orgWideLedger ? [] : ['south'],
+    },
+    {
+      permission_code: SHIPPING_RECORD_RETURN,
+      base_organization_wide: false,
+      base_department_ids: [],
+      organization_wide: false,
+      department_ids: [],
+    },
+  ]
+  db.rpcRows.mockImplementation(async (name: string) => name === 'shipping_employee_permission_scopes_v1' ? scopes : overrides)
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -88,6 +113,53 @@ describe('shipping entry authorization', () => {
     expect(await resolveShippingEntry(user, token)).toMatchObject({ canOperate: false, departmentLedger: [{ id: 'south' }] })
     scopes[0].department_ids = []
     expect(await loadShippingLedgerAccess(user.id, false)).toBeNull()
+  })
+
+  it.each(orgOnlyWorkbenchActions)('uses personal DENY for %s without restoring it through the legacy operator grant', async (key) => {
+    db.context.mockResolvedValue({
+      ...activeOrg,
+      settings: employeeOverridesEnabled,
+      assignments: [assignment('OPERATIONS', [SHIPPING_OPERATE])],
+    })
+    db.published.mockResolvedValue(workbenchPublication)
+    mockEmployeeWorkbenchState([], true, true)
+    expect((await loadPublishedShippingAccess(user.id))?.permissions).toContain(key)
+
+    mockEmployeeWorkbenchState([{ permission_code: key, effect: 'DENY', scope: null }], true, true)
+    const access = await loadPublishedShippingAccess(user.id)
+    expect(access?.permissions).toContain('shipping:ledger_view')
+    expect(access?.permissions).not.toContain(key)
+    expect(access?.permissions).not.toContain(SHIPPING_OPERATE)
+    expect(access?.permissions).toEqual(expect.arrayContaining(orgOnlyWorkbenchActions.filter(action => action !== key)))
+  })
+
+  it.each(orgOnlyWorkbenchActions)('uses a role-free ALLOW for %s only with organization-wide ledger access', async (key) => {
+    db.context.mockResolvedValue({ ...activeOrg, settings: employeeOverridesEnabled, assignments: [] })
+    db.published.mockResolvedValue(workbenchPublication)
+    const allow = { permission_code: key, effect: 'ALLOW', scope: { type: 'org' } }
+    mockEmployeeWorkbenchState([
+      allow,
+      { permission_code: 'shipping:ledger_view', effect: 'ALLOW', scope: { type: 'org' } },
+    ], false, true)
+    expect(await loadPublishedShippingAccess(user.id)).toMatchObject({
+      permissions: ['shipping:ledger_view', key],
+      roleCodes: [],
+    })
+
+    mockEmployeeWorkbenchState([
+      allow,
+      { permission_code: 'shipping:ledger_view', effect: 'ALLOW', scope: {
+        type: 'department', departments: [{ department_id: 'south', include_subdepartments: false }],
+      } },
+    ], false, false)
+    db.restRows.mockResolvedValue([
+      { id: 'south', name: '华南', org_id: 'org-a', status: 'active', parent_id: null },
+    ])
+    expect(await loadPublishedShippingAccess(user.id, 'scoped')).toMatchObject({
+      permissions: [],
+      roleCodes: [],
+      departmentLedger: [{ id: 'south' }],
+    })
   })
 
   it('keeps connection settings separate and recomputes the operator after grant or lifecycle changes', async () => {

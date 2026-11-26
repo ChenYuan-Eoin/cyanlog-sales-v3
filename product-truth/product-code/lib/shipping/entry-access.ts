@@ -1,12 +1,15 @@
 import type { AuthUser } from '@/lib/auth'
 import {
-  getEffectiveOwnerShippingPermissions, SHIPPING_RECORD_RETURN,
+  getEffectiveOwnerShippingPermissions, getEffectiveShippingPermissions, hasShippingPermission,
+  SHIPPING_RECORD_RETURN, type ShippingPermissionKey,
 } from '@/lib/module-access'
 import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import { loadRoleModulePermissionProjection, loadShippingModulePermissionState } from '@/lib/permission-registry'
 import { supabaseAdmin } from '@/lib/supabase'
 import { createMiddlewareRestClient } from '@/lib/middleware-rest-client'
 import { DEPARTMENT_LEDGER_VIEW, loadAuthorizedLedgerDepartments, loadDepartmentLedgerScope, type LedgerDepartment } from './department-ledger-access'
+import { isEmployeeTeamPermission } from './employee-permission-scope'
+import { isShippingOwnerPermission } from './owner-permission-keys'
 import {
   displayEmployeeTeamPermissionScope, effectiveEmployeeOwnerShippingPermissions, effectiveOrganizationShippingPermissions,
   employeeShippingPermissionKeys, hasEmployeeShippingOverrides, loadEmployeeShippingState, type EmployeeShippingPermissionRow,
@@ -15,7 +18,7 @@ import {
 type PublishedShippingAccess = {
   orgId: string
   returnRegistered?: boolean
-  permissions: string[]
+  permissions: ShippingPermissionKey[]
   roleCodes: string[]
   ownerPermissions: string[]
   departmentLedger?: LedgerDepartment[]
@@ -97,15 +100,28 @@ export async function loadEmployeeShippingPermissionTable(userId: string, orgId:
   if (account.error) throw account.error
   if (!account.data || account.data.id !== userId || account.data.status !== 'active' || account.data.login_enabled !== true) return null
   const ownerGrants = context.assignments.flatMap(assignment => assignment.ownerShippingPermissions ?? [])
+  const organizationGrants = context.assignments.flatMap(assignment => assignment.permissions)
+  const baseOwner = getEffectiveOwnerShippingPermissions(ownerGrants, publication)
+  const effectiveOwner = effectiveEmployeeOwnerShippingPermissions(ownerGrants, publication, protectedAccount ? null : employee)
+  const baseOrganization = getEffectiveShippingPermissions(organizationGrants, publication)
+  const effectiveOrganization = effectiveOrganizationShippingPermissions(organizationGrants, publication, protectedAccount ? null : employee)
   const permissions = employeeShippingPermissionKeys.map<EmployeeShippingPermissionRow>(key => {
     const override = protectedAccount ? null : employee.overrides.get(key) ?? null
     const can_edit = !protectedAccount && (publication.published.has(key) || override !== null)
-    if (key === 'shipping:owner_view') {
-      const base = getEffectiveOwnerShippingPermissions(ownerGrants, publication).includes(key)
-      const effective = effectiveEmployeeOwnerShippingPermissions(ownerGrants, publication, protectedAccount ? null : employee).includes(key)
+    if (isShippingOwnerPermission(key)) {
+      const base = baseOwner.includes(key)
+      const effective = effectiveOwner.includes(key)
       const scope = { type: 'self' } as const
       return { key, base, effective, base_scope: base ? scope : null, effective_scope: effective ? scope : null, override, can_edit,
-        sources: context.assignments.filter(assignment => assignment.ownerShippingPermissions?.includes(key))
+        sources: context.assignments.filter(assignment => base && assignment.ownerShippingPermissions?.includes(key))
+          .map(assignment => ({ kind: 'role' as const, name: assignment.roleName })) }
+    }
+    if (!isEmployeeTeamPermission(key)) {
+      const base = baseOrganization.includes(key)
+      const effective = effectiveOrganization.includes(key)
+      const scope = { type: 'org' } as const
+      return { key, base, effective, base_scope: base ? scope : null, effective_scope: effective ? scope : null, override, can_edit,
+        sources: context.assignments.filter(assignment => base && hasShippingPermission(assignment.permissions, key))
           .map(assignment => ({ kind: 'role' as const, name: assignment.roleName })) }
     }
     const scope = employee.team[key]

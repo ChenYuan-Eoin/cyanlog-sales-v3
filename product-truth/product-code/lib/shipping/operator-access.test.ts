@@ -2,6 +2,7 @@
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST as confirmShipment } from '@/app/api/shipping/ledger/[id]/confirm/route'
+import type { EmployeeShippingState } from './employee-permission-overrides'
 import { listShippingOperatorRecipients, loadShippingOperatorDecision, requireShippingOperator } from './operator-access'
 
 type Row = Record<string, unknown>
@@ -10,6 +11,7 @@ const m = vi.hoisted(() => ({
   requireAuth: vi.fn(),
   submitShipment: vi.fn(),
   publishedKeys: vi.fn(),
+  loadEmployeeShippingState: vi.fn(),
   tables: {} as Record<string, Row[]>,
   failedTable: '',
 }))
@@ -17,6 +19,10 @@ const m = vi.hoisted(() => ({
 vi.mock('@/lib/auth', () => ({ requireAuth: m.requireAuth, AuthError: class extends Error {} }))
 vi.mock('@/lib/shipping/workflow', () => ({ confirmAndSubmitShipment: m.submitShipment }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: m.from } }))
+vi.mock('./employee-permission-overrides', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./employee-permission-overrides')>(),
+  loadEmployeeShippingState: m.loadEmployeeShippingState,
+}))
 vi.mock('@/lib/permission-registry', () => ({
   loadPublishedModulePermissionKeys: m.publishedKeys,
   loadShippingModulePermissionState: async () => {
@@ -54,11 +60,31 @@ function operatorAssignment({
   }
 }
 
+function employeeState(
+  overrides: EmployeeShippingState['overrides'] = new Map(),
+  organizationWide = true,
+): EmployeeShippingState {
+  return {
+    overrides,
+    team: {
+      'shipping:ledger_view': {
+        permission_code: 'shipping:ledger_view', base_organization_wide: true, base_department_ids: [],
+        organization_wide: organizationWide, department_ids: [],
+      },
+      'shipping:record_return': {
+        permission_code: 'shipping:record_return', base_organization_wide: false, base_department_ids: [],
+        organization_wide: false, department_ids: [],
+      },
+    },
+  }
+}
+
 beforeEach(() => {
   m.failedTable = ''
   m.requireAuth.mockReset().mockResolvedValue({ id: userId, org_id: orgId })
   m.submitShipment.mockReset().mockResolvedValue({ status: 'waybill_created' })
   m.publishedKeys.mockReset().mockResolvedValue(['shipping:operate'])
+  m.loadEmployeeShippingState.mockReset().mockResolvedValue(employeeState())
   m.tables = {
     user_organizations: [{ ...operatorAssignment().membership, account: operatorAssignment().user }],
     organizations: [operatorAssignment().membership.organization],
@@ -179,6 +205,48 @@ describe('organization-scoped shipping operator access', () => {
 })
 
 describe('shipping reminder recipients', () => {
+  it('requires existing organization operators to keep organization ledger and review access', async () => {
+    function inOptedInOrg(user: string, role = establishedRole) {
+      const assignment = operatorAssignment({ user, role })
+      assignment.membership.organization.settings = { employee_permission_overrides_enabled: true }
+      return assignment
+    }
+    const personallyAllowed = inOptedInOrg('personally-allowed', { ...establishedRole, permissions: [] })
+    m.tables.user_roles = [
+      operatorAssignment({ user: 'unchanged-org', org: 'org-without-overrides' }),
+      inOptedInOrg('still-wide'), inOptedInOrg('still-wide'),
+      inOptedInOrg('scoped'), inOptedInOrg('ledger-denied'), inOptedInOrg('review-denied'),
+      personallyAllowed,
+    ]
+    const scoped = employeeState(new Map([['shipping:ledger_view', {
+      effect: 'ALLOW', scope: { type: 'department', departments: [{ department_id: 'east', include_subdepartments: true }] },
+    }]]), false)
+    const personalStates: Record<string, EmployeeShippingState> = {
+      scoped,
+      'ledger-denied': employeeState(new Map([['shipping:ledger_view', { effect: 'DENY', scope: null }]]), false),
+      'review-denied': employeeState(new Map([['shipping:record_review', { effect: 'DENY', scope: null }]])),
+      'personally-allowed': employeeState(new Map([['shipping:record_review', { effect: 'ALLOW', scope: { type: 'org' } }]])),
+    }
+    m.loadEmployeeShippingState.mockImplementation(async (_orgId: string, targetId: string) => personalStates[targetId] ?? employeeState())
+    await expect(listShippingOperatorRecipients()).resolves.toEqual([
+      { userId: 'unchanged-org', orgId: 'org-without-overrides' },
+      { userId: 'still-wide', orgId },
+    ])
+    expect(m.loadEmployeeShippingState.mock.calls).toEqual([
+      [orgId, 'still-wide'], [orgId, 'scoped'], [orgId, 'ledger-denied'], [orgId, 'review-denied'],
+    ])
+  })
+
+  it('stops reminder recipient discovery when an opted-in operator permission snapshot is unavailable', async () => {
+    const assignment = operatorAssignment()
+    assignment.membership.organization.settings = { employee_permission_overrides_enabled: true }
+    m.tables.user_roles = [assignment]
+    m.loadEmployeeShippingState.mockRejectedValueOnce(new Error('scope read failed'))
+    await expect(listShippingOperatorRecipients()).rejects.toMatchObject({
+      status: 503, message: '寄件提醒接收人读取失败。',
+    })
+  })
+
   it('deduplicates explicit exact-org grants and excludes implicit-only platform authority', async () => {
     m.tables.user_roles.push(
       operatorAssignment({ role: { ...establishedRole, id: 'custom-role', code: 'CUSTOM', permissions: ['shipping:*'], owner_org_id: orgId } }),

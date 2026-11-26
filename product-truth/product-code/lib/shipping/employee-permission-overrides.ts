@@ -1,18 +1,15 @@
 import { readMiddlewareRpcRows } from '@/lib/middleware-rest-client'
 import {
-  getEffectiveOwnerShippingPermissions, getEffectiveShippingPermissions, SHIPPING_OPERATE, SHIPPING_RECORD_RETURN, shippingActionViewDependency,
+  getEffectiveOwnerShippingPermissions, getEffectiveShippingPermissions,
+  legacyShippingPermission, SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE, SHIPPING_RECORD_RETURN, shippingActionViewDependency,
 } from '@/lib/module-access'
-
-export const employeeShippingPermissionKeys = ['shipping:ledger_view', SHIPPING_RECORD_RETURN, 'shipping:owner_view'] as const
-export type EmployeeShippingPermissionKey = typeof employeeShippingPermissionKeys[number]
-type TeamPermission = Exclude<EmployeeShippingPermissionKey, 'shipping:owner_view'>
-export type EmployeePermissionScope =
-  | { type: 'self' }
-  | { type: 'org' }
-  | { type: 'department'; departments: readonly { department_id: string; include_subdepartments: boolean }[] }
-export type EmployeePermissionOverride =
-  | { effect: 'ALLOW'; scope: EmployeePermissionScope }
-  | { effect: 'DENY'; scope: null }
+import { SHIPPING_OWNER_ACTION_KEYS } from './owner-permission-keys'
+import {
+  employeeOrganizationPermissionKeys, employeePermissionAllowsScope, employeeShippingPermissionKeys,
+  type EmployeePermissionOverride, type EmployeePermissionScope, type EmployeeShippingPermissionKey, type EmployeeTeamPermissionKey,
+} from './employee-permission-scope'
+export { employeeShippingPermissionKeys }
+export type { EmployeePermissionOverride, EmployeePermissionScope, EmployeeShippingPermissionKey }
 
 type PermissionSource = { kind: 'role' | 'department'; name: string }
 export type EmployeeShippingPermissionRow = {
@@ -26,7 +23,7 @@ export type EmployeeShippingPermissionRow = {
   sources: PermissionSource[]
 }
 type TeamScope = {
-  permission_code: TeamPermission
+  permission_code: EmployeeTeamPermissionKey
   base_organization_wide: boolean
   base_department_ids: string[]
   organization_wide: boolean
@@ -35,7 +32,7 @@ type TeamScope = {
 }
 export type EmployeeShippingState = {
   overrides: ReadonlyMap<EmployeeShippingPermissionKey, EmployeePermissionOverride>
-  team: Record<TeamPermission, TeamScope>
+  team: Record<EmployeeTeamPermissionKey, TeamScope>
 }
 
 function object(value: unknown): Record<string, unknown> | null {
@@ -46,9 +43,10 @@ function readOverride(key: EmployeeShippingPermissionKey, row: Record<string, un
   if (row.effect === 'DENY' && row.scope === null) return { effect: 'DENY', scope: null }
   const scope = object(row.scope)
   if (row.effect === 'ALLOW' && scope) {
-    if (key === 'shipping:owner_view' && scope.type === 'self') return { effect: 'ALLOW', scope: { type: 'self' } }
-    if (key !== 'shipping:owner_view' && scope.type === 'org') return { effect: 'ALLOW', scope: { type: 'org' } }
-    if (key !== 'shipping:owner_view' && scope.type === 'department' && Array.isArray(scope.departments) && scope.departments.length) {
+    if (scope.type === 'self' && employeePermissionAllowsScope(key, scope.type)) return { effect: 'ALLOW', scope: { type: 'self' } }
+    if (scope.type === 'org' && employeePermissionAllowsScope(key, scope.type)) return { effect: 'ALLOW', scope: { type: 'org' } }
+    if (scope.type === 'department' && employeePermissionAllowsScope(key, scope.type)
+      && Array.isArray(scope.departments) && scope.departments.length) {
       const departments = scope.departments.map(value => {
         const selection = object(value)
         if (typeof selection?.department_id !== 'string' || typeof selection.include_subdepartments !== 'boolean') {
@@ -62,7 +60,7 @@ function readOverride(key: EmployeeShippingPermissionKey, row: Record<string, un
   throw new Error('auth middleware invalid employee shipping override')
 }
 
-function readTeamScope(rows: TeamScope[], key: TeamPermission): TeamScope {
+function readTeamScope(rows: TeamScope[], key: EmployeeTeamPermissionKey): TeamScope {
   const matches = rows.filter(row => row?.permission_code === key)
   const scope = matches[0]
   if (matches.length !== 1 || typeof scope?.organization_wide !== 'boolean' || typeof scope.base_organization_wide !== 'boolean'
@@ -100,19 +98,34 @@ export function hasEmployeeShippingOverrides(settings: unknown): boolean {
 
 type ShippingPublication = Parameters<typeof getEffectiveShippingPermissions>[1]
 
+export function hasPersonalOrganizationShippingGrant(employee: EmployeeShippingState | null | undefined, key: string): boolean {
+  if (!employee) return false
+  if (key === 'shipping:ledger_view' || key === SHIPPING_RECORD_RETURN) return employee.team[key].organization_wide
+  const permission = employeeOrganizationPermissionKeys.find(action => action === key)
+  const override = permission && employee.overrides.get(permission)
+  return !!override && override.effect === 'ALLOW' && override.scope.type === 'org'
+}
+
 export function effectiveOrganizationShippingPermissions(
   grants: readonly string[], publication: ShippingPublication, employee?: EmployeeShippingState | null,
 ) {
   if (!employee) return getEffectiveShippingPermissions(grants, publication)
   const ledger = employee.team['shipping:ledger_view'].organization_wide
   const returns = employee.team[SHIPPING_RECORD_RETURN].organization_wide
+  const denied = new Set<string>(employeeOrganizationPermissionKeys.filter(key => employee.overrides.get(key)?.effect === 'DENY'))
+  const deniedBundles = new Set([...denied].map(legacyShippingPermission))
+  const allowed = employeeOrganizationPermissionKeys.filter(key => publication.published.has(key) && hasPersonalOrganizationShippingGrant(employee, key))
   const projection = getEffectiveShippingPermissions([
     ...grants,
     ...(ledger ? ['shipping:ledger_view'] : []),
     ...(returns ? [SHIPPING_RECORD_RETURN] : []),
+    ...allowed,
   ], publication)
   return projection.filter(key => {
-    if (key === 'shipping:ledger_view' || key === SHIPPING_OPERATE || shippingActionViewDependency(key) === 'shipping:ledger_view') {
+    const dependency = shippingActionViewDependency(key)
+    if (denied.has(key) || (dependency && denied.has(dependency))) return false
+    if ((key === SHIPPING_OPERATE || key === SHIPPING_MANAGE_CONNECTIONS) && deniedBundles.has(key)) return false
+    if (key === 'shipping:ledger_view' || key === SHIPPING_OPERATE || dependency === 'shipping:ledger_view') {
       return ledger && (key !== SHIPPING_RECORD_RETURN || returns)
     }
     return true
@@ -120,11 +133,14 @@ export function effectiveOrganizationShippingPermissions(
 }
 
 export function employeeOwnerShippingGrants(grants: readonly string[], employee?: EmployeeShippingState | null) {
-  const override = employee?.overrides.get('shipping:owner_view')
-  if (!override) return [...grants]
-  return override.effect === 'ALLOW'
-    ? [...new Set([...grants, 'shipping:owner_view'])]
-    : grants.filter(key => key !== 'shipping:owner_view')
+  if (!employee) return [...grants]
+  const result = new Set(grants)
+  for (const key of SHIPPING_OWNER_ACTION_KEYS) {
+    const override = employee.overrides.get(key)
+    if (override?.effect === 'DENY') result.delete(key)
+    if (override?.effect === 'ALLOW') result.add(key)
+  }
+  return [...result]
 }
 
 export function effectiveEmployeeOwnerShippingPermissions(
@@ -138,7 +154,7 @@ export function displayTeamScope(wide: boolean, ids: string[]): EmployeePermissi
   return ids.length ? { type: 'department', departments: ids.map(department_id => ({ department_id, include_subdepartments: false })) } : null
 }
 
-export function displayEmployeeTeamPermissionScope(state: EmployeeShippingState, key: TeamPermission, useBase: boolean) {
+export function displayEmployeeTeamPermissionScope(state: EmployeeShippingState, key: EmployeeTeamPermissionKey, useBase: boolean) {
   const action = state.team[key]
   const wide = useBase ? action.base_organization_wide : action.organization_wide
   const ids = useBase ? action.base_department_ids : action.department_ids

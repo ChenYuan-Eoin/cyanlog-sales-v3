@@ -73,6 +73,41 @@ describe('employee shipping permissions', () => {
     expect(navigation.headers.get('x-middleware-request-x-user-navigation-scope')).toBe('shipping-only')
     expect((await request('/api/quotes')).status).toBe(403)
   })
+
+  it('admits read-only settings with no role and preserves exact write denial over the inherited settings bundle', async () => {
+    const settingsActions = {
+      ...options.shippingActions,
+      'shipping:settings_view': { status: 'published', dependencies: [] },
+      'shipping:intake_write': { status: 'published', dependencies: ['shipping:settings_view'] },
+    }
+    const allowView = { permission_code: 'shipping:settings_view', effect: 'ALLOW', scope: { type: 'org' } }
+    const denyWrite = { permission_code: 'shipping:intake_write', effect: 'DENY', scope: null }
+    const fixture = { ...options, roles: [], shippingActions: settingsActions, employeeShippingScopes: scopes(false) }
+    mockExactOrgAuth({ ...fixture, employeeOverrides: [allowView] })
+    expect((await request('/')).headers.get('location')).toBe('https://sales.cyanlog.icu/shipping/settings')
+    expect((await request('/api/shipping/intake-settings')).status).toBe(200)
+    expect((await request('/api/shipping/intake-settings', 'POST')).status).toBe(403)
+    expect((await request('/api/quotes')).status).toBe(403)
+    mockExactOrgAuth({ ...fixture, employeeOverrides: [allowView, { ...denyWrite, effect: 'ALLOW', scope: { type: 'org' } }] })
+    expect((await request('/api/shipping/intake-settings', 'POST')).status).toBe(200)
+    mockExactOrgAuth({ ...fixture, employeeOverrides: [denyWrite],
+      roles: [{ roles: { id: 'settings', code: 'SETTINGS', permissions: ['shipping:manage_connections'] } }],
+    })
+    expect((await request('/api/shipping/intake-settings')).status).toBe(200)
+    expect((await request('/api/shipping/intake-settings', 'POST')).status).toBe(403)
+  })
+
+  it('allows an employee to view their own workorders without also allowing them to submit', async () => {
+    const view = { permission_code: 'shipping:owner_view', effect: 'ALLOW', scope: { type: 'self' } }
+    const submit = { permission_code: 'shipping:owner_submit', effect: 'ALLOW', scope: { type: 'self' } }
+    const fixture = { ...options, roles: [], authMethod: 'fxiaoke' as const, employeeShippingScopes: scopes(false) }
+    mockExactOrgAuth({ ...fixture, employeeOverrides: [view, { ...submit, effect: 'DENY', scope: null }] })
+    expect((await request('/api/shipping/owner/orders')).status).toBe(200)
+    expect((await request('/api/shipping/owner/orders', 'POST')).status).toBe(403)
+    mockExactOrgAuth({ ...fixture, employeeOverrides: [view, submit] })
+    expect((await request('/api/shipping/owner/orders', 'POST')).status).toBe(200)
+    expect((await request('/api/shipping/ledger')).status).toBe(403)
+  })
 })
 
 type TestDepartment = { id: string; org_id: string; status: string; leader_id?: string; name?: string; parent_id?: string | null }

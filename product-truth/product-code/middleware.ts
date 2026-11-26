@@ -57,7 +57,7 @@ import {
 import { sessionDeadline } from '@/lib/auth/fxiaoke-session'
 import { DEPARTMENT_LEDGER_VIEW, isDepartmentLedgerReadPath, isDepartmentLedgerReturnPath, loadDepartmentLedgerScope } from '@/lib/shipping/department-ledger-access'
 import {
-  effectiveOrganizationShippingPermissions, employeeOwnerShippingGrants, hasEmployeeShippingOverrides,
+  effectiveOrganizationShippingPermissions, employeeOwnerShippingGrants, hasEmployeeShippingOverrides, hasPersonalOrganizationShippingGrant,
   loadEmployeeShippingState, type EmployeeShippingState,
 } from '@/lib/shipping/employee-permission-overrides'
 
@@ -420,6 +420,8 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
   const personalShippingAccess = employeeShipping?.team[DEPARTMENT_LEDGER_VIEW].organization_wide === true
     || (employeeShipping?.overrides.get('shipping:owner_view')?.effect === 'ALLOW'
       && await allowsShippingOwnerPermission(effectiveOwnerGrants, 'shipping:owner_view'))
+    || (hasPersonalOrganizationShippingGrant(employeeShipping, 'shipping:settings_view')
+      && (await readShippingPermissionPublication(new Set(['shipping:settings_view']))).published.has('shipping:settings_view'))
   const scopedModulesOnly = (roleCodes.length > 0 || personalShippingAccess) && !hasOtherModuleGrants
   const departmentWorkspaceAccess = checkDepartmentWorkspace && activeMembership
     && (roleCodes.length === 0 || scopedModulesOnly)
@@ -468,14 +470,17 @@ async function allowsShippingPermission(auth: MiddlewareAuthContext, required: r
   for (const key of required) {
     const legacy = legacyShippingPermission(key)
     const hasLegacy = legacy !== null && hasPermission(grants, legacy)
-    const hasPersonalOrgScope = (key === 'shipping:ledger_view' || key === 'shipping:record_return')
-      && employeeShipping?.team[key].organization_wide
+    const hasPersonalOrgScope = hasPersonalOrganizationShippingGrant(employeeShipping, key)
     if (!hasLegacy && !hasPermission(grants, key) && !hasPersonalOrgScope) continue
 
     relevant.add(key)
     if (hasLegacy) relevant.add(legacy)
     const dependency = shippingActionViewDependency(key)
-    if (dependency) relevant.add(dependency)
+    if (dependency) {
+      relevant.add(dependency)
+      const legacyDependency = legacyShippingPermission(dependency)
+      if (legacyDependency && hasPermission(grants, legacyDependency)) relevant.add(legacyDependency)
+    }
   }
   if (!relevant.size) return false
   const allowed = effectiveOrganizationShippingPermissions(grants, await readShippingPermissionPublication(relevant), employeeShipping)

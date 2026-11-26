@@ -18,6 +18,36 @@ beforeEach(() => {
 })
 
 describe('RoleAssignmentDialog scoped assignment', () => {
+  it.each([
+    { responseOrg: 'org-1', text: '此员工有 1 项寄件个人设置。保存角色分配后，个人设置仍覆盖对应权限点及数据范围。' },
+    { responseOrg: 'other-org', text: '暂时无法核对该员工的寄件个人设置。' },
+  ])('checks stored overrides only for the requested organization', async ({ responseOrg, text }) => {
+    const reviewEndpoint = '/api/admin/users/user-1/permission-overrides?orgId=org-1'
+    const fetchMock = vi.fn(async (url: string) => url === reviewEndpoint
+      ? Response.json({
+        org_id: responseOrg, user_id: 'user-1', departments: [],
+        permissions: [{
+          key: 'shipping:ledger_view', base: true, effective: false, base_scope: { type: 'org' }, effective_scope: null,
+          override: { effect: 'DENY', scope: null }, sources: [], can_edit: true,
+        }],
+        shipping_permission_publication: { registered: ['shipping:ledger_view'], published: ['shipping:ledger_view'] },
+      })
+      : Response.json({ success: true, data: { roles: [{ id: 'role-1', code: 'SALES', name: '销售' }] } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const onSubmit = vi.fn(async () => undefined)
+    render(<RoleAssignmentDialog
+      userId="user-1" userName="成员" employeePermissionOrgId="org-1"
+      currentRoles={[]} departments={[]} onSubmit={onSubmit} open onOpenChange={vi.fn()}
+    />)
+
+    expect(await screen.findByText(text)).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(reviewEndpoint, expect.objectContaining({ cache: 'no-store' }))
+    expect(onSubmit).not.toHaveBeenCalled()
+    fireEvent.click(await screen.findByRole('checkbox', { name: /销售/ }))
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(['role-1']))
+  })
+
   it('loads later pages before exposing assignable roles', async () => {
     const fetch = vi.fn().mockResolvedValueOnce(Response.json({
       success: true, data: { roles: [{ id: 'first', code: 'SALES', name: '第一页角色' }] },

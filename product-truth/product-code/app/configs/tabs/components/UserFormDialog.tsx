@@ -32,6 +32,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { PlusIcon, UserIcon, EditIcon } from 'lucide-react'
 import type { OrgSummaryUser, OrgSummaryDepartment } from '../../types'
 import { editableOrgRoleIds, isGenericallyAssignableRole } from '../role-assignment-policy'
+import { EmployeePermissionReview } from '../EmployeePermissionOverrides'
 
 const userSchema = z.object({
   email: z.string().email('请输入有效的邮箱地址'),
@@ -48,6 +49,7 @@ interface UserFormDialogProps {
   departments: OrgSummaryDepartment[]
   roles?: Array<{ id: string; name: string; code: string }>
   editingUser?: OrgSummaryUser | null
+  employeePermissionOrgId?: string
   onSubmit: (values: UserFormValues & { role_ids?: string[] }) => Promise<void>
   trigger?: React.ReactNode
   open?: boolean
@@ -58,6 +60,7 @@ export function UserFormDialog({
   departments,
   roles = [],
   editingUser,
+  employeePermissionOrgId,
   onSubmit,
   trigger,
   open: controlledOpen,
@@ -209,6 +212,9 @@ export function UserFormDialog({
                       ))}
                     </SelectContent>
                   </Select>
+                  {open && employeePermissionOrgId && editingUser && (
+                    <EmployeePermissionReview orgId={employeePermissionOrgId} userId={editingUser.id} change="主部门" />
+                  )}
                   <FormMessage />
                 </FormItem>
               )}

@@ -99,6 +99,42 @@ it('restores inherited access with a null override and uses the current base sco
   }))
 })
 
+it.each([
+  { key: 'shipping:owner_submit', label: '提交本人寄件', scopeType: 'self' as const, scopeLabel: '本人' },
+  { key: 'shipping:connection_write', label: '维护顺丰连接', scopeType: 'org' as const, scopeLabel: '全组织' },
+])('saves only the fixed $scopeLabel scope for $label', async ({ key, label, scopeType, scopeLabel }) => {
+  const before = payload(null)
+  const permission = { ...before.permissions[1], key }
+  before.permissions.push(permission)
+  before.shipping_permission_publication.registered.push(key)
+  before.shipping_permission_publication.published.push(key)
+  const override = { effect: 'ALLOW' as const, scope: { type: scopeType } }
+  const after = {
+    ...before,
+    permissions: before.permissions.map(point => point.key === key
+      ? { ...point, override, effective: true, effective_scope: override.scope }
+      : point),
+  }
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce(Response.json(before))
+    .mockResolvedValueOnce(Response.json(after))
+    .mockResolvedValueOnce(Response.json(after))
+  vi.stubGlobal('fetch', fetchMock)
+  open()
+
+  const select = await screen.findByRole('combobox', { name: label + ' 个人设置' })
+  const row = select.closest('li')!
+  fireEvent.change(select, { target: { value: 'ALLOW' } })
+  expect(within(row).getByText('数据范围 ' + scopeLabel)).toBeInTheDocument()
+  expect(within(row).queryByRole('combobox', { name: label + ' 数据范围' })).not.toBeInTheDocument()
+  fireEvent.click(within(row).getByRole('button', { name: '保存' + label }))
+  expect(await screen.findByText('已保存该权限点的个人设置。')).toBeInTheDocument()
+  expect(fetchMock).toHaveBeenNthCalledWith(2, endpoint, expect.objectContaining({
+    method: 'PATCH',
+    body: JSON.stringify({ permission_code: key, expected_override: null, override }),
+  }))
+})
+
 it('disables further writes on a stale permission and requires a fresh read', async () => {
   const fetchMock = vi.fn()
     .mockResolvedValueOnce(Response.json(payload(null)))

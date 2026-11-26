@@ -46,6 +46,10 @@ function getHeaders(token: string | null) {
   return token ? { Authorization: 'Bearer ' + token } : undefined
 }
 
+function employeePermissionEndpoint(orgId: string, userId: string) {
+  return '/api/admin/users/' + encodeURIComponent(userId) + '/permission-overrides?orgId=' + encodeURIComponent(orgId)
+}
+
 async function readSnapshot(response: Response, orgId: string, userId: string): Promise<Snapshot> {
   const result = await response.json().catch(() => null)
   if (!response.ok) throw new Error(typeof result?.error === 'string' ? result.error : '无法读取员工权限。')
@@ -56,13 +60,49 @@ async function readSnapshot(response: Response, orgId: string, userId: string): 
   return parsed.data
 }
 
+export async function readEmployeePermissionOverrideCount(orgId: string, userId: string, signal: AbortSignal) {
+  const token = localStorage.getItem('token')
+  const response = await fetch(employeePermissionEndpoint(orgId, userId), {
+    headers: getHeaders(token), cache: 'no-store', signal,
+  })
+  const snapshot = await readSnapshot(response, orgId, userId)
+  if (token !== localStorage.getItem('token')) throw new Error('登录身份已变更，请重新读取。')
+  return snapshot.permissions.filter(permission => permission.override !== null).length
+}
+
+export function EmployeePermissionReview({ orgId, userId, change = '角色分配' }: {
+  orgId: string
+  userId: string
+  change?: '角色分配' | '主部门'
+}) {
+  const [review, setReview] = useState<{ orgId: string; userId: string; count: number | null }>()
+  useEffect(() => {
+    const controller = new AbortController()
+    function finish(count: number | null) {
+      if (!controller.signal.aborted) setReview({ orgId, userId, count })
+    }
+    void readEmployeePermissionOverrideCount(orgId, userId, controller.signal).then(finish, () => finish(null))
+    return () => controller.abort()
+  }, [orgId, userId])
+  if (review?.orgId !== orgId || review.userId !== userId || review.count === 0) return null
+  return review.count === null ? (
+    <p role="status" className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
+      暂时无法核对该员工的寄件个人设置。
+    </p>
+  ) : (
+    <p role="status" className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+      此员工有 {review.count} 项寄件个人设置。保存{change}后，个人设置仍覆盖对应权限点及数据范围。
+    </p>
+  )
+}
+
 export function EmployeePermissionOverrides({ orgId, userId, userName, onClose }: {
   orgId: string
   userId: string
   userName: string
   onClose: () => void
 }) {
-  const endpoint = '/api/admin/users/' + encodeURIComponent(userId) + '/permission-overrides?orgId=' + encodeURIComponent(orgId)
+  const endpoint = employeePermissionEndpoint(orgId, userId)
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [attempt, setAttempt] = useState(0)
   const [loading, setLoading] = useState(true)

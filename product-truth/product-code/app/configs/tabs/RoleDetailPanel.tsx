@@ -57,7 +57,9 @@ import {
   partitionRoleMutationTargets,
 } from './role-assignment-policy'
 import { PermissionSettingTable } from './PermissionSettingTable'
-import { EmployeePermissionOverrides, isEmployeePermissionTarget } from './EmployeePermissionOverrides'
+import {
+  EmployeePermissionOverrides, EmployeePermissionReview, isEmployeePermissionTarget, readEmployeePermissionOverrideCount,
+} from './EmployeePermissionOverrides'
 import { getRoleMembershipStats, type RoleMember, type RoleMembershipStats } from './role-membership-stats'
 
 // ============ Props 类型 ============
@@ -481,6 +483,10 @@ function MemberAssignmentTab({
     return fuse.search(dialogSearch).map(r => r.item)
   }, [fuse, dialogSearch, availableUsers])
 
+  const selectedPermissionTarget = !protectedRole && selection
+    ? availableUsers.find(user => user.id === selection.id && isEmployeePermissionTarget(user))
+    : undefined
+
   // 打开弹窗时重置选择
   useEffect(() => {
     if (dialogOpen) {
@@ -649,12 +655,19 @@ function MemberAssignmentTab({
 
     const currentRoleIds = editableOrgRoleIds(user)
     if (!currentRoleIds.includes(roleId)) return
-    if (!await confirmAction(`确定要撤销「${user.display_name}」的组织级角色分配？`, { confirmText: '移除', danger: true })) return
-
-    const newRoleIds = currentRoleIds.filter(id => id !== roleId)
 
     setAssigning(true)
     try {
+      let confirmation = `确定要撤销「${user.display_name}」的组织级角色分配？`
+      if (employeePermissionsOrgId && isEmployeePermissionTarget(user)) {
+        const count = await readEmployeePermissionOverrideCount(employeePermissionsOrgId, user.id, AbortSignal.timeout(2000))
+          .catch(() => null)
+        if (count === null) confirmation += '\n暂时无法核对该员工的寄件个人设置。'
+        else if (count > 0) confirmation += `\n此员工有 ${count} 项寄件个人设置。移除角色后，可核对最终权限及数据范围。`
+      }
+      if (!await confirmAction(confirmation, { confirmText: '移除', danger: true })) return
+
+      const newRoleIds = currentRoleIds.filter(id => id !== roleId)
       const token = localStorage.getItem('token')
       const res = await fetch(`/api/admin/users/${userId}/roles`, {
         method: 'POST',
@@ -913,6 +926,10 @@ function MemberAssignmentTab({
             <div className="shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-900">
               {systemSuperAdminAuthority ? '每次可为一名在职且已启用登录的本组织成员授予权限。' : '当前接口不支持原子批量写入。为避免多请求部分成功，每次只可添加一名成员。'}
             </div>
+
+            {dialogOpen && employeePermissionsOrgId && selectedPermissionTarget && (
+              <EmployeePermissionReview orgId={employeePermissionsOrgId} userId={selectedPermissionTarget.id} />
+            )}
 
             {/* 用户列表 */}
             <div className="flex-1 overflow-y-auto border rounded-lg">

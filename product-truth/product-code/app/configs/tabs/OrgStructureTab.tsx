@@ -1361,6 +1361,7 @@ export default function OrgStructureTab({
         <UserFormDialog
           departments={departments}
           editingUser={editingUser}
+          employeePermissionOrgId={currentUserId && actions.assignRoles && isEmployeePermissionTarget(editingUser) ? orgId : undefined}
           open={true}
           onOpenChange={(open) => !open && setEditingUser(null)}
           onSubmit={async (values) => {
@@ -1405,6 +1406,7 @@ export default function OrgStructureTab({
           currentRoles={assigningRoleIds}
           pendingRoles={assigningUser.pending_org_roles}
           organizationOnly={assigningUser.membership_status === 'invited'}
+          employeePermissionOrgId={currentUserId && isEmployeePermissionTarget(assigningUser) ? orgId : undefined}
           departments={departments}
           scopedRoles={users.find(user => user.id === assigningUser.id)?.scoped_roles}
           open={true}

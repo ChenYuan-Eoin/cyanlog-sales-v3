@@ -56,7 +56,7 @@ $$;
 
 -- Use one canonical tuple for both optimistic concurrency and JSON readback.
 -- Department existence is checked separately so an old selection can be cleared.
-create function private.normalize_employee_permission_override_v1(p_permission_code text, p_value jsonb)
+create function private.normalize_employee_permission_override_v1(p_scope_types text[], p_value jsonb)
 returns jsonb
 language plpgsql immutable set search_path = ''
 as $$
@@ -82,12 +82,11 @@ begin
     if v_scope is not distinct from 'null'::jsonb then return p_value; end if;
   elsif jsonb_typeof(v_scope) = 'object' and jsonb_typeof(v_scope->'type') = 'string' then
     v_kind := v_scope->>'type';
-    if ((p_permission_code = 'shipping:owner_view' and v_kind = 'self')
-      or (p_permission_code <> 'shipping:owner_view' and v_kind = 'org'))
+    if v_kind in ('self', 'org') and v_kind = any(p_scope_types)
       and v_scope = jsonb_build_object('type', v_kind) then
       return p_value;
     end if;
-    if p_permission_code <> 'shipping:owner_view' and v_kind = 'department'
+    if v_kind = 'department' and v_kind = any(p_scope_types)
       and jsonb_typeof(v_scope->'departments') = 'array'
       and (v_scope - array['type','departments']::text[]) = '{}'::jsonb then
       v_departments := v_scope->'departments';
@@ -126,7 +125,7 @@ begin
     using errcode = '22023', detail = 'EMPLOYEE_PERMISSION_OVERRIDE_INVALID';
 end;
 $$;
-revoke all on function private.normalize_employee_permission_override_v1(text, jsonb)
+revoke all on function private.normalize_employee_permission_override_v1(text[], jsonb)
   from public, anon, authenticated, service_role;
 
 create function public.admin_set_employee_permission_override_v1(
@@ -141,12 +140,37 @@ declare
   v_override jsonb;
   v_current jsonb;
   v_scope jsonb;
+  v_allowed_scope_types text[];
+  v_expected_dependencies text[];
   v_published_scope_types text[];
   v_department_count bigint;
 begin
-  if p_actor_id is null or p_org_id is null or p_user_id is null
-    or p_permission_code is null
-    or p_permission_code not in ('shipping:ledger_view', 'shipping:record_return', 'shipping:owner_view') then
+  select editable.scope_types, editable.dependencies into v_allowed_scope_types, v_expected_dependencies
+  from (values
+    ('shipping:ledger_view', array['org','department'], array[]::text[]),
+    ('shipping:record_return', array['org','department'], array['shipping:ledger_view']),
+    ('shipping:record_create', array['org'], array['shipping:ledger_view']),
+    ('shipping:record_review', array['org'], array['shipping:ledger_view']),
+    ('shipping:order_confirm', array['org'], array['shipping:ledger_view']),
+    ('shipping:order_reconcile', array['org'], array['shipping:ledger_view']),
+    ('shipping:tracking_refresh', array['org'], array['shipping:ledger_view']),
+    ('shipping:order_cancel', array['org'], array['shipping:ledger_view']),
+    ('shipping:order_change', array['org'], array['shipping:ledger_view']),
+    ('shipping:owner_view', array['self'], array[]::text[]),
+    ('shipping:owner_submit', array['self'], array['shipping:owner_view']),
+    ('shipping:owner_address_write', array['self'], array['shipping:owner_view']),
+    ('shipping:owner_resubmit', array['self'], array['shipping:owner_view']),
+    ('shipping:owner_tracking_refresh', array['self'], array['shipping:owner_view']),
+    ('shipping:owner_cancel', array['self'], array['shipping:owner_view']),
+    ('shipping:owner_change', array['self'], array['shipping:owner_view']),
+    ('shipping:settings_view', array['org'], array[]::text[]),
+    ('shipping:connection_write', array['org'], array['shipping:settings_view']),
+    ('shipping:billing_write', array['org'], array['shipping:settings_view']),
+    ('shipping:intake_write', array['org'], array['shipping:settings_view']),
+    ('shipping:intercept_enable', array['org'], array['shipping:settings_view'])
+  ) as editable(code, scope_types, dependencies)
+  where editable.code = p_permission_code;
+  if not found or p_actor_id is null or p_org_id is null or p_user_id is null then
     raise exception 'invalid employee permission override'
       using errcode = '22023', detail = 'EMPLOYEE_PERMISSION_OVERRIDE_INVALID';
   end if;
@@ -169,8 +193,8 @@ begin
       using errcode = '42501', detail = 'EMPLOYEE_PERMISSION_OVERRIDE_PROTECTED';
   end if;
 
-  v_expected := private.normalize_employee_permission_override_v1(p_permission_code, p_expected_override);
-  v_override := private.normalize_employee_permission_override_v1(p_permission_code, p_override);
+  v_expected := private.normalize_employee_permission_override_v1(v_allowed_scope_types, p_expected_override);
+  v_override := private.normalize_employee_permission_override_v1(v_allowed_scope_types, p_override);
   v_scope := nullif(v_override->'scope', 'null'::jsonb);
 
   select jsonb_build_object('effect', exception.effect, 'scope', exception.scope) into v_current
@@ -189,17 +213,10 @@ begin
       and point.resource = 'shipping' and point.category = 'shipping'
       and point.action = split_part(p_permission_code, ':', 2)
       and point.enforcement_consumer = 'lib/shipping/http.ts'
-      and case p_permission_code
-        when 'shipping:ledger_view' then point.dependencies = array[]::text[]
-          and (point.supported_scope_types = array['org']
-            or (cardinality(point.supported_scope_types) = 2
-              and point.supported_scope_types @> array['org','department']))
-        when 'shipping:record_return' then point.dependencies = array['shipping:ledger_view']
-          and cardinality(point.supported_scope_types) = 2
-          and point.supported_scope_types @> array['org','department']
-        when 'shipping:owner_view' then point.dependencies = array[]::text[]
-          and point.supported_scope_types = array['self']
-      end
+      and point.dependencies = v_expected_dependencies
+      and ((cardinality(point.supported_scope_types) = cardinality(v_allowed_scope_types)
+          and point.supported_scope_types @> v_allowed_scope_types)
+        or (p_permission_code = 'shipping:ledger_view' and point.supported_scope_types = array['org']))
     for share;
     if not found then
       raise exception 'employee permission action is not published'

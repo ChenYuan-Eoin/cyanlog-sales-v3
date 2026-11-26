@@ -25,6 +25,7 @@ const url = `${path}?orgId=${orgId}`
 const params = { params: Promise.resolve({ id: userId }) }
 const point = 'shipping:ledger_view'
 const orgScope = { type: 'org' } as const
+const selfScope = { type: 'self' } as const
 const departmentScope = { type: 'department' as const, departments: [
   { department_id: departmentId, include_subdepartments: true },
   { department_id: childId, include_subdepartments: false },
@@ -36,11 +37,16 @@ const change = { permission_code: point, expected_override: orgOverride, overrid
 const authority = { orgId, settings: {}, canRead: true, canEdit: true, canEditPlatformRoot: true, actorPermissions: ['*'] }
 
 type Snapshot = NonNullable<Awaited<ReturnType<typeof loadEmployeeShippingPermissionTable>>>
+type PermissionRow = Snapshot['permissions'][number]
 
-function projection(overrides: Partial<Omit<Snapshot['permissions'][number], 'key'>> = {}, published = true): Snapshot {
+function projection(
+  overrides: Partial<Omit<PermissionRow, 'key'>> = {},
+  published = true,
+  key: PermissionRow['key'] = point,
+): Snapshot {
   return {
     permissions: [{
-      key: point,
+      key,
       base: true,
       effective: true,
       base_scope: orgScope,
@@ -55,7 +61,7 @@ function projection(overrides: Partial<Omit<Snapshot['permissions'][number], 'ke
       { id: childId, name: '子部门', parent_id: departmentId },
     ],
     permission_catalog: [],
-    shipping_permission_publication: { registered: [point], published: published ? [point] : [] },
+    shipping_permission_publication: { registered: [key], published: published ? [key] : [] },
   }
 }
 
@@ -159,6 +165,35 @@ it('CAS replaces a wider data scope with the selected departments and independen
     p_override: departmentOverride,
   })
   expect(loadEmployeeShippingPermissionTable).toHaveBeenNthCalledWith(2, userId, orgId)
+})
+
+it.each([
+  { key: 'shipping:owner_submit', scope: selfScope, wrongScope: orgScope },
+  { key: 'shipping:intake_write', scope: orgScope, wrongScope: departmentScope },
+] as const)('accepts only the registered scope for $key and reads back the saved override', async ({ key, scope, wrongScope }) => {
+  const allow = { effect: 'ALLOW', scope } as const
+  const invalid = { effect: 'ALLOW', scope: wrongScope } as const
+  const assignment = { permission_code: key, expected_override: null, override: allow }
+  const before = projection({ base: false, effective: false, base_scope: null, effective_scope: null, override: null }, true, key)
+  const after = projection({ base: false, effective: true, base_scope: null, effective_scope: scope, override: allow }, true, key)
+  vi.mocked(loadEmployeeShippingPermissionTable).mockResolvedValueOnce(before).mockResolvedValueOnce(after)
+  setRpcResult(allow)
+
+  expect((await patch({ ...assignment, override: invalid })).status).toBe(400)
+  expect((await patch({ ...assignment, expected_override: invalid })).status).toBe(400)
+  expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+
+  const response = await patch(assignment)
+  expect(response.status).toBe(200)
+  expect(await response.json()).toEqual({ org_id: orgId, user_id: userId, ...after })
+  expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith('admin_set_employee_permission_override_v1', {
+    p_actor_id: actorId,
+    p_org_id: orgId,
+    p_user_id: userId,
+    p_permission_code: key,
+    p_expected_override: null,
+    p_override: allow,
+  })
 })
 
 it('denies independently of the base grant and can clear a stored unpublished override', async () => {

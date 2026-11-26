@@ -1,18 +1,12 @@
-import { getEffectiveShippingPermissions, SHIPPING_MANAGE_CONNECTIONS, type ShippingPermissionKey } from '@/lib/module-access'
-import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
-import { loadShippingModulePermissionState } from '@/lib/permission-registry'
+import { SHIPPING_MANAGE_CONNECTIONS, type ShippingPermissionKey } from '@/lib/module-access'
 import { ShippingError } from './config'
+import { loadPublishedShippingAccess } from './entry-access'
 
 export async function loadShippingConnectionAccess(userId: string) {
-  const [context, publication] = await Promise.all([
-    loadOrgRolePermissionContext(userId),
-    loadShippingModulePermissionState(),
-  ]).catch(() => { throw new ShippingError(503, '寄件连接管理授权读取失败。') })
-  if (!context) throw new ShippingError(403, '当前账号没有可用的组织寄件配置。')
-  return {
-    orgId: context.orgId,
-    permissions: getEffectiveShippingPermissions(context.actorPermissions, publication),
-  }
+  const access = await loadPublishedShippingAccess(userId)
+    .catch(() => { throw new ShippingError(503, '寄件连接管理授权读取失败。') })
+  if (!access) throw new ShippingError(403, '当前账号没有可用的组织寄件配置。')
+  return { orgId: access.orgId, permissions: access.permissions }
 }
 
 export function checkShippingConnectionAccess(

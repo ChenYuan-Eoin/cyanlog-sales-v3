@@ -15,12 +15,14 @@ import { BuildingIcon, ShieldIcon, XIcon } from 'lucide-react'
 import type { OrgSummaryDepartment, OrgSummaryRole, ScopedRoleAssignment } from '../../types'
 import { isRoleAssignableInScope } from '@/lib/role-permission-resolution'
 import { isGenericallyAssignableRole } from '../role-assignment-policy'
+import { EmployeePermissionReview } from '../EmployeePermissionOverrides'
 
 interface RoleAssignmentDialogProps {
   userId: string
   userName: string
   pendingRoles?: { id: string }[]
   organizationOnly?: boolean
+  employeePermissionOrgId?: string
   currentRoles: string[]
   departments: OrgSummaryDepartment[]
   scopedRoles?: ScopedRoleAssignment[]
@@ -33,11 +35,12 @@ interface RoleAssignmentDialogProps {
 }
 
 export function RoleAssignmentDialog({
-  userId: _userId,
+  userId,
   userName,
   currentRoles,
   pendingRoles,
   organizationOnly = false,
+  employeePermissionOrgId,
   departments,
   scopedRoles = [],
   onSubmit,
@@ -163,6 +166,10 @@ export function RoleAssignmentDialog({
             为 &quot;{userName}&quot; 分配角色
           </DialogTitle>
         </DialogHeader>
+
+        {open && employeePermissionOrgId && (
+          <EmployeePermissionReview orgId={employeePermissionOrgId} userId={userId} />
+        )}
 
         {fetchingRoles ? (
           <div className="py-8 text-center text-slate-500">加载角色列表...</div>

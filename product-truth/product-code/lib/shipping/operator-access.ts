@@ -3,11 +3,14 @@ import { loadShippingModulePermissionState } from '@/lib/permission-registry'
 import { resolveRolePermissions } from '@/lib/role-permission-resolution'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
+import { hasEmployeeShippingOverrides, loadEmployeeShippingState } from './employee-permission-overrides'
 import { loadPublishedShippingAccess } from './entry-access'
 
 const REMINDER_PAGE_SIZE = 500
+const RECIPIENT_PERMISSION_BATCH_SIZE = 8
 
 type OperatorRecipient = { userId: string; orgId: string }
+type OperatorRecipientCandidate = OperatorRecipient & { checkEmployeeOverrides: boolean }
 type RecipientAssignment = {
   user_id: string
   org_id: string
@@ -48,7 +51,7 @@ export async function requireShippingOperator(userId: string, permission: Shippi
 
 function getOperatorRecipient(
   assignment: RecipientAssignment, publication: Awaited<ReturnType<typeof loadShippingModulePermissionState>>,
-): OperatorRecipient | null {
+): OperatorRecipientCandidate | null {
   const { user_id: userId, org_id: orgId, membership, user, role } = assignment
   if (!userId || !orgId || assignment.scope_type !== 'org' || assignment.scope_id !== orgId
     || user?.id !== userId || user.status !== 'active' || user.login_enabled !== true
@@ -61,7 +64,15 @@ function getOperatorRecipient(
   // Workbench access can inherit platform authority. Reminders go to explicitly assigned shipping operators.
   const operatorGrants = permissions.filter(permission => permission !== '*')
   if (!getEffectiveShippingPermissions(operatorGrants, publication).includes('shipping:record_review')) return null
-  return { userId, orgId }
+  return { userId, orgId, checkEmployeeOverrides: hasEmployeeShippingOverrides(membership.organization.settings) }
+}
+
+async function canReceiveOrganizationReminder({ userId, orgId }: OperatorRecipient) {
+  const employee = await loadEmployeeShippingState(orgId, userId)
+  const ledger = employee.overrides.get('shipping:ledger_view')
+  return employee.team['shipping:ledger_view'].organization_wide
+    && employee.overrides.get('shipping:record_review')?.effect !== 'DENY'
+    && (!ledger || (ledger.effect === 'ALLOW' && ledger.scope.type === 'org'))
 }
 
 export async function listShippingOperatorRecipients() {
@@ -69,7 +80,7 @@ export async function listShippingOperatorRecipients() {
     const publication = await loadShippingModulePermissionState()
     if (!publication.published.has(SHIPPING_OPERATE) && !publication.published.has('shipping:record_review')) return []
 
-    const recipients = new Map<string, OperatorRecipient>()
+    const recipients = new Map<string, OperatorRecipientCandidate>()
     for (let offset = 0; ; offset += REMINDER_PAGE_SIZE) {
       const { data, error } = await supabaseAdmin.from('user_roles')
         .select(`user_id,org_id,scope_type,scope_id,
@@ -90,10 +101,21 @@ export async function listShippingOperatorRecipients() {
 
       for (const assignment of data as unknown as RecipientAssignment[]) {
         const recipient = getOperatorRecipient(assignment, publication)
-        if (recipient) recipients.set(`${recipient.userId}:${recipient.orgId}`, recipient)
+        if (!recipient) continue
+        const key = `${recipient.userId}:${recipient.orgId}`
+        if (!recipients.has(key) || recipient.checkEmployeeOverrides) recipients.set(key, recipient)
       }
-      if (data.length < REMINDER_PAGE_SIZE) return [...recipients.values()]
+      if (data.length < REMINDER_PAGE_SIZE) break
     }
+
+    const needsPermissionCheck = [...recipients].filter(([, recipient]) => recipient.checkEmployeeOverrides)
+    for (let offset = 0; offset < needsPermissionCheck.length; offset += RECIPIENT_PERMISSION_BATCH_SIZE) {
+      const batch = needsPermissionCheck.slice(offset, offset + RECIPIENT_PERMISSION_BATCH_SIZE)
+      await Promise.all(batch.map(async ([key, recipient]) => {
+        if (!await canReceiveOrganizationReminder(recipient)) recipients.delete(key)
+      }))
+    }
+    return Array.from(recipients.values(), ({ userId, orgId }) => ({ userId, orgId }))
   } catch {
     throw new ShippingError(503, '寄件提醒接收人读取失败。')
   }
