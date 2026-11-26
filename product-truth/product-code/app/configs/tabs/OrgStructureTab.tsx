@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Table,
   TableBody,
@@ -20,9 +21,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, PowerOffIcon, PowerIcon, LockIcon, UnlockIcon, MailIcon, BanIcon, FingerprintIcon } from 'lucide-react'
-import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment } from '../types'
+import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, PowerOffIcon, PowerIcon, UnlockIcon, MailIcon, BanIcon, FingerprintIcon } from 'lucide-react'
+import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment, OrgSummaryRole } from '../types'
 import type { MemberActionAvailability } from '@/lib/admin/member-actions'
+import { isRetiredRoleCode } from '@/lib/role-permission-resolution'
 import Fuse from 'fuse.js'
 import { success, error, confirmAction } from '@/lib/toast'
 import { buildDepartmentOptions, resolveDepartmentSpaceIds } from '@/lib/department-spaces'
@@ -33,8 +35,9 @@ import { DepartmentFormDialog } from './components/DepartmentFormDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
 import { IdentityBindingDialog } from './components/IdentityBindingDialog'
+import { MemberBatchActions } from './components/MemberBatchActions'
 import {
-  editableCurrentOrgBusinessRoleIds, editableOrgRoleIds, getMemberRoleMutationRestriction, getRoleMutationRestriction,
+  editableCurrentOrgBusinessRoleIds, editableOrgRoleIds, getMemberRoleMutationRestriction, getRoleMutationRestriction, isGenericallyAssignableRole,
   userHasSystemAdminAssignment,
 } from './role-assignment-policy'
 import {
@@ -238,7 +241,17 @@ function DepartmentTree({
   const [addDeptOpen, setAddDeptOpen] = useState(false)
   const [addDeptParentId, setAddDeptParentId] = useState<string | null>(null)
 
-  const rootDepts = useMemo(() => departments.filter(d => !d.parent_id), [departments])
+  const departmentsByParent = useMemo(() => {
+    const grouped = new Map<string | null, OrgSummaryDepartment[]>()
+    for (const department of departments) {
+      const parent = department.parent_id || null
+      const siblings = grouped.get(parent) ?? []
+      siblings.push(department)
+      grouped.set(parent, siblings)
+    }
+    return grouped
+  }, [departments])
+  const rootDepts = departmentsByParent.get(null) ?? []
 
   const toggleExpand = useCallback((id: string) => {
     setExpanded(prev => {
@@ -279,21 +292,21 @@ function DepartmentTree({
       }
       success('部门已删除')
       await onRefresh?.()
+    } catch {
+      error('未能确认删除结果，请核对部门状态')
     } finally {
       setDeletingDept(null)
     }
   }, [memberAccess, onMemberBindingsBlocked, onRefresh])
 
-  function DeptNode({ dept, depth }: { dept: OrgSummaryDepartment; depth: number }) {
-    const children = useMemo(() => departments.filter(d => d.parent_id === dept.id),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [departments, dept.id])
+  function renderDepartment(dept: OrgSummaryDepartment, depth: number) {
+    const children = departmentsByParent.get(dept.id) ?? []
     const isExpanded = expanded.has(dept.id)
     const hasChildren = children.length > 0
     const isSelected = selectedDeptId === dept.id
 
     return (
-      <div>
+      <div key={dept.id}>
         <div
           role="button"
           tabIndex={0}
@@ -387,9 +400,7 @@ function DepartmentTree({
 
         {isExpanded && hasChildren && (
           <div>
-            {children.map(child => (
-              <DeptNode key={child.id} dept={child} depth={depth + 1} />
-            ))}
+            {children.map(child => renderDepartment(child, depth + 1))}
           </div>
         )}
       </div>
@@ -413,7 +424,7 @@ function DepartmentTree({
             暂无部门数据
           </div>
         ) : (
-          rootDepts.map(dept => <DeptNode key={dept.id} dept={dept} depth={0} />)
+          rootDepts.map(dept => renderDepartment(dept, 0))
         )}
       </div>
 
@@ -487,6 +498,9 @@ interface MemberTableProps {
   departments: OrgSummaryDepartment[]
   currentUserId: string | null
   actions: MemberActionAvailability
+  batchOrgId?: string
+  batchScope: string
+  batchRoles: OrgSummaryRole[]
   onEditUser: (user: OrgSummaryUser) => void
   onAssignRole: (user: OrgSummaryUser) => void
   systemAdminOrgIdForUser: (user: OrgSummaryUser) => string | undefined
@@ -495,10 +509,18 @@ interface MemberTableProps {
   onRefresh?: () => void | Promise<void>
 }
 
+const memberPageSize = 10
+
 function MemberTable({
-  users, currentUserId, actions, onEditUser, onAssignRole, systemAdminOrgIdForUser, onOpenEmployeePermissions, onBindIdentity, onRefresh,
+  users, currentUserId, actions, batchOrgId, batchScope, batchRoles,
+  onEditUser, onAssignRole, systemAdminOrgIdForUser, onOpenEmployeePermissions, onBindIdentity, onRefresh,
 }: MemberTableProps) {
   const [globalFilter, setGlobalFilter] = useState('')
+  const query = globalFilter.trim()
+  const selectionScope = JSON.stringify([batchScope, query])
+  const [selection, setSelection] = useState(() => ({ scope: selectionScope, ids: new Set<string>() }))
+  const [pageIndex, setPageIndex] = useState(0)
+  const allowSelection = Boolean(batchOrgId && currentUserId && (actions.manageLogin || actions.manageEmployment || actions.assignRoles))
 
   // 使用 Fuse.js 进行模糊搜索
   const fuse = useMemo(() => {
@@ -510,11 +532,38 @@ function MemberTable({
 
   // 根据搜索关键词过滤
   const filteredUsers = useMemo(() => {
-    if (!globalFilter.trim()) return users
-    return fuse.search(globalFilter).map(result => result.item)
-  }, [users, fuse, globalFilter])
+    if (!query) return users
+    return fuse.search(query).map(result => result.item)
+  }, [users, fuse, query])
 
-  const columns = useMemo<ColumnDef<OrgSummaryUser>[]>(() => [
+  const lastPageIndex = Math.max(0, Math.ceil(filteredUsers.length / memberPageSize) - 1)
+  if (selection.scope !== selectionScope) {
+    setSelection({ scope: selectionScope, ids: new Set() })
+    setPageIndex(0)
+  } else if (pageIndex > lastPageIndex) {
+    setPageIndex(lastPageIndex)
+  }
+  const membersInScope = useMemo(() => new Map(filteredUsers.map(user => [user.id, user])), [filteredUsers])
+  const selectedMembers = useMemo(() => selection.scope === selectionScope
+    ? [...membersInScope.values()].filter(user => selection.ids.has(user.id))
+    : [], [membersInScope, selection, selectionScope])
+  const toggleMember = useCallback((memberId: string, checked: boolean) => {
+    setSelection(previous => {
+      const ids = new Set(previous.scope === selectionScope ? previous.ids : [])
+      if (checked) ids.add(memberId)
+      else ids.delete(memberId)
+      return { scope: selectionScope, ids }
+    })
+  }, [selectionScope])
+  const clearSelection = useCallback(() => setSelection({ scope: selectionScope, ids: new Set() }), [selectionScope])
+  const removeCompletedSelection = useCallback((userIds: string[]) => {
+    const completed = new Set(userIds)
+    setSelection(previous => previous.scope === selectionScope
+      ? { scope: previous.scope, ids: new Set([...previous.ids].filter(id => !completed.has(id))) }
+      : previous)
+  }, [selectionScope])
+
+  const dataColumns = useMemo<ColumnDef<OrgSummaryUser>[]>(() => [
     {
       accessorKey: 'display_name',
       header: '姓名',
@@ -558,11 +607,13 @@ function MemberTable({
       size: 110,
       cell: ({ row }) => {
         const user = row.original
-        if (!user.directory_identity_id) return <span className="text-xs text-slate-500">系统成员</span>
+        if (!user.directory_identity_id) return <span className="text-xs text-slate-500">
+          {user.status === 'active' && user.login_enabled === false ? '账号已停用' : '系统成员'}
+        </span>
         const employed = memberEmployment(user) === 'active'
         const firstLoginPending = user.directory_pending_account === true && user.membership_status === 'invited' && user.status === 'inactive'
         return <Badge variant={employed && firstLoginPending ? 'outline' : 'secondary'}>
-          {!employed ? '不可登录' : firstLoginPending ? '待首次登录' : user.login_enabled === false ? '登录已禁用' : '已有账号'}
+          {!employed ? '不可登录' : firstLoginPending ? '待首次登录' : user.login_enabled === false ? '账号已停用' : '已有账号'}
         </Badge>
       },
     },
@@ -570,16 +621,18 @@ function MemberTable({
       accessorKey: 'role_names',
       header: '角色',
       size: 180,
-      cell: ({ row }) => (
-        <div className="flex flex-wrap gap-1 max-w-[170px]">
-          {row.original.role_names?.trim() ? row.original.role_names.split(',').filter(role => role.trim()).map((role, i) => (
-            <Badge key={i} variant="secondary" className="text-xs">
-              {role.trim()}
-            </Badge>
-          )) : !row.original.pending_org_roles?.length && <span className="text-slate-400">-</span>}
-          {row.original.pending_org_roles?.map(role => <Badge key={role.id} variant="outline" className="text-xs">{role.name} · 待首次登录生效</Badge>)}
+      cell: ({ row }) => {
+        const user = row.original
+        const roleNames = user.scoped_roles?.filter(role => !isRetiredRoleCode(role.roleCode))
+          .map(role => role.scopeType === 'org' ? role.roleName : `${role.roleName}（${role.scopeName}）`)
+          ?? (user.role_names ?? '').split(',').map(role => role.trim()).filter(Boolean)
+        const pendingRoles = user.pending_org_roles?.filter(role => !isRetiredRoleCode(role.code)) ?? []
+        return <div className="flex flex-wrap gap-1 max-w-[170px]">
+          {[...new Set(roleNames)].map(role => <Badge key={role} variant="secondary" className="text-xs">{role}</Badge>)}
+          {pendingRoles.map(role => <Badge key={role.id} variant="outline" className="text-xs">{role.name} · 待首次登录生效</Badge>)}
+          {roleNames.length === 0 && pendingRoles.length === 0 && <span className="text-slate-400">-</span>}
         </div>
-      ),
+      },
     },
     {
       accessorKey: 'status',
@@ -607,6 +660,10 @@ function MemberTable({
         const directoryUnavailable = isDirectoryManaged && memberEmployment(user) !== 'active'
         const lifecycleRestriction = getRoleMutationRestriction(user, currentUserId)
         const roleMutationRestriction = getMemberRoleMutationRestriction(user, currentUserId, systemAdminOrgIdForUser(user))
+        const canChangeRoles = actions.assignRoles && !roleMutationRestriction && !directoryUnavailable
+        const showAccountActions = !isInvited && !directoryUnavailable && user.status !== 'inactive'
+        const lifecycleHint = lifecycleRestriction?.code === 'PROTECTED_ROLE_MUTATION_FORBIDDEN'
+          ? '请先撤销系统超管角色' : lifecycleRestriction?.label
 
         return (
           <DropdownMenu>
@@ -617,36 +674,26 @@ function MemberTable({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="z-[100]">
               {/* P0: 编辑 */}
-              <DropdownMenuItem disabled={!actions.edit || isDirectoryManaged} title={isDirectoryManaged ? '人员资料与在职状态由外部目录管理' : undefined} onSelect={() => onEditUser(user)}>
+              <DropdownMenuItem disabled={!actions.edit || isDirectoryManaged} onSelect={() => onEditUser(user)}>
                 <EditIcon className="h-4 w-4 mr-2" />
                 编辑
               </DropdownMenuItem>
 
               {/* P0: 分配角色 */}
               <DropdownMenuItem
-                disabled={!actions.assignRoles || Boolean(roleMutationRestriction) || directoryUnavailable}
-                onSelect={() => {
-                  if (actions.assignRoles && !roleMutationRestriction && !directoryUnavailable) onAssignRole(user)
-                }}
-                title={roleMutationRestriction?.reason || (directoryUnavailable ? '非在职目录成员不可分配角色' : undefined) || (user.can_preassign_org_roles ? '预分配的组织角色将在员工首次登录后生效' : undefined)}
+                disabled={!canChangeRoles}
+                onSelect={() => onAssignRole(user)}
+                title={roleMutationRestriction?.label}
               >
-                {roleMutationRestriction ? (
-                  <LockIcon className="h-4 w-4 mr-2" />
-                ) : (
-                  <ShieldIcon className="h-4 w-4 mr-2" />
-                )}
-                <span className="flex min-w-0 flex-col">
-                  <span>{roleMutationRestriction?.label || '分配角色'}</span>
-                  {roleMutationRestriction && (
-                    <span className="max-w-64 whitespace-normal text-[11px] leading-4 text-slate-400">
-                      {roleMutationRestriction.reason}
-                    </span>
-                  )}
-                </span>
+                <ShieldIcon className="h-4 w-4 mr-2" />
+                分配角色
               </DropdownMenuItem>
 
-              {onOpenEmployeePermissions && !directoryUnavailable && isEmployeePermissionTarget(user) && (
-                <DropdownMenuItem onSelect={() => onOpenEmployeePermissions(user)}>
+              {onOpenEmployeePermissions && (
+                <DropdownMenuItem
+                  disabled={directoryUnavailable || !isEmployeePermissionTarget(user)}
+                  onSelect={() => onOpenEmployeePermissions(user)}
+                >
                   <ShieldIcon className="mr-2 h-4 w-4" />
                   员工权限设置
                 </DropdownMenuItem>
@@ -664,8 +711,7 @@ function MemberTable({
                 </DropdownMenuItem>
               )}
 
-              {!isDirectoryManaged && <>
-              {!isDirectoryPending && <>
+              {!isDirectoryManaged && !isDirectoryPending && <>
               <DropdownMenuItem
                 disabled={!actions.invite || !isInvited}
                 onSelect={async () => {
@@ -717,17 +763,17 @@ function MemberTable({
               </DropdownMenuItem>
               </>}
 
-              {/* P1: 停用/启用 */}
+              {!isDirectoryManaged && isDisabled && (
               <DropdownMenuItem
                 disabled={!actions.manageEmployment || isInvited || Boolean(lifecycleRestriction)}
                 onSelect={async () => {
                   const isRehire = user.status === 'inactive'
-                  const action = isRehire ? '恢复在职' : isDisabled ? '启用' : '停用'
+                  const action = isRehire ? '恢复在职' : '启用用户'
                   if (!await confirmAction(
                     isRehire
                       ? `确定将 "${user.display_name}" 恢复为在职吗？部门和角色需要重新配置，登录保持关闭。`
-                      : `确定要${action}用户 "${user.display_name}" 吗？`,
-                    { confirmText: action, danger: !isDisabled },
+                      : `确定要启用用户 "${user.display_name}" 吗？`,
+                    { confirmText: action },
                   )) return
                   try {
                     const res = await fetch(
@@ -737,39 +783,32 @@ function MemberTable({
                       {
                       method: isRehire ? 'POST' : 'PATCH',
                       headers: buildAuthHeaders(true),
-                      body: JSON.stringify(isRehire ? {} : { status: isDisabled ? 'active' : 'suspended' }),
+                      body: JSON.stringify(isRehire ? {} : { status: 'active' }),
                     })
                     const result = await res.json()
                     if (!res.ok) {
                       error(result.error || `${action}失败`)
                       return
                     }
-                    success(`用户已${action}`)
+                    success(isRehire ? '用户已恢复在职' : '用户已启用')
                     await onRefresh?.()
                   } catch (_err) {
                     error(`${action}请求失败`)
                   }
                 }}
               >
-                {isDisabled ? (
-                  <>
-                    <PowerIcon className="h-4 w-4 mr-2 text-emerald-600" />
-                    <span className="text-emerald-600">启用用户</span>
-                  </>
-                ) : (
-                  <>
-                    <PowerOffIcon className="h-4 w-4 mr-2 text-amber-600" />
-                    <span className="text-amber-600">停用用户</span>
-                  </>
-                )}
+                <PowerIcon className="h-4 w-4 mr-2 text-emerald-600" />
+                <span className="text-emerald-600">{user.status === 'inactive' ? '恢复在职' : '启用用户'}</span>
               </DropdownMenuItem>
+              )}
 
-              {/* P1: 允许/禁止登录 */}
+              {showAccountActions && (
               <DropdownMenuItem
-                disabled={!actions.manageLogin || isInvited || Boolean(lifecycleRestriction)}
+                disabled={!actions.manageLogin || Boolean(lifecycleRestriction)}
+                title={lifecycleHint}
                 onSelect={async () => {
-                  const action = isLoginDisabled ? '允许' : '禁止'
-                  if (!await confirmAction(`确定要${action}用户 "${user.display_name}" 登录吗？`, { confirmText: action, danger: !isLoginDisabled })) return
+                  const action = isLoginDisabled ? '启用账号' : '停用账号'
+                  if (!await confirmAction(`确定要为「${user.display_name}」${action}吗？`, { confirmText: action, danger: !isLoginDisabled })) return
                   try {
                     const res = await fetch(`/api/admin/users/${user.id}/login-enabled`, {
                       method: 'PATCH',
@@ -778,37 +817,39 @@ function MemberTable({
                     })
                     const result = await res.json()
                     if (!res.ok) {
-                      error(result.error || `${action}登录失败`)
+                      error(result.error || `${action}失败`)
                       return
                     }
-                    success(`已${action}登录`)
+                    success(isLoginDisabled ? '账号已启用' : '账号已停用')
                     await onRefresh?.()
                   } catch (_err) {
-                    error(`登录状态更新请求失败`)
+                    error(`${action}请求失败`)
                   }
                 }}
               >
                 {isLoginDisabled ? (
                   <>
                     <UnlockIcon className="h-4 w-4 mr-2 text-emerald-600" />
-                    <span className="text-emerald-600">允许登录</span>
+                    <span className="text-emerald-600">启用账号</span>
                   </>
                 ) : (
                   <>
-                    <LockIcon className="h-4 w-4 mr-2 text-amber-600" />
-                    <span className="text-amber-600">禁止登录</span>
+                    <PowerOffIcon className="h-4 w-4 mr-2 text-amber-600" />
+                    <span className="text-amber-600">停用账号</span>
                   </>
                 )}
               </DropdownMenuItem>
+              )}
 
               <DropdownMenuSeparator />
 
-              {!isInvited && (
+              {showAccountActions && (
                 <DropdownMenuItem
                   className="text-red-600"
                   disabled={!actions.manageEmployment || Boolean(lifecycleRestriction)}
+                  title={lifecycleHint}
                   onSelect={async () => {
-                    if (!await confirmAction(`确定要为 "${user.display_name}" 办理离职吗？\n成员关系、角色和部门授权会结束，历史审计保留，可在之后明确复职。`, { confirmText: '办理离职', danger: true })) return
+                    if (!await confirmAction(`为「${user.display_name}」办理离职后，员工将失去 ICU 的成员身份及访问权限。`, { confirmText: '办理离职', danger: true })) return
                     try {
                       const res = await fetch(`/api/admin/users/${user.id}`, {
                         method: 'DELETE',
@@ -832,7 +873,7 @@ function MemberTable({
                 </DropdownMenuItem>
               )}
 
-              {!isInvited && (
+              {!isDirectoryManaged && !isInvited && (
                 <DropdownMenuItem
                   className="text-red-600"
                   disabled={!actions.removeMembership || Boolean(lifecycleRestriction)}
@@ -863,7 +904,6 @@ function MemberTable({
                   移出当前组织
                 </DropdownMenuItem>
               )}
-              </>}
             </DropdownMenuContent>
           </DropdownMenu>
         )
@@ -871,16 +911,48 @@ function MemberTable({
     },
   ], [currentUserId, actions, onEditUser, onAssignRole, systemAdminOrgIdForUser, onOpenEmployeePermissions, onBindIdentity, onRefresh])
 
+  const columns = useMemo<ColumnDef<OrgSummaryUser>[]>(() => {
+    if (!allowSelection) return dataColumns
+    const fullSelection = selectedMembers.length > 0 && selectedMembers.length === membersInScope.size
+    return [{
+      id: 'member_selection',
+      size: 76,
+      header: () => (
+        <label className="inline-flex items-center gap-2 whitespace-nowrap" title="选择当前名单的所有分页">
+          <Checkbox
+            aria-label={`全选当前名单（${membersInScope.size} 人，含所有分页）`}
+            disabled={membersInScope.size === 0}
+            checked={fullSelection ? true : selectedMembers.length > 0 ? 'indeterminate' : false}
+            onCheckedChange={checked => {
+              if (checked === true) setSelection({ scope: selectionScope, ids: new Set(membersInScope.keys()) })
+              else clearSelection()
+            }}
+          />
+          <span className="text-xs">全选</span>
+        </label>
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          aria-label={`选择${row.original.display_name}`}
+          checked={selection.scope === selectionScope && selection.ids.has(row.original.id)}
+          onCheckedChange={checked => toggleMember(row.original.id, checked === true)}
+        />
+      ),
+    }, ...dataColumns]
+  }, [allowSelection, clearSelection, dataColumns, membersInScope, selectedMembers.length, selection, selectionScope, toggleMember])
+
   const table = useReactTable({
     data: filteredUsers,
     columns,
+    getRowId: user => user.id,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
+    autoResetPageIndex: false,
+    state: { pagination: { pageIndex, pageSize: memberPageSize } },
+    onPaginationChange: update => {
+      const next = typeof update === 'function' ? update({ pageIndex, pageSize: memberPageSize }) : update
+      setPageIndex(next.pageIndex)
     },
   })
 
@@ -903,6 +975,22 @@ function MemberTable({
           共 {filteredUsers.length} 人
         </div>
       </div>
+
+      {allowSelection && batchOrgId && (
+        <MemberBatchActions
+          key={selectionScope}
+          orgId={batchOrgId}
+          members={selectedMembers}
+          roles={batchRoles}
+          canSuspend={actions.manageLogin}
+          canOffboard={actions.manageEmployment}
+          canAssignRoles={actions.assignRoles}
+          authHeaders={() => buildAuthHeaders(true)}
+          onClearSelection={clearSelection}
+          onSucceeded={removeCompletedSelection}
+          onRefresh={onRefresh}
+        />
+      )}
 
       {/* 表格 */}
       <div className="rounded-md border">
@@ -950,6 +1038,7 @@ function MemberTable({
           <Button
             variant="outline"
             size="sm"
+            aria-label="上一页"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
@@ -958,6 +1047,7 @@ function MemberTable({
           <Button
             variant="outline"
             size="sm"
+            aria-label="下一页"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >
@@ -1073,9 +1163,9 @@ export default function OrgStructureTab({
   const orgId = orgSummary?.organization?.id
   const eligibleSystemAdminIds = orgSummary?.role_membership_stats?.systemSuperAdminAssignableMemberIds
   const systemAdminOrgIdForUser = useCallback((user: OrgSummaryUser) => {
-    if (!orgId || !currentUserId || !actions.assignRoles || user.id === currentUserId
-      || user.status !== 'active' || user.membership_status !== 'active' || user.employment_status !== 'active') return undefined
+    if (!orgId || !currentUserId || !actions.assignRoles || user.id === currentUserId) return undefined
     if (userHasSystemAdminAssignment(user, orgId)) return orgId
+    if (user.membership_status !== 'active' || user.employment_status !== 'active') return undefined
     return user.login_enabled === true && isEmployeePermissionTarget(user) && eligibleSystemAdminIds?.includes(user.id) ? orgId : undefined
   }, [orgId, currentUserId, actions.assignRoles, eligibleSystemAdminIds])
   const assignment = actions.assignRoles && assignmentDraft?.orgId === orgId && assignmentDraft?.actorId === currentUserId
@@ -1249,6 +1339,10 @@ export default function OrgStructureTab({
                 departments={departments}
                 currentUserId={currentUserId}
                 actions={actions}
+                batchOrgId={orgId}
+                batchScope={JSON.stringify([orgId, currentUserId, selectedDeptId, includeSubdepartments, employmentFilter,
+                  actions.manageLogin, actions.manageEmployment, actions.assignRoles])}
+                batchRoles={(orgSummary?.roles ?? []).filter(role => isGenericallyAssignableRole(role.code) && !isRetiredRoleCode(role.code))}
                 onEditUser={setEditingUser}
                 systemAdminOrgIdForUser={systemAdminOrgIdForUser}
                 onAssignRole={(user) => {

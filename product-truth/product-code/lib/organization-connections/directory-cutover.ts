@@ -97,6 +97,10 @@ export type DirectoryOrganizationMembership = {
   createdAt: string
 }
 
+function hasEndedOrganizationMembership(membership: { status?: unknown; employmentStatus?: unknown }) {
+  return membership.status === 'ended' || membership.employmentStatus === 'ended'
+}
+
 export type DirectoryCutoverConflict = {
   kind: string
   externalId: string | null
@@ -577,6 +581,7 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
   }
 
   const usersById = new Map(input.users.map(user => [user.id, user]))
+  const endedMemberIds = new Set(input.organizationMemberships.filter(hasEndedOrganizationMembership).map(row => row.userId))
   const identityIndex = buildIdentityIndex(input.users)
   const targetIdentities = input.identities.filter(identity => identity.sourceId === input.targetSourceId)
   const targetIdentityByExternalId = new Map(targetIdentities.map(identity => [identity.externalUserId, identity]))
@@ -584,6 +589,7 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
   const employeesByCanonicalUser = new Map<string, string[]>()
   const identityChanges: DirectoryCutoverIdentityChange[] = []
   const userDepartmentChanges: DirectoryCutoverUserDepartmentChange[] = []
+  let endedMembersObserved = 0
 
   for (const employee of input.snapshot.employees) {
     if (normalizeSnapshotStatus(employee.status, targetProvider) === 'unknown') {
@@ -706,6 +712,10 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
       profileSnapshot,
       changedFields,
     })
+    if (endedMemberIds.has(canonicalUserId)) {
+      endedMembersObserved += 1
+      continue
+    }
     userDepartmentChanges.push({
       userId: canonicalUserId,
       externalUserId: employee.id,
@@ -713,6 +723,10 @@ export function buildDirectoryCutoverPlan(input: DirectoryCutoverInput): Directo
       primaryDepartmentExternalId: employee.primaryDepartmentId,
       active: isEmployeeActive(employee, targetProvider),
     })
+  }
+
+  if (endedMembersObserved) {
+    notices.push(`${endedMembersObserved} 名已在系统办理离职的员工仅更新来源身份资料。`)
   }
 
   const staleTargetIdentityIds = targetIdentities
@@ -1021,6 +1035,15 @@ export async function applyDirectoryCutoverPlan(input: {
   // Already-applied retries still reach the transaction's original idempotency check.
   if (stored.data.status === 'planned') {
     const payload = objectValue(stored.data.plan_payload)
+    const previousMemberships = objectValue(payload.beforeState).organizationMemberships
+    const userDepartmentChanges = payload.userDepartmentChanges
+    if (Array.isArray(previousMemberships) && Array.isArray(userDepartmentChanges)) {
+      const endedMemberIds = new Set(previousMemberships.map(objectValue)
+        .filter(hasEndedOrganizationMembership).map(membership => membership.userId))
+      if (userDepartmentChanges.some(change => endedMemberIds.has(objectValue(change).userId))) {
+        throw new OrganizationConnectionError('PLAN_STALE', '计划包含已离职成员的部门归属更新，请重新读取目录差异。', 409)
+      }
+    }
     const connection = await loadVerifiedConnection({
       orgId: input.orgId, provider: String(payload.targetProvider || ''),
       sourceId: String(stored.data.target_source_id),

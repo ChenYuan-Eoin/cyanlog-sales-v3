@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => {
     applied_at: null,
     rolled_back_at: null,
   }
+  const getPlan = vi.fn((): Record<string, unknown> => planRow)
   const selectedSourceIds: string[] = []
   const from = vi.fn((table: string) => {
     if (table === 'organization_sources') {
@@ -65,7 +66,7 @@ const mocks = vi.hoisted(() => {
       order: vi.fn(() => builder),
       limit: vi.fn(() => builder),
       maybeSingle: vi.fn(async () => ({
-        data: table === 'organization_directory_cutover_plans' ? planRow : null,
+        data: table === 'organization_directory_cutover_plans' ? getPlan() : null,
         error: null,
       })),
     }
@@ -73,6 +74,8 @@ const mocks = vi.hoisted(() => {
   })
   return {
     organizationSourceId,
+    planRow,
+    getPlan,
     selectedSourceIds,
     loadOrganizationConnection: vi.fn(),
     readOrganizationDirectory: vi.fn(),
@@ -115,6 +118,23 @@ describe('latest directory cutover plan selection', () => {
       planHash: 'a'.repeat(64), connectionRevision: '00000000-0000-4000-8000-000000000021',
       sourceRevisions: [{}] as never,
     })).rejects.toMatchObject({ code: 'SOURCE_DISABLED' })
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('requires replanning an older pending plan that would restore an ended member’s department links', async () => {
+    const { planRow } = mocks
+    const ended = '00000000-0000-4000-8000-000000000101'
+    mocks.getPlan.mockReturnValueOnce({ ...planRow, plan_payload: {
+      ...planRow.plan_payload,
+      userDepartmentChanges: [{ userId: ended }],
+      beforeState: { ...planRow.plan_payload.beforeState, organizationMemberships: [
+        { userId: ended, status: 'ended', employmentStatus: 'active' },
+      ] },
+    } })
+    await expect(applyDirectoryCutoverPlan({
+      orgId: 'org-1', actorId: 'admin-1', planId: planRow.id, planHash: planRow.plan_hash,
+      connectionRevision: planRow.plan_payload.connectionRevision, sourceRevisions: [{}] as never,
+    })).rejects.toMatchObject({ code: 'PLAN_STALE', status: 409, message: expect.stringContaining('请重新读取目录差异') })
     expect(mocks.rpc).not.toHaveBeenCalled()
   })
 

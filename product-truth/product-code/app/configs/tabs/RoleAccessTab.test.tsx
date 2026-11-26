@@ -98,7 +98,7 @@ it('uses exactly the same effective, pending and scoped counts on the role list 
   const summary = screen.getByRole('heading', { name: '组织作用域' }).parentElement!
   expect(within(summary).getByText('同步在职').parentElement).toHaveTextContent('1')
   expect(within(summary).queryByText('空间')).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: '从角色中移除 部门级销售' })).not.toBeInTheDocument()
+  expect(within(screen.getByRole('table')).getByRole('button', { name: '从角色中移除 部门级销售' })).toBeEnabled()
   expect(screen.getAllByRole('button', { name: '从角色中移除 组织级销售' }).length).toBeGreaterThan(0)
   fireEvent.click(screen.getByRole('button', { name: '添加成员' }))
   expect(within(screen.getByRole('dialog')).getByText('部门级销售')).toBeInTheDocument()
@@ -109,6 +109,7 @@ it('uses exactly the same effective, pending and scoped counts on the role list 
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '添加成员' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '从角色中移除 组织级销售' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '从角色中移除 部门级销售' })).not.toBeInTheDocument()
 })
 
 it('shows unavailable counts rather than zero while organization data is missing', () => {
@@ -154,7 +155,7 @@ it('only lets verified system super administrators appoint the canonical role', 
 
   rerender(<RoleAccessTab {...props} systemSuperAdminAuthority={{ orgId: 'org-1' }}
     orgSummary={{ ...orgSummary, role_membership_stats: undefined }} />)
-  expect(screen.getByText('当前组织的在职成员暂无法核对，请刷新后重试。')).toBeInTheDocument()
+  expect(screen.getByText('在职名单暂不可用')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '添加成员' })).not.toBeInTheDocument()
 })
 

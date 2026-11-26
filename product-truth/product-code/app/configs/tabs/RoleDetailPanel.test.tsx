@@ -169,6 +169,75 @@ it('opens the same tenant-scoped employee permission table from a role member', 
   })))
 })
 
+it('removes an appointed administrator’s selected business role while retaining the administrator and other roles', async () => {
+  const sales = { id: 'sales-role', code: 'SALES', name: '销售', description: null, permissions: [] }
+  const support = { id: 'support-role', code: 'SUPPORT', name: '支持' }
+  const orgId = 'active-organization'
+  const member = {
+    id: 'appointed-admin', display_name: '已任命的超管', email: '', title: '', primary_dept_name: '华南',
+    role_names: '超级管理员、销售、支持', role_codes: [role.code, sales.code, support.code], role_ids: [role.id, sales.id, support.id],
+    scoped_roles: [role, sales, support].map(record => ({
+      roleId: record.id, roleCode: record.code, roleName: record.name,
+      scopeType: 'org' as const, scopeId: orgId, scopeName: '组织', grantedAt: null,
+    })),
+    status: 'active', login_enabled: true, membership_status: 'active' as const, employment_status: 'active' as const,
+  }
+  const send = vi.fn()
+    .mockResolvedValueOnce(Response.json({
+      org_id: orgId, user_id: member.id, permissions: [], departments: [],
+      shipping_permission_publication: { registered: [], published: [] },
+    }))
+    .mockResolvedValueOnce(Response.json({ success: true }))
+  vi.stubGlobal('fetch', send)
+  vi.mocked(confirmAction).mockResolvedValueOnce(true)
+  const onRefresh = vi.fn()
+  render(<RoleDetailPanel {...defaults} role={sales} users={[member]} systemSuperAdminAuthority={{ orgId }} onRefresh={onRefresh} onSave={vi.fn()} />)
+
+  const row = within(screen.getByRole('row', { name: /已任命的超管/ }))
+  expect(row.getByRole('button', { name: '员工权限设置 已任命的超管' })).toBeEnabled()
+  expect(row.queryByText('平台根管理员只读')).not.toBeInTheDocument()
+  fireEvent.click(row.getByRole('button', { name: '从角色中移除 已任命的超管' }))
+
+  await waitFor(() => expect(onRefresh).toHaveBeenCalledOnce())
+  expect(send).toHaveBeenLastCalledWith(`/api/admin/users/${member.id}/roles`, expect.objectContaining({
+    method: 'POST', body: JSON.stringify({
+      role_ids: [support.id], expected_role_ids: [sales.id, support.id],
+      expected_org_id: orgId, expected_system_admin: true, system_admin: true,
+    }),
+  }))
+})
+
+it('revokes only the selected department binding when a member has multiple role bindings', async () => {
+  const sales = { id: 'sales-role', code: 'SALES', name: '销售', description: null, permissions: [] }
+  const member = {
+    id: 'sales-member', display_name: '销售员工', email: '', title: '', primary_dept_name: '华南',
+    role_names: '销售', role_ids: [sales.id], status: 'active',
+    scoped_roles: [
+      { scopeType: 'org' as const, scopeId: 'org-a', scopeName: '组织' },
+      { scopeType: 'department' as const, scopeId: 'south', scopeName: '华南' },
+      { scopeType: 'department' as const, scopeId: 'east', scopeName: '华东' },
+    ].map(binding => ({ ...binding, roleId: sales.id, roleCode: sales.code, roleName: sales.name, grantedAt: null })),
+  }
+  const send = vi.fn().mockResolvedValueOnce(Response.json({ success: true }))
+  vi.stubGlobal('fetch', send)
+  vi.mocked(confirmAction).mockResolvedValueOnce(true)
+  const onRefresh = vi.fn()
+  render(<RoleDetailPanel {...defaults} role={sales} users={[member]} onRefresh={onRefresh} onSave={vi.fn()} />)
+
+  const action = within(screen.getByRole('table')).getByRole('button', { name: '从角色中移除 销售员工' })
+  fireEvent.pointerDown(action, { button: 0, ctrlKey: false })
+  expect(await screen.findByRole('menuitem', { name: '撤销 全组织' })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: '撤销 华东' })).toBeInTheDocument()
+  expect(send).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('menuitem', { name: '撤销 华南' }))
+
+  await waitFor(() => expect(onRefresh).toHaveBeenCalledOnce())
+  expect(confirmAction).toHaveBeenLastCalledWith(expect.stringContaining('「华南」'), { confirmText: '移除', danger: true })
+  expect(send).toHaveBeenCalledExactlyOnceWith(`/api/admin/users/${member.id}/role-scopes`, expect.objectContaining({
+    method: 'DELETE', body: JSON.stringify({ role_id: sales.id, scope_type: 'department', scope_id: 'south' }),
+  }))
+})
+
 describe('personal shipping review when adjusting a role member', () => {
   const shippingRole = { id: 'ship', code: 'SHIP', name: '寄件', description: null, permissions: [] }
   const member = {

@@ -237,12 +237,12 @@
   "active_task": {
     "id": "WP82",
     "slug": "permission-default-deny",
-    "name": "权限目录与实际动作一致",
+    "name": "组织与权限设计整改",
     "kind": "product",
     "status": "active",
     "feature_id": "F003",
-    "objective": "部门、角色和员工复用按真实系统功能组织的唯一 L1–L4 权限表。员工先按权限点合并部门与角色授权及数据范围。个人调整保存该点的完整结果，直接覆盖基础权限开关和数据范围。业务参数的查看、修改和发布与权限分配分别校验。只有系统超管可以维护授权，保留任免和末位保护，停用默认发权。组织与自助收寄先贯通员工的入口、数据范围和服务端动作。其他模块先核对目录归属。",
-    "activation_basis": "IN-20261126-018 确认个人开关与数据范围直接覆盖基础并集，补充 IN-20261126-017。IN-20261126-001 确认权限层级，IN-20261126-002 区分业务参数和权限分配。",
+    "objective": "完成组织与权限操作闭环。组织架构、外部系统接入、角色权限三个入口按原布局呈现；部门、角色和员工复用按真实系统功能划分的唯一 L1–L4 权限表。员工按权限点合并部门与角色授权、实时组织树和数据范围，再用个人差异覆盖。业务参数与授权分别校验，只有系统超管可以维护授权；使用唯一系统超管角色并保护最后一名有效超管。组织成员可维护角色、查看个人权限、停用账号和办理离职；角色成员可移除对应角色并打开同一份个人权限表。组织名单支持逐人、全选和批量操作，失败可定位到人。统计明确区分同步在职与关联成员，操作保留当前视图。先验收组织和自助收寄的实际权限与范围。",
+    "activation_basis": "IN-20261126-024 将 IN-20261126-019 至 IN-20261126-023 的界面与操作缺陷合并到当前 WP82，沿用 IN-20261126-017 至 IN-20261126-018 确认的并集与个人差异覆盖，以及 IN-20261126-002 的业务参数和授权边界。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp82-personal-overrides/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
@@ -285,6 +285,7 @@
       "product-truth/product-code/lib/organization-connections/fxiaoke-baseline-view-migration.test.ts",
       "product-truth/product-code/lib/organization-connections/directory-cutover.ts",
       "product-truth/product-code/lib/organization-connections/directory-cutover-read.test.ts",
+      "product-truth/product-code/lib/organization-connections/directory-cutover.test.ts",
       "product-truth/product-code/app/pending-access/page.tsx",
       "product-truth/product-code/components/layout/AppShell.tsx",
       "product-truth/product-code/components/layout/AppShell.test.tsx",
@@ -361,7 +362,7 @@
     "active": {
       "id": "WP82",
       "slug": "permission-default-deny",
-      "name": "权限目录与实际动作一致"
+      "name": "组织与权限设计整改"
     },
     "next": {
       "id": "WP35",

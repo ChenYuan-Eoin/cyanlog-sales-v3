@@ -272,7 +272,11 @@ it('defaults to employed members, preserves active directory newcomers and count
   expect(screen.queryByText('本地在职戊')).not.toBeInTheDocument()
   expect(screen.queryByText('目录待核对丁')).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: /^销售父部门/ })).toHaveTextContent('1')
-  fireEvent.click(screen.getByRole('button', { name: /^销售父部门/ }))
+  const department = screen.getByRole('button', { name: /^销售父部门/ })
+  department.focus()
+  fireEvent.keyDown(department, { key: 'Enter' })
+  expect(department).toHaveFocus()
+  expect(screen.getAllByLabelText('部门成员范围')).toHaveLength(1)
   expect(screen.getByText('在职待登录甲')).toBeInTheDocument()
   expect(screen.getByText('共 1 人（含子部门）')).toBeInTheDocument()
 })
@@ -359,10 +363,31 @@ it('shows only granted lifecycle actions for an organization member', async () =
   }} currentUserId="actor" />)
   fireEvent.change(screen.getByLabelText('成员状态'), { target: { value: 'all' } })
   fireEvent.pointerDown(screen.getByRole('button', { name: '管理本地在职戊' }), { button: 0, ctrlKey: false })
-  expect(await screen.findByRole('menuitem', { name: '禁止登录' })).not.toHaveAttribute('aria-disabled')
+  expect(await screen.findByRole('menuitem', { name: '停用账号' })).not.toHaveAttribute('aria-disabled')
   expect(screen.getByRole('menuitem', { name: '办理离职' })).toHaveAttribute('aria-disabled', 'true')
   expect(screen.getByRole('menuitem', { name: '移出当前组织' })).toHaveAttribute('aria-disabled', 'true')
   expect(screen.queryByRole('button', { name: '提交新增成员' })).not.toBeInTheDocument()
+})
+
+it.each([
+  { action: '停用账号', endpoint: '/login-enabled', method: 'PATCH', body: { login_enabled: false } },
+  { action: '办理离职', endpoint: '', method: 'DELETE', body: { reason: 'tenant administrator offboarding' } },
+])('lets an administrator $action for a linked active employee in ICU', async ({ action, endpoint, method, body }) => {
+  const employee = { ...statusPayload.users[0], status: 'active', login_enabled: true,
+    membership_status: 'active' as const, directory_pending_account: false, employment_status: 'active' as const }
+  const url = '/api/admin/users/' + employee.id + endpoint
+  const send = vi.mocked(fetch).mockImplementation(async (path) => path === url
+    ? Response.json({ success: true }) : new Response(null, { status: 403 }))
+  const onRefresh = vi.fn()
+  render(<OrgStructureTab orgSummary={{ ...statusPayload, users: [employee] }} currentUserId="actor" onRefresh={onRefresh} />)
+  fireEvent.keyDown(screen.getByRole('button', { name: '管理' + employee.display_name }), { key: 'ArrowDown' })
+  const operation = await screen.findByRole('menuitem', { name: action })
+  expect(operation).not.toHaveAttribute('aria-disabled')
+  fireEvent.click(operation)
+  expect(send).not.toHaveBeenCalledWith(url, expect.anything())
+  fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: action }))
+  await waitFor(() => expect(onRefresh).toHaveBeenCalledOnce())
+  expect(send).toHaveBeenCalledWith(url, expect.objectContaining({ method, body: JSON.stringify(body) }))
 })
 
 it('shows an unconfirmed directory count as unknown and still lets administrators see all local records', () => {
@@ -472,7 +497,7 @@ it('shows stopped Fxiaoke employees as departed and unable to log in without inv
   fireEvent.keyDown(within(row).getByRole('button', { name: '管理纷享离职乙' }), { key: 'ArrowDown' })
   expect(await screen.findByRole('menu')).toBeInTheDocument()
   expect(screen.queryByRole('menuitem', { name: /在职状态由纷享销客管理|已由纷享目录关联/ })).not.toBeInTheDocument()
-  expect(screen.queryByRole('menuitem', { name: /启用用户|允许登录|恢复在职|办理离职/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('menuitem', { name: /启用用户|停用账号|启用账号|恢复在职|办理离职/ })).not.toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: '编辑' })).toHaveAttribute('aria-disabled', 'true')
 })
 
@@ -504,9 +529,24 @@ it('does not call a previously active directory account a first-login account af
     status: 'ready', asOf: appliedAt, members: [{ id: user.id, departmentIds: ['child'] }],
   } }} currentUserId="actor" />)
   const row = screen.getByText('已登录后禁用戊').closest('tr')!
-  expect(within(row).getByText('登录已禁用')).toBeInTheDocument()
+  expect(within(row).getByText('账号已停用')).toBeInTheDocument()
   expect(within(row).queryByText('待首次登录')).not.toBeInTheDocument()
   expect(within(row).getByText('在职')).toBeInTheDocument()
+})
+
+it('keeps retired role names out of active member role badges', () => {
+  const ordinaryRole: ScopedRoleAssignment = { roleId: 'role', roleName: '销售', roleCode: 'SALES',
+    scopeType: 'org', scopeId: 'org', scopeName: '组织', grantedAt: null }
+  const user = { ...statusPayload.users[0], role_names: '销售,组织超级管理员,纷享基础查看', scoped_roles: [
+    ordinaryRole,
+    { ...ordinaryRole, roleId: 'old-admin', roleCode: 'ORG_SUPER_ADMIN', roleName: '组织超级管理员' },
+    { ...ordinaryRole, roleId: 'old-base', roleCode: 'FXIAOKE_BASELINE', roleName: '纷享基础查看' },
+  ] }
+  render(<OrgStructureTab orgSummary={{ ...statusPayload, users: [user] }} currentUserId="actor" />)
+  const row = screen.getByText(user.display_name).closest('tr')!
+  expect(within(row).getByText('销售')).toBeInTheDocument()
+  expect(within(row).queryByText('组织超级管理员')).not.toBeInTheDocument()
+  expect(within(row).queryByText('纷享基础查看')).not.toBeInTheDocument()
 })
 
 it('renders pending role separately on the organization member row', () => {
@@ -564,7 +604,7 @@ it.each([true, false])('updates a promoted member’s roles once when login_enab
   const view = render(<OrgStructureTab {...props} orgSummary={summary} />)
   fireEvent.keyDown(screen.getByRole('button', { name: `管理${user.display_name}` }), { key: 'ArrowDown' })
   expect(screen.queryByText('平台根管理员只读')).not.toBeInTheDocument()
-  expect(screen.getByRole('menuitem', { name: '停用用户' })).toHaveAttribute('aria-disabled', 'true')
+  expect(screen.getByRole('menuitem', { name: loginEnabled ? '停用账号' : '启用账号' })).toHaveAttribute('aria-disabled', 'true')
   fireEvent.click(await screen.findByRole('menuitem', { name: '分配角色' }))
   expect(screen.getByText('仅可调整组织级角色')).toBeInTheDocument()
 

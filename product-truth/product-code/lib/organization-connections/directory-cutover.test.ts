@@ -155,6 +155,39 @@ describe('directory cutover plan', () => {
     expect(canonicalDirectoryJson({ b: 1, a: { d: 2, c: 3 } })).toBe('{"a":{"c":3,"d":2},"b":1}')
   })
 
+  it.each([
+    { status: 'ended', employmentStatus: 'ended' },
+    { status: 'ended', employmentStatus: 'active' },
+  ])('observes the external identity of an ended member without restoring the department ($employmentStatus)', (state) => {
+    const base = input()
+    const observed = base.snapshot.employees[0]
+    const regular = { ...observed, id: 'employee-2', name: '李四', employeeNumber: 'E002' }
+    const plan = buildDirectoryCutoverPlan(input({
+      snapshot: { ...base.snapshot, employees: [observed, regular] },
+      users: base.users.map(user => user.id === alice ? {
+        ...user, status: 'inactive', loginEnabled: false, primaryDepartmentId: null,
+      } : user),
+      identities: [...base.identities, {
+        ...base.identities[0], id: '00000000-0000-4000-8000-000000000304',
+        canonicalUserId: bob, externalUserId: regular.id,
+      }],
+      memberships: [],
+      organizationMemberships: [{
+        userId: alice, orgId: org, primaryDepartmentId: null, isDefault: true,
+        createdAt: '2026-11-01T00:00:00.000Z', ...state,
+      }],
+    }))
+
+    expect(plan.applyable).toBe(true)
+    expect(plan.identityChanges).toContainEqual(expect.objectContaining({
+      canonicalUserId: alice, createsMember: false, externalUserId: observed.id,
+      profileSnapshot: expect.objectContaining({ status: 'active', primaryDepartmentExternalId: 'dept-sales' }),
+    }))
+    expect(plan.userDepartmentChanges).toEqual([expect.objectContaining({ userId: bob, primaryDepartmentExternalId: 'dept-sales' })])
+    expect(plan.beforeState.users.map(user => user.id)).toEqual([bob])
+    expect(plan.beforeState.organizationMemberships).toEqual([])
+  })
+
   it('blocks an incomplete provider snapshot as a whole', () => {
     const base = input()
     const plan = buildDirectoryCutoverPlan(input({
