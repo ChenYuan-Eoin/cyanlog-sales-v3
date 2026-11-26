@@ -800,6 +800,58 @@ describe('department-scoped workspace admission', () => {
     expect((await request('/quotes')).headers.get('location')).toBe('https://sales.cyanlog.icu/pending-access')
   })
 
+  it('combines a scoped role-directory grant with the department workbench and revokes the workbench independently', async () => {
+    const role = { roles: { id: 'directory', code: 'ORG_DIRECTORY', permissions: ['role:view', 'user:view'] } }
+
+    bind({ roles: [role, departmentRole], departments: [department] })
+    expect((await request('/')).status).toBe(200)
+    expect((await request('/api/dashboard/department')).status).toBe(200)
+    expect((await request('/api/navigation')).headers.get('x-middleware-request-x-user-navigation-scope')).toBe('scoped-with-workbench')
+    expect((await request('/configs')).status).toBe(200)
+    expect((await request('/api/roles')).status).toBe(200)
+    expect((await request('/api/roles', 'POST')).status).toBe(403)
+    expect((await request('/api/quotes')).status).toBe(403)
+    expect((await request('/api/dashboard/department', 'POST')).status).toBe(403)
+
+    bind({ roles: [role] })
+    expect((await request('/')).headers.get('location')).toBe('https://sales.cyanlog.icu/configs')
+    expect((await request('/api/dashboard/department')).status).toBe(403)
+    const navigation = await middleware(makeRequest('https://sales.cyanlog.icu/api/navigation', {
+      authorization: `Bearer ${token}`, 'x-user-navigation-scope': 'scoped-with-workbench',
+    }))
+    expect(navigation.headers.get('x-middleware-request-x-user-navigation-scope')).toBe('scoped')
+  })
+
+  it('admits the assigned workbench alongside a shipping role without allowing additional workbench paths', async () => {
+    const role = { roles: { id: 'shipping', code: 'ORG_SHIPPING', permissions: ['shipping:settings_view'] } }
+    bind({ roles: [role], departmentLeads: [leaderGrant] })
+
+    expect((await request('/')).status).toBe(200)
+    expect((await request('/api/dashboard/department/roster')).status).toBe(200)
+    expect((await request('/api/navigation')).headers.get('x-middleware-request-x-user-navigation-scope')).toBe('scoped-with-workbench')
+    expect((await request('/api/dashboard/department/other')).status).toBe(403)
+    expect((await request('/api/quotes')).status).toBe(403)
+  })
+
+  it('keeps the settings dependencies available without treating config read as product edit or quote access', async () => {
+    const configurationRole = (action: string) => ({ roles: { id: 'configuration', code: 'ORG_CONFIG', permissions: [action] } })
+    bind({ roles: [configurationRole('config:read')] })
+    for (const path of ['/api/configs', '/api/config-center/pricing', '/api/contract-policies/rules',
+      '/api/products?summary=1', '/api/product-price-tiers?product_id=a']) {
+      expect((await request(path)).status, path).toBe(200)
+    }
+    for (const [path, method] of [
+      ['/api/products', 'GET'], ['/api/quotes', 'GET'], ['/api/products', 'POST'], ['/api/products/a', 'PUT'],
+    ]) {
+      expect((await request(path, method)).status, path).toBe(403)
+    }
+
+    bind({ roles: [configurationRole('config:write')] })
+    expect((await request('/api/products', 'POST')).status).toBe(200)
+    expect((await request('/api/products/a', 'PUT')).status).toBe(200)
+    expect((await request('/api/product-price-tiers', 'POST')).status).toBe(403)
+  })
+
   it.each([
     { name: 'confirmed department leader', departmentLeads: [leaderGrant] },
     { name: 'active department view role', roles: [departmentRole], departments: [department] },

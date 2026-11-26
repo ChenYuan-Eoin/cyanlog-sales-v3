@@ -35,7 +35,7 @@ import { getConfigsTabAccess, hasConfigsTabAccess } from '@/lib/configs/tab-acce
 import { createMiddlewareRestClient, type MiddlewareRestClient } from '@/lib/middleware-rest-client'
 import {
   canAccessOrgAdmin, canReadOrgDepartmentDirectory, canReadRoleDirectory, hasConfigurationReadPermission, hasOrganizationSourcePermission,
-  hasPermission, isSystemAuthorizationGrant, ORG_MEMBER_EDIT,
+  hasPermission, isOrgDelegationSensitivePermission, isSystemAuthorizationGrant, ORG_MEMBER_EDIT,
 } from '@/lib/permissions'
 import {
   ORG_MEMBER_INVITE, ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_REMOVE_MEMBERSHIP,
@@ -115,6 +115,7 @@ type MiddlewareAuthContext = {
   shippingPermissions: string[]
   ownerShippingPermissions: string[]
   activeMembership: boolean
+  scopedModulesOnly: boolean
   departmentWorkspaceAccess: boolean
   departmentLedgerAccess: boolean
   canManageSystemAuthorizations: boolean
@@ -157,7 +158,7 @@ const DEPARTMENT_WORKSPACE_READ_PATHS = new Set([
   '/', '/api/auth/me', '/api/navigation', '/api/dashboard', '/api/dashboard/department', '/api/dashboard/department/roster',
 ])
 const DEPARTMENT_LEDGER_ENTRY_PATHS = new Set(['/', '/shipping', '/api/auth/me', '/api/navigation'])
-const SHIPPING_ONLY_SESSION_READ_PATHS = new Set([
+const SCOPED_SESSION_READ_PATHS = new Set([
   '/shipping', '/sales-portal', '/profile', '/pending-access', '/api/auth/me', '/api/auth/context', '/api/navigation',
 ])
 
@@ -207,6 +208,22 @@ function hasMemberRoutePermission(pathname: string, method: string, permissions:
   const detail = memberDetailPath.exec(pathname)
   return !!detail && (memberPathPermissions[method + ' ' + (detail[1] ?? '')]
     ?.some(permission => hasPermission(permissions, permission)) ?? false)
+}
+
+function hasGeneralConfigurationRoutePermission(request: NextRequest, required: string | null, permissions: string[]): boolean {
+  if (!hasConfigurationReadPermission(permissions)) return false
+  const { pathname, searchParams } = request.nextUrl
+  if (required === 'config:read' && pathname !== '/configs' && pathname !== '/api/roles') return true
+  if (/^\/api\/contract-policies\/(rules|rule-categories|rule-sets)(\/|$)/.test(pathname)) return true
+
+  // The pricing settings tab uses these shared product endpoints.
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    return (pathname === '/api/products' && searchParams.get('summary') === '1')
+      || (pathname === '/api/product-price-tiers' && searchParams.has('product_id'))
+  }
+  if (!hasPermission(permissions, 'config:write')) return false
+  return (request.method === 'POST' && pathname === '/api/products')
+    || (['PUT', 'DELETE'].includes(request.method) && /^\/api\/products\/[^/]+$/.test(pathname))
 }
 
 // These read handlers already apply the current organization, owner or
@@ -382,7 +399,11 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
     }
   }
 
-  const departmentWorkspaceAccess = checkDepartmentWorkspace && activeMembership && roleCodes.length === 0
+  const scopedModulesOnly = roleCodes.length > 0 && allPermissions.every(permission =>
+    permission !== '*' && (permission.startsWith('shipping:') || isOrgDelegationSensitivePermission(permission)),
+  )
+  const departmentWorkspaceAccess = checkDepartmentWorkspace && activeMembership
+    && (roleCodes.length === 0 || scopedModulesOnly)
     && await canEnterDepartmentWorkspace(rest, userId, orgId, organization.settings)
   const departmentLedgerAccess = checkDepartmentLedger && activeMembership
     && (await readShippingPermissionPublication(new Set([DEPARTMENT_LEDGER_VIEW]))).departmentLedgerPublished
@@ -398,6 +419,7 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
     shippingPermissions: activeMembership ? allPermissions : [],
     ownerShippingPermissions,
     activeMembership,
+    scopedModulesOnly,
     departmentWorkspaceAccess,
     departmentLedgerAccess,
     canManageSystemAuthorizations,
@@ -514,6 +536,7 @@ export async function middleware(request: NextRequest) {
       && hasRestrictedShippingRoleSet(authContext.roleCodes)
     const shippingOnly = authContext.roleCodes.length > 0
       && authContext.allPermissions.every(permission => permission.startsWith('shipping:'))
+    const { scopedModulesOnly } = authContext
     const ownerPermission = shippingOwnerPermissionRequirement(pathname, request.method)
     const receiptLookup = read && /^\/api\/shipping\/public\/orders\/[^/]+$/.test(pathname)
     // The receipt handler distinguishes actor-owned orders from old anonymous bearer receipts.
@@ -565,18 +588,28 @@ export async function middleware(request: NextRequest) {
     const memberAccess = hasMemberRoutePermission(pathname, request.method, authContext.allPermissions)
     const specificConfigurationAccess = configurationShell || organizationSourceAccess || rolesIndexAccess
       || departmentDirectoryAccess || memberAccess || systemAuthorizationPath
-    if (shippingOnly && !specificConfigurationAccess && !ownerPermission && !requiredShipping.length
-      && !(read && SHIPPING_ONLY_SESSION_READ_PATHS.has(pathname))
+      || (scopedModulesOnly && hasGeneralConfigurationRoutePermission(request, required, authContext.allPermissions))
+    if (scopedModulesOnly && !specificConfigurationAccess && !authContext.departmentWorkspaceAccess
+      && !ownerPermission && !requiredShipping.length
+      && !(read && SCOPED_SESSION_READ_PATHS.has(pathname))
       && pathname !== '/api/profile' && pathname !== '/api/auth/logout') {
       if (pathname.startsWith('/api/')) {
-        return NextResponse.json({ error: '此操作超出当前寄件授权', code: 'SHIPPING_SCOPE_REQUIRED' }, { status: 403 })
+        return NextResponse.json(shippingOnly
+          ? { error: '此操作超出当前寄件授权', code: 'SHIPPING_SCOPE_REQUIRED' }
+          : { error: '此操作超出当前模块授权', code: 'MODULE_SCOPE_REQUIRED' }, { status: 403 })
       }
+      if (pathname !== '/' && !shippingOnly) return NextResponse.redirect(buildRedirectUrl(request, '/'))
       const [ledger, owner, settings] = await Promise.all([
         allowsShippingPermission(authContext.shippingPermissions, ['shipping:ledger_view']),
         allowsShippingOwnerPermission(authContext.ownerShippingPermissions, 'shipping:owner_view'),
         allowsShippingPermission(authContext.shippingPermissions, ['shipping:settings_view']),
       ])
-      const landingPage = ledger || owner ? '/shipping' : settings ? '/shipping/settings' : '/pending-access'
+      const configAccess = hasConfigsTabAccess(getConfigsTabAccess({
+        permissions: authContext.allPermissions,
+        systemAdministrator: authContext.canManageSystemAuthorizations,
+      }))
+      const landingPage = ledger || owner || authContext.departmentLedgerAccess ? '/shipping'
+        : configAccess ? '/configs' : settings ? '/shipping/settings' : '/pending-access'
       return NextResponse.redirect(buildRedirectUrl(request, landingPage))
     }
     if (restrictedMember && !specificConfigurationAccess && required && (required === 'config:read' || required === 'admin:access')) {
@@ -617,7 +650,10 @@ export async function middleware(request: NextRequest) {
     if (shippingSettingsView) requestHeaders.set('x-user-shipping-settings-view', '1')
     requestHeaders.delete('x-user-navigation-scope')
     if (pathname === '/api/navigation') {
-      if (shippingOnly) requestHeaders.set('x-user-navigation-scope', 'shipping-only')
+      if (scopedModulesOnly) {
+        const scope = authContext.departmentWorkspaceAccess ? 'scoped-with-workbench' : shippingOnly ? 'shipping-only' : 'scoped'
+        requestHeaders.set('x-user-navigation-scope', scope)
+      }
       if (authContext.roleCodes.length === 0 && (authContext.departmentWorkspaceAccess || authContext.departmentLedgerAccess)) {
         const scope = authContext.departmentLedgerAccess
           ? (authContext.departmentWorkspaceAccess ? 'workbench-and-ledger' : 'department-ledger')

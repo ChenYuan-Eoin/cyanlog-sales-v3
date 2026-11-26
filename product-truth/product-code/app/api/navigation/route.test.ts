@@ -79,6 +79,44 @@ it('shows configuration for an available organization tab independently from shi
   expect(await response.json()).toEqual({ paths: ['/configs'] })
 })
 
+it.each([
+  {
+    scope: 'scoped', permissions: 'role:manage', canViewOwn: true,
+    paths: ['/shipping', '/configs'],
+  },
+  {
+    scope: 'scoped-with-workbench', permissions: 'dept:directory_view',
+    paths: ['/', '/configs'],
+  },
+  {
+    scope: 'scoped-with-workbench', permissions: '', canOperate: true, canManageConnections: true,
+    paths: ['/', '/shipping', '/shipping/settings', '/configs'],
+  },
+  {
+    scope: 'scoped-with-workbench', permissions: 'role:manage', canViewOwn: true,
+    departmentLedger: [{ id: 'south', name: '华南', parentId: null }],
+    paths: ['/', '/shipping', '/configs'],
+  },
+  {
+    scope: 'scoped', permissions: '',
+    paths: [],
+  },
+])('limits a $scope session with $permissions to authorized business paths', async ({
+  scope, permissions, canViewOwn = false, canOperate = false, canManageConnections = false, departmentLedger, paths,
+}) => {
+  vi.mocked(resolveShippingEntry).mockResolvedValue({
+    orgId: 'org1', canOperate, canViewOwn, canSubmitOwn: false, canManageConnections,
+    canReadLegacyReceipt: false, permissions: [], ownerPermissions: [], departmentLedger,
+  })
+  const response = await GET(request({
+    'x-user-navigation-scope': scope,
+    'x-user-permissions': permissions,
+  }))
+  expect(response.status).toBe(200)
+  expect(response.headers.get('cache-control')).toBe('private, no-store')
+  expect(await response.json()).toEqual({ paths, onlyProjectedPaths: true })
+})
+
 it('does not use the forwarded settings flag when shipping did not authorize settings', async () => {
   vi.mocked(resolveShippingEntry).mockResolvedValue({
     orgId: 'org1', canOperate: false, canViewOwn: true, canSubmitOwn: false, canManageConnections: false,

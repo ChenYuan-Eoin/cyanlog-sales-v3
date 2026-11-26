@@ -25,11 +25,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ paths, onlyProjectedPaths: true }, { headers })
     }
 
-    const paths: string[] = []
+    const paths: string[] = scope === 'scoped-with-workbench' ? ['/'] : []
     if (shipping.canOperate || shipping.canViewOwn || shipping.departmentLedger?.length) paths.push('/shipping')
     if (shipping.canManageConnections) paths.push('/shipping/settings')
     if (hasConfigsTabAccess(readConfigsTabAccess(req.headers, shipping.canManageConnections))) paths.push('/configs')
-    return NextResponse.json({ paths, ...(scope === 'shipping-only' ? { onlyProjectedPaths: true } : {}) }, { headers })
+    const onlyProjectedPaths = scope === 'scoped' || scope === 'scoped-with-workbench' || scope === 'shipping-only'
+    return NextResponse.json({ paths, ...(onlyProjectedPaths ? { onlyProjectedPaths } : {}) }, { headers })
   } catch (error) {
     return NextResponse.json({ paths: [] }, { status: error instanceof AuthError ? 401 : 503, headers })
   }
