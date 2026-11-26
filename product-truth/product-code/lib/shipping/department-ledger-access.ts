@@ -95,7 +95,18 @@ export async function loadDepartmentLedgerScope(
   const options = await activeTree(rest, orgId)
   const allowed = new Set(roots.filter(root => !root.descendants).map(root => root.id))
   for (const id of descendants(options, roots.filter(root => root.descendants).map(root => root.id))) allowed.add(id)
-  return options.filter(option => allowed.has(option.id))
+  const activeById = new Map(options.map(option => [option.id, option]))
+  return options.filter(option => allowed.has(option.id)).map(option => {
+    // Keep ancestry between visible options even when intermediate departments are hidden.
+    const visited = new Set([option.id])
+    let parentId = option.parentId
+    while (parentId && activeById.has(parentId) && !visited.has(parentId)) {
+      if (allowed.has(parentId)) return { ...option, parentId }
+      visited.add(parentId)
+      parentId = activeById.get(parentId)?.parentId ?? null
+    }
+    return { ...option, parentId: null }
+  })
 }
 
 /** The selector can only narrow the already-authorized set. */

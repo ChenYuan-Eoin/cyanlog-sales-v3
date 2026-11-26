@@ -66,6 +66,29 @@ describe('explicit department shipping grants', () => {
     expect(await loadDepartmentLedgerScope(rest, orgId, userId, { ...settings, department_permission_grants: {} })).toEqual([])
   })
 
+  it('includes an independently granted descendant when there is an ungranted intermediate department', async () => {
+    const rest = source()
+    rest.rows.user_roles = [roleAt('authorized-grandchild', 'ORDINARY', ['shipping:ledger_view'])]
+    rest.rows.department_lead_access = []
+    rest.rows.departments = [
+      dept('east'), dept('intermediate', 'east'), dept('authorized-grandchild', 'intermediate'),
+      dept('ungranted-sibling', 'intermediate'), dept('another-parent'),
+    ]
+    const settings = { department_permission_grants: { east: grant(false) } }
+    const options = await loadDepartmentLedgerScope(rest, orgId, userId, settings)
+    expect(options.map(option => [option.id, option.parentId])).toEqual([
+      ['east', null], ['authorized-grandchild', 'east'],
+    ])
+    expect(selectLedgerDepartments(options, 'east', true)).toEqual(['east', 'authorized-grandchild'])
+    expect(selectLedgerDepartments(options, 'east')).toEqual(['east'])
+    expect(selectLedgerDepartments(options, 'intermediate', true)).toBeNull()
+
+    rest.rows.departments = [dept('east'), dept('another-parent'), dept('authorized-grandchild', 'another-parent')]
+    const moved = await loadDepartmentLedgerScope(rest, orgId, userId, settings)
+    expect(selectLedgerDepartments(moved, 'east', true)).toEqual(['east'])
+    expect(selectLedgerDepartments(moved)).toEqual(['east', 'authorized-grandchild'])
+  })
+
   it('does not grant a parent permission to a user merely assigned to its child', async () => {
     const rest = source()
     rest.rows.user_roles = []
