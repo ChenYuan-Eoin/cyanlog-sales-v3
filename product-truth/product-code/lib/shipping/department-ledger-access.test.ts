@@ -53,6 +53,36 @@ describe('explicit department shipping grants', () => {
     expect(selectLedgerDepartments(options, 'no-authorization')).toBeNull()
   })
 
+  it.each(['SHIPPING_OPERATOR', 'ORDINARY'])('uses the current explicit ledger grant for a %s department binding', async code => {
+    const rest = source()
+    rest.rows.user_roles = [roleAt('west', code, ['shipping:operate'])]
+    expect(await loadDepartmentLedgerScope(rest, orgId, userId, {})).toEqual([])
+
+    const options = await loadDepartmentLedgerScope(rest, orgId, userId, {
+      role_permission_overrides: { [code]: ['shipping:ledger_view'] },
+    })
+    expect(options.map(option => option.id)).toEqual(['west', 'west-child'])
+    expect(selectLedgerDepartments(options, 'east')).toBeNull()
+
+    expect(await loadDepartmentLedgerScope(rest, orgId, userId, {
+      role_permission_overrides: { [code]: ['shipping:*', '*'] },
+    })).toEqual([])
+  })
+
+  it('keeps retired, system, foreign, inactive and legacy scope bindings out of the shipping ledger', async () => {
+    const rest = source()
+    const ledger = ['shipping:ledger_view']
+    rest.rows.user_roles = [
+      ...['SUPER_ADMIN', 'ORG_SUPER_ADMIN', 'FXIAOKE_BASELINE'].map(code => roleAt('west', code, ledger)),
+      { ...roleAt('west', 'SHIPPING_OPERATOR', ledger), scope_type: 'space' },
+      { ...roleAt('west', 'SHIPPING_OPERATOR', ledger), org_id: 'org-b' },
+      { ...roleAt('west', 'SHIPPING_OPERATOR', ledger), user_id: 'another-member' },
+      roleAt('west', 'SHIPPING_OPERATOR', ledger, 'org-b'),
+      roleAt('disabled', 'SHIPPING_OPERATOR', ledger),
+    ]
+    expect(await loadDepartmentLedgerScope(rest, orgId, userId, {})).toEqual([])
+  })
+
   it('recomputes expanded scopes after reparenting, new departments and revocation', async () => {
     const rest = source()
     const settings = {

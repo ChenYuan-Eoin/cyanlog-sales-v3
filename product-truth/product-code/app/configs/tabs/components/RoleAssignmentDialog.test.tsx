@@ -173,11 +173,11 @@ describe('RoleAssignmentDialog scoped assignment', () => {
     await waitFor(() => expect(onRevokeScoped).toHaveBeenCalledWith('role-1', 'department', inactive.id))
   })
 
-  it('limits the shipping operator to organization assignments and keeps its old scope binding revocable', async () => {
+  it.each([undefined, false])('keeps shipping operator organization-only without department availability (%s)', async departmentScopeAvailable => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({
       success: true,
       data: { roles: [
-        { id: 'shipping-role', code: 'SHIPPING_OPERATOR', name: '顺丰寄件操作员' },
+        { id: 'shipping-role', code: 'SHIPPING_OPERATOR', name: '顺丰寄件操作员', department_scope_available: departmentScopeAvailable },
         { id: 'mixed-role', code: 'FIELD_TEAM', name: '现场团队', permissions: ['shipping:operate', 'contract:view'] },
       ] },
     })))
@@ -208,6 +208,37 @@ describe('RoleAssignmentDialog scoped assignment', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(['shipping-role']))
     expect(onSubmitScoped).not.toHaveBeenCalled()
+  })
+
+  it('assigns a shipping operator to an active department when the server currently offers that scope', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      success: true,
+      data: { roles: [
+        { id: 'shipping-role', code: 'SHIPPING_OPERATOR', name: '顺丰寄件操作员', department_scope_available: true },
+      ] },
+    })))
+    const onSubmit = vi.fn(async () => undefined)
+    const onSubmitScoped = vi.fn(async () => undefined)
+    render(<RoleAssignmentDialog userId="test-user" userName="测试成员" currentRoles={[]}
+      departments={[{ id: 'department', name: '部门甲', status: 'active', parent_name: null }]}
+      scopedRoles={[{
+        roleId: 'shipping-role', roleCode: 'SHIPPING_OPERATOR', roleName: '顺丰寄件操作员',
+        scopeType: 'department', scopeId: 'department', scopeName: '部门甲', grantedAt: null,
+      }]}
+      onSubmit={onSubmit} onSubmitScoped={onSubmitScoped} onRevokeScoped={vi.fn()}
+      open onOpenChange={vi.fn()} />)
+
+    expect(await screen.findByRole('checkbox', { name: /顺丰寄件操作员/ })).not.toBeChecked()
+    expect(screen.queryByText('仅整个组织')).not.toBeInTheDocument()
+    expect(screen.queryByText('历史绑定 · 仅可撤销')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '撤销 顺丰寄件操作员（部门甲）' })).toBeEnabled()
+    fireEvent.change(screen.getByLabelText('角色作用域类型'), { target: { value: 'department' } })
+    fireEvent.change(screen.getByLabelText('选择部门角色作用域'), { target: { value: 'department' } })
+    fireEvent.click(screen.getByRole('checkbox', { name: /顺丰寄件操作员/ }))
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => expect(onSubmitScoped).toHaveBeenCalledExactlyOnceWith('shipping-role', 'department'))
+    expect(onSubmit).not.toHaveBeenCalled()
   })
 })
 

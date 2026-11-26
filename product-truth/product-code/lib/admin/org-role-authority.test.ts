@@ -11,11 +11,15 @@ vi.mock('@/lib/supabase', () => ({
     from: vi.fn(), rpc: vi.fn(),
   },
 }))
+vi.mock('@/lib/permission-registry', () => ({
+  loadShippingModulePermissionState: vi.fn(),
+}))
 
 import { supabaseAdmin } from '@/lib/supabase'
 import type { ScopedRoleAssignment } from '@/lib/scoped-access'
 import { userHasOrgRoleCode, validateOrgRoleAssignment } from './org-role-authority'
 import { loadOrgRolePermissionSettings } from '@/lib/org-role-permissions'
+import { loadShippingModulePermissionState } from '@/lib/permission-registry'
 
 function actor(permissions: string[]): ScopedRoleAssignment[] {
   return [{
@@ -109,9 +113,31 @@ describe('validateOrgRoleAssignment', () => {
       .resolves.toEqual({ ok: false, reason: 'ROLE_SCOPE_NOT_SUPPORTED' })
     await expect(validateOrgRoleAssignment(actor([]), 'org-a', ['shipping-role'], { scopeType, action: 'revoke' }))
       .resolves.toEqual({ ok: true, roleIds: ['shipping-role'] })
-    expect(loadOrgRolePermissionSettings).not.toHaveBeenCalled()
+    expect(loadShippingModulePermissionState).not.toHaveBeenCalled()
     await expect(validateOrgRoleAssignment(actor([]), 'org-a', ['SHIPPING-ROLE']))
       .resolves.toEqual({ ok: true, roleIds: ['shipping-role'] })
+  })
+
+  it.each([false, true])('checks the published department action for a configured shipping role (%s)', async departmentLedgerPublished => {
+    const roleId = 'shipping-role'
+    mockRoles([{ id: roleId, code: 'SHIPPING_OPERATOR', permissions: ['shipping:operate'] }])
+    vi.mocked(loadOrgRolePermissionSettings).mockResolvedValueOnce({
+      role_permission_overrides: { [roleId]: ['shipping:ledger_view', 'shipping:record_return'] },
+    })
+    vi.mocked(loadShippingModulePermissionState).mockResolvedValueOnce({
+      registered: new Set(['shipping:ledger_view']), published: new Set(['shipping:ledger_view']), departmentLedgerPublished,
+    })
+
+    await expect(validateOrgRoleAssignment(actor([]), 'org-a', [roleId], { scopeType: 'department', action: 'assign' }))
+      .resolves.toEqual(departmentLedgerPublished ? { ok: true, roleIds: [roleId] } : { ok: false, reason: 'ROLE_SCOPE_NOT_SUPPORTED' })
+    expect(loadShippingModulePermissionState).toHaveBeenCalledOnce()
+  })
+
+  it('does not infer a departmental role from a shipping bundle or return without ledger view', async () => {
+    mockRoles([{ id: 'shipping-role', code: 'SHIPPING_OPERATOR', permissions: ['shipping:*', 'shipping:record_return'] }])
+    await expect(validateOrgRoleAssignment(actor(['*']), 'org-a', ['shipping-role'], { scopeType: 'department', action: 'assign' }))
+      .resolves.toEqual({ ok: false, reason: 'ROLE_SCOPE_NOT_SUPPORTED' })
+    expect(loadShippingModulePermissionState).not.toHaveBeenCalled()
   })
 
   it('preserves department assignments for a mixed role with other department permissions', async () => {

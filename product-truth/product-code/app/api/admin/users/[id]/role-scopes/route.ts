@@ -5,7 +5,7 @@ import { userHasOrgRoleCode, validateOrgRoleAssignment } from '@/lib/admin/org-r
 import { canManageSystemAuthorizations, loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import { supabaseAdmin } from '@/lib/supabase'
 
-const SHIPPING_OPERATOR_ORG_SCOPE_MESSAGE = '顺丰寄件操作员只能分配到整个组织'
+const SHIPPING_DEPARTMENT_LEDGER_MESSAGE = '该角色需要启用支持部门范围的「查看收寄台账」权限。'
 
 const scopeSchema = z.strictObject({
   role_id: z.guid(),
@@ -45,7 +45,7 @@ async function changeScope(req: NextRequest, userId: string, action: 'assign' | 
         return failure('历史纷享基础角色仅可撤销', validation.reason, 409)
       }
       if (validation.reason === 'ROLE_SCOPE_NOT_SUPPORTED') {
-        return failure(SHIPPING_OPERATOR_ORG_SCOPE_MESSAGE, validation.reason, 409)
+        return failure(SHIPPING_DEPARTMENT_LEDGER_MESSAGE, validation.reason, 409)
       }
       return validation.reason === 'ROLE_NOT_FOUND'
         ? failure('角色不存在', validation.reason, 404)
@@ -69,8 +69,9 @@ async function changeScope(req: NextRequest, userId: string, action: 'assign' | 
       return failure('历史纷享基础角色仅可撤销', error.details, 409)
     }
     if (error?.code === '42501') return failure('当前账号无权变更该作用域角色', 'NO_PERMISSION', 403)
-    if (error?.code === '23514' && error.details === 'ROLE_SCOPE_NOT_SUPPORTED') {
-      return failure(SHIPPING_OPERATOR_ORG_SCOPE_MESSAGE, error.details, 409)
+    if (error?.code === '23514' && (error.details === 'ROLE_SCOPE_NOT_SUPPORTED'
+      || error.details === 'SHIPPING_DEPARTMENT_LEDGER_PERMISSION_REQUIRED')) {
+      return failure(SHIPPING_DEPARTMENT_LEDGER_MESSAGE, 'ROLE_SCOPE_NOT_SUPPORTED', 409)
     }
     if (error?.code === '23514' && error.details === 'DEPARTMENT_SCOPE_UNAVAILABLE') {
       return failure('所选部门未启用或已变化，请刷新后重新选择。', error.details, 409)

@@ -77,7 +77,7 @@ export default function RoleAccessTab({
     return roles.filter(role => !isRetiredRoleCode(role.code)).map(role => {
       return {
         ...role,
-        membershipStats: getRoleMembershipStats(users, role.id, orgSummary),
+        membershipStats: getRoleMembershipStats(users, role.id, orgSummary, role.department_scope_available === true),
         isSuperAdmin: role.code === 'SUPER_ADMIN',
       }
     }).sort((a, b) => {

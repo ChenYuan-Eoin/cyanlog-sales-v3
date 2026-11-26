@@ -16,12 +16,15 @@ const identity = '77777777-7777-4777-8777-777777777777'
 const nextIdentity = '88888888-8888-4888-8888-888888888888'
 const department = '99999999-9999-4999-8999-999999999999'
 const childDepartment = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+const unrelatedDepartment = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+const otherDepartment = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
 const lifecycle = '20261021000006_personnel_lifecycle_commands.sql'
 const organizationAdmin = '20261125055213_organization_super_admin.sql'
 const replacement = '20261126105311_employee_organization_permission_overrides.sql'
 const firstLogin = '20261118095000_fxiaoke_prelogin_role_assignment.sql'
 const roleCatalog = '20261126061431_org_owned_ordinary_roles.sql'
 const pendingMigration = '20261126111603_fxiaoke_prelogin_employee_permission_overrides.sql'
+const shippingDepartmentMigration = '20261126114126_allow_shipping_operator_department_ledger_roles.sql'
 const signature = 'public.admin_set_employee_org_permission_override_v1(uuid,uuid,uuid,text,jsonb,jsonb)'
 const allow = { effect: 'ALLOW', scope: { type: 'org' } }
 const deny = { effect: 'DENY', scope: null }
@@ -62,6 +65,7 @@ beforeEach(async () => {
     );
     create table public.user_roles (
       org_id uuid, user_id uuid, role_id uuid, scope_type text, scope_id uuid, granted_by uuid,
+      granted_at timestamptz,
       primary key (user_id, role_id, scope_type, scope_id)
     );
     create table private.org_role_metadata (
@@ -90,6 +94,7 @@ beforeEach(async () => {
       match_status text, profile_snapshot jsonb
     );
     create table public.departments (id uuid, parent_id uuid, org_id uuid, leader_id uuid, name text, status text);
+    create table public.sales_spaces (id uuid, org_id uuid);
     create table public.user_departments (org_id uuid, user_id uuid, department_id uuid);
     create table public.department_lead_access (org_id uuid, user_id uuid, department_id uuid);
     insert into public.organizations (id, settings) values ('${org}', '{"keep_setting":true}'), ('${otherOrg}', '{}');
@@ -425,4 +430,161 @@ it('does not promote pending differences through generic invitation acceptance o
   expect(await employeeOverrides()).toEqual([])
   expect(await save('user:view', null, deny)).toEqual(deny)
   expect(await employeeOverrides()).toEqual([{ permission_code: 'user:view', ...deny }])
+})
+
+async function installScopedRoleCommands() {
+  const operatorParity = migration('20261125065221_shipping_operator_role_parity.sql')
+  await db.exec(operatorParity.slice(
+    operatorParity.indexOf('with definitions as ('),
+    operatorParity.indexOf('-- Membership identifies the tenant'),
+  ))
+  await db.exec(functionDefinition(roleCatalog, 'assert_org_role_references_v1'))
+  for (const [file, name] of [
+    ['20261022000001_role_scope_lifecycle.sql', 'admin_set_role_scope_assignment_v1'],
+    [organizationAdmin, 'admin_set_role_scope_assignment_before_system_admin_v1'],
+    ['20261126045425_system_super_admin_authority.sql', 'admin_set_role_scope_assignment_before_system_actor_v1'],
+  ]) {
+    await db.exec(functionDefinition(file, 'admin_set_role_scope_assignment_v1', 'public')
+      .replace('function public.admin_set_role_scope_assignment_v1(', `function private.${name}(`))
+  }
+  await db.exec(functionDefinition('20261126060000_retire_new_fxiaoke_baseline_grants.sql', 'admin_set_role_scope_assignment_v1', 'public'))
+  await db.exec(migration('20261126113407_allow_super_admin_scoped_ordinary_role_revoke.sql'))
+  await db.exec(`
+    revoke all on function public.admin_set_role_scope_assignment_v1(uuid,uuid,uuid,uuid,text,uuid,text,text,text)
+      from public, anon, authenticated;
+    grant execute on function public.admin_set_role_scope_assignment_v1(uuid,uuid,uuid,uuid,text,uuid,text,text,text)
+      to service_role;
+    insert into public.roles (id,code,name,permissions)
+    values ('${shippingRole}','SHIPPING_OPERATOR','顺丰寄件操作员','["shipping:operate"]');
+    insert into public.departments (id,parent_id,org_id,name,status) values
+      ('${department}',null,'${org}','归属部门','active'),
+      ('${childDepartment}','${department}','${org}','下属部门','active'),
+      ('${unrelatedDepartment}',null,'${org}','其他部门','active'),
+      ('${otherDepartment}',null,'${otherOrg}','其他组织部门','active');
+    insert into public.sales_spaces values ('${unrelatedDepartment}','${org}');
+  `)
+}
+
+async function scopedShippingRole(
+  action: 'assign' | 'revoke',
+  { scopeType = 'department', scopeId = department, userId = employee, actorId = admin } = {},
+) {
+  await db.exec('set role service_role')
+  try {
+    const { rows } = await db.query<{ saved: boolean }>(
+      'select public.admin_set_role_scope_assignment_v1($1,$2,$3,$4,$5,$6,$7) as saved',
+      [actorId, org, userId, shippingRole, scopeType, scopeId, action],
+    )
+    return rows[0].saved
+  } finally {
+    await db.exec('reset role')
+  }
+}
+
+async function configureShippingRole(permissions: string[]) {
+  await db.query(
+    "update public.organizations set settings = settings || jsonb_build_object('role_permission_overrides',jsonb_build_object($1::text,$2::jsonb)) where id = $3",
+    [shippingRole, JSON.stringify(permissions), org],
+  )
+}
+
+async function shippingScopes() {
+  const { rows } = await db.query(
+    'select permission_code, organization_wide, department_ids from public.shipping_employee_permission_scopes_v1($1,$2)',
+    [org, employee],
+  )
+  return rows
+}
+
+it('grants only published configured department ledger and optional return on a fresh shipping operator binding', async () => {
+  await installScopedRoleCommands()
+  await db.exec(migration(shippingDepartmentMigration))
+  const ledgerRequired = { code: '23514', detail: 'SHIPPING_DEPARTMENT_LEDGER_PERMISSION_REQUIRED' }
+  await expect(scopedShippingRole('assign')).rejects.toMatchObject(ledgerRequired)
+  await configureShippingRole(['shipping:*', 'shipping:record_return'])
+  await expect(scopedShippingRole('assign')).rejects.toMatchObject(ledgerRequired)
+
+  const ledger = 'shipping:ledger_view'
+  const recordReturn = 'shipping:record_return'
+  await configureShippingRole([ledger])
+  await db.query("update public.permission_points set supported_scope_types = array['org'] where code = $1", [ledger])
+  await expect(scopedShippingRole('assign')).rejects.toMatchObject(ledgerRequired)
+  await db.query("update public.permission_points set supported_scope_types = array['org','department'] where code = $1", [ledger])
+  expect(await scopedShippingRole('assign')).toBe(true)
+
+  const departments = [department, childDepartment]
+  const scope = (permissionCode: string, departmentIds: string[], organizationWide = false) => ({
+    permission_code: permissionCode, organization_wide: organizationWide, department_ids: departmentIds,
+  })
+  expect(await shippingScopes()).toEqual([scope(ledger, departments), scope(recordReturn, [])])
+  await configureShippingRole([ledger, recordReturn, 'shipping:operate', 'shipping:order_confirm',
+    'shipping:order_change', 'shipping:connection_write'])
+  expect(await shippingScopes()).toEqual([scope(ledger, departments), scope(recordReturn, departments)])
+  const checkedReturn = async () => (await db.query(
+    'select * from private.shipping_return_scope_v1($1,$2)', [employee, org],
+  )).rows
+  expect(await checkedReturn()).toEqual([{ organization_wide: false, department_ids: departments }])
+
+  await db.query("update public.permission_points set status = 'disabled' where code = $1", [recordReturn])
+  expect(await shippingScopes()).toEqual([scope(ledger, departments), scope(recordReturn, [])])
+  await db.query("update public.permission_points set status = 'published' where code = $1", [recordReturn])
+  await db.query('insert into public.user_departments values ($1,$2,$3)', [org, employee, department])
+  await db.query(`
+    update public.organizations
+    set settings = settings || jsonb_build_object(
+      'department_permission_grants',
+      jsonb_build_object($1::text,'{"permissions":["shipping:ledger_view"],"include_subdepartments":true}'::jsonb)
+    ) where id = $2
+  `, [department, org])
+  await configureShippingRole([recordReturn])
+  expect(await shippingScopes()).toEqual([scope(ledger, departments), scope(recordReturn, [])])
+  expect(await checkedReturn()).toEqual([{ organization_wide: false, department_ids: [] }])
+
+  expect(await scopedShippingRole('revoke')).toBe(true)
+  await configureShippingRole(['shipping:operate'])
+  expect(await scopedShippingRole('assign', { scopeType: 'org', scopeId: org })).toBe(true)
+  expect(await shippingScopes()).toEqual([scope(ledger, [], true), scope(recordReturn, [])])
+})
+
+it('retains active membership, target, department and legacy space restrictions for shipping operator assignment', async () => {
+  await installScopedRoleCommands()
+  await db.exec(migration(shippingDepartmentMigration))
+  await configureShippingRole(['shipping:ledger_view'])
+  await expect(scopedShippingRole('assign', { actorId: outsider })).rejects.toMatchObject({ code: '42501' })
+  await expect(scopedShippingRole('assign', { userId: admin })).rejects.toMatchObject({ code: '42501' })
+  await expect(scopedShippingRole('assign', { scopeType: 'space', scopeId: unrelatedDepartment }))
+    .rejects.toMatchObject({ code: '23514', detail: 'LEGACY_SCOPE_ASSIGNMENT_FORBIDDEN' })
+  await expect(scopedShippingRole('assign', { scopeId: otherDepartment }))
+    .rejects.toMatchObject({ code: '23514', detail: 'DEPARTMENT_SCOPE_UNAVAILABLE' })
+  expect(await scopedShippingRole('assign', { userId: outsider })).toBe(false)
+  await db.query('update public.roles set owner_org_id = $1 where id = $2', [otherOrg, shippingRole])
+  await expect(scopedShippingRole('assign')).rejects.toMatchObject({ code: '23503', detail: 'ORG_ROLE_NOT_FOUND' })
+  await db.query('update public.roles set owner_org_id = null where id = $1', [shippingRole])
+
+  await db.query("update public.departments set status = 'inactive' where id = $1", [department])
+  await expect(scopedShippingRole('assign'))
+    .rejects.toMatchObject({ code: '23514', detail: 'DEPARTMENT_SCOPE_UNAVAILABLE' })
+  await db.query("update public.departments set status = 'active' where id = $1", [department])
+  await db.query('update public.users set login_enabled = false where id = $1', [employee])
+  expect(await scopedShippingRole('assign')).toBe(false)
+  expect((await db.query('select role_id from public.user_roles where user_id = $1', [employee])).rows).toEqual([])
+})
+
+it.each(['department', 'space'])('fails closed on an existing dormant %s shipping operator binding', async scopeType => {
+  await installScopedRoleCommands()
+  await db.query(`
+    insert into public.user_roles (org_id,user_id,role_id,scope_type,scope_id)
+    values ($1,$2,$3,$4,$5)
+  `, [org, employee, shippingRole, scopeType, department])
+  await configureShippingRole(['shipping:ledger_view'])
+  await expect(db.exec(migration(shippingDepartmentMigration))).rejects.toMatchObject({
+    code: '23514', detail: 'LEGACY_SHIPPING_OPERATOR_SCOPE_PRESENT',
+  })
+  await db.exec('rollback')
+  expect((await db.query('select scope_type from public.user_roles where user_id = $1', [employee])).rows)
+    .toEqual([{ scope_type: scopeType }])
+  expect(await shippingScopes()).toEqual([
+    { permission_code: 'shipping:ledger_view', organization_wide: false, department_ids: [] },
+    { permission_code: 'shipping:record_return', organization_wide: false, department_ids: [] },
+  ])
 })

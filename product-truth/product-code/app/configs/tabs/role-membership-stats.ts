@@ -22,6 +22,7 @@ export function getRoleMembershipStats(
   users: readonly OrgSummaryUser[],
   roleId: string,
   context?: RoleMembershipContext | null,
+  departmentScopeAvailable = false,
 ): RoleMembershipStats {
   const orgId = context?.organization?.id
   const basis = context?.role_membership_stats
@@ -61,7 +62,7 @@ export function getRoleMembershipStats(
       for (const binding of bindings) {
         const { roleCode, scopeType, scopeId } = binding
         if (scopeType !== 'org' && (roleCode === 'SUPER_ADMIN' || roleCode === ORG_SUPER_ADMIN_ROLE_CODE)) continue
-        if (scopeId && isRoleAssignableInScope(roleCode, scopeType) && (
+        if (scopeId && isRoleAssignableInScope(roleCode, scopeType, departmentScopeAvailable) && (
           (scopeType === 'org' && scopeId === orgId)
           || (scopeType === 'department' && activeDepartmentIds.has(scopeId))
           || (scopeType === 'space' && activeSpaceIds.has(scopeId))

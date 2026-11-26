@@ -17,6 +17,8 @@ import { isRetiredRoleCode, isRoleAssignableInScope } from '@/lib/role-permissio
 import { isGenericallyAssignableRole } from '../role-assignment-policy'
 import { EmployeePermissionReview } from '../EmployeePermissionOverrides'
 
+type AssignableRole = OrgSummaryRole & { department_scope_available?: boolean }
+
 interface RoleAssignmentDialogProps {
   userId: string
   userName: string
@@ -59,7 +61,7 @@ export function RoleAssignmentDialog({
   const onOpenChange = controlledOnOpenChange ?? setInternalOpen
   const [loading, setLoading] = useState(false)
   const [saveError, setSaveError] = useState('')
-  const [roles, setRoles] = useState<OrgSummaryRole[]>([])
+  const [roles, setRoles] = useState<AssignableRole[]>([])
   const [selectedOrgRoles, setSelectedOrgRoles] = useState<string[]>(currentRoles)
   const [selectedSystemAdmin, setSelectedSystemAdmin] = useState(currentSystemAdmin ?? false)
   const [selectedScopedRoleId, setSelectedScopedRoleId] = useState('')
@@ -71,7 +73,7 @@ export function RoleAssignmentDialog({
   const showSystemAdmin = scopeType === 'org' && !organizationOnly && currentSystemAdmin !== undefined
   const [scopeId, setScopeId] = useState('')
   const [revokingKey, setRevokingKey] = useState<string | null>(null)
-  const assignableRoles = roles.filter(role => isRoleAssignableInScope(role.code, scopeType))
+  const assignableRoles = roles.filter(role => isRoleAssignableInScope(role.code, scopeType, role.department_scope_available === true))
   const selectedScopedRole = assignableRoles.find(role => role.id === selectedScopedRoleId)
   const assignableDepartments = departments.filter(department => department.status === 'active')
   const selectedDepartment = assignableDepartments.find(department => department.id === scopeId)
@@ -87,7 +89,7 @@ export function RoleAssignmentDialog({
       setRolesError(false)
       try {
         const token = localStorage.getItem('token')
-        const collected = new Map<string, OrgSummaryRole>()
+        const collected = new Map<string, AssignableRole>()
         let offset = 0
         while (!controller.signal.aborted) {
           const res = await fetch(
@@ -101,7 +103,7 @@ export function RoleAssignmentDialog({
           if (!res.ok) throw new Error('无法读取可分配角色')
           const result = await res.json()
           if (!result.success || !Array.isArray(result.data?.roles)) throw new Error('无效的角色列表')
-          for (const role of result.data.roles as OrgSummaryRole[]) {
+          for (const role of result.data.roles as AssignableRole[]) {
             if (isGenericallyAssignableRole(role.code) && !isRetiredRoleCode(role.code)) collected.set(role.id, role)
           }
           if (result.meta?.hasMore !== true) break
@@ -232,7 +234,8 @@ export function RoleAssignmentDialog({
                   >
                     <span className="font-medium">{role.name}</span>
                     {pendingRoles?.some(pending => pending.id === role.id) && <Badge variant="outline">待首次登录生效</Badge>}
-                    {!isRoleAssignableInScope(role.code, 'department') && <Badge variant="outline">仅整个组织</Badge>}
+                    {!isRoleAssignableInScope(role.code, 'department', role.department_scope_available === true) &&
+                      <Badge variant="outline">仅整个组织</Badge>}
                     <Badge variant="outline" className="text-xs">
                       {role.code}
                     </Badge>
@@ -253,6 +256,11 @@ export function RoleAssignmentDialog({
               {nonOrgScopedRoles.map((assignment) => {
                 const scopeType = assignment.scopeType === 'space' ? 'space' : 'department'
                 const key = `${assignment.roleId}:${scopeType}:${assignment.scopeId}`
+                const role = roles.find(role => role.id === assignment.roleId)
+                const revokeOnly = scopeType === 'space' || (
+                  !fetchingRoles && !rolesError
+                  && !isRoleAssignableInScope(assignment.roleCode, scopeType, role?.department_scope_available === true)
+                )
                 return (
                   <div
                     key={key}
@@ -264,7 +272,7 @@ export function RoleAssignmentDialog({
                     <span className="min-w-0 flex-1 truncate text-slate-600">
                       {scopeType === 'department' ? '部门' : '历史范围'} · {assignment.scopeName}
                     </span>
-                    {(scopeType === 'space' || !isRoleAssignableInScope(assignment.roleCode, scopeType)) && <Badge variant="outline">历史绑定 · 仅可撤销</Badge>}
+                    {revokeOnly && <Badge variant="outline">历史绑定 · 仅可撤销</Badge>}
                     <Button
                       type="button"
                       variant="ghost"

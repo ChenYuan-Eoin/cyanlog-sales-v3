@@ -2,6 +2,7 @@ export type ConfigRoleRecord = {
   id: string
   code: string
   name: string
+  department_scope_available?: boolean
   description: string | null
   permissions: string[] | null
   sort_order: number | null
@@ -74,6 +75,7 @@ function parseRole(value: unknown): ConfigRoleRecord | null {
     id: value.id,
     code: value.code,
     name: value.name,
+    ...(typeof value.department_scope_available === 'boolean' ? { department_scope_available: value.department_scope_available } : {}),
     description: typeof value.description === 'string' ? value.description : null,
     permissions: value.permissions,
     sort_order: typeof value.sort_order === 'number' ? value.sort_order : null,

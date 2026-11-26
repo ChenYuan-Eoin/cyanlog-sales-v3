@@ -1,5 +1,5 @@
 import type { MiddlewareRestClient } from '@/lib/middleware-rest-client'
-import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, resolveRolePermissions } from '@/lib/role-permission-resolution'
+import { isRetiredRoleCode, resolveRolePermissions } from '@/lib/role-permission-resolution'
 
 export const DEPARTMENT_LEDGER_VIEW = 'shipping:ledger_view'
 const LEDGER_ITEM_PATH = /^\/api\/shipping\/ledger\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
@@ -96,8 +96,7 @@ export async function loadDepartmentLedgerScope(
     const role = row.roles
     if (row.org_id !== orgId || row.user_id !== userId || row.scope_type !== 'department' || !role?.id
       || (role.owner_org_id !== null && role.owner_org_id !== orgId)
-      || !role.code || ['SUPER_ADMIN', ORG_SUPER_ADMIN_ROLE_CODE].includes(role.code)
-      || !isRoleAssignableInScope(role.code, 'department')) continue
+      || !role.code || role.code === 'SUPER_ADMIN' || isRetiredRoleCode(role.code)) continue
     if (resolveRolePermissions(settings, role).permissions.includes(DEPARTMENT_LEDGER_VIEW)) {
       roots.push({ id: row.scope_id, descendants: true })
     }

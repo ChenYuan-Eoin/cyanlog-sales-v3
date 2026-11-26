@@ -119,6 +119,19 @@ it('preserves runtime publication and override provenance separately from select
   expect(snapshot.modulePermissionCatalog).toEqual([])
 })
 
+it('preserves only explicit boolean department scope availability from the role response', async () => {
+  const operator = { ...role, code: 'SHIPPING_OPERATOR' }
+  const request = vi.fn()
+    .mockResolvedValueOnce(readback({ roles: [{ ...operator, department_scope_available: true }] }))
+    .mockResolvedValueOnce(readback({ roles: [{ ...operator, department_scope_available: false }] }))
+    .mockResolvedValueOnce(readback({ roles: [{ ...operator, department_scope_available: 'true' }] }))
+  vi.stubGlobal('fetch', request)
+
+  expect((await loadOrgRolePermissionSnapshot({})).roles[0].department_scope_available).toBe(true)
+  expect((await loadOrgRolePermissionSnapshot({})).roles[0].department_scope_available).toBe(false)
+  expect((await loadOrgRolePermissionSnapshot({})).roles[0]).not.toHaveProperty('department_scope_available')
+})
+
 it('reads later pages for the same organization and preserves role metadata revisions', async () => {
   const laterRole = { ...role, id: 'later', metadata_editable: true, metadata_revision: 1 }
   const request = vi.fn().mockResolvedValueOnce(Response.json({

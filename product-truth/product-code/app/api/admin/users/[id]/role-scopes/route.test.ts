@@ -132,7 +132,9 @@ describe('scoped role assignment route', () => {
     const response = await POST(request('POST'), context())
 
     expect(response.status).toBe(409)
-    expect(await response.json()).toEqual({ error: '顺丰寄件操作员只能分配到整个组织', code: 'ROLE_SCOPE_NOT_SUPPORTED' })
+    expect(await response.json()).toEqual({
+      error: '该角色需要启用支持部门范围的「查看收寄台账」权限。', code: 'ROLE_SCOPE_NOT_SUPPORTED',
+    })
     expect(rpc).not.toHaveBeenCalled()
   })
 
@@ -175,6 +177,7 @@ describe('scoped role assignment route', () => {
   it.each([
     [{ data: null, error: { code: '23514' } }, 409, 'INVALID_SCOPE'],
     [{ data: null, error: { code: '23514', details: 'ROLE_SCOPE_NOT_SUPPORTED' } }, 409, 'ROLE_SCOPE_NOT_SUPPORTED'],
+    [{ data: null, error: { code: '23514', details: 'SHIPPING_DEPARTMENT_LEDGER_PERMISSION_REQUIRED' } }, 409, 'ROLE_SCOPE_NOT_SUPPORTED'],
     [{ data: null, error: { code: '42501' } }, 403, 'NO_PERMISSION'],
     [{ data: null, error: { code: 'PGRST202' } }, 503, 'SCOPE_ASSIGNMENT_UNAVAILABLE'],
     [{ data: false, error: null }, 409, 'MEMBER_NOT_ELIGIBLE'],

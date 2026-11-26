@@ -6,12 +6,19 @@ import { errorResponse, successResponse } from '@/lib/api/common'
 import { createApiError } from '@/lib/api/errors'
 import { queryOrgRoles, rolePermissionsEditBlockReason, type OrgVisibleRole } from '@/lib/org-role-permissions'
 import { hasPublishedShippingBundle, REGISTERED_MODULE_PERMISSION_KEYS, SHIPPING_BUNDLE } from '@/lib/module-access'
-import { loadRoleModulePermissionProjection } from '@/lib/permission-registry'
+import { loadRoleModulePermissionProjection, loadShippingModulePermissionState } from '@/lib/permission-registry'
 import { PERMISSION_KEYS } from '@/lib/role-permission-policy'
 import { ORG_BUSINESS_ROLE_ASSIGN } from '@/lib/permissions'
-import { FXIAOKE_BASELINE_ROLE_CODE, ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions, resolveRolePermissions } from '@/lib/role-permission-resolution'
+import { FXIAOKE_BASELINE_ROLE_CODE, ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions, resolveRolePermissions, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
+import { DEPARTMENT_LEDGER_VIEW } from '@/lib/shipping/department-ledger-access'
 import { isRoleId, withRolePermissionContext } from './context'
 import { mutateOrgRoleMetadata, roleMetadata } from './metadata'
+
+function shippingDepartmentAvailability(code: string, permissions: readonly string[], departmentLedgerPublished: boolean) {
+  return code === SHIPPING_OPERATOR_ROLE_CODE
+    ? { department_scope_available: departmentLedgerPublished && permissions.includes(DEPARTMENT_LEDGER_VIEW) }
+    : {}
+}
 
 export async function GET(req: NextRequest) {
   return withRolePermissionContext(req, async ({
@@ -46,9 +53,15 @@ export async function GET(req: NextRequest) {
     const total = count ?? 0
     const pagination = { total, limit, offset, hasMore: total > offset + limit }
     if (assignable) {
-      return successResponse({ roles: rows.map(({ id, code, name }) => ({ id, code, name })) }, pagination)
+      const departmentLedgerPublished = rows.some(role => role.code === SHIPPING_OPERATOR_ROLE_CODE)
+        && (await loadShippingModulePermissionState()).departmentLedgerPublished
+      return successResponse({ roles: rows.map(role => ({
+        id: role.id, code: role.code, name: role.name,
+        ...shippingDepartmentAvailability(role.code, resolveRolePermissions(settings, role).permissions, departmentLedgerPublished),
+      })) }, pagination)
     }
 
+    const { catalog: permissionCatalog, publication } = await loadRoleModulePermissionProjection()
     const roles = rows.map((role) => {
       const effective = resolveRolePermissions(settings, role)
       return {
@@ -57,11 +70,11 @@ export async function GET(req: NextRequest) {
         created_at: role.created_at,
         permissions: effective.permissions,
         permissions_overridden: effective.overridden,
+        ...shippingDepartmentAvailability(role.code, effective.permissions, publication.departmentLedgerPublished),
         owner_shipping_permissions: resolveOwnerShippingPermissions(settings, role),
         permissions_edit_block_reason: rolePermissionsEditBlockReason(role.code),
       }
     })
-    const { catalog: permissionCatalog, publication } = await loadRoleModulePermissionProjection()
     const publishedModuleKeys = [...publication.published].sort()
     const shippingBundleAvailable = hasPublishedShippingBundle(new Set(publishedModuleKeys))
     const permissionKeys = [

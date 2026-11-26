@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { NextRequest } from 'next/server'
 import { ORGANIZATION_ACTIONS_HEADER, resolveOrganizationPermissionDecision } from '@/lib/admin/employee-organization-permissions'
+import { SHIPPING_MANAGE_CONNECTIONS, SHIPPING_SETTINGS_ACTION_KEYS, shippingActionViewDependency } from '@/lib/module-access'
 import { BUILTIN_PERMISSION_DEFINITIONS } from '@/lib/permission-catalog'
 import { SHIPPING_OWNER_ACTION_KEYS } from '@/lib/shipping/owner-permission-keys'
 import { middleware } from './middleware'
@@ -935,6 +936,41 @@ describe('department-scoped shipping ledger admission', () => {
     mockExactOrgAuth({ ...options, settings: {} })
     expect((await request(record)).status).toBe(403)
     mockExactOrgAuth({ ...options, shippingActions: { 'shipping:ledger_view': { status: 'draft', dependencies: [], supported_scope_types: ['org', 'department'] } } })
+    expect((await request('/api/shipping/ledger')).status).toBe(403)
+  })
+
+  it('admits a configured department shipping role without organization-level operations and rechecks the same session', async () => {
+    const organizationActions = ['shipping:order_confirm', 'shipping:order_change', ...SHIPPING_SETTINGS_ACTION_KEYS] as const
+    const publishedOrganizationActions = Object.fromEntries(organizationActions.map(action => {
+      const dependency = shippingActionViewDependency(action)
+      return [action, { status: 'published', dependencies: dependency ? [dependency] : [] }]
+    }))
+    const scopedOperator = {
+      scope_type: 'department', scope_id: department.id,
+      roles: { id: 'shipping-operator', code: 'SHIPPING_OPERATOR', permissions: ['shipping:operate'] },
+    }
+    const fixture = {
+      ...options, roles: [scopedOperator], userDepartments: [],
+      shippingActions: { ...options.shippingActions, ...publishedOrganizationActions },
+      settings: { role_permission_overrides: {
+        'shipping-operator': ['shipping:ledger_view', ...organizationActions, SHIPPING_MANAGE_CONNECTIONS],
+      } },
+    }
+    mockExactOrgAuth(fixture)
+    expect((await request('/api/shipping/ledger')).status).toBe(200)
+    expect((await request('/api/navigation')).headers.get('x-middleware-request-x-user-navigation-scope')).toBe('department-ledger')
+    expect((await request(`${record}/confirm`, 'POST')).status).toBe(403)
+    expect((await request(`${record}/carrier-changes`, 'POST')).status).toBe(403)
+    expect((await request('/api/shipping/settings?workspace=1')).status).toBe(403)
+    expect((await request('/api/shipping/settings', 'POST')).status).toBe(403)
+    expect((await request('/api/dashboard/department')).status).toBe(403)
+
+    mockExactOrgAuth({ ...fixture, roles: [{ ...scopedOperator, scope_type: 'org', scope_id: 'org-a' }] })
+    expect((await request(`${record}/confirm`, 'POST')).status).toBe(200)
+    expect((await request(`${record}/carrier-changes`, 'POST')).status).toBe(200)
+    expect((await request('/api/shipping/settings', 'POST')).status).toBe(200)
+
+    mockExactOrgAuth({ ...fixture, settings: { role_permission_overrides: { 'shipping-operator': ['shipping:operate'] } } })
     expect((await request('/api/shipping/ledger')).status).toBe(403)
   })
 })

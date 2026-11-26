@@ -153,6 +153,27 @@ describe('GET /api/roles organization permissions', () => {
     expect(supabaseAdmin.from).not.toHaveBeenCalledWith('permission_points')
   })
 
+  it.each([false, true])('reports department availability for the shipping role in both lists (%s)', async supportsDepartment => {
+    const shippingRole = { id: 'shipping-role', code: 'SHIPPING_OPERATOR', name: '顺丰寄件操作员', permissions: ['shipping:operate'] }
+    const publishedLedger = {
+      code: 'shipping:ledger_view', kind: 'atomic', status: 'published', category: 'shipping',
+      resource: 'shipping', action: 'ledger_view', enforcement_consumer: 'lib/shipping/http.ts',
+      supported_scope_types: supportsDepartment ? ['org', 'department'] : ['org'], dependencies: [],
+    }
+
+    for (const query of ['', '?view=assignable']) {
+      database({
+        assignments: [root], globalRoles: [shippingRole], permissionRows: [publishedLedger],
+        settings: { role_permission_overrides: { [shippingRole.id]: ['shipping:ledger_view'] } },
+      })
+      const res = await GET(makeRequest(`https://example.test/api/roles${query}`))
+      expect(res.status).toBe(200)
+      expect((await res.json()).data.roles).toEqual([expect.objectContaining({
+        id: shippingRole.id, department_scope_available: supportsDepartment,
+      })])
+    }
+  })
+
   it('角色目录只读权限不能用来请求分配选项', async () => {
     database()
     expect((await GET(makeRequest('https://example.test/api/roles?view=assignable'))).status).toBe(403)

@@ -80,6 +80,29 @@ describe('role membership statistics', () => {
     ])
   })
 
+  it('counts published shipping operator department bindings for active departments and still excludes historical spaces', () => {
+    const roleId = 'operator'
+    const role = { ...binding('org', 'org', roleId), roleCode: 'SHIPPING_OPERATOR' }
+    const users = [
+      activeUser('organization-member', { scoped_roles: [role] }),
+      activeUser('department-member', { scoped_roles: [{ ...role, scopeType: 'department', scopeId: 'open-department' }] }),
+      activeUser('closed-department', { scoped_roles: [{ ...role, scopeType: 'department', scopeId: 'closed-department' }] }),
+      activeUser('legacy-space', { scoped_roles: [{ ...role, scopeType: 'space', scopeId: 'open-space' }] }),
+    ]
+
+    const available = getRoleMembershipStats(users, roleId, context, true)
+    expect(available).toMatchObject({ effectiveMemberCount: 2, effectiveBindingCount: 2 })
+    expect(available.members.map(({ user, effective }) => [user.id, effective])).toEqual([
+      ['organization-member', true],
+      ['department-member', true],
+      ['closed-department', false],
+      ['legacy-space', false],
+    ])
+    expect(getRoleMembershipStats(users, roleId, context, false)).toMatchObject({
+      effectiveMemberCount: 1, effectiveBindingCount: 1,
+    })
+  })
+
   it('deduplicates eligible first-login reservations separately from effective roles', () => {
     const pending = activeUser('pending', {
       status: 'inactive', membership_status: 'invited', login_enabled: false,

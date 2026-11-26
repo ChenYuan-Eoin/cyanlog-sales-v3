@@ -4,8 +4,11 @@ export const ORG_SUPER_ADMIN_ROLE_CODE = 'ORG_SUPER_ADMIN'
 export const FXIAOKE_BASELINE_ROLE_CODE = 'FXIAOKE_BASELINE'
 export const SHIPPING_OPERATOR_ROLE_CODE = 'SHIPPING_OPERATOR'
 
-export function isRoleAssignableInScope(code: string, scopeType: 'org' | 'department' | 'space'): boolean {
+export function isRoleAssignableInScope(
+  code: string, scopeType: 'org' | 'department' | 'space', departmentScopeAvailable = false,
+): boolean {
   return code !== SHIPPING_OPERATOR_ROLE_CODE || scopeType === 'org'
+    || (scopeType === 'department' && departmentScopeAvailable)
 }
 
 export function isRetiredRoleCode(code: string): boolean {

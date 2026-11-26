@@ -5,8 +5,10 @@ import {
 } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import { loadOrgRolePermissionSettings, queryOrgRoles } from '@/lib/org-role-permissions'
+import { loadShippingModulePermissionState } from '@/lib/permission-registry'
 import { resolveRolePermissions } from '@/lib/role-permission-policy'
 import { FXIAOKE_BASELINE_ROLE_CODE, isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
+import { DEPARTMENT_LEDGER_VIEW } from '@/lib/shipping/department-ledger-access'
 
 type AssignableRoleRow = {
   id: string
@@ -80,7 +82,8 @@ export async function validateOrgRoleAssignment(
   if (mutation?.action !== 'replace' && mutation?.action !== 'revoke' && roles.some(role => role.code === FXIAOKE_BASELINE_ROLE_CODE)) {
     return { ok: false, reason: 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN' }
   }
-  if (mutation?.action === 'assign' && roles.some(role => !isRoleAssignableInScope(role.code, mutation.scopeType))) {
+  if (mutation?.action === 'assign' && mutation.scopeType === 'space'
+    && roles.some(role => !isRoleAssignableInScope(role.code, 'space'))) {
     return { ok: false, reason: 'ROLE_SCOPE_NOT_SUPPORTED' }
   }
   // An existing department or space binding may be removed without delegating its permissions.
@@ -94,6 +97,14 @@ export async function validateOrgRoleAssignment(
   const effectiveRoles = rolesToAuthorize.map(role => ({
     code: role.code, permissions: resolveRolePermissions(settings, role).permissions,
   }))
+  if (mutation?.action === 'assign' && mutation.scopeType === 'department'
+    && effectiveRoles.some(role => role.code === SHIPPING_OPERATOR_ROLE_CODE)) {
+    const shippingRoles = effectiveRoles.filter(role => role.code === SHIPPING_OPERATOR_ROLE_CODE)
+    if (shippingRoles.some(role => !role.permissions.includes(DEPARTMENT_LEDGER_VIEW))
+      || !(await loadShippingModulePermissionState()).departmentLedgerPublished) {
+      return { ok: false, reason: 'ROLE_SCOPE_NOT_SUPPORTED' }
+    }
+  }
   const escalation = { ok: false, reason: 'ROLE_ESCALATION_FORBIDDEN' } as const
   const exceedsActorAuthority = effectiveRoles.some(({ code, permissions }) => (
     code === 'SUPER_ADMIN'
