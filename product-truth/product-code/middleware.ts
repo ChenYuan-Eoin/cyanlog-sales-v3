@@ -212,6 +212,9 @@ function hasMemberRoutePermission(pathname: string, method: string, permissions:
     return legacyWrite || hasPermission(permissions, 'user:view')
   }
   if (pathname === '/api/admin/users' && method === 'POST') return legacyWrite || hasPermission(permissions, ORG_MEMBER_INVITE)
+  if (pathname === '/api/admin/users/batch' && method === 'POST') {
+    return legacyWrite || hasPermission(permissions, ORG_MEMBER_MANAGE_LOGIN) || hasPermission(permissions, ORG_MEMBER_MANAGE_EMPLOYMENT)
+  }
   const detail = memberDetailPath.exec(pathname)
   const actions = detail && memberPathPermissions[method + ' ' + (detail[1] ?? '')]
   return !!actions && (legacyWrite || actions.some(permission => hasPermission(permissions, permission)))

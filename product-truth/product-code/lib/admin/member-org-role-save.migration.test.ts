@@ -57,7 +57,8 @@ beforeEach(async () => {
     create table public.organizations (id uuid primary key, status text default 'active');
     create table public.users (
       id uuid primary key, org_id uuid, status text default 'active', login_enabled boolean default true,
-      primary_dept_id uuid, report_to_user_id uuid, updated_at timestamptz, password_hash text, last_login_at timestamptz
+      primary_dept_id uuid, report_to_user_id uuid, updated_at timestamptz, password_hash text,
+      must_change_password boolean, last_login_at timestamptz
     );
     create table public.user_organizations (
       user_id uuid, org_id uuid, is_default boolean default true, status text default 'active',
@@ -141,9 +142,7 @@ beforeEach(async () => {
     .replace('function public.', 'function private.'))
   await db.exec(functionDefinition(systemAdmin, 'admin_set_account_state_v1', 'public'))
   await db.exec(functionDefinition(lifecycle, 'admin_offboard_member_v1', 'public'))
-  await db.exec(functionDefinition(activation, 'accept_personnel_invitation_v1', 'public'))
   await db.exec(migration(saveMigration))
-  await db.exec(migration(batchMigration))
 })
 
 afterEach(async () => { await db?.close() })
@@ -208,6 +207,15 @@ async function prepareDirectoryFirstLogin() {
 async function addInvitation() {
   await db.query(`insert into public.personnel_invitations (org_id,user_id,created_by,token_hash,role_ids,expires_at)
     values ($1,$2,$3,'fixture-invite',$4,now() + interval '1 hour')`, [org, ordinary, actor, [added]])
+}
+
+async function installBatchMigration(invitationBaseline: 'passwordless' | 'legacy' = 'passwordless') {
+  const previousMigration = invitationBaseline === 'legacy' ? lifecycle : activation
+  await db.exec(functionDefinition(previousMigration, 'accept_personnel_invitation_v1', 'public'))
+  if (invitationBaseline === 'legacy') {
+    await db.exec('grant execute on function public.accept_personnel_invitation_v1(text, text, text) to service_role')
+  }
+  await db.exec(migration(batchMigration))
 }
 
 it('changes ordinary roles for an existing system administrator while preserving all unrelated bindings and grant metadata', async () => {
@@ -276,6 +284,7 @@ it('keeps the sole system administrator protected and grants RPC execution only 
 })
 
 it('adds roles for eligible people, keeps unrelated history and rejects unavailable or reserved roles', async () => {
+  await installBatchMigration()
   await prepareDirectoryFirstLogin()
   const before = await bindings()
   expect(await batch('assign_roles', [target, ordinary, actor, otherMember], [added])).toEqual([
@@ -306,6 +315,7 @@ it('adds roles for eligible people, keeps unrelated history and rejects unavaila
 })
 
 it('stops verified first login and leaves active employment unchanged when disabling ICU login', async () => {
+  await installBatchMigration()
   await prepareDirectoryFirstLogin()
   await addInvitation()
   expect(await batch('suspend', [ordinary, actor, target])).toEqual([
@@ -323,6 +333,7 @@ it('stops verified first login and leaves active employment unchanged when disab
 })
 
 it('offboards linked members and retired-role holders, keeps audit and rejects unsafe changes to active administrators', async () => {
+  await installBatchMigration()
   await prepareDirectoryFirstLogin()
   await addInvitation()
   await batch('assign_roles', [ordinary], [added])
@@ -348,12 +359,42 @@ it('offboards linked members and retired-role holders, keeps audit and rejects u
   expect((await events()).filter(event => event.command === 'offboard_member')).toHaveLength(2)
 })
 
-it('accepts a current invitation and reports a last administrator separately from a protected peer', async () => {
+it.each(['passwordless', 'legacy'] as const)('accepts a current invitation through the server RPC with a %s baseline', async baseline => {
+  if (baseline === 'passwordless') {
+    await db.exec('alter table public.users drop column password_hash, drop column must_change_password')
+  }
+  await installBatchMigration(baseline)
   await prepareDirectoryFirstLogin()
   await addInvitation()
-  expect((await db.query("select public.accept_personnel_invitation_v1('fixture-invite') as accepted")).rows)
-    .toEqual([{ accepted: { user_id: ordinary, org_id: org } }])
+
+  const privileges = await db.query(`
+    select to_regprocedure('public.accept_personnel_invitation_v1(text,text,text)') is null as retired,
+      has_function_privilege('anon', $1, 'execute') as anon,
+      has_function_privilege('authenticated', $1, 'execute') as authenticated,
+      has_function_privilege('service_role', $1, 'execute') as server
+  `, ['public.accept_personnel_invitation_v1(text,text)'])
+  expect(privileges.rows).toEqual([{ retired: true, anon: false, authenticated: false, server: true }])
+
+  await db.exec('set role service_role')
+  try {
+    const accept = () => db.query(
+      'select public.accept_personnel_invitation_v1(p_token_hash => $1, p_request_id => $2) as accepted',
+      ['fixture-invite', request],
+    )
+    expect((await accept()).rows).toEqual([{ accepted: { user_id: ordinary, org_id: org } }])
+    expect((await accept()).rows).toEqual([{ accepted: null }])
+  } finally {
+    await db.exec('reset role')
+  }
   expect((await db.query('select status from public.personnel_invitations')).rows).toEqual([{ status: 'accepted' }])
+  expect((await events()).filter(event => event.command === 'activate_membership')).toMatchObject([{ request_id: request }])
+  if (baseline === 'legacy') {
+    expect((await db.query('select password_hash from public.users where id = $1', [ordinary])).rows).toEqual([{ password_hash: null }])
+  }
+})
+
+it('reports a last administrator separately from a protected peer', async () => {
+  await installBatchMigration()
   expect(await save({ admin: false })).toBe('saved')
   expect(await batch('offboard', [actor], [], ordinary))
     .toEqual([{ user_id: actor, outcome: 'LAST_SYSTEM_SUPER_ADMIN_PROTECTED' }])

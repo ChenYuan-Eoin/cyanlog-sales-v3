@@ -27,23 +27,28 @@ create trigger clear_departed_pending_authorization
   for each row when (new.status = 'ended' and old.status is distinct from new.status)
   execute function private.clear_departed_pending_authorization_v1();
 
--- Invitation acceptance must not reactivate an explicitly disabled or departed person.
-alter function public.accept_personnel_invitation_v1(text, text)
-  rename to accept_personnel_invitation_before_lifecycle_guard_v1;
-alter function public.accept_personnel_invitation_before_lifecycle_guard_v1(text, text) set schema private;
+-- The API accepts invitations without setting a password. Older databases may
+-- still have only the three-argument, password-writing overload.
+drop function if exists public.accept_personnel_invitation_v1(text, text, text) restrict;
 
-create function public.accept_personnel_invitation_v1(p_token_hash text, p_request_id text default null)
+create or replace function public.accept_personnel_invitation_v1(p_token_hash text, p_request_id text default null)
 returns jsonb language plpgsql security definer set search_path = ''
 as $$
 declare
   v_org_id uuid;
+  v_invitation public.personnel_invitations%rowtype;
 begin
+  if p_token_hash is null or length(p_token_hash) = 0 then
+    raise exception 'invitation token hash is required' using errcode = '22023';
+  end if;
+
   select invitation.org_id into v_org_id from public.personnel_invitations as invitation
   where invitation.token_hash = p_token_hash and invitation.status = 'pending' and invitation.expires_at > now();
   if not found then return null; end if;
 
+  -- Lock in the same order as the personnel lifecycle commands.
   perform private.personnel_lock_org_v1(v_org_id);
-  perform 1
+  select invitation.* into v_invitation
   from public.personnel_invitations as invitation
   join public.users as person on person.id = invitation.user_id and person.org_id = invitation.org_id
   join public.user_organizations as membership on membership.user_id = person.id and membership.org_id = person.org_id
@@ -61,7 +66,34 @@ begin
   for update of invitation, person, membership;
   if not found then return null; end if;
 
-  return private.accept_personnel_invitation_before_lifecycle_guard_v1(p_token_hash, p_request_id);
+  update public.users set status = 'active', login_enabled = true, updated_at = now()
+  where id = v_invitation.user_id and org_id = v_org_id;
+
+  update public.user_organizations
+  set status = 'active', employment_status = 'active', joined_at = now(), left_at = null,
+    employment_started_at = now(), employment_ended_at = null, membership_version = membership_version + 1,
+    updated_by = v_invitation.created_by, updated_at = now()
+  where user_id = v_invitation.user_id and org_id = v_org_id;
+
+  delete from public.auth_tokens where user_id = v_invitation.user_id;
+  delete from public.user_roles
+  where user_id = v_invitation.user_id and org_id = v_org_id and scope_type = 'org' and scope_id = v_org_id;
+
+  insert into public.user_roles (user_id, role_id, org_id, scope_type, scope_id, granted_by)
+  select v_invitation.user_id, invited.role_id, v_org_id, 'org', v_org_id, v_invitation.created_by
+  from unnest(v_invitation.role_ids) as invited(role_id);
+
+  update public.personnel_invitations set status = 'accepted', accepted_at = now() where id = v_invitation.id;
+
+  perform private.personnel_insert_event_v1(
+    v_org_id, v_invitation.user_id, v_invitation.created_by, 'activate_membership',
+    jsonb_build_object('membership_status', 'invited'),
+    jsonb_build_object('user_status', 'active', 'login_enabled', true, 'membership_status', 'active',
+      'role_ids', to_jsonb(v_invitation.role_ids)),
+    'invitation accepted', p_request_id
+  );
+
+  return jsonb_build_object('user_id', v_invitation.user_id, 'org_id', v_org_id);
 end;
 $$;
 
@@ -241,7 +273,6 @@ end;
 $$;
 
 revoke all on function private.clear_departed_pending_authorization_v1(),
-  private.accept_personnel_invitation_before_lifecycle_guard_v1(text, text),
   public.accept_personnel_invitation_v1(text, text),
   private.admin_add_member_org_roles_v1(uuid, uuid, uuid, uuid[], boolean, text),
   public.admin_apply_org_member_batch_v1(uuid, uuid, uuid[], text, uuid[], text)

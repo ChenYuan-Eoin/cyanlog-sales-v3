@@ -1157,6 +1157,27 @@ describe('middleware public API routing', () => {
 })
 
 describe('middleware exact organization authorization', () => {
+  it.each(['user:manage_login', 'user:manage_employment'])(
+    'admits a scoped %s grant to the batch POST route and rechecks the grant each request',
+    async permission => {
+      const token = 'member-lifecycle-batch'
+      const request = (method: string) =>
+        makeRequest('https://sales.cyanlog.icu/api/admin/users/batch', { authorization: `Bearer ${token}` }, method)
+      const mockRole = (permissions: string[]) => mockExactOrgAuth({
+        token,
+        orgId: 'org-a',
+        roles: [{ roles: { id: 'member-operator', code: 'MEMBER_OPERATOR', permissions } }],
+      })
+
+      mockRole(['user:view', permission])
+      expect((await middleware(request('POST'))).status).toBe(200)
+      expect((await middleware(request('GET'))).status).toBe(403)
+
+      mockRole(['user:view', 'user:edit_profile'])
+      expect((await middleware(request('POST'))).status).toBe(403)
+    },
+  )
+
   it('treats the historical organization governance role as cleanup-only across entries', async () => {
     const token = 'retired-org-admin'
     const role = { roles: { id: 'org-admin', code: 'ORG_SUPER_ADMIN', permissions: ['*'] } }
