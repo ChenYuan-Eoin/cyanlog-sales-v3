@@ -25,6 +25,7 @@ import { groupPlatformConfigRevisions } from './tabs/ai-config-presentation'
 import { isMaskedApiKey } from '@/lib/configs/runtime'
 import { isResolvedRuleContractComplete } from '@/lib/rules/rule-contract'
 import TabsContent from './tabs/TabsContent'
+import { isGenericallyAssignableRole } from './tabs/role-assignment-policy'
 import { confirmAction } from '@/lib/toast'
 import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
 import {
@@ -1026,7 +1027,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
     const ownerProjection = role?.owner_shipping_permissions
     const ownerChange = newOwnerPermissions && ownerProjection
       ? { expected: ownerProjection, permissions: newOwnerPermissions } : undefined
-    if (!roleAuthority?.permissionsEditable || !role || !Array.isArray(role.permissions)
+    if (!roleAuthority?.permissionsEditable || !role || !isGenericallyAssignableRole(role.code) || !Array.isArray(role.permissions)
       || (newOwnerPermissions && !ownerChange)
       || (role.permissions_edit_block_reason && !(role.code === 'FXIAOKE_BASELINE' && ownerChange))) {
       setError('无法确认当前组织的角色编辑权限，请刷新后重试。')
@@ -1058,7 +1059,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
         orgId: snapshot.orgId,
         permissionsEditable: snapshot.permissionsEditable,
         modulePermissionCatalog: snapshot.modulePermissionCatalog,
-        canAssignOrgSuperAdmin: snapshot.canAssignOrgSuperAdmin,
+        canAppointSystemSuperAdmin: snapshot.canAppointSystemSuperAdmin,
         permissionsEditBlockReason: snapshot.permissionsEditBlockReason,
       })
       clearOrgAccessBrowserCache(token)
@@ -1837,7 +1838,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
                 permissionsEditable={permissionsEditable}
                 modulePermissionCatalog={roleAuthority?.modulePermissionCatalog}
                 permissionsEditBlockReason={permissionsEditBlockReason}
-                orgSuperAdminAuthority={roleAuthority?.canAssignOrgSuperAdmin && roleAuthority.orgId === orgSummary?.organization?.id
+                systemSuperAdminAuthority={roleAuthority?.canAppointSystemSuperAdmin && roleAuthority.orgId === orgSummary?.organization?.id
                   ? { orgId: roleAuthority.orgId } : undefined}
                 onSaveRole={handleSaveRole}
               />

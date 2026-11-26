@@ -20,7 +20,7 @@ const url = 'https://example.test/api/admin/departments/leader-access'
 
 const authority = {
   orgId, settings: {}, actorPermissions: ['*'], canEdit: true, canEditPlatformRoot: true,
-  canAppointOrganizationSuperAdmin: true, canRead: true, canListAssignableRoles: true,
+  canRead: true, canListAssignableRoles: true,
 }
 
 function changeRequest(body: object) {

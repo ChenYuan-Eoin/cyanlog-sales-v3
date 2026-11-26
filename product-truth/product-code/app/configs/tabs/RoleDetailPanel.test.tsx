@@ -31,7 +31,7 @@ describe('RoleDetailPanel explicit permission editing', () => {
 
   it('renders wildcard-derived access as effective without checking its explicit grant', () => {
     const onSave = vi.fn()
-    render(<RoleDetailPanel {...defaults} permissionsEditable onSave={onSave} />)
+    render(<RoleDetailPanel {...defaults} role={{ ...role, id: 'admin', code: 'ADMIN', name: '管理员' }} permissionsEditable onSave={onSave} />)
     openPermissions()
     const publish = screen.getByRole('checkbox', { name: /配置发布/ })
     expect(publish).toBeEnabled()
@@ -168,29 +168,24 @@ it('retains the selected member snapshot across a directory refresh and clears s
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
-describe('organization super administrator membership', () => {
+describe('system super administrator membership', () => {
   const org = 'org-1'
-  const orgAdmin = {
-    id: 'org-super',
-    code: 'ORG_SUPER_ADMIN',
-    name: '组织超级管理员',
-    description: null,
-    permissions: ['role:manage'],
-  }
   const member = {
     id: 'active-member', display_name: '在职成员', email: '', title: '', primary_dept_name: '销售',
     role_names: '', status: 'active', employment_status: 'active' as const, membership_status: 'active' as const, login_enabled: true,
   }
-  const assigned = { ...member, role_ids: [orgAdmin.id] }
+  const binding = { roleId: role.id, roleCode: role.code, roleName: role.name, scopeType: 'org' as const, scopeId: org, scopeName: '组织', grantedAt: null }
+  const assigned = { ...member, role_ids: [role.id], role_codes: [role.code], scoped_roles: [binding] }
+  const suspended = { ...assigned, status: 'inactive', login_enabled: false, employment_status: 'suspended' as const }
   const invited = { ...member, id: 'invitee', display_name: '待登录成员', membership_status: 'invited' as const, login_enabled: false }
   const otherOrgMember = { ...member, id: 'non-default', display_name: '兼职组织成员' }
-  const root = { ...member, id: 'platform-root', display_name: '平台根管理员', role_codes: ['SUPER_ADMIN'] }
+  const existingAdmin = { ...assigned, id: 'existing-admin', display_name: '已分配的超管' }
   const actor = { ...member, id: defaults.currentUserId, display_name: '我的账号' }
   const getResponse = (enabled: boolean, orgId = org) => ({
     ok: true, status: 200, json: async () => ({ success: true, org_id: orgId, enabled }),
   })
-  const authority = { orgId: org, memberIds: [member.id, root.id, actor.id] }
-  const endpoint = '/api/admin/users/active-member/org-super-admin'
+  const authority = { orgId: org, memberIds: [member.id, existingAdmin.id, actor.id] }
+  const endpoint = '/api/admin/users/active-member/system-super-admin'
 
   function startGrant() {
     fireEvent.click(screen.getByRole('button', { name: '添加成员' }))
@@ -205,20 +200,20 @@ describe('organization super administrator membership', () => {
       .mockResolvedValueOnce(getResponse(true))
     vi.stubGlobal('fetch', send)
     const onRefresh = vi.fn()
-    render(<RoleDetailPanel {...defaults} role={orgAdmin} users={[member, invited, otherOrgMember, root, actor]}
-      orgSuperAdminAuthority={authority} onSave={vi.fn()} onRefresh={onRefresh} />)
+    render(<RoleDetailPanel {...defaults} role={role} users={[member, invited, otherOrgMember, existingAdmin, actor]}
+      systemSuperAdminAuthority={authority} onSave={vi.fn()} onRefresh={onRefresh} />)
 
     fireEvent.click(screen.getByRole('button', { name: '添加成员' }))
     const dialog = within(screen.getByRole('dialog'))
     expect(dialog.getByText('在职成员')).toBeInTheDocument()
     expect(dialog.queryByText('待登录成员')).not.toBeInTheDocument()
     expect(dialog.queryByText('兼职组织成员')).not.toBeInTheDocument()
-    expect(dialog.queryByText('平台根管理员')).not.toBeInTheDocument()
+    expect(dialog.queryByText('已分配的超管')).not.toBeInTheDocument()
     expect(dialog.queryByText('我的账号')).not.toBeInTheDocument()
 
     fireEvent.click(dialog.getByRole('checkbox'))
     fireEvent.click(dialog.getByRole('button', { name: '授予权限' }))
-    expect(await screen.findByRole('status')).toHaveTextContent('已确认「在职成员」获得组织超级管理员权限。')
+    expect(await screen.findByRole('status')).toHaveTextContent('已确认「在职成员」获得超级管理员权限。')
     expect(send.mock.calls.map(([url]) => url)).toEqual([endpoint, endpoint, endpoint])
     expect(send.mock.calls[0][1]).toMatchObject({ cache: 'no-store' })
     expect(send.mock.calls[1][1].method).toBe('PATCH')
@@ -227,32 +222,74 @@ describe('organization super administrator membership', () => {
     expect(onRefresh).toHaveBeenCalledOnce()
   })
 
-  it('requires a confirmation and verifies the revoked role with a fresh read', async () => {
+  it('can revoke an inactive member with a current binding after confirmation and readback', async () => {
     const send = vi.fn()
       .mockResolvedValueOnce(getResponse(true))
       .mockResolvedValueOnce(getResponse(false))
       .mockResolvedValueOnce(getResponse(false))
     vi.stubGlobal('fetch', send)
     vi.mocked(confirmAction).mockResolvedValueOnce(false).mockResolvedValueOnce(true)
-    render(<RoleDetailPanel {...defaults} role={orgAdmin} users={[assigned]}
-      orgSuperAdminAuthority={authority} onSave={vi.fn()} />)
-    const revoke = screen.getAllByRole('button', { name: '撤销组织超级管理员权限 在职成员' })[0]
+    const currentAdmin = { ...assigned, id: defaults.currentUserId, display_name: '当前超管' }
+    const otherOrgAdmin = { ...assigned, id: 'other-org-admin', display_name: '其他组织超管',
+      scoped_roles: [{ ...binding, scopeId: 'other-org' }] }
+    render(<RoleDetailPanel {...defaults} role={role} users={[suspended, currentAdmin, otherOrgAdmin]}
+      systemSuperAdminAuthority={{ orgId: org, memberIds: [] }} onSave={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: '撤销超级管理员权限 当前超管' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '撤销超级管理员权限 其他组织超管' })).not.toBeInTheDocument()
+    const revoke = screen.getAllByRole('button', { name: '撤销超级管理员权限 在职成员' })[0]
     fireEvent.click(revoke)
     await waitFor(() => expect(revoke).toBeEnabled())
     expect(send).not.toHaveBeenCalled()
 
     fireEvent.click(revoke)
-    expect(await screen.findByRole('status')).toHaveTextContent('已确认撤销「在职成员」的组织超级管理员权限。')
-    expect(confirmAction).toHaveBeenLastCalledWith('确定要撤销「在职成员」的组织超级管理员角色？', { confirmText: '撤销权限', danger: true })
+    expect(await screen.findByRole('status')).toHaveTextContent('已确认撤销「在职成员」的超级管理员权限。')
+    expect(confirmAction).toHaveBeenLastCalledWith('确定要撤销「在职成员」的超级管理员角色？', { confirmText: '撤销权限', danger: true })
     expect(JSON.parse(send.mock.calls[1][1].body)).toEqual({ enabled: false, expected_enabled: true, expected_org_id: org })
     expect(send).toHaveBeenCalledTimes(3)
+  })
+
+  it('shows the server last-super-admin rejection without reporting success', async () => {
+    const message = '必须至少保留一名有效的超级管理员。'
+    const send = vi.fn().mockResolvedValueOnce(getResponse(true))
+      .mockResolvedValueOnce(Response.json({ error: message }, { status: 409 }))
+    vi.stubGlobal('fetch', send)
+    vi.mocked(confirmAction).mockResolvedValueOnce(true)
+    const onRefresh = vi.fn()
+    render(<RoleDetailPanel {...defaults} role={role} users={[assigned]}
+      systemSuperAdminAuthority={authority} onSave={vi.fn()} onRefresh={onRefresh} />)
+    fireEvent.click(screen.getAllByRole('button', { name: '撤销超级管理员权限 在职成员' })[0])
+    expect(await screen.findByRole('alert')).toHaveTextContent(message)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(onRefresh).toHaveBeenCalledOnce()
+  })
+
+  it('verifies revoking historical authorization without offering legacy appointment or edits', async () => {
+    const legacyRole = { id: 'legacy', code: 'ORG_SUPER_ADMIN', name: '组织超级管理员', description: null, permissions: ['role:manage'] }
+    const formerAdmin = { ...suspended, role_ids: [legacyRole.id], role_codes: [legacyRole.code], scoped_roles: [{
+      ...binding, roleId: legacyRole.id, roleCode: legacyRole.code, roleName: legacyRole.name,
+    }] }
+    const send = vi.fn().mockResolvedValueOnce(getResponse(true))
+      .mockResolvedValueOnce(getResponse(false)).mockResolvedValueOnce(getResponse(false))
+    vi.stubGlobal('fetch', send)
+    vi.mocked(confirmAction).mockResolvedValueOnce(true)
+    render(<RoleDetailPanel {...defaults} role={legacyRole} users={[formerAdmin, member]}
+      systemSuperAdminAuthority={{ orgId: org }} permissionsEditable onSave={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: '添加成员' })).not.toBeInTheDocument()
+    expect(screen.getByText('旧授权仅可撤销')).toBeInTheDocument()
+    fireEvent.click(screen.getAllByRole('button', { name: '撤销旧授权 在职成员' })[0])
+    expect(await screen.findByRole('status')).toHaveTextContent('已确认撤销「在职成员」的旧组织超管授权。')
+    expect(send.mock.calls.map(([url]) => url)).toEqual(Array(3).fill('/api/admin/users/active-member/org-super-admin'))
+    expect(JSON.parse(send.mock.calls[1][1].body)).toEqual({ enabled: false, expected_enabled: true, expected_org_id: org })
+    openPermissions()
+    expect(screen.queryByRole('button', { name: '保存授权' })).not.toBeInTheDocument()
   })
 
   it('blocks the write when the fresh state belongs to another organization', async () => {
     const send = vi.fn().mockResolvedValueOnce(getResponse(false, 'other-org'))
     vi.stubGlobal('fetch', send)
-    render(<RoleDetailPanel {...defaults} role={orgAdmin} users={[member]}
-      orgSuperAdminAuthority={authority} onSave={vi.fn()} />)
+    render(<RoleDetailPanel {...defaults} role={role} users={[member]}
+      systemSuperAdminAuthority={authority} onSave={vi.fn()} />)
     startGrant()
     expect(await screen.findByRole('alert')).toHaveTextContent('接口返回的组织或角色状态无法核对')
     expect(send).toHaveBeenCalledOnce()
@@ -265,8 +302,8 @@ describe('organization super administrator membership', () => {
       .mockResolvedValueOnce(getResponse(false))
     vi.stubGlobal('fetch', send)
     const onRefresh = vi.fn()
-    render(<RoleDetailPanel {...defaults} role={orgAdmin} users={[member]}
-      orgSuperAdminAuthority={authority} onSave={vi.fn()} onRefresh={onRefresh} />)
+    render(<RoleDetailPanel {...defaults} role={role} users={[member]}
+      systemSuperAdminAuthority={authority} onSave={vi.fn()} onRefresh={onRefresh} />)
     startGrant()
     expect(await screen.findByRole('alert')).toHaveTextContent('未能确认变更结果')
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
@@ -275,10 +312,12 @@ describe('organization super administrator membership', () => {
   })
 
   it('keeps the permission settings fixed even for an authorized role editor', () => {
-    render(<RoleDetailPanel {...defaults} role={orgAdmin} users={[member]} permissionsEditable
-      orgSuperAdminAuthority={authority} onSave={vi.fn()} />)
+    render(<RoleDetailPanel {...defaults} role={role} users={[member]} permissionsEditable
+      systemSuperAdminAuthority={authority} onSave={vi.fn()} />)
     openPermissions()
-    expect(screen.getByText('组织超级管理员的治理权限由系统固定。')).toBeInTheDocument()
+    expect(screen.getByText('超级管理员的权限由系统固定。')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /配置发布/ })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: /配置发布/ })).toBeChecked()
     expect(screen.getByText('保存角色授权')).toBeVisible()
     expect(screen.queryByRole('checkbox', { name: /角色权限管理/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '授权已保存' })).not.toBeInTheDocument()
@@ -457,7 +496,7 @@ it('keeps organization and owner shipping permission drafts separate', () => {
     id: 'shipping', label: '寄件', description: '',
     items: [{ key: 'shipping:owner_view', label: '查看本人寄件记录', description: '', dependencies: [] }],
   }]
-  render(<RoleDetailPanel {...defaults} role={{ ...role, owner_shipping_permissions: [] }}
+  render(<RoleDetailPanel {...defaults} role={{ ...role, id: 'admin', code: 'ADMIN', name: '管理员', owner_shipping_permissions: [] }}
     permissionsEditable modulePermissionCatalog={catalog} onSave={onSave} />)
   openPermissions()
   expect(screen.getByRole('checkbox', { name: '查看本人寄件记录' })).not.toBeChecked()

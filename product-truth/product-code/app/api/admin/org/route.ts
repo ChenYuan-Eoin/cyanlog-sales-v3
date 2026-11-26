@@ -137,7 +137,7 @@ async function listOrgPayloadFromRpc(orgId: string): Promise<{ data: OrgAdminPay
 async function readRoleMembershipBasis(orgId: string, source: OrgPayloadSource, organization: unknown) {
   const unavailable = {
     effectiveAvailable: false, pendingAvailable: false, activeSpaceIds: [], activeMemberIds: [],
-    orgSuperAdminAssignableMemberIds: [],
+    systemSuperAdminAssignableMemberIds: [],
   }
   if (!organization || typeof organization !== 'object' || !('id' in organization) || organization.id !== orgId) {
     return unavailable
@@ -165,7 +165,7 @@ async function readRoleMembershipBasis(orgId: string, source: OrgPayloadSource, 
       pendingAvailable,
       activeSpaceIds: spaces.data.map(space => space.id),
       activeMemberIds: members.data.map(member => member.user_id),
-      orgSuperAdminAssignableMemberIds: members.data.filter(member => member.is_default === true).map(member => member.user_id),
+      systemSuperAdminAssignableMemberIds: members.data.filter(member => member.is_default === true).map(member => member.user_id),
     }
   } catch {
     return { ...unavailable, pendingAvailable }

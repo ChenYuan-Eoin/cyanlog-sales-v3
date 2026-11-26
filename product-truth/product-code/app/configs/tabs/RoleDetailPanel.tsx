@@ -35,7 +35,6 @@ import { Checkbox } from '@/components/ui/checkbox'
 import Fuse from 'fuse.js'
 import {
   canRevokeShippingAction,
-  SUPER_ADMIN_CORE_PERMISSIONS,
   getPermissionGrantSource,
   grantExplicitRolePermissions,
   isRolePermissionEnabled,
@@ -77,9 +76,9 @@ const retainedLegacyGrantKeys = new Set<string>([
 
 // ============ Props 类型 ============
 
-interface OrgSuperAdminAuthority {
+interface SystemSuperAdminAuthority {
   orgId: string
-  memberIds: readonly string[]
+  memberIds?: readonly string[]
 }
 
 interface RoleDetailPanelProps {
@@ -99,8 +98,7 @@ interface RoleDetailPanelProps {
   modulePermissionCatalog?: RoleModulePermissionCatalog
   permissionsEditBlockReason?: string | null
   canAssignBusinessRoles?: boolean
-  orgSuperAdminAuthority?: OrgSuperAdminAuthority
-  orgSuperAdminRosterUnavailable?: boolean
+  systemSuperAdminAuthority?: SystemSuperAdminAuthority
   users: OrgSummaryUser[]
   membershipStats?: RoleMembershipStats
   departments: OrgSummaryDepartment[]
@@ -118,8 +116,7 @@ export function RoleDetailPanel({
   modulePermissionCatalog,
   permissionsEditBlockReason,
   canAssignBusinessRoles = false,
-  orgSuperAdminAuthority,
-  orgSuperAdminRosterUnavailable = false,
+  systemSuperAdminAuthority,
   users,
   membershipStats,
   departments,
@@ -131,19 +128,15 @@ export function RoleDetailPanel({
   const isSuperAdmin = role.code === 'SUPER_ADMIN'
   const isOrgSuperAdmin = role.code === ORG_SUPER_ADMIN_ROLE_CODE
   const protectedRole = isSuperAdmin || isOrgSuperAdmin
-  const canEditPermissions = permissionsEditable && !isOrgSuperAdmin && !role.permissions_edit_block_reason
+  const canEditPermissions = permissionsEditable && !protectedRole && !role.permissions_edit_block_reason
   const canEditOwnerPermissions = permissionsEditable && role.owner_shipping_permissions !== undefined
     && (canEditPermissions || role.code === 'FXIAOKE_BASELINE')
   let assignmentBlockReason: string | null = null
-  if (isSuperAdmin) {
-    assignmentBlockReason = 'SUPER_ADMIN 是平台根角色，不能通过组织管理界面变更。'
-  } else if (!currentUserId) {
+  if (!currentUserId) {
     assignmentBlockReason = '当前登录身份尚未确认，角色分配暂不可用。'
-  } else if (isOrgSuperAdmin && !orgSuperAdminAuthority) {
-    assignmentBlockReason = orgSuperAdminRosterUnavailable
-      ? '当前组织的在职成员暂无法核对，请刷新后重试。'
-      : '仅本组织有分配权限的超级管理员可管理此角色的成员。'
-  } else if (!isOrgSuperAdmin && !canAssignBusinessRoles) {
+  } else if (protectedRole && !systemSuperAdminAuthority) {
+    assignmentBlockReason = '仅本组织的系统超级管理员可管理此角色成员。'
+  } else if (!protectedRole && !canAssignBusinessRoles) {
     assignmentBlockReason = '当前账号可查看成员分配记录。'
   }
 
@@ -190,17 +183,16 @@ export function RoleDetailPanel({
       return
     }
     if (!canEditPermissions || saving) return
-    const protectedPermissions = isSuperAdmin ? SUPER_ADMIN_CORE_PERMISSIONS : []
     setPerms(current => {
       if (legacyShippingPermission(key) && getEffectiveShippingPermissions(current, {
         registered: catalogShippingKeys,
         published: availableModuleKeys,
       }).some(permission => permission === key)) {
-        return revokeRolePermissions(current, [key], protectedPermissions, availableModuleKeys)
+        return revokeRolePermissions(current, [key], [], availableModuleKeys)
       }
       return isRolePermissionExplicitlyGranted(current, key)
-        ? toggleExplicitRolePermission(current, key, protectedPermissions)
-        : grantExplicitRolePermissions(current, includePermissionDependencies([key]), protectedPermissions)
+        ? toggleExplicitRolePermission(current, key)
+        : grantExplicitRolePermissions(current, includePermissionDependencies([key]))
     })
   }
 
@@ -213,10 +205,9 @@ export function RoleDetailPanel({
       return
     }
     if (!canEditPermissions || saving) return
-    const protectedPermissions = isSuperAdmin ? SUPER_ADMIN_CORE_PERMISSIONS : []
     setPerms(current => enabled
-      ? grantExplicitRolePermissions(current, includePermissionDependencies(keys), protectedPermissions)
-      : revokeRolePermissions(current, keys, protectedPermissions, availableModuleKeys))
+      ? grantExplicitRolePermissions(current, includePermissionDependencies(keys))
+      : revokeRolePermissions(current, keys, [], availableModuleKeys))
   }
 
   return (
@@ -237,7 +228,7 @@ export function RoleDetailPanel({
                 <h2 className="text-xl font-semibold text-slate-900">{role.name}</h2>
                 {isSuperAdmin && (
                   <Badge className="bg-amber-100 text-amber-800 border-amber-200">
-                    {role.permissions?.includes('*') ? '全部权限' : '组织内已配置'}
+                    系统固定
                   </Badge>
                 )}
               </div>
@@ -286,7 +277,8 @@ export function RoleDetailPanel({
         <TabsContent value="members" className="m-0">
           <MemberAssignmentTab
             key={role.id}
-            orgSuperAdminAuthority={isOrgSuperAdmin ? orgSuperAdminAuthority : undefined}
+            systemSuperAdminAuthority={protectedRole ? systemSuperAdminAuthority : undefined}
+            roleCode={role.code}
             roleId={role.id}
             roleName={role.name}
             assignmentEditable={!assignmentBlockReason}
@@ -309,9 +301,9 @@ export function RoleDetailPanel({
             isSuperAdmin={isSuperAdmin}
             readOnly={!canEditPermissions || saving}
             ownerReadOnly={!canEditOwnerPermissions || saving}
-            blockReason={isOrgSuperAdmin
-              ? '组织超级管理员的治理权限由系统固定。'
-              : role.permissions_edit_block_reason ?? permissionsEditBlockReason}
+            blockReason={isSuperAdmin
+              ? '超级管理员的权限由系统固定。'
+              : isOrgSuperAdmin ? '此历史角色保留只读记录。' : role.permissions_edit_block_reason ?? permissionsEditBlockReason}
             onToggle={togglePermission}
             onSetGroup={setPermissionGroup}
           />
@@ -324,7 +316,8 @@ export function RoleDetailPanel({
 // ============ 员工分配 Tab ============
 
 interface MemberAssignmentTabProps {
-  orgSuperAdminAuthority?: OrgSuperAdminAuthority
+  systemSuperAdminAuthority?: SystemSuperAdminAuthority
+  roleCode: string
   roleId: string
   roleName: string
   assignmentEditable: boolean
@@ -354,10 +347,10 @@ function MemberRoleStatus({ member, roleId }: { member: RoleMember; roleId: stri
   )
 }
 
-async function readOrgSuperAdminResult(response: Response, orgId: string): Promise<boolean> {
+async function readSystemSuperAdminResult(response: Response, orgId: string): Promise<boolean> {
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    throw new Error(typeof data?.error === 'string' ? data.error : '组织超级管理员状态读取或保存失败。')
+    throw new Error(typeof data?.error === 'string' ? data.error : '超级管理员状态读取或保存失败。')
   }
   if (data?.success !== true || data.org_id !== orgId || typeof data.enabled !== 'boolean') {
     throw new Error('接口返回的组织或角色状态无法核对，请刷新后重试。')
@@ -366,7 +359,8 @@ async function readOrgSuperAdminResult(response: Response, orgId: string): Promi
 }
 
 function MemberAssignmentTab({
-  orgSuperAdminAuthority,
+  systemSuperAdminAuthority,
+  roleCode,
   roleId,
   roleName,
   assignmentEditable,
@@ -382,9 +376,19 @@ function MemberAssignmentTab({
   const [selection, setSelection] = useState<OrgSummaryUser | null>(null)
   const [orgAssignmentFeedback, setOrgAssignmentFeedback] = useState<{ status: 'error' | 'success'; message: string } | null>(null)
   const orgAssignmentInFlight = useRef(false)
-  const orgSuperAdminMemberIds = useMemo(
-    () => orgSuperAdminAuthority ? new Set(orgSuperAdminAuthority.memberIds) : null,
-    [orgSuperAdminAuthority],
+  const isLegacySuperAdmin = roleCode === ORG_SUPER_ADMIN_ROLE_CODE
+  const isSystemSuperAdmin = roleCode === 'SUPER_ADMIN'
+  const protectedRole = isSystemSuperAdmin || isLegacySuperAdmin
+  const candidateIds = systemSuperAdminAuthority?.memberIds
+  const canAddMembers = assignmentEditable && !isLegacySuperAdmin && (!isSystemSuperAdmin || candidateIds !== undefined)
+  const addBlockedReason = isSystemSuperAdmin && assignmentEditable && !canAddMembers
+    ? '当前组织的在职成员暂无法核对，请刷新后重试。'
+    : assignmentBlockReason
+  const removeMemberLabel = isLegacySuperAdmin ? '撤销旧授权'
+    : isSystemSuperAdmin ? '撤销超级管理员权限' : '从角色中移除'
+  const systemSuperAdminMemberIds = useMemo(
+    () => candidateIds ? new Set(candidateIds) : null,
+    [candidateIds],
   )
 
   // 此界面的添加和撤销只作用于组织级角色。
@@ -393,16 +397,25 @@ function MemberAssignmentTab({
     [members],
   )
 
-  // 可分配的用户（排除已分配、当前登录账号与平台根管理员）
   const { eligible: availableUsers, restricted: restrictedAvailableUsers } = useMemo(() => {
-    const unassignedUsers = users.filter((user) => !orgAssignedUserIds.has(user.id)
-      && (!orgSuperAdminMemberIds || orgSuperAdminMemberIds.has(user.id)))
+    const unassignedUsers = users.filter(user => !orgAssignedUserIds.has(user.id))
+    if (systemSuperAdminMemberIds) {
+      return {
+        eligible: unassignedUsers.filter(user => user.id !== currentUserId && systemSuperAdminMemberIds.has(user.id)),
+        restricted: [],
+      }
+    }
     return partitionRoleMutationTargets(unassignedUsers, currentUserId)
-  }, [orgAssignedUserIds, orgSuperAdminMemberIds, currentUserId, users])
+  }, [orgAssignedUserIds, systemSuperAdminMemberIds, currentUserId, users])
 
   function canRemoveMember(member: RoleMember) {
     if (!assignmentEditable) return false
-    if (orgSuperAdminMemberIds) return member.hasOrgAssignment && orgSuperAdminMemberIds.has(member.user.id)
+    if (systemSuperAdminAuthority) {
+      return member.user.id !== currentUserId && Boolean(member.user.scoped_roles?.some(binding => (
+        binding.roleId === roleId && binding.roleCode === roleCode
+        && binding.scopeType === 'org' && binding.scopeId === systemSuperAdminAuthority.orgId
+      )))
+    }
     return editableOrgRoleIds(member.user).includes(roleId)
   }
 
@@ -433,8 +446,10 @@ function MemberAssignmentTab({
     setSelection(current => current?.id === user.id ? null : user)
   }, [])
 
-  async function setOrgSuperAdmin(user: OrgSummaryUser, enabled: boolean) {
-    if (!orgSuperAdminAuthority || !orgSuperAdminMemberIds?.has(user.id) || orgAssignmentInFlight.current) return
+  async function setSystemSuperAdmin(user: OrgSummaryUser, enabled: boolean) {
+    if (!systemSuperAdminAuthority || user.id === currentUserId || orgAssignmentInFlight.current) return
+    if (enabled && (isLegacySuperAdmin || !systemSuperAdminMemberIds?.has(user.id))) return
+    const token = localStorage.getItem('token')
     orgAssignmentInFlight.current = true
     setAssigning(true)
     setOrgAssignmentFeedback(null)
@@ -443,18 +458,18 @@ function MemberAssignmentTab({
 
     try {
       if (!enabled && !await confirmAction(
-        `确定要撤销「${user.display_name}」的组织超级管理员角色？`,
+        `确定要撤销「${user.display_name}」的${isLegacySuperAdmin ? '旧组织超管授权' : '超级管理员角色'}？`,
         { confirmText: '撤销权限', danger: true },
       )) return
 
-      const orgId = orgSuperAdminAuthority.orgId
-      const endpoint = `/api/admin/users/${encodeURIComponent(user.id)}/org-super-admin`
-      const token = localStorage.getItem('token')
+      const orgId = systemSuperAdminAuthority.orgId
+      const endpoint = `/api/admin/users/${encodeURIComponent(user.id)}/${isLegacySuperAdmin ? 'org-super-admin' : 'system-super-admin'}`
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined
-      const readCurrent = async () => readOrgSuperAdminResult(
+      const readCurrent = async () => readSystemSuperAdminResult(
         await fetch(endpoint, { cache: 'no-store', headers }), orgId,
       )
       const previous = await readCurrent()
+      if (token !== localStorage.getItem('token')) throw new Error('登录身份已变更，请刷新后重试。')
       if (previous === enabled) {
         refreshNeeded = true
         setDialogOpen(false)
@@ -471,7 +486,7 @@ function MemberAssignmentTab({
       refreshNeeded = writeMayHaveSucceeded || response.status === 409
       if (response.status === 409) setDialogOpen(false)
 
-      const savedState = await readOrgSuperAdminResult(response, orgId)
+      const savedState = await readSystemSuperAdminResult(response, orgId)
       const readBackState = await readCurrent()
       if (savedState !== enabled || readBackState !== enabled) {
         throw new Error('接口回读的角色状态与本次变更不一致。')
@@ -480,7 +495,8 @@ function MemberAssignmentTab({
       setDialogOpen(false)
       setOrgAssignmentFeedback({
         status: 'success',
-        message: enabled ? `已确认「${user.display_name}」获得组织超级管理员权限。` : `已确认撤销「${user.display_name}」的组织超级管理员权限。`,
+        message: enabled ? `已确认「${user.display_name}」获得超级管理员权限。`
+          : `已确认撤销「${user.display_name}」的${isLegacySuperAdmin ? '旧组织超管授权' : '超级管理员权限'}。`,
       })
     } catch (err) {
       const detail = err instanceof Error ? err.message : '请刷新后重试。'
@@ -504,7 +520,7 @@ function MemberAssignmentTab({
   // 当前后端只提供单用户替换接口。为避免 N 个独立请求形成部分成功，
   // 在有原子批量端点前，每次只允许添加一名成员。
   const handleAddMember = async () => {
-    if (!assignmentEditable || !selection || assigning) return
+    if (!canAddMembers || !selection || assigning) return
 
     const selectedUser = users.find((user) => user.id === selection.id)
     if (!selectedUser) {
@@ -512,18 +528,17 @@ function MemberAssignmentTab({
       return
     }
 
-    const restriction = getRoleMutationRestriction(selectedUser, currentUserId)
-    if (restriction) {
-      error(restriction?.reason || '当前成员不可进行角色变更。')
-      return
-    }
-
-    if (orgSuperAdminAuthority) {
-      if (!orgSuperAdminMemberIds?.has(selectedUser.id)) {
+    if (systemSuperAdminAuthority) {
+      if (!availableUsers.some(user => user.id === selectedUser.id)) {
         setOrgAssignmentFeedback({ status: 'error', message: '该成员当前不符合分配条件，请核对在职状态。' })
         return
       }
-      await setOrgSuperAdmin(selectedUser, true)
+      await setSystemSuperAdmin(selectedUser, true)
+      return
+    }
+    const restriction = getRoleMutationRestriction(selectedUser, currentUserId)
+    if (restriction) {
+      error(restriction.reason)
       return
     }
 
@@ -574,14 +589,14 @@ function MemberAssignmentTab({
     if (!member || (!member.hasOrgAssignment && !member.pending)) return
     const { user } = member
 
-    const restriction = getRoleMutationRestriction(user, currentUserId)
-    if (restriction) {
-      error(restriction.reason)
+    if (systemSuperAdminAuthority) {
+      if (canRemoveMember(member)) await setSystemSuperAdmin(user, false)
       return
     }
 
-    if (orgSuperAdminAuthority) {
-      if (canRemoveMember(member)) await setOrgSuperAdmin(user, false)
+    const restriction = getRoleMutationRestriction(user, currentUserId)
+    if (restriction) {
+      error(restriction.reason)
       return
     }
 
@@ -626,7 +641,7 @@ function MemberAssignmentTab({
           <h4 className="min-w-0 font-medium text-slate-900">
             角色关联成员 ({members.length})
           </h4>
-          {assignmentEditable ? (
+          {canAddMembers ? (
             <Button
               size="sm"
               variant="outline"
@@ -643,11 +658,11 @@ function MemberAssignmentTab({
           ) : (
             <div className="max-w-sm text-right">
               <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
-                角色分配只读
+                {isLegacySuperAdmin && assignmentEditable ? '旧授权仅可撤销' : '无法添加成员'}
               </Badge>
-              {assignmentBlockReason && (
+              {addBlockedReason && (
                 <p className="mt-1 text-xs leading-5 text-amber-800">
-                  {assignmentBlockReason}
+                  {addBlockedReason}
                 </p>
               )}
             </div>
@@ -664,7 +679,7 @@ function MemberAssignmentTab({
             {members.map((member) => {
               const { user } = member
               const canRemove = canRemoveMember(member)
-              const restriction = getRoleMutationRestriction(user, currentUserId)
+              const restriction = protectedRole ? null : getRoleMutationRestriction(user, currentUserId)
               return (
                 <div key={user.id} className="rounded-md border bg-white p-3">
                   <div className="flex items-start gap-3">
@@ -698,7 +713,7 @@ function MemberAssignmentTab({
                         variant="ghost"
                         onClick={() => handleRemoveMember(user.id)}
                         disabled={assigning}
-                        aria-label={orgSuperAdminAuthority ? `撤销组织超级管理员权限 ${user.display_name}` : `从角色中移除 ${user.display_name}`}
+                        aria-label={`${removeMemberLabel} ${user.display_name}`}
                         className="h-8 w-8 shrink-0"
                       >
                         <TrashIcon size={16} className="text-red-500" />
@@ -730,7 +745,7 @@ function MemberAssignmentTab({
                 members.map((member) => {
                   const { user } = member
                   const canRemove = canRemoveMember(member)
-                  const restriction = getRoleMutationRestriction(user, currentUserId)
+                  const restriction = protectedRole ? null : getRoleMutationRestriction(user, currentUserId)
                   return (
                     <TableRow key={user.id}>
                       <TableCell>
@@ -766,7 +781,7 @@ function MemberAssignmentTab({
                             variant="ghost"
                             onClick={() => handleRemoveMember(user.id)}
                             disabled={assigning}
-                            aria-label={orgSuperAdminAuthority ? `撤销组织超级管理员权限 ${user.display_name}` : `从角色中移除 ${user.display_name}`}
+                            aria-label={`${removeMemberLabel} ${user.display_name}`}
                           >
                             <TrashIcon size={16} className="text-red-500" />
                           </Button>
@@ -788,7 +803,7 @@ function MemberAssignmentTab({
       </div>
 
       {/* 添加成员 Dialog */}
-      <Dialog open={assignmentEditable && dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={canAddMembers && dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[520px] max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -840,7 +855,7 @@ function MemberAssignmentTab({
             )}
 
             <div className="shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-900">
-              {orgSuperAdminAuthority ? '每次可为一名在职且已启用登录的本组织成员授予权限。' : '当前接口不支持原子批量写入。为避免多请求部分成功，每次只可添加一名成员。'}
+              {systemSuperAdminAuthority ? '每次可为一名在职且已启用登录的本组织成员授予权限。' : '当前接口不支持原子批量写入。为避免多请求部分成功，每次只可添加一名成员。'}
             </div>
 
             {/* 用户列表 */}
@@ -885,7 +900,7 @@ function MemberAssignmentTab({
                     <>
                       <UsersIcon size={32} className="mb-2 text-slate-300" />
                       <p className="text-sm">暂无可添加的成员</p>
-                      {!orgSuperAdminAuthority && <p className="text-xs text-slate-400 mt-1">所有成员已分配到此角色</p>}
+                      {!systemSuperAdminAuthority && <p className="text-xs text-slate-400 mt-1">所有成员已分配到此角色</p>}
                     </>
                   )}
                 </div>
@@ -905,7 +920,7 @@ function MemberAssignmentTab({
               onClick={handleAddMember}
               disabled={!selection || assigning}
             >
-              {assigning ? '添加中...' : orgSuperAdminAuthority ? '授予权限' : '添加成员到角色'}
+              {assigning ? '添加中...' : systemSuperAdminAuthority ? '授予权限' : '添加成员到角色'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -982,7 +997,6 @@ function PermissionSettingTab({
       ? !isEffective(key)
       : !isExplicit(key)))
     const candidatesToRevoke = directKeys.filter(key => isEffective(key)
-      && (!isSuperAdmin || !SUPER_ADMIN_CORE_PERMISSIONS.includes(key))
       && !hasRetainedLegacyGrant(key)
       && canRevokeShippingAction(perms, key, availableModuleKeys))
     const revocableKeys = candidatesToRevoke.filter(key => !actions.some(action =>
@@ -1045,9 +1059,8 @@ function PermissionSettingTab({
                 const effective = isEffective(item.key)
                 const shippingAction = legacyShippingPermission(item.key) !== null
                 const inheritedLegacy = hasRetainedLegacyGrant(item.key)
-                const checked = ownerAction || shippingAction || inheritedLegacy ? effective : explicit
+                const checked = isSuperAdmin || ownerAction || shippingAction || inheritedLegacy ? effective : explicit
                 const source = effective && !ownerAction ? getPermissionGrantSource(perms, item.key) : null
-                const isCore = isSuperAdmin && SUPER_ADMIN_CORE_PERMISSIONS.includes(item.key)
                 const dependent = explicit && actions.find(action =>
                   action.available && action.dependencies?.includes(item.key) && isEffective(action.key))
                 const missingDependency = item.dependencies?.find(key => !isEffective(key))
@@ -1060,7 +1073,7 @@ function PermissionSettingTab({
                         type="checkbox"
                         aria-label={item.label}
                         checked={checked}
-                        disabled={groupReadOnly || isCore || !!dependent || unavailableForRevoke || inheritedLegacy}
+                        disabled={groupReadOnly || !!dependent || unavailableForRevoke || inheritedLegacy}
                         onChange={() => onToggle(item.key)}
                         className="mt-1"
                       />
@@ -1069,7 +1082,6 @@ function PermissionSettingTab({
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-medium text-slate-900">{item.label}</span>
                         {!item.available && <Badge variant="outline">{effective ? '旧授权生效' : '待接入'}</Badge>}
-                        {isCore && <Badge variant="outline">核心权限</Badge>}
                         {explicit && item.available && <Badge variant="outline">{ownerAction ? '角色授权' : '显式授权'}</Badge>}
                         {item.available && effective && !explicit && <Badge variant="secondary">当前有效</Badge>}
                         {source?.via === 'bundle' && <Badge variant="secondary">由 {labelFor(source.grant)} 汇总</Badge>}
@@ -1112,12 +1124,6 @@ function PermissionSettingTab({
   return (
     <div className="space-y-3 p-6">
       <p className="text-sm text-slate-600">此处设置角色可以执行的操作。业务参数由各功能的设置页维护。</p>
-      {isSuperAdmin && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <ShieldIcon className="mr-2 inline-block h-4 w-4" />
-          权限更改作用于当前组织。恢复配置所需的核心权限由系统保留。
-        </div>
-      )}
       {readOnly && blockReason && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
           {blockReason}

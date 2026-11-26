@@ -4,6 +4,7 @@ import { AuthError, requireAuth } from '@/lib/auth'
 import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
 import { supabaseAdmin } from '@/lib/supabase'
 import { GET, PATCH } from './route'
+import { GET as getLegacyGrant, PATCH as patchLegacyGrant } from '../org-super-admin/route'
 
 vi.mock('@/lib/auth', async importOriginal => ({
   ...await importOriginal<typeof import('@/lib/auth')>(),
@@ -17,21 +18,20 @@ const orgId = '10000000-0000-4000-8000-000000000002'
 const memberId = '10000000-0000-4000-8000-000000000003'
 const anotherOrgId = '10000000-0000-4000-8000-000000000004'
 const authority = {
-  orgId, settings: {}, canEdit: true, canRead: true, canEditPlatformRoot: false, actorPermissions: ['role:manage'],
-  canAppointOrganizationSuperAdmin: true,
+  orgId, settings: {}, canEdit: true, canRead: true, canEditPlatformRoot: true, actorPermissions: ['role:manage'],
 }
 const routeContext = { params: Promise.resolve({ id: memberId }) }
 const rpcArgs = { p_org_id: orgId, p_actor_id: actorId, p_user_id: memberId }
 
 function request(body?: unknown) {
-  return new NextRequest('https://example.test/api/admin/users/' + memberId + '/org-super-admin', body === undefined ? {} : {
+  return new NextRequest('https://example.test/api/admin/users/' + memberId + '/system-super-admin', body === undefined ? {} : {
     method: 'PATCH',
     headers: { 'x-request-id': 'request-1', 'content-type': 'application/json' },
     body: JSON.stringify(body),
   })
 }
 
-describe('organization super administrator resource', () => {
+describe('system super administrator resource', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     vi.mocked(requireAuth).mockResolvedValue({ id: actorId, email: null, phone: null, display_name: null })
@@ -44,7 +44,7 @@ describe('organization super administrator resource', () => {
     expect(result.status).toBe(200)
     expect(result.headers.get('cache-control')).toBe('no-store')
     expect(await result.json()).toEqual({ success: true, org_id: orgId, enabled: false })
-    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_get_org_super_admin_v1', rpcArgs)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_get_system_super_admin_v1', rpcArgs)
   })
 
   it.each([true, false])('delegates the desired %s state and expected state to the exact-org transaction', async enabled => {
@@ -52,7 +52,7 @@ describe('organization super administrator resource', () => {
     const result = await PATCH(request({ enabled, expected_enabled: !enabled, expected_org_id: orgId }), routeContext)
     expect(result.status).toBe(200)
     expect(await result.json()).toEqual({ success: true, org_id: orgId, enabled })
-    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_set_org_super_admin_v1', {
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_set_system_super_admin_v1', {
       ...rpcArgs, p_assigned: enabled, p_expected_assigned: !enabled, p_request_id: 'request-1',
     })
   })
@@ -60,7 +60,7 @@ describe('organization super administrator resource', () => {
   it('checks current authority again for every read or write', async () => {
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: true, error: null } as never)
     expect((await GET(request(), routeContext)).status).toBe(200)
-    vi.mocked(loadOrgRolePermissionContext).mockResolvedValue({ ...authority, canAppointOrganizationSuperAdmin: false })
+    vi.mocked(loadOrgRolePermissionContext).mockResolvedValue({ ...authority, canEditPlatformRoot: false })
     expect((await GET(request(), routeContext)).status).toBe(403)
     expect((await PATCH(request({ enabled: false, expected_enabled: true, expected_org_id: orgId }), routeContext)).status).toBe(403)
     expect(supabaseAdmin.rpc).toHaveBeenCalledTimes(1)
@@ -89,4 +89,33 @@ describe('organization super administrator resource', () => {
       expect((await PATCH(request({ enabled: true, expected_enabled: false, expected_org_id: orgId }), routeContext)).status).toBe(status)
     },
   )
+
+  it('distinguishes the last effective super administrator from an ineligible target', async () => {
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null, error: { code: '23514', details: 'LAST_SYSTEM_SUPER_ADMIN_PROTECTED' },
+    } as never)
+    const result = await PATCH(request({ enabled: false, expected_enabled: true, expected_org_id: orgId }), routeContext)
+    expect(result.status).toBe(409)
+    expect((await result.json()).code).toBe('LAST_SYSTEM_SUPER_ADMIN_PROTECTED')
+  })
+
+  it('allows only readback and removal of an existing legacy organization administrator grant', async () => {
+    const change = { enabled: true, expected_enabled: false, expected_org_id: orgId }
+    const denied = await patchLegacyGrant(request(change), routeContext)
+    expect(denied.status).toBe(403)
+    expect((await denied.json()).code).toBe('LEGACY_ROLE_ASSIGNMENT_RETIRED')
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: true, error: null } as never)
+    expect(await (await getLegacyGrant(request(), routeContext)).json()).toMatchObject({ enabled: true })
+    expect(supabaseAdmin.rpc).toHaveBeenLastCalledWith('admin_get_org_super_admin_v1', rpcArgs)
+
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: false, error: null } as never)
+    const revoked = await patchLegacyGrant(request({ ...change, enabled: false, expected_enabled: true }), routeContext)
+    expect(revoked.status).toBe(200)
+    expect(await revoked.json()).toMatchObject({ enabled: false })
+    expect(supabaseAdmin.rpc).toHaveBeenLastCalledWith('admin_set_org_super_admin_v1', {
+      ...rpcArgs, p_assigned: false, p_expected_assigned: true, p_request_id: 'request-1',
+    })
+  })
 })

@@ -41,7 +41,6 @@ export async function PATCH(
     if (result.reason === 'conflict') return errorResponse(createApiError('CONFLICT', '权限已被其他管理员更新，请刷新后重试。'))
     if (result.reason === 'fixed_role') return errorResponse(createApiError('BUSINESS_RULE_VIOLATION', result.message))
     if (result.reason === 'escalation_forbidden') return errorResponse(createApiError('FORBIDDEN', '不能授予超出当前组织治理权限的配置项。'))
-    if (result.reason === 'core_required') return errorResponse(createApiError('BUSINESS_RULE_VIOLATION', '超级管理员必须保留后台访问和权限配置能力，避免组织无法管理。'))
     return errorResponse(createApiError('VALIDATION_ERROR', '权限内容无效，请刷新角色列表后重试。'))
   })
 }

@@ -27,7 +27,7 @@ interface RoleAccessTabProps {
   permissionsEditable?: boolean
   modulePermissionCatalog?: RoleModulePermissionCatalog
   permissionsEditBlockReason?: string | null
-  orgSuperAdminAuthority?: { orgId: string }
+  systemSuperAdminAuthority?: { orgId: string }
   orgSummary: OrgSummaryPayload | null
   onSaveRole: (roleId: string, newPerms: string[], ownerShippingPermissions?: string[]) => void
   onRefresh: () => void | Promise<void>
@@ -54,7 +54,7 @@ export default function RoleAccessTab({
   permissionsEditable = false,
   modulePermissionCatalog,
   permissionsEditBlockReason,
-  orgSuperAdminAuthority,
+  systemSuperAdminAuthority,
   orgSummary,
   onSaveRole,
   onRefresh,
@@ -64,9 +64,8 @@ export default function RoleAccessTab({
   const roster = orgSummary?.directory_roster
   const orgId = orgSummary?.organization?.id
   const memberBasis = orgSummary?.role_membership_stats
-  const orgSuperAdminEditor = orgSuperAdminAuthority && orgSuperAdminAuthority.orgId === orgId
-    && memberBasis?.effectiveAvailable && memberBasis.orgSuperAdminAssignableMemberIds
-    ? { orgId, memberIds: memberBasis.orgSuperAdminAssignableMemberIds }
+  const systemSuperAdminEditor = systemSuperAdminAuthority && systemSuperAdminAuthority.orgId === orgId
+    ? { orgId, memberIds: memberBasis?.effectiveAvailable ? memberBasis.systemSuperAdminAssignableMemberIds : undefined }
     : undefined
 
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
@@ -169,9 +168,9 @@ export default function RoleAccessTab({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-slate-900 truncate">{role.name}</span>
-                    {role.isSuperAdmin && (
+                    {(role.isSuperAdmin || role.isOrgSuperAdmin) && (
                       <Badge variant="outline" className="text-xs shrink-0 text-amber-600 border-amber-200">
-                        平台根角色
+                        {role.isSuperAdmin ? '系统角色' : '历史角色'}
                       </Badge>
                     )}
                   </div>
@@ -200,8 +199,7 @@ export default function RoleAccessTab({
           <RoleDetailPanel
             key={orgId}
             role={selectedRole}
-            orgSuperAdminAuthority={orgSuperAdminEditor}
-            orgSuperAdminRosterUnavailable={Boolean(orgSuperAdminAuthority && !orgSuperAdminEditor)}
+            systemSuperAdminAuthority={systemSuperAdminEditor}
             permissionsEditable={permissionsEditable}
             modulePermissionCatalog={modulePermissionCatalog}
             permissionsEditBlockReason={permissionsEditBlockReason}

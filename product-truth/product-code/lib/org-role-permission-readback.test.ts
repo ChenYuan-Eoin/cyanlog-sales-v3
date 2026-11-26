@@ -21,6 +21,14 @@ function readback(data: Record<string, unknown> = {}) {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('organization role permission save and independent readback', () => {
+  it('uses the explicit system super administrator appointment flag', async () => {
+    const request = vi.fn().mockResolvedValueOnce(readback({ can_appoint_system_super_admin: true }))
+      .mockResolvedValueOnce(readback({ can_assign_org_super_admin: true }))
+    vi.stubGlobal('fetch', request)
+    expect((await loadOrgRolePermissionSnapshot({})).canAppointSystemSuperAdmin).toBe(true)
+    expect((await loadOrgRolePermissionSnapshot({})).canAppointSystemSuperAdmin).toBe(false)
+  })
+
   it('sends the organization and old permissions, then confirms the same role without cache', async () => {
     const request = vi.fn().mockResolvedValueOnce(receipt()).mockResolvedValueOnce(
       readback({ roles: [{ ...role, permissions: [...savedPermissions].reverse() }] }),

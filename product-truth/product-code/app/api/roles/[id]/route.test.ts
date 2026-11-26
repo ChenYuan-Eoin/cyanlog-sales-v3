@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: vi.fn() } }))
 vi.mock('@/lib/auth', () => ({ requireAuth: vi.fn(async () => ({ id: 'user-1' })) }))
 import { supabaseAdmin } from '@/lib/supabase'
-import { SUPER_ADMIN_CORE_PERMISSIONS } from '@/lib/role-permission-policy'
 import { PATCH } from './route'
 
 function jsonRequest(body: Record<string, unknown>): any {
@@ -125,18 +124,14 @@ describe('PATCH /api/roles/[id] organization role permissions', () => {
     expect((await res.json()).error.code).toBe('R003')
   })
 
-  it.each(SUPER_ADMIN_CORE_PERMISSIONS)('returns 400 if SUPER_ADMIN loses %s', async (removed) => {
-    database({ code: 'SUPER_ADMIN', permissions: ['*'] })
-    const res = await PATCH(jsonRequest({ permissions: SUPER_ADMIN_CORE_PERMISSIONS.filter((key) => key !== removed), expected_permissions: ['*'] }), routeContext)
+  it('rejects edits to system super administrator permissions even for the current super administrator', async () => {
+    const { operations } = database({ code: 'SUPER_ADMIN', permissions: ['*'] })
+    const res = await PATCH(jsonRequest({
+      permissions: ['role:manage', 'config:read', 'config:write'], expected_permissions: ['*'],
+    }), routeContext)
     expect(res.status).toBe(400)
-    expect((await res.json()).error.code).toBe('B001')
-  })
-
-  it('allows SUPER_ADMIN non-core revocation', async () => {
-    database({ code: 'SUPER_ADMIN', permissions: ['*'] })
-    const res = await PATCH(jsonRequest({ permissions: [...SUPER_ADMIN_CORE_PERMISSIONS], expected_permissions: ['*'] }), routeContext)
-    expect(res.status).toBe(200)
-    expect((await res.json()).data.role.permissions).toEqual(SUPER_ADMIN_CORE_PERMISSIONS)
+    expect((await res.json()).error).toMatchObject({ code: 'B001', message: expect.stringContaining('系统固定') })
+    expect(operations.some(operation => operation.patch)).toBe(false)
   })
 
   it.each([
@@ -159,16 +154,4 @@ describe('PATCH /api/roles/[id] organization role permissions', () => {
     expect((await res.json()).error.code).toBe('S002')
     expect(operations.some((operation) => operation.patch)).toBe(false)
   })
-})
-
-it('preserves exact platform-root wildcard recovery while shipping definitions are unavailable', async () => {
-  const core = [...SUPER_ADMIN_CORE_PERMISSIONS]
-  const { operations } = database({
-    code: 'SUPER_ADMIN', permissions: ['*'],
-    assignments: [{ ...root, role: { ...root.role, id: 'role-1' } }],
-    settings: { role_permission_overrides: { 'role-1': core } },
-  })
-  const response = await PATCH(jsonRequest({ permissions: ['*'], expected_permissions: core }), routeContext)
-  expect(response.status).toBe(200)
-  expect(operations.some(operation => operation.table === 'permission_points')).toBe(false)
 })

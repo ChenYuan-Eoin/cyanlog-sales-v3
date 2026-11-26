@@ -96,7 +96,7 @@ describe('GET /api/admin/org', () => {
       ],
       directory_roster: { status: 'unavailable', reason: 'DIRECTORY_UNCONFIRMED' },
       role_membership_stats: {
-        effectiveAvailable: true, pendingAvailable: true, activeSpaceIds: [], activeMemberIds: [], orgSuperAdminAssignableMemberIds: [],
+        effectiveAvailable: true, pendingAvailable: true, activeSpaceIds: [], activeMemberIds: [], systemSuperAdminAssignableMemberIds: [],
       },
       member_access: true,
       member_actions: {
@@ -127,7 +127,7 @@ describe('GET /api/admin/org', () => {
     })
     const authority = {
       settings: {}, orgId: 'org-1', canRead: true, canEdit: true, canEditPlatformRoot: true, actorPermissions: ['role:manage'],
-      canAppointOrganizationSuperAdmin: true, canListAssignableRoles: true,
+      canListAssignableRoles: true,
     }
     const request = makeRequest('org-1', 'SUPER_ADMIN')
 
@@ -164,7 +164,7 @@ describe('GET /api/admin/org', () => {
       },
       department_access: { canRead: true, canEdit: true, canDelete: true },
       role_membership_stats: {
-        effectiveAvailable: false, pendingAvailable: false, activeSpaceIds: [], activeMemberIds: [], orgSuperAdminAssignableMemberIds: [],
+        effectiveAvailable: false, pendingAvailable: false, activeSpaceIds: [], activeMemberIds: [], systemSuperAdminAssignableMemberIds: [],
       },
     })
     expect(vi.mocked(supabaseAdmin.rpc).mock.calls.map(call => call[0])).toEqual([
@@ -219,7 +219,7 @@ describe('GET /api/admin/org', () => {
     expect(body.users).toHaveLength(3)
     expect(body.role_membership_stats).toEqual({
       effectiveAvailable: true, pendingAvailable: true, activeSpaceIds: ['active-space'],
-      activeMemberIds: [localId, 'member-of-another-default-org'], orgSuperAdminAssignableMemberIds: [localId],
+      activeMemberIds: [localId, 'member-of-another-default-org'], systemSuperAdminAssignableMemberIds: [localId],
     })
   })
 

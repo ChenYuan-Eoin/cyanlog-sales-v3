@@ -452,7 +452,7 @@ async function getCachedRoleTemplates(userId: string): Promise<ScopedRoleAssignm
 
 export async function getUserScopedRoleAssignments(userId: string): Promise<ScopedRoleAssignment[]> {
   const assignments = await getCachedRoleTemplates(userId)
-  if (assignments.some(assignment => assignment.roleCode === ORG_SUPER_ADMIN_ROLE_CODE)) {
+  if (assignments.some(assignment => assignment.roleCode === 'SUPER_ADMIN' || assignment.roleCode === ORG_SUPER_ADMIN_ROLE_CODE)) {
     return getFreshUserScopedRoleAssignments(userId)
   }
   return applyCurrentRolePermissionOverrides(assignments)

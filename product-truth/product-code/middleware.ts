@@ -165,7 +165,7 @@ const BASELINE_READ_PATHS = new Set([
 
 const departmentDetailPath = /^\/api\/admin\/departments\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const memberDetailPath = /^\/api\/admin\/users\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/([a-z-]+))?$/i
-const memberAuthorizationPaths = new Set(['roles', 'role-scopes', 'org-super-admin'])
+const memberAuthorizationPaths = new Set(['roles', 'role-scopes', 'system-super-admin', 'org-super-admin'])
 const memberPathPermissions: Partial<Record<string, readonly string[]>> = {
   'PATCH ': [ORG_MEMBER_EDIT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_MANAGE_EMPLOYMENT],
   'DELETE ': [ORG_MEMBER_MANAGE_EMPLOYMENT],

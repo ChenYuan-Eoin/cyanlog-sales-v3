@@ -15,7 +15,7 @@ import { isRoleId, withRolePermissionContext } from './context'
 
 export async function GET(req: NextRequest) {
   return withRolePermissionContext(req, async ({
-    orgId, settings, canRead, canEdit, canEditPlatformRoot, canAppointOrganizationSuperAdmin, canListAssignableRoles,
+    orgId, settings, canRead, canEdit, canListAssignableRoles,
   }) => {
     const { searchParams } = new URL(req.url)
     const assignable = searchParams.get('view') === 'assignable'
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
       ...role,
       permissions: resolveRolePermissions(settings, role).permissions,
       owner_shipping_permissions: resolveOwnerShippingPermissions(settings, role),
-      permissions_edit_block_reason: rolePermissionsEditBlockReason(role.code, canEditPlatformRoot),
+      permissions_edit_block_reason: rolePermissionsEditBlockReason(role.code),
     }))
     const permissionCatalog = await loadRoleModulePermissionCatalog()
     const publishedModuleKeys = permissionCatalog.flatMap(group => group.items.map(item => item.key))
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
         permission_keys: permissionKeys,
         permission_catalog: permissionCatalog,
         permissions_editable: canEdit,
-        can_assign_org_super_admin: canAppointOrganizationSuperAdmin === true,
+        can_appoint_system_super_admin: canEdit,
         permissions_edit_block_reason: canEdit ? null : '仅系统超管可以保存角色授权。',
       },
       {

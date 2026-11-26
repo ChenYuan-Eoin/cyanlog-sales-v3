@@ -376,6 +376,7 @@ describe('role-free federated session boundary', () => {
     const authorizationPaths = [
       ['/api/roles?view=assignable', 'GET'], ['/api/roles/role-id', 'PATCH'],
       [`/api/admin/users/${id}/roles`, 'POST'], [`/api/admin/users/${id}/role-scopes`, 'DELETE'],
+      [`/api/admin/users/${id}/system-super-admin`, 'PATCH'],
       [`/api/admin/users/${id}/org-super-admin`, 'PATCH'],
       ['/api/admin/departments/leader-access', 'PUT'], ['/api/admin/departments/shipping-intake', 'PATCH'],
     ]

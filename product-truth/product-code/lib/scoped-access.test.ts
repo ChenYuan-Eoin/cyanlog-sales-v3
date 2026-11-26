@@ -323,21 +323,33 @@ describe('organization role permission overrides', () => {
     expect(await getUserScopedRoleAssignments('org-delegated-user')).toEqual([])
   })
 
+  it('rechecks a cached system super administrator binding after a member is removed from that role', async () => {
+    const orgId = 'org-with-system-admin'
+    const role = { id: 'system-admin', code: 'SUPER_ADMIN', name: '系统超管', permissions: ['*'] }
+    const exact = { org_id: orgId, scope_type: 'org', scope_id: orgId, granted_at: null, role }
+    vi.mocked(supabaseAdmin.from).mockReturnValue(makeCollectionQuery({ data: [exact], error: null }))
+
+    expect(getOrgRoleCodes(await getUserScopedRoleAssignments('revoked-root'), orgId)).toEqual(['SUPER_ADMIN'])
+
+    vi.mocked(supabaseAdmin.from).mockReturnValue(makeCollectionQuery({ data: [], error: null }))
+    expect(await getUserScopedRoleAssignments('revoked-root')).toEqual([])
+  })
+
   it('角色模板被缓存时仍每次读取当前组织覆盖，并保留组织隔离', async () => {
     vi.mocked(supabaseAdmin.from).mockReturnValue(makeCollectionQuery({ data: [
-      {scope_type:'org',scope_id:'org-override-a',granted_at:null,role:{id:'same-role',code:'SUPER_ADMIN',name:'管理员',permissions:['*']}},
-      {scope_type:'org',scope_id:'org-override-b',granted_at:null,role:{id:'same-role',code:'SUPER_ADMIN',name:'管理员',permissions:['*']}},
+      {scope_type:'org',scope_id:'org-override-a',granted_at:null,role:{id:'same-role',code:'CUSTOM',name:'普通角色',permissions:['config:read']}},
+      {scope_type:'org',scope_id:'org-override-b',granted_at:null,role:{id:'same-role',code:'CUSTOM',name:'普通角色',permissions:['config:read']}},
     ],error:null}))
     let revoked = false
     vi.mocked(loadOrgRolePermissionSettings).mockImplementation(async orgId => (
       revoked && orgId === 'org-override-a' ? {role_permission_overrides:{'same-role':[]}} : {}
     ))
     const before = await getUserScopedRoleAssignments('override-cache-user')
-    expect(getOrgPermissions(before,'org-override-a')).toEqual(['*'])
+    expect(getOrgPermissions(before,'org-override-a')).toEqual(['config:read'])
     revoked = true
     const after = await getUserScopedRoleAssignments('override-cache-user')
     expect(getOrgPermissions(after,'org-override-a')).toEqual([])
-    expect(getOrgPermissions(after,'org-override-b')).toEqual(['*'])
+    expect(getOrgPermissions(after,'org-override-b')).toEqual(['config:read'])
     expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
     expect(loadOrgRolePermissionSettings).toHaveBeenCalledTimes(4)
   })

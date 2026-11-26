@@ -6,7 +6,6 @@ vi.mock('@/lib/permission-registry', () => ({ loadRoleModulePermissionCatalog: v
 
 import { supabaseAdmin } from '@/lib/supabase'
 import { canEditRolePermissions, loadOrgRolePermissionSettings, saveOrgRolePermissions } from './org-role-permissions'
-import { SUPER_ADMIN_CORE_PERMISSIONS } from './role-permission-policy'
 import { BUILTIN_PERMISSION_DEFINITIONS, buildPermissionCatalog } from './permission-catalog'
 import { loadRoleModulePermissionCatalog } from './permission-registry'
 import { SHIPPING_OWNER_ACTION_KEYS, SHIPPING_OWNER_VIEW } from './shipping/owner-permission-keys'
@@ -98,17 +97,14 @@ describe('organization role permission storage', () => {
     expect(state.organizations[0].settings).toEqual({ role_permission_overrides: { 'role-1': [] } })
   })
 
-  it.each(SUPER_ADMIN_CORE_PERMISSIONS)('requires superadmin core permission %s', async (removed) => {
+  it('rejects any change to the system super administrator definition', async () => {
     const state = database({ code: 'SUPER_ADMIN', permissions: ['*'] })
-    expect(await saveOrgRolePermissions('org-1', 'role-1', SUPER_ADMIN_CORE_PERMISSIONS.filter((key) => key !== removed), ['*']))
-      .toEqual({ ok: false, reason: 'core_required' })
-    expect(state.operations.some((entry) => entry.patch)).toBe(false)
-  })
-
-  it('allows revoking all non-core superadmin permissions', async () => {
-    database({ code: 'SUPER_ADMIN', permissions: ['*'] })
-    expect(await saveOrgRolePermissions('org-1', 'role-1', [...SUPER_ADMIN_CORE_PERMISSIONS], ['*']))
-      .toMatchObject({ ok: true, role: { permissions: [...SUPER_ADMIN_CORE_PERMISSIONS] } })
+    expect(await saveOrgRolePermissions('org-1', 'role-1', ['role:manage', 'config:read'], ['*']))
+      .toMatchObject({ ok: false, reason: 'fixed_role' })
+    expect(await saveOrgRolePermissions('org-1', 'role-1', ['*'], ['*'], undefined, {
+      permissions: [], expected: SHIPPING_OWNER_ACTION_KEYS,
+    })).toMatchObject({ ok: false, reason: 'fixed_role' })
+    expect(state.operations.some(entry => entry.patch)).toBe(false)
   })
 
   it('never writes an override for the fixed Fxiaoke baseline role', async () => {

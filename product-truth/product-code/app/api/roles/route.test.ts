@@ -136,7 +136,7 @@ describe('GET /api/roles organization permissions', () => {
         ],
         permission_keys: expect.arrayContaining(['config:read', 'config:write', 'role:manage']),
         permissions_editable: false,
-        can_assign_org_super_admin: false,
+        can_appoint_system_super_admin: false,
         permissions_edit_block_reason: '仅系统超管可以保存角色授权。',
       },
       meta: { total: 2, limit: 20, offset: 0, hasMore: false },
@@ -161,7 +161,7 @@ describe('GET /api/roles organization permissions', () => {
     const body = await res.json()
     expect(res.status).toBe(200)
     expect(body.data.permissions_editable).toBe(editable)
-    expect(body.data.can_assign_org_super_admin).toBe(editable)
+    expect(body.data.can_appoint_system_super_admin).toBe(editable)
     expect(body.data.permissions_edit_block_reason).toEqual(editable ? null : expect.any(String))
   })
 
@@ -192,6 +192,16 @@ describe('GET /api/roles organization permissions', () => {
       roles: [{ id: 'baseline', permissions: ['quote:view', 'contract:view', 'customer:view'], permissions_edit_block_reason: expect.any(String) }],
     })
     expect(roleQuery.eq).toHaveBeenCalledWith('id', 'baseline')
+  })
+
+  it('separates appointment authority from a system role definition that cannot be edited', async () => {
+    database({ assignments: [root], globalRoles: [root.role] })
+    const res = await GET(makeRequest())
+    expect(res.status).toBe(200)
+    expect((await res.json()).data).toMatchObject({
+      can_appoint_system_super_admin: true,
+      roles: [{ code: 'SUPER_ADMIN', permissions_edit_block_reason: expect.stringContaining('系统固定') }],
+    })
   })
 
   it('组织设置读取失败时返回 500，不返回全局模板权限', async () => {

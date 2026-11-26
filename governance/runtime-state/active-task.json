@@ -241,7 +241,7 @@
     "kind": "product",
     "status": "active",
     "feature_id": "F003",
-    "objective": "按系统菜单、功能区、动作交付可验收权限表。业务参数由持对应查看、修改或发布权限的人操作；只有系统超管能发放、修改或撤销授权。首批验证自助收寄的表单规则与部门提报授权分开保存，以及角色授权、角色分配和部门负责人授权的服务端校验。其他模块只核对目录归属。",
+    "objective": "按系统菜单、功能区、动作交付可验收权限表。业务参数由持对应查看、修改或发布权限的人操作；只有系统超管能发放、修改或撤销授权。先验证自助收寄业务配置与授权的写入边界，再让现有系统超管角色支持任免并保护最后一名有效超管。历史组织治理授权仅可撤销。其他模块只核对目录归属。",
     "activation_basis": "IN-20261126-001 用户确认权限层级并要求开始工作。IN-20261126-002 明确业务参数与权限分配的边界。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp82-permissions-current/Price-v3",
     "allowed_paths": [
@@ -278,6 +278,7 @@
       "product-truth/product-code/lib/module-access.test.ts",
       "product-truth/product-code/lib/permissions.ts",
       "product-truth/product-code/lib/scoped-access.ts",
+      "product-truth/product-code/lib/scoped-access.test.ts",
       "product-truth/product-code/middleware.ts",
       "product-truth/product-code/middleware.test.ts",
       "product-truth/product-code/supabase/migrations",

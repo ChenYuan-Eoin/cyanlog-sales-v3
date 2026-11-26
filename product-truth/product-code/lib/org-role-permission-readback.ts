@@ -21,7 +21,7 @@ export type OrgRolePermissionSnapshot = {
   roles: ConfigRoleRecord[]
   permissionsEditable: boolean
   modulePermissionCatalog: RoleModulePermissionCatalog
-  canAssignOrgSuperAdmin: boolean
+  canAppointSystemSuperAdmin: boolean
   permissionsEditBlockReason: string | null
 }
 
@@ -105,7 +105,7 @@ export async function loadOrgRolePermissionSnapshot(
     roles: roles.filter((role): role is ConfigRoleRecord => role !== null),
     permissionsEditable: data.permissions_editable,
     modulePermissionCatalog: parseModuleCatalog(data.permission_catalog),
-    canAssignOrgSuperAdmin: data.can_assign_org_super_admin === true,
+    canAppointSystemSuperAdmin: data.can_appoint_system_super_admin === true,
     permissionsEditBlockReason: typeof data.permissions_edit_block_reason === 'string' ? data.permissions_edit_block_reason : null,
   }
 }

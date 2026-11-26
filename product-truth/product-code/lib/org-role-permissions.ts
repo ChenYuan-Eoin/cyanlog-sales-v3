@@ -8,7 +8,7 @@ import {
   ORG_DEPARTMENT_DIRECTORY_VIEW, ORG_DEPARTMENT_STRUCTURE_DELETE, ORG_DEPARTMENT_STRUCTURE_EDIT,
   ROLE_DIRECTORY_VIEW,
 } from '@/lib/permissions'
-import { PERMISSION_KEYS, SUPER_ADMIN_CORE_PERMISSIONS, resolveRolePermissions } from '@/lib/role-permission-policy'
+import { PERMISSION_KEYS, resolveRolePermissions } from '@/lib/role-permission-policy'
 import { isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions } from '@/lib/role-permission-resolution'
 import type { ScopedRoleAssignment } from '@/lib/scoped-access'
 import { ORG_MEMBER_LIFECYCLE_ACTIONS } from '@/lib/admin/member-action-keys'
@@ -38,7 +38,6 @@ type RolePermissionContext = {
   canListAssignableRoles?: boolean
   canEdit: boolean
   canEditPlatformRoot: boolean
-  canAppointOrganizationSuperAdmin?: boolean
   actorPermissions: string[]
 }
 
@@ -110,7 +109,6 @@ export async function loadOrgRolePermissionContext(userId: string): Promise<Role
     orgId,
     settings,
     canEdit,
-    canAppointOrganizationSuperAdmin: canEdit,
     canEditPlatformRoot: canEdit,
     actorPermissions: permissions,
     canRead: canReadRoleDirectory(permissions, legacyRoleCodes),
@@ -118,17 +116,17 @@ export async function loadOrgRolePermissionContext(userId: string): Promise<Role
   }
 }
 
-export function rolePermissionsEditBlockReason(roleCode: string, canEditPlatformRoot = true): string | null {
+export function rolePermissionsEditBlockReason(roleCode: string): string | null {
   if (roleCode === 'FXIAOKE_BASELINE') return '纷享基础角色由系统管理，权限固定为只读。'
-  if (roleCode === ORG_SUPER_ADMIN_ROLE_CODE) return '组织超级管理员的治理权限由系统固定。'
-  if (roleCode === 'SUPER_ADMIN' && !canEditPlatformRoot) return '仅平台超级管理员可修改此角色的权限。'
+  if (roleCode === ORG_SUPER_ADMIN_ROLE_CODE) return '历史组织治理授权仅可撤销。'
+  if (roleCode === 'SUPER_ADMIN') return '系统超管的权限由系统固定，可在员工分配中任免成员。'
   return null
 }
 
 type PermissionRole = { id: string; code: string; permissions: unknown; [key: string]: unknown }
 type SaveResult =
   | { ok: true; role: PermissionRole }
-  | { ok: false; reason: 'not_found' | 'invalid' | 'core_required' | 'conflict' | 'escalation_forbidden' }
+  | { ok: false; reason: 'not_found' | 'invalid' | 'conflict' | 'escalation_forbidden' }
   | { ok: false; reason: 'fixed_role'; message: string }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -160,7 +158,7 @@ export async function saveOrgRolePermissions(
     .select('id, code, name, description, permissions, sort_order').eq('id', roleId).maybeSingle()
   if (error) throw error
   if (!role) return { ok: false, reason: 'not_found' }
-  const fixedRoleReason = rolePermissionsEditBlockReason(role.code, authorizedSnapshot?.canEditPlatformRoot)
+  const fixedRoleReason = rolePermissionsEditBlockReason(role.code)
   const settings = authorizedSnapshot ? authorizedSnapshot.settings : await loadOrgRolePermissionSettings(orgId)
   if (settings !== null && !record(settings)) throw new Error('Invalid organization settings')
   const current = resolveRolePermissions(settings, role)
@@ -220,10 +218,6 @@ export async function saveOrgRolePermissions(
   if (tenantActor && newGrants.some(key => isOrgDelegationSensitivePermission(key)
     && !hasPermission(tenantActor.actorPermissions, key))) {
     return { ok: false, reason: 'escalation_forbidden' }
-  }
-  if (role.code === 'SUPER_ADMIN'
-    && SUPER_ADMIN_CORE_PERMISSIONS.some((key) => !hasPermission(permissions, key))) {
-    return { ok: false, reason: 'core_required' }
   }
   const updateOwnerPermissions = !samePermissions(currentOwnerPermissions, ownerPermissions)
   const roleResult = { ...role, permissions, owner_shipping_permissions: ownerPermissions }

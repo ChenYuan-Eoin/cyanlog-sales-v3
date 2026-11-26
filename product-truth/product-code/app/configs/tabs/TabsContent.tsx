@@ -104,7 +104,7 @@ export interface TabsContentProps {
   permissionsEditable?: boolean
   modulePermissionCatalog?: RoleModulePermissionCatalog
   permissionsEditBlockReason?: string | null
-  orgSuperAdminAuthority?: { orgId: string }
+  systemSuperAdminAuthority?: { orgId: string }
   onSaveRole: (roleId: string, newPerms: string[], ownerShippingPermissions?: string[]) => void
 }
 
@@ -141,7 +141,7 @@ export default function TabsContent({
   permissionsEditable,
   modulePermissionCatalog,
   permissionsEditBlockReason,
-  orgSuperAdminAuthority,
+  systemSuperAdminAuthority,
   onSaveRole,
 }: TabsContentProps) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -324,7 +324,7 @@ export default function TabsContent({
           permissionsEditable={permissionsEditable}
           modulePermissionCatalog={modulePermissionCatalog}
           permissionsEditBlockReason={permissionsEditBlockReason}
-          orgSuperAdminAuthority={orgSuperAdminAuthority}
+          systemSuperAdminAuthority={systemSuperAdminAuthority}
           orgSummary={orgSummary}
           onSaveRole={onSaveRole}
           onRefresh={onRefreshOrg}

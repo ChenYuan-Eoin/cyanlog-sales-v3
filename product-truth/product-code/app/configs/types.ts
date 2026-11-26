@@ -653,7 +653,7 @@ export interface OrgSummaryPayload {
     pendingAvailable: boolean
     activeSpaceIds: string[]
     activeMemberIds?: string[]
-    orgSuperAdminAssignableMemberIds?: string[]
+    systemSuperAdminAssignableMemberIds?: string[]
   }
 }
 

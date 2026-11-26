@@ -13,10 +13,11 @@ const defaults = { roles, currentUserId: 'actor', savingRoleId: null, orgSummary
 
 describe('RoleAccessTab capability propagation', () => {
   it('forwards server editing capability and revokes editing when it changes', () => {
-    const { rerender } = render(<RoleAccessTab {...defaults} permissionsEditable />)
+    const props = { ...defaults, roles: [{ ...roles[0], id: 'business', code: 'ADMIN', name: '管理员' }] }
+    const { rerender } = render(<RoleAccessTab {...props} permissionsEditable />)
     fireEvent.click(screen.getByRole('tab', { name: '权限设置' }))
     expect(screen.getByRole('checkbox', { name: /配置发布/ })).toBeEnabled()
-    rerender(<RoleAccessTab {...defaults} permissionsEditable={false} permissionsEditBlockReason="当前账号只可查看角色。" />)
+    rerender(<RoleAccessTab {...props} permissionsEditable={false} permissionsEditBlockReason="当前账号只可查看角色。" />)
     expect(screen.getByRole('checkbox', { name: /配置发布/ })).toBeDisabled()
     expect(screen.getByText('当前账号只可查看角色。')).toBeInTheDocument()
   })
@@ -87,28 +88,33 @@ it('shows unavailable counts rather than zero while organization data is missing
   expect(screen.getByText('SUPER_ADMIN · 已生效 待核对 · 待生效 待核对 · 生效作用域绑定 待核对')).toBeInTheDocument()
 })
 
-it('allows organization administrator member editing only with matching authority and a verified roster', () => {
-  const orgAdmin = {
+it('only lets verified system super administrators appoint the canonical role', () => {
+  const legacyRole = {
     id: 'org-super', code: 'ORG_SUPER_ADMIN', name: '组织超级管理员',
     description: null, permissions: ['role:manage'], sort_order: 2,
   }
   const orgSummary: OrgSummaryPayload = {
-    organization: { id: 'org-1', name: '当前组织' }, roles: [orgAdmin], users: [], departments: [], spaces: [],
+    organization: { id: 'org-1', name: '当前组织' }, roles: [...roles, legacyRole], users: [], departments: [], spaces: [],
     role_membership_stats: {
-      effectiveAvailable: true, pendingAvailable: true, activeSpaceIds: [], orgSuperAdminAssignableMemberIds: [],
+      effectiveAvailable: true, pendingAvailable: true, activeSpaceIds: [], systemSuperAdminAssignableMemberIds: [],
     },
   }
-  const props = { ...defaults, roles: [orgAdmin], orgSummary, permissionsEditable: true }
+  const props = { ...defaults, roles: [...roles, legacyRole], orgSummary, permissionsEditable: true }
   const { rerender } = render(<RoleAccessTab {...props} />)
   expect(screen.queryByRole('button', { name: '添加成员' })).not.toBeInTheDocument()
 
-  rerender(<RoleAccessTab {...props} orgSuperAdminAuthority={{ orgId: 'other-org' }} />)
+  rerender(<RoleAccessTab {...props} systemSuperAdminAuthority={{ orgId: 'other-org' }} />)
   expect(screen.queryByRole('button', { name: '添加成员' })).not.toBeInTheDocument()
 
-  rerender(<RoleAccessTab {...props} orgSuperAdminAuthority={{ orgId: 'org-1' }} />)
+  rerender(<RoleAccessTab {...props} systemSuperAdminAuthority={{ orgId: 'org-1' }} />)
   expect(screen.getByRole('button', { name: '添加成员' })).toBeEnabled()
+  fireEvent.click(screen.getByRole('button', { name: /组织超级管理员 ORG_SUPER_ADMIN/ }))
+  expect(screen.getByText('历史角色')).toBeInTheDocument()
+  expect(screen.getByText('旧授权仅可撤销')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '添加成员' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /^超级管理员 SUPER_ADMIN/ }))
 
-  rerender(<RoleAccessTab {...props} orgSuperAdminAuthority={{ orgId: 'org-1' }}
+  rerender(<RoleAccessTab {...props} systemSuperAdminAuthority={{ orgId: 'org-1' }}
     orgSummary={{ ...orgSummary, role_membership_stats: undefined }} />)
   expect(screen.getByText('当前组织的在职成员暂无法核对，请刷新后重试。')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '添加成员' })).not.toBeInTheDocument()
