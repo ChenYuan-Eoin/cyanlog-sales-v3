@@ -44,8 +44,9 @@ describe('organization role permission policy', () => {
     const admin = { id: 'admin', code: 'ADMIN', permissions: ['quote:view'] }
     const defaults = resolveRolePermissions(null, admin)
     expect(defaults.permissions).toEqual(expect.arrayContaining([
-      'quote:view', 'admin:access', 'user:write', 'dept:write', 'contract:write', 'shipping:manage_connections',
+      'quote:view', 'admin:access', 'user:write', 'dept:write', 'contract:write',
     ]))
+    expect(defaults.permissions).not.toContain('shipping:manage_connections')
     expect(resolveRolePermissions({ role_permission_overrides: { admin: ['quote:view'] } }, admin))
       .toEqual({ permissions: ['quote:view'], overridden: true })
     expect(resolveRolePermissions({}, { ...role, permissions: [] }).permissions).toEqual(['*'])
