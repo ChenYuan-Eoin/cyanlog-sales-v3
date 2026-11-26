@@ -57,6 +57,7 @@ import {
   partitionRoleMutationTargets,
 } from './role-assignment-policy'
 import { PermissionSettingTable } from './PermissionSettingTable'
+import { EmployeePermissionOverrides, isEmployeePermissionTarget } from './EmployeePermissionOverrides'
 import { getRoleMembershipStats, type RoleMember, type RoleMembershipStats } from './role-membership-stats'
 
 // ============ Props 类型 ============
@@ -305,6 +306,7 @@ export function RoleDetailPanel({
           <MemberAssignmentTab
             key={role.id}
             systemSuperAdminAuthority={protectedRole ? systemSuperAdminAuthority : undefined}
+            employeePermissionsOrgId={currentUserId ? systemSuperAdminAuthority?.orgId : undefined}
             roleCode={role.code}
             roleId={role.id}
             roleName={role.name}
@@ -348,6 +350,7 @@ export function RoleDetailPanel({
 
 interface MemberAssignmentTabProps {
   systemSuperAdminAuthority?: SystemSuperAdminAuthority
+  employeePermissionsOrgId?: string
   roleCode: string
   roleId: string
   roleName: string
@@ -391,6 +394,7 @@ async function readSystemSuperAdminResult(response: Response, orgId: string): Pr
 
 function MemberAssignmentTab({
   systemSuperAdminAuthority,
+  employeePermissionsOrgId,
   roleCode,
   roleId,
   roleName,
@@ -405,6 +409,7 @@ function MemberAssignmentTab({
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogSearch, setDialogSearch] = useState('')
   const [selection, setSelection] = useState<OrgSummaryUser | null>(null)
+  const [employeePermissions, setEmployeePermissions] = useState<OrgSummaryUser | null>(null)
   const [orgAssignmentFeedback, setOrgAssignmentFeedback] = useState<{ status: 'error' | 'success'; message: string } | null>(null)
   const orgAssignmentInFlight = useRef(false)
   const isLegacySuperAdmin = roleCode === ORG_SUPER_ADMIN_ROLE_CODE
@@ -450,6 +455,15 @@ function MemberAssignmentTab({
       )))
     }
     return editableOrgRoleIds(member.user).includes(roleId)
+  }
+
+  function renderMemberName(user: OrgSummaryUser) {
+    return employeePermissionsOrgId && isEmployeePermissionTarget(user) ? (
+      <button type="button" className="max-w-full break-words text-left font-medium text-blue-700 hover:underline"
+        aria-label={'员工权限设置 ' + user.display_name} onClick={() => setEmployeePermissions(user)}>
+        {user.display_name}
+      </button>
+    ) : <div className="font-medium text-slate-900">{user.display_name}</div>
   }
 
   // 弹窗内搜索
@@ -668,6 +682,15 @@ function MemberAssignmentTab({
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
+      {employeePermissionsOrgId && employeePermissions && (
+        <EmployeePermissionOverrides
+          key={JSON.stringify([employeePermissionsOrgId, currentUserId, employeePermissions.id])}
+          orgId={employeePermissionsOrgId}
+          userId={employeePermissions.id}
+          userName={employeePermissions.display_name}
+          onClose={() => setEmployeePermissions(null)}
+        />
+      )}
       {/* 已分配成员列表 */}
       <div>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -720,7 +743,7 @@ function MemberAssignmentTab({
                       {user.display_name?.charAt(0) || '?'}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium leading-5 text-slate-900">{user.display_name}</div>
+                      {renderMemberName(user)}
                       <MemberRoleStatus member={member} roleId={roleId} />
                       <div className="break-all text-xs leading-5 text-slate-500">{user.email}</div>
                       <div className="mt-2 flex flex-wrap gap-2">
@@ -787,7 +810,7 @@ function MemberAssignmentTab({
                             {user.display_name?.charAt(0) || '?'}
                           </div>
                           <div className="min-w-0">
-                            <div className="font-medium text-slate-900">{user.display_name}</div>
+                            {renderMemberName(user)}
                             <MemberRoleStatus member={member} roleId={roleId} />
                             <div className="max-w-[260px] break-all text-xs text-slate-500">{user.email}</div>
                           </div>

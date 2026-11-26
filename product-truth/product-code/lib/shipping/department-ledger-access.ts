@@ -63,6 +63,12 @@ async function activeTree(rest: MiddlewareRestClient, orgId: string) {
     .map(row => ({ id: row.id, name: row.name, parentId: row.parent_id }))
 }
 
+export async function loadAuthorizedLedgerDepartments(rest: MiddlewareRestClient, orgId: string, departmentIds?: string[]) {
+  if (departmentIds?.length === 0) return []
+  const options = await activeTree(rest, orgId)
+  return departmentIds ? filterLedgerDepartments(options, new Set(departmentIds)) : options
+}
+
 export async function loadDepartmentLedgerScope(
   rest: MiddlewareRestClient, orgId: string, userId: string, settings: unknown, organizationWide = false,
 ): Promise<LedgerDepartment[]> {
@@ -100,6 +106,10 @@ export async function loadDepartmentLedgerScope(
   const options = await activeTree(rest, orgId)
   const allowed = new Set(roots.filter(root => !root.descendants).map(root => root.id))
   for (const id of descendants(options, roots.filter(root => root.descendants).map(root => root.id))) allowed.add(id)
+  return filterLedgerDepartments(options, allowed)
+}
+
+function filterLedgerDepartments(options: readonly LedgerDepartment[], allowed: ReadonlySet<string>): LedgerDepartment[] {
   const activeById = new Map(options.map(option => [option.id, option]))
   return options.filter(option => allowed.has(option.id)).map(option => {
     // Keep ancestry between visible options even when intermediate departments are hidden.

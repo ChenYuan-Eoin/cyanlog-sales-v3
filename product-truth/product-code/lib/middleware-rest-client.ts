@@ -69,3 +69,22 @@ export function createMiddlewareRestClient(): MiddlewareRestClient {
     },
   }
 }
+
+export async function readMiddlewareRpcRows<T>(rpc: string, args: Record<string, string>): Promise<T[]> {
+  const { endpoint, serviceRoleKey } = readConfig()
+  const response = await fetch(`${endpoint}/rpc/${encodeURIComponent(rpc)}`, {
+    method: 'POST',
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(args),
+    cache: 'no-store',
+  })
+  if (!response.ok) throw new Error(`auth middleware query failed: ${rpc} returned ${response.status}`)
+  const rows = await response.json().catch(() => null)
+  if (!Array.isArray(rows)) throw new Error(`auth middleware query failed: ${rpc} returned invalid JSON`)
+  return rows as T[]
+}

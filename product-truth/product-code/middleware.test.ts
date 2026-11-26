@@ -39,6 +39,42 @@ afterEach(() => {
   }
 })
 
+describe('employee shipping permissions', () => {
+  const options = {
+    token: 'employee-scope', orgId: 'org-a',
+    settings: { employee_permission_overrides_enabled: true },
+    shippingActions: {
+      'shipping:ledger_view': { status: 'published', dependencies: [], supported_scope_types: ['org', 'department'] },
+    },
+  }
+  const request = (path: string, method = 'GET') => middleware(makeRequest(
+    `https://sales.cyanlog.icu${path}`, { authorization: 'Bearer employee-scope' }, method,
+  ))
+  const scopes = (wide: boolean, departments: string[] = []) => [
+    { permission_code: 'shipping:ledger_view', base_organization_wide: true, base_department_ids: [],
+      organization_wide: wide, department_ids: departments },
+    { permission_code: 'shipping:record_return', base_organization_wide: false, base_department_ids: [],
+      organization_wide: false, department_ids: [] },
+  ]
+
+  it('prevents legacy organization-wide shipping grants from bypassing a narrowed or disabled view', async () => {
+    const roles = [{ roles: { id: 'operator-role', code: 'SHIPPING_OPERATOR', permissions: ['shipping:*'] } }]
+    mockExactOrgAuth({ ...options, roles, employeeShippingScopes: scopes(false, ['east']) })
+    expect((await request('/api/shipping/ledger')).status).toBe(200)
+    expect((await request('/api/shipping/ledger', 'POST')).status).toBe(403)
+    mockExactOrgAuth({ ...options, roles, employeeShippingScopes: scopes(false) })
+    expect((await request('/api/shipping/ledger')).status).toBe(403)
+  })
+
+  it('admits an explicitly authorized employee with no role and restricts navigation to authorized modules', async () => {
+    mockExactOrgAuth({ ...options, roles: [], employeeShippingScopes: scopes(true) })
+    expect((await request('/api/shipping/ledger')).status).toBe(200)
+    const navigation = await request('/api/navigation')
+    expect(navigation.headers.get('x-middleware-request-x-user-navigation-scope')).toBe('shipping-only')
+    expect((await request('/api/quotes')).status).toBe(403)
+  })
+})
+
 type TestDepartment = { id: string; org_id: string; status: string; leader_id?: string; name?: string; parent_id?: string | null }
 type TestDepartmentAccess = { org_id: string; user_id: string; department_id: string; department: TestDepartment }
 
@@ -65,10 +101,17 @@ function mockExactOrgAuth(options: {
   organizationStatus?: string
   sessionCreatedAt?: string
   sessionExpiresAt?: string
+  employeeOverrides?: unknown[]
+  employeeShippingScopes?: unknown[]
 }) {
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input))
     const table = url.pathname.split('/').pop()
+    if (table === 'employee_permission_overrides_v1' || table === 'shipping_employee_permission_scopes_v1') {
+      expect(init?.method).toBe('POST')
+      expect(JSON.parse(String(init?.body))).toEqual({ p_org_id: options.orgId, p_user_id: 'user-1' })
+      return Response.json((table === 'employee_permission_overrides_v1' ? options.employeeOverrides : options.employeeShippingScopes) ?? [])
+    }
     if (table === 'auth_tokens') {
       expect(url.searchParams.get('user.memberships.status')).toBe('eq.active')
       expect(url.searchParams.get('user.memberships.is_default')).toBe('eq.true')

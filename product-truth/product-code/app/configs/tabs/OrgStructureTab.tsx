@@ -28,6 +28,7 @@ import { success, error, confirmAction } from '@/lib/toast'
 import { buildDepartmentOptions, resolveDepartmentSpaceIds } from '@/lib/department-spaces'
 import { ShippingDepartmentAuthorization } from '@/app/shipping/intake-configuration'
 import { DepartmentPermissions } from './DepartmentPermissions'
+import { EmployeePermissionOverrides, isEmployeePermissionTarget } from './EmployeePermissionOverrides'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
@@ -483,11 +484,12 @@ interface MemberTableProps {
   actions: MemberActionAvailability
   onEditUser: (user: OrgSummaryUser) => void
   onAssignRole: (user: OrgSummaryUser) => void
+  onOpenEmployeePermissions?: (user: OrgSummaryUser) => void
   onBindIdentity: (user: OrgSummaryUser) => void
   onRefresh?: () => void | Promise<void>
 }
 
-function MemberTable({ users, currentUserId, actions, onEditUser, onAssignRole, onBindIdentity, onRefresh }: MemberTableProps) {
+function MemberTable({ users, currentUserId, actions, onEditUser, onAssignRole, onOpenEmployeePermissions, onBindIdentity, onRefresh }: MemberTableProps) {
   const [globalFilter, setGlobalFilter] = useState('')
 
   // 使用 Fuse.js 进行模糊搜索
@@ -633,6 +635,13 @@ function MemberTable({ users, currentUserId, actions, onEditUser, onAssignRole, 
                   )}
                 </span>
               </DropdownMenuItem>
+
+              {onOpenEmployeePermissions && !directoryUnavailable && isEmployeePermissionTarget(user) && (
+                <DropdownMenuItem onSelect={() => onOpenEmployeePermissions(user)}>
+                  <ShieldIcon className="mr-2 h-4 w-4" />
+                  员工权限设置
+                </DropdownMenuItem>
+              )}
 
               <DropdownMenuSeparator />
 
@@ -862,7 +871,7 @@ function MemberTable({ users, currentUserId, actions, onEditUser, onAssignRole, 
         )
       },
     },
-  ], [currentUserId, actions, onEditUser, onAssignRole, onBindIdentity, onRefresh])
+  ], [currentUserId, actions, onEditUser, onAssignRole, onOpenEmployeePermissions, onBindIdentity, onRefresh])
 
   const table = useReactTable({
     data: filteredUsers,
@@ -1038,6 +1047,7 @@ export default function OrgStructureTab({
   // 编辑用户状态
   const [editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)
   const [assigningUser, setAssigningUser] = useState<OrgSummaryUser | null>(null)
+  const [employeePermissions, setEmployeePermissions] = useState<{ orgId: string; user: OrgSummaryUser } | null>(null)
   const assigningRoleIds = useMemo(() => assigningUser ? editableOrgRoleIds(assigningUser) : [], [assigningUser])
   const [bindingUser, setBindingUser] = useState<OrgSummaryUser | null>(null)
 
@@ -1205,6 +1215,8 @@ export default function OrgStructureTab({
                   setAssigningUser(user)
                 }}
                 onBindIdentity={setBindingUser}
+                onOpenEmployeePermissions={currentUserId && orgId && actions.assignRoles
+                  ? user => setEmployeePermissions({ orgId, user }) : undefined}
                 onRefresh={onRefresh}
               />}
             </div>
@@ -1374,6 +1386,16 @@ export default function OrgStructureTab({
         onOpenChange={(open) => !open && setBindingUser(null)}
         onBound={onRefresh}
       />
+
+      {currentUserId && orgId && actions.assignRoles && employeePermissions?.orgId === orgId && (
+        <EmployeePermissionOverrides
+          key={JSON.stringify([orgId, currentUserId, employeePermissions.user.id])}
+          orgId={orgId}
+          userId={employeePermissions.user.id}
+          userName={employeePermissions.user.display_name}
+          onClose={() => setEmployeePermissions(null)}
+        />
+      )}
 
       {/* 分配角色 Dialog */}
       {assigningUser && actions.assignRoles && (

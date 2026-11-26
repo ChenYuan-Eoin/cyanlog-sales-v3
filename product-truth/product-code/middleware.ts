@@ -43,7 +43,6 @@ import {
 import { isRetiredRoleCode, isRoleAssignableInScope, resolveOwnerShippingPermissions, resolveRolePermissions, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
 import {
   getEffectiveOwnerShippingPermissions,
-  getEffectiveShippingPermissions,
   getShippingPermissionPublication,
   hasRestrictedShippingRoleSet,
   MODULE_PERMISSION_ROW_FIELDS,
@@ -57,6 +56,10 @@ import {
 } from '@/lib/module-access'
 import { sessionDeadline } from '@/lib/auth/fxiaoke-session'
 import { DEPARTMENT_LEDGER_VIEW, isDepartmentLedgerReadPath, isDepartmentLedgerReturnPath, loadDepartmentLedgerScope } from '@/lib/shipping/department-ledger-access'
+import {
+  effectiveOrganizationShippingPermissions, employeeOwnerShippingGrants, hasEmployeeShippingOverrides,
+  loadEmployeeShippingState, type EmployeeShippingState,
+} from '@/lib/shipping/employee-permission-overrides'
 
 const PUBLIC_PATHS = ['/login', '/accept-invitation']
 const RETIRED_EXACT_PATHS = new Set([
@@ -118,6 +121,8 @@ type MiddlewareAuthContext = {
   scopedModulesOnly: boolean
   departmentWorkspaceAccess: boolean
   departmentLedgerAccess: boolean
+  employeeShipping: EmployeeShippingState | null
+  personalShippingAccess: boolean
   canManageSystemAuthorizations: boolean
 }
 
@@ -173,7 +178,7 @@ const BASELINE_READ_PATHS = new Set([
 
 const departmentDetailPath = /^\/api\/admin\/departments\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const memberDetailPath = /^\/api\/admin\/users\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/([a-z-]+))?$/i
-const memberAuthorizationPaths = new Set(['roles', 'role-scopes', 'system-super-admin', 'org-super-admin', 'identity-binding'])
+const memberAuthorizationPaths = new Set(['roles', 'role-scopes', 'system-super-admin', 'org-super-admin', 'identity-binding', 'permission-overrides'])
 const memberPathPermissions: Partial<Record<string, readonly string[]>> = {
   'PATCH ': [ORG_MEMBER_EDIT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_MANAGE_EMPLOYMENT],
   'DELETE ': [ORG_MEMBER_MANAGE_EMPLOYMENT],
@@ -409,13 +414,20 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
     }
   }
 
-  const scopedModulesOnly = roleCodes.length > 0 && !hasOtherModuleGrants
+  const employeeShipping = activeMembership && !canManageSystemAuthorizations && hasEmployeeShippingOverrides(organization.settings)
+    ? await loadEmployeeShippingState(orgId, userId) : null
+  const effectiveOwnerGrants = usesFxiaoke ? employeeOwnerShippingGrants(ownerShippingPermissions, employeeShipping) : []
+  const personalShippingAccess = employeeShipping?.team[DEPARTMENT_LEDGER_VIEW].organization_wide === true
+    || (employeeShipping?.overrides.get('shipping:owner_view')?.effect === 'ALLOW'
+      && await allowsShippingOwnerPermission(effectiveOwnerGrants, 'shipping:owner_view'))
+  const scopedModulesOnly = (roleCodes.length > 0 || personalShippingAccess) && !hasOtherModuleGrants
   const departmentWorkspaceAccess = checkDepartmentWorkspace && activeMembership
     && (roleCodes.length === 0 || scopedModulesOnly)
     && await canEnterDepartmentWorkspace(rest, userId, orgId, organization.settings)
   const departmentLedgerAccess = checkDepartmentLedger && activeMembership
-    && (await readShippingPermissionPublication(new Set([DEPARTMENT_LEDGER_VIEW]))).departmentLedgerPublished
-    && (await loadDepartmentLedgerScope(rest, orgId, userId, organization.settings)).length > 0
+    && (employeeShipping ? employeeShipping.team[DEPARTMENT_LEDGER_VIEW].department_ids.length > 0
+      : (await readShippingPermissionPublication(new Set([DEPARTMENT_LEDGER_VIEW]))).departmentLedgerPublished
+        && (await loadDepartmentLedgerScope(rest, orgId, userId, organization.settings)).length > 0)
 
   return {
     userId,
@@ -425,11 +437,13 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
     authorizationRoleCodes,
     allPermissions,
     shippingPermissions: activeMembership ? allPermissions : [],
-    ownerShippingPermissions,
+    ownerShippingPermissions: effectiveOwnerGrants,
     activeMembership,
     scopedModulesOnly,
     departmentWorkspaceAccess,
     departmentLedgerAccess,
+    employeeShipping,
+    personalShippingAccess,
     canManageSystemAuthorizations,
   }
 }
@@ -448,12 +462,15 @@ async function readShippingPermissionPublication(codes: ReadonlySet<string>) {
   return getShippingPermissionPublication(rows)
 }
 
-async function allowsShippingPermission(grants: string[], required: readonly ShippingPermissionKey[]): Promise<boolean> {
+async function allowsShippingPermission(auth: MiddlewareAuthContext, required: readonly ShippingPermissionKey[]): Promise<boolean> {
+  const { shippingPermissions: grants, employeeShipping } = auth
   const relevant = new Set<string>()
   for (const key of required) {
     const legacy = legacyShippingPermission(key)
     const hasLegacy = legacy !== null && hasPermission(grants, legacy)
-    if (!hasLegacy && !hasPermission(grants, key)) continue
+    const hasPersonalOrgScope = (key === 'shipping:ledger_view' || key === 'shipping:record_return')
+      && employeeShipping?.team[key].organization_wide
+    if (!hasLegacy && !hasPermission(grants, key) && !hasPersonalOrgScope) continue
 
     relevant.add(key)
     if (hasLegacy) relevant.add(legacy)
@@ -461,7 +478,7 @@ async function allowsShippingPermission(grants: string[], required: readonly Shi
     if (dependency) relevant.add(dependency)
   }
   if (!relevant.size) return false
-  const allowed = getEffectiveShippingPermissions(grants, await readShippingPermissionPublication(relevant))
+  const allowed = effectiveOrganizationShippingPermissions(grants, await readShippingPermissionPublication(relevant), employeeShipping)
   return required.some(key => allowed.includes(key))
 }
 
@@ -530,7 +547,8 @@ export async function middleware(request: NextRequest) {
       && authContext.departmentLedgerAccess && !authContext.departmentWorkspaceAccess) {
       return NextResponse.redirect(buildRedirectUrl(request, '/shipping'))
     }
-    if (authContext.roleCodes.length === 0 && !authContext.departmentWorkspaceAccess && !authContext.departmentLedgerAccess) {
+    if (authContext.roleCodes.length === 0 && !authContext.personalShippingAccess
+      && !authContext.departmentWorkspaceAccess && !authContext.departmentLedgerAccess) {
       if (pathname === '/pending-access' || pathname === '/api/auth/logout') return NextResponse.next()
       if (pathname === '/api/profile' && ['GET', 'HEAD'].includes(request.method)) return NextResponse.next()
       if (pathname.startsWith('/api/')) {
@@ -542,7 +560,7 @@ export async function middleware(request: NextRequest) {
     // An operational shipping role adds only the matching shipping actions.
     const restrictedMember = (authContext.authMethod === 'fxiaoke' || authContext.roleCodes.includes(SHIPPING_OPERATOR_ROLE_CODE))
       && hasRestrictedShippingRoleSet(authContext.roleCodes)
-    const shippingOnly = authContext.roleCodes.length > 0
+    const shippingOnly = (authContext.roleCodes.length > 0 || authContext.personalShippingAccess)
       && authContext.allPermissions.every(permission => permission.startsWith('shipping:'))
     const { scopedModulesOnly } = authContext
     const ownerPermission = shippingOwnerPermissionRequirement(pathname, request.method)
@@ -550,7 +568,7 @@ export async function middleware(request: NextRequest) {
     // The receipt handler distinguishes actor-owned orders from old anonymous bearer receipts.
     if (ownerPermission && !await allowsShippingOwnerPermission(authContext.ownerShippingPermissions, ownerPermission)
       && !(receiptLookup && authContext.activeMembership
-        && await allowsShippingPermission(authContext.shippingPermissions, ['shipping:ledger_view']))) {
+        && await allowsShippingPermission(authContext, ['shipping:ledger_view']))) {
       return NextResponse.json({ error: 'Forbidden', required: ownerPermission }, {
         status: 403, headers: { 'Cache-Control': 'private, no-store' },
       })
@@ -562,7 +580,7 @@ export async function middleware(request: NextRequest) {
       ? [...SHIPPING_SETTINGS_ACTION_KEYS.slice(1), SHIPPING_MANAGE_CONNECTIONS]
       : shippingPermission ? [shippingPermission] : []
     if (requiredShipping.length && !((ledgerPath || ledgerReturnPath) && authContext.departmentLedgerAccess)
-      && !await allowsShippingPermission(authContext.shippingPermissions, requiredShipping)) {
+      && !await allowsShippingPermission(authContext, requiredShipping)) {
       return pathname.startsWith('/api/')
         ? NextResponse.json({ error: 'Forbidden', required: requiredShipping[0] }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } })
         : NextResponse.redirect(buildRedirectUrl(request, '/', '?denied=shipping'))
@@ -573,7 +591,7 @@ export async function middleware(request: NextRequest) {
       systemAdministrator: authContext.canManageSystemAuthorizations,
     }) : null
     const shippingSettingsView = configurationTabs !== null
-      && await allowsShippingPermission(authContext.shippingPermissions, ['shipping:settings_view']).catch(error => {
+      && await allowsShippingPermission(authContext, ['shipping:settings_view']).catch(error => {
         if (hasConfigsTabAccess(configurationTabs)) return false
         throw error
       })
@@ -608,9 +626,9 @@ export async function middleware(request: NextRequest) {
       }
       if (pathname !== '/' && !shippingOnly) return NextResponse.redirect(buildRedirectUrl(request, '/'))
       const [ledger, owner, settings] = await Promise.all([
-        allowsShippingPermission(authContext.shippingPermissions, ['shipping:ledger_view']),
+        allowsShippingPermission(authContext, ['shipping:ledger_view']),
         allowsShippingOwnerPermission(authContext.ownerShippingPermissions, 'shipping:owner_view'),
-        allowsShippingPermission(authContext.shippingPermissions, ['shipping:settings_view']),
+        allowsShippingPermission(authContext, ['shipping:settings_view']),
       ])
       const configAccess = hasConfigsTabAccess(getConfigsTabAccess({
         permissions: authContext.allPermissions,
@@ -662,7 +680,8 @@ export async function middleware(request: NextRequest) {
         const scope = authContext.departmentWorkspaceAccess ? 'scoped-with-workbench' : shippingOnly ? 'shipping-only' : 'scoped'
         requestHeaders.set('x-user-navigation-scope', scope)
       }
-      if (authContext.roleCodes.length === 0 && (authContext.departmentWorkspaceAccess || authContext.departmentLedgerAccess)) {
+      if (authContext.roleCodes.length === 0 && !authContext.personalShippingAccess
+        && (authContext.departmentWorkspaceAccess || authContext.departmentLedgerAccess)) {
         const scope = authContext.departmentLedgerAccess
           ? (authContext.departmentWorkspaceAccess ? 'workbench-and-ledger' : 'department-ledger')
           : 'department-workbench'

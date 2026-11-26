@@ -276,6 +276,7 @@
       "product-truth/product-code/lib/org-role-permission-readback.test.ts",
       "product-truth/product-code/lib/module-access.ts",
       "product-truth/product-code/lib/module-access.test.ts",
+      "product-truth/product-code/lib/middleware-rest-client.ts",
       "product-truth/product-code/lib/permissions.ts",
       "product-truth/product-code/lib/scoped-access.ts",
       "product-truth/product-code/lib/scoped-access.test.ts",

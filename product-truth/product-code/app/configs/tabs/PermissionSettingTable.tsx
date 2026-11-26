@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { CheckCheckIcon, ChevronDownIcon, ChevronUpIcon, EraserIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,11 +22,33 @@ const retainedLegacyGrantKeys = new Set<string>([
   ORG_BUSINESS_ROLE_ASSIGN, ORG_MEMBER_EDIT, ...ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ...ORG_MEMBER_LIFECYCLE_ACTIONS,
 ])
 
-interface PermissionSettingTableProps {
+export type EmployeeDepartmentRange = { department_id: string; include_subdepartments: boolean }
+export type EmployeePermissionScope = { type: 'self' } | { type: 'org' }
+  | { type: 'department'; departments: EmployeeDepartmentRange[] }
+export type EmployeePermissionOverride = { effect: 'DENY'; scope: null }
+  | { effect: 'ALLOW'; scope: EmployeePermissionScope } | null
+
+export type EmployeePermissionDepartment = { id: string; name: string; parent_id: string | null }
+
+export interface EmployeePermissionState {
+  key: string
+  base: boolean
+  effective: boolean
+  base_scope: EmployeePermissionScope | null
+  effective_scope: EmployeePermissionScope | null
+  override: EmployeePermissionOverride
+  sources: Array<{ kind: 'role' | 'department'; name: string }>
+  can_edit: boolean
+}
+
+interface DirectoryTableProps {
   description: string
+  groups: PermissionDirectoryGroup[]
+}
+
+interface GrantTableProps extends DirectoryTableProps {
   perms: string[]
   ownerPerms: string[]
-  groups: PermissionDirectoryGroup[]
   availableModuleKeys: ReadonlySet<string>
   shippingPublication?: { registered: ReadonlySet<string>; published: ReadonlySet<string> }
   entryStates?: Partial<Record<ShippingDirectoryEntry, { checked: boolean; canClear: boolean }> & { config: boolean }>
@@ -39,10 +61,157 @@ interface PermissionSettingTableProps {
   onClearEntry?: (entry: ShippingDirectoryEntry) => void
 }
 
-export function PermissionSettingTable({
-  description, perms, ownerPerms, groups, availableModuleKeys, shippingPublication,
-  entryStates, isSuperAdmin, readOnly, ownerReadOnly, blockReason, onToggle, onSetGroup, onClearEntry,
-}: PermissionSettingTableProps) {
+interface EmployeeTableProps extends DirectoryTableProps {
+  employee: {
+    permissions: ReadonlyMap<string, EmployeePermissionState>
+    departments: EmployeePermissionDepartment[]
+    published: ReadonlySet<string>
+    disabled: boolean
+    onChange: (state: EmployeePermissionState, override: EmployeePermissionOverride) => void
+  }
+}
+
+function departmentName(departments: EmployeePermissionDepartment[], id: string) {
+  const department = departments.find(item => item.id === id)
+  if (!department) return '已停用或不可见的部门'
+  const parent = departments.find(item => item.id === department.parent_id)
+  return parent ? parent.name + ' / ' + department.name : department.name
+}
+
+function scopeText(scope: EmployeePermissionScope | null, departments: EmployeePermissionDepartment[]) {
+  if (!scope) return '无'
+  if (scope.type === 'self') return '本人'
+  if (scope.type === 'org') return '全组织'
+  return scope.departments.map(department => departmentName(departments, department.department_id)
+    + (department.include_subdepartments ? '（含下级）' : '')).join('、')
+}
+
+export function sameEmployeeOverride(first: EmployeePermissionOverride, second: EmployeePermissionOverride) {
+  if (first?.effect !== second?.effect || first?.scope?.type !== second?.scope?.type) return false
+  if (first?.scope?.type !== 'department' || second?.scope?.type !== 'department') return true
+  const ranges = new Map(second.scope.departments.map(row => [row.department_id, row.include_subdepartments]))
+  return first.scope.departments.length === ranges.size
+    && first.scope.departments.every(row => ranges.get(row.department_id) === row.include_subdepartments)
+}
+
+function EmployeePermissionControls({ state, label, employee }: {
+  state: EmployeePermissionState
+  label: string
+  employee: EmployeeTableProps['employee']
+}) {
+  const [effect, setEffect] = useState(state.override?.effect ?? '')
+  const initialScope = state.override?.scope ?? state.base_scope
+  const [scopeType, setScopeType] = useState<EmployeePermissionScope['type'] | ''>(initialScope?.type ?? '')
+  const [ranges, setRanges] = useState<EmployeeDepartmentRange[]>(initialScope?.type === 'department' ? initialScope.departments : [])
+  const selfOnly = isShippingOwnerPermission(state.key)
+  const scope: EmployeePermissionScope | null = selfOnly ? { type: 'self' }
+    : scopeType === 'department' && ranges.length > 0 ? { type: 'department', departments: ranges }
+      : scopeType === 'org' ? { type: 'org' } : null
+  const next: EmployeePermissionOverride = effect === 'DENY' ? { effect, scope: null }
+    : effect === 'ALLOW' && scope ? { effect, scope } : null
+  const canSetOverride = state.can_edit && employee.published.has(state.key)
+  const valid = effect === '' ? state.can_edit
+    : canSetOverride && (effect === 'DENY' || scope !== null)
+  const selectClass = 'rounded-md border border-slate-200 bg-white px-2 py-1 text-sm disabled:opacity-60'
+
+  return (
+    <div className="space-y-1.5 text-sm">
+      <p>基础范围 {scopeText(state.base_scope, employee.departments)}</p>
+      <p>最终范围 {scopeText(state.effective_scope, employee.departments)}</p>
+      <p className="text-xs text-slate-600">基础来源 {state.sources.length > 0
+        ? state.sources.map(source => (source.kind === 'department' ? '部门 ' : '角色 ') + source.name).join('、')
+        : '无'}</p>
+      {!state.can_edit ? (
+        <p className="text-xs text-slate-600">
+          个人设置 {state.override?.effect === 'ALLOW' ? '开启' : state.override?.effect === 'DENY' ? '关闭' : '沿用'}（只读）
+        </p>
+      ) : (
+        <fieldset disabled={employee.disabled} className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="inline-flex flex-wrap items-center gap-2">
+              个人设置
+              <select
+                aria-label={label + ' 个人设置'}
+                className={selectClass}
+                value={effect}
+                onChange={event => setEffect(event.currentTarget.value as 'ALLOW' | 'DENY' | '')}
+              >
+                <option value="">沿用</option>
+                <option value="ALLOW" disabled={!canSetOverride}>开启</option>
+                <option value="DENY" disabled={!canSetOverride}>关闭</option>
+              </select>
+            </label>
+            {effect === 'ALLOW' && (
+              selfOnly ? <span>数据范围 本人</span> : (
+                <label className="inline-flex flex-wrap items-center gap-2">
+                  数据范围
+                  <select aria-label={label + ' 数据范围'} className={selectClass} value={scopeType}
+                    onChange={event => setScopeType(event.currentTarget.value as 'org' | 'department' | '')}>
+                    <option value="">请选择</option>
+                    <option value="org">全组织</option>
+                    <option value="department">指定部门</option>
+                  </select>
+                </label>
+              )
+            )}
+            <Button type="button" size="sm" variant="outline" disabled={!valid || sameEmployeeOverride(next, state.override)}
+              onClick={() => employee.onChange(state, next)}>
+              保存{label}
+            </Button>
+          </div>
+          {effect === 'ALLOW' && !selfOnly && scopeType === 'department' && (
+            <div className="space-y-1.5">
+              {ranges.map(range => {
+                const name = departmentName(employee.departments, range.department_id)
+                return (
+                  <div key={range.department_id} className="flex flex-wrap items-center gap-2">
+                    <span>{name}</span>
+                    <label className="inline-flex items-center gap-1">
+                      <input type="checkbox" aria-label={label + ' ' + name + ' 含下级'} checked={range.include_subdepartments}
+                        onChange={event => {
+                          const include_subdepartments = event.currentTarget.checked
+                          setRanges(previous => previous.map(row => row.department_id === range.department_id
+                            ? { ...row, include_subdepartments } : row))
+                        }} />
+                      含下级
+                    </label>
+                    <Button type="button" size="sm" variant="ghost" aria-label={'移除数据部门 ' + name}
+                      onClick={() => setRanges(previous => previous.filter(row => row.department_id !== range.department_id))}>
+                      移除
+                    </Button>
+                  </div>
+                )
+              })}
+              <label className="inline-flex flex-wrap items-center gap-2">
+                加入数据部门
+                <select aria-label={label + ' 加入数据部门'} className={selectClass} value=""
+                  onChange={event => {
+                    const department_id = event.currentTarget.value
+                    if (department_id) setRanges(previous => [...previous, { department_id, include_subdepartments: false }])
+                  }}>
+                  <option value="">请选择</option>
+                  {employee.departments.filter(department => !ranges.some(range => range.department_id === department.id))
+                    .map(department => <option key={department.id} value={department.id}>{departmentName(employee.departments, department.id)}</option>)}
+                </select>
+              </label>
+            </div>
+          )}
+        </fieldset>
+      )}
+    </div>
+  )
+}
+
+export function PermissionSettingTable(props: GrantTableProps | EmployeeTableProps) {
+  const { description, groups } = props
+  const employee = 'employee' in props ? props.employee : undefined
+  const grant = 'perms' in props ? props : undefined
+  const {
+    perms = [], ownerPerms = [], availableModuleKeys = new Set<string>(), shippingPublication,
+    entryStates, isSuperAdmin = false, readOnly = true, ownerReadOnly = true, blockReason,
+    onToggle, onSetGroup, onClearEntry,
+  } = grant ?? {}
+  const tableId = useId()
   const actions = groups.flatMap(getDirectoryActions)
   const availableKeys = new Set(actions.filter(item => item.available).map(item => item.key))
   const publication = shippingPublication ?? {
@@ -57,6 +226,7 @@ export function PermissionSettingTable({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
   function isEffective(key: string): boolean {
+    if (employee) return employee.permissions.get(key)?.effective === true
     if (isShippingOwnerPermission(key)) return effectiveOwnerKeys.has(key)
     if (isSuperAdmin && isOrganizationSourcePermissionKey(key)) return true
     if (key === SHIPPING_RECORD_RETURN) return isSuperAdmin ? effectiveShippingKeys.has(key) : perms.includes(key) && effectiveShippingKeys.has(key)
@@ -117,8 +287,9 @@ export function PermissionSettingTable({
     const items = group.actions ?? []
     const groupReadOnly = items.length > 0 && items.every(item => isShippingOwnerPermission(item.key)) ? ownerReadOnly : readOnly
     const directKeys = items.filter(item => item.available).map(item => item.key)
-    const expandedKeys = getDirectoryActions(group)
-      .filter(item => item.available || effectiveShippingKeys.has(item.key)).map(item => item.key)
+    const expandedKeys = getDirectoryActions(group).filter(item => employee
+      ? employee.permissions.has(item.key)
+      : item.available || effectiveShippingKeys.has(item.key)).map(item => item.key)
     const effectiveCount = expandedKeys.filter(isEffective).length
     const allEffective = expandedKeys.length > 0 && effectiveCount === expandedKeys.length
     const grantableKeys = directKeys.filter(key => !hasRetainedLegacyGrant(key) && (legacyShippingPermission(key)
@@ -139,7 +310,7 @@ export function PermissionSettingTable({
             onClick={() => toggleGroup(group.id)}
             className="flex min-w-0 flex-1 items-center gap-3 text-left"
             aria-expanded={isExpanded}
-            aria-controls={`permission-directory-${group.id}`}
+            aria-controls={`${tableId}-permission-directory-${group.id}`}
           >
             {isExpanded
               ? <ChevronDownIcon aria-hidden="true" size={16} className="text-slate-500" />
@@ -149,7 +320,7 @@ export function PermissionSettingTable({
           {renderEntry(group)}
           {expandedKeys.length > 0 && (
             <Badge variant={allEffective ? 'default' : effectiveCount > 0 ? 'secondary' : 'outline'}>
-              {allEffective ? '全部生效' : effectiveCount > 0 ? '部分生效' : '未生效'}
+              {employee ? effectiveCount + ' 项已开启' : allEffective ? '全部生效' : effectiveCount > 0 ? '部分生效' : '未生效'}
             </Badge>
           )}
           {!groupReadOnly && directKeys.length > 0 && (
@@ -158,7 +329,7 @@ export function PermissionSettingTable({
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => onSetGroup(grantableKeys, true)}
+                onClick={() => onSetGroup?.(grantableKeys, true)}
                 disabled={grantableKeys.length === 0}
                 aria-label={`选择${group.label}直接权限`}
                 title="选择本组直接权限"
@@ -169,7 +340,7 @@ export function PermissionSettingTable({
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => onSetGroup(revocableKeys, false)}
+                onClick={() => onSetGroup?.(revocableKeys, false)}
                 disabled={revocableKeys.length === 0}
                 aria-label={`清除${group.label}直接权限`}
                 title="清除本组直接权限"
@@ -179,10 +350,28 @@ export function PermissionSettingTable({
             </div>
           )}
         </div>
-        <div id={`permission-directory-${group.id}`} hidden={!isExpanded}>
+        <div id={`${tableId}-permission-directory-${group.id}`} hidden={!isExpanded}>
           {(items.length > 0 || (group.notes?.length ?? 0) > 0) && (
             <ul className="divide-y border-t px-4">
               {items.map(item => {
+                if (employee) {
+                  const state = employee.permissions.get(item.key)
+                  return (
+                    <li key={item.key} className="space-y-1 py-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium text-slate-900">{item.label}</span>
+                        {item.capabilityLevel && <Badge variant="outline">{item.capabilityLevel}</Badge>}
+                        {state ? <>
+                          <Badge variant="outline">基础{state.base ? '开启' : '关闭'}</Badge>
+                          <Badge variant={state.effective ? 'secondary' : 'outline'}>最终{state.effective ? '开启' : '关闭'}</Badge>
+                        </> : <Badge variant="outline">个人设置待接入</Badge>}
+                      </div>
+                      <div className="text-xs text-slate-500">{item.description}</div>
+                      {state && <EmployeePermissionControls key={JSON.stringify([state.override, state.base_scope])}
+                        state={state} label={item.label} employee={employee} />}
+                    </li>
+                  )
+                }
                 const ownerAction = isShippingOwnerPermission(item.key)
                 const explicit = isExplicit(item.key)
                 const effective = isEffective(item.key)
@@ -203,7 +392,7 @@ export function PermissionSettingTable({
                         aria-label={item.label}
                         checked={checked}
                         disabled={groupReadOnly || !!dependent || unavailableForRevoke || inheritedLegacy}
-                        onChange={() => onToggle(item.key)}
+                        onChange={() => onToggle?.(item.key)}
                         className="mt-1"
                       />
                     )}
@@ -273,7 +462,7 @@ export function PermissionSettingTable({
                   <Badge variant="outline">已保存</Badge>
                 </span>
                 {!readOnly && removableShippingCompatibilityKeys.includes(key) && (
-                  <Button type="button" variant="ghost" size="sm" onClick={() => onToggle(key)} aria-label={`移除${labelFor(key)}`}>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => onToggle?.(key)} aria-label={`移除${labelFor(key)}`}>
                     移除
                   </Button>
                 )}

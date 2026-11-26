@@ -17,7 +17,7 @@ export const SHIPPING_ACTION_DEFINITIONS = {
   'shipping:ledger_view': ['查看收寄台账', '查看授权范围内的寄件工单和系统已保存的物流。'],
   'shipping:record_create': ['录入寄件工单', '在工作台录入或批量提报工单。'],
   'shipping:record_review': ['核对与处理工单', '分配归属、修改或重新核对工单。'],
-  [SHIPPING_RECORD_RETURN]: ['退回工单', '退回已获授权范围内的待审核工单。仅可配置给角色。'],
+  [SHIPPING_RECORD_RETURN]: ['退回工单', '退回已获授权范围内的待审核工单。'],
   'shipping:order_confirm': ['确认并下单', '确认审核后的工单并向顺丰下单。'],
   'shipping:order_reconcile': ['查回下单结果', '从承运商核实并回写下单结果。'],
   'shipping:tracking_refresh': ['同步运单物流', '向承运商查询运单轨迹并在有依据时更新平台记录。'],

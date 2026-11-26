@@ -92,7 +92,7 @@ function parseShippingPublication(value: unknown): ShippingPermissionPublication
   return published.every(key => registered.includes(key)) ? { registered, published } : undefined
 }
 
-function parseModuleCatalog(value: unknown): RoleModulePermissionCatalog {
+export function parseModuleCatalog(value: unknown): RoleModulePermissionCatalog {
   if (!Array.isArray(value)) return []
   return value.flatMap((group) => {
     if (!isObject(group) || typeof group.id !== 'string' || typeof group.label !== 'string'

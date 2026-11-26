@@ -1,18 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveShippingEntry } from './entry-access'
+import { loadShippingLedgerAccess, resolveShippingEntry } from './entry-access'
 import { resolveOwnerShippingPermissions } from '@/lib/role-permission-resolution'
 import { SHIPPING_OWNER_ACTION_KEYS } from '@/lib/module-access'
 
 const db = vi.hoisted(() => ({
   from: vi.fn(), select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn(),
   context: vi.fn(), published: vi.fn(),
+  restRows: vi.fn(), rpcRows: vi.fn(),
 }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: db.from } }))
 vi.mock('@/lib/org-role-permissions', () => ({ loadCurrentOrganizationRoleAssignments: db.context }))
+vi.mock('@/lib/middleware-rest-client', () => ({
+  createMiddlewareRestClient: () => ({ selectRows: db.restRows }),
+  readMiddlewareRpcRows: db.rpcRows,
+}))
 vi.mock('@/lib/permission-registry', () => ({
   loadShippingModulePermissionState: async () => {
     const keys: string[] = await db.published()
-    return { registered: new Set(keys), published: new Set(keys) }
+    return { registered: new Set(keys), published: new Set(keys), departmentLedgerPublished: keys.includes('shipping:ledger_view') }
   },
 }))
 
@@ -60,6 +65,29 @@ describe('shipping entry authorization', () => {
     expect(await resolveShippingEntry(user, token)).toMatchObject({
       canViewOwn: false, canSubmitOwn: false, canReadLegacyReceipt: true,
     })
+  })
+
+  it('uses the final employee department set in place of organization-wide inherited ledger access', async () => {
+    db.context.mockResolvedValue({ ...activeOrg, settings: { employee_permission_overrides_enabled: true },
+      assignments: [assignment('OPERATIONS', ['shipping:ledger_view', 'shipping:record_return'])] })
+    db.published.mockResolvedValue(['shipping:ledger_view', 'shipping:record_return'])
+    const scopes = [
+      { permission_code: 'shipping:ledger_view', base_organization_wide: true, base_department_ids: [],
+        organization_wide: false, department_ids: ['south'] },
+      { permission_code: 'shipping:record_return', base_organization_wide: true, base_department_ids: [],
+        organization_wide: true, department_ids: [] },
+    ]
+    db.rpcRows.mockImplementation(async (key: string) => key === 'shipping_employee_permission_scopes_v1' ? scopes : [])
+    db.restRows.mockResolvedValue([
+      { id: 'east', name: '华东', org_id: 'org-a', status: 'active', parent_id: null },
+      { id: 'south', name: '华南', org_id: 'org-a', status: 'active', parent_id: null },
+    ])
+    expect(await loadShippingLedgerAccess(user.id, false)).toMatchObject({
+      organizationWide: false, organizationReturn: false, departments: [{ id: 'south' }],
+    })
+    expect(await resolveShippingEntry(user, token)).toMatchObject({ canOperate: false, departmentLedger: [{ id: 'south' }] })
+    scopes[0].department_ids = []
+    expect(await loadShippingLedgerAccess(user.id, false)).toBeNull()
   })
 
   it('keeps connection settings separate and recomputes the operator after grant or lifecycle changes', async () => {
