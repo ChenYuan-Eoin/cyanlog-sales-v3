@@ -58,7 +58,7 @@ describe('organization role permission storage', () => {
     const template = structuredClone(state.roles)
     const otherOrg = structuredClone(state.organizations[1])
     expect(await saveOrgRolePermissions('org-1', 'role-1', ['quote:view'], salesPermissions))
-      .toEqual({ ok: true, role: { ...template[0], permissions: ['quote:view'], owner_shipping_permissions: SHIPPING_OWNER_ACTION_KEYS } })
+      .toEqual({ ok: true, role: { ...template[0], permissions: ['quote:view'], owner_shipping_permissions: [] } })
     expect(state.organizations[0].settings).toEqual({
       locale: 'zh', role_permission_overrides: { 'role-other': ['config:read'], 'role-1': ['quote:view'] },
     })
@@ -116,7 +116,13 @@ describe('organization role permission storage', () => {
 
   it('revokes owner actions on a fixed baseline without changing its protected permissions', async () => {
     const core = ['quote:view', 'contract:view', 'customer:view']
-    const state = database({ code: 'FXIAOKE_BASELINE' })
+    const state = database({
+      code: 'FXIAOKE_BASELINE',
+      settings: {
+        locale: 'zh', role_permission_overrides: { 'role-other': ['config:read'] },
+        shipping_owner_permission_overrides: { 'role-1': SHIPPING_OWNER_ACTION_KEYS },
+      },
+    })
     const result = await saveOrgRolePermissions('org-1', 'role-1', core, core, undefined, {
       permissions: [], expected: SHIPPING_OWNER_ACTION_KEYS,
     })
@@ -137,7 +143,7 @@ describe('organization role permission storage', () => {
   it('rejects owner actions without their view or when sent as organization permissions', async () => {
     const state = database()
     expect(await saveOrgRolePermissions('org-1', 'role-1', salesPermissions, salesPermissions, undefined, {
-      permissions: ['shipping:owner_submit'], expected: SHIPPING_OWNER_ACTION_KEYS,
+      permissions: ['shipping:owner_submit'], expected: [],
     })).toEqual({ ok: false, reason: 'invalid' })
     expect(await saveOrgRolePermissions('org-1', 'role-1', [SHIPPING_OWNER_VIEW], salesPermissions))
       .toEqual({ ok: false, reason: 'invalid' })

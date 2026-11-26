@@ -18,10 +18,13 @@ vi.mock('@/lib/permission-registry', () => ({
 
 const user = { id: 'staff', email: null, phone: null, display_name: null, org_id: 'org-a' }
 const token = 'session-token'
-const assignment = (roleCode: string, permissions: string[] = []) => ({
-  roleCode, permissions, ownerShippingPermissions: resolveOwnerShippingPermissions({}, { id: 'role', code: roleCode }),
+const assignment = (roleCode: string, permissions: string[] = [], ownerGrant?: readonly string[]) => ({
+  roleCode, permissions, ownerShippingPermissions: resolveOwnerShippingPermissions(
+    ownerGrant ? { shipping_owner_permission_overrides: { role: ownerGrant } } : {},
+    { id: 'role', code: roleCode, permissions },
+  ),
 })
-const activeOrg = { orgId: 'org-a', assignments: [assignment('FXIAOKE_BASELINE')] }
+const activeOrg = { orgId: 'org-a', assignments: [assignment('FXIAOKE_BASELINE', [], SHIPPING_OWNER_ACTION_KEYS)] }
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -42,14 +45,21 @@ describe('shipping entry authorization', () => {
     expect(await resolveShippingEntry({ ...user, org_id: 'org-b' }, token)).toMatchObject({ canViewOwn: false, canSubmitOwn: false })
   })
 
-  it.each([
-    [['READONLY'], true, false],
-    [['READONLY', 'FXIAOKE_BASELINE'], true, true],
-    [['READONLY', 'SALES'], true, true],
-    [[], false, false],
-  ] as const)('derives owner read and write access from the current organization roles %j', async (roles, canViewOwn, canSubmitOwn) => {
-    db.context.mockResolvedValue({ ...activeOrg, assignments: roles.map(roleCode => assignment(roleCode)) })
-    expect(await resolveShippingEntry(user, token)).toMatchObject({ canViewOwn, canSubmitOwn })
+  it.each(['READONLY', 'FXIAOKE_BASELINE', 'SALES', 'SHIPPING_OPERATOR'])(
+    'does not grant personal shipping or old receipt reads for the ordinary role %s', async (roleCode) => {
+      db.context.mockResolvedValue({ ...activeOrg, assignments: [assignment(roleCode, ['quote:view'])] })
+      expect(await resolveShippingEntry(user, token)).toMatchObject({
+        canViewOwn: false, canSubmitOwn: false, canReadLegacyReceipt: false,
+      })
+    },
+  )
+
+  it('can read in the old bearer-receipt path with published ledger view and no personal shipping grants', async () => {
+    db.published.mockResolvedValue(['shipping:ledger_view'])
+    db.context.mockResolvedValue({ ...activeOrg, assignments: [assignment('OPERATIONS', ['shipping:ledger_view'])] })
+    expect(await resolveShippingEntry(user, token)).toMatchObject({
+      canViewOwn: false, canSubmitOwn: false, canReadLegacyReceipt: true,
+    })
   })
 
   it('keeps connection settings separate and recomputes the operator after grant or lifecycle changes', async () => {
@@ -72,7 +82,7 @@ describe('shipping entry authorization', () => {
     })
     db.context.mockResolvedValue({ ...activeOrg, assignments: [{ ...assigned, ownerShippingPermissions: [] }] })
     expect(await resolveShippingEntry(user, token)).toMatchObject({
-      canViewOwn: false, canSubmitOwn: false, ownerPermissions: [],
+      canViewOwn: false, canSubmitOwn: false, canReadLegacyReceipt: false, ownerPermissions: [],
     })
   })
 

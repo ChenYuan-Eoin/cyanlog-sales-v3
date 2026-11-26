@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { NextRequest } from 'next/server'
+import { SHIPPING_OWNER_ACTION_KEYS } from '@/lib/shipping/owner-permission-keys'
 import { middleware } from './middleware'
 
 function makeRequest(url: string, headers: Record<string, string> = {}, method = 'GET'): NextRequest {
@@ -223,8 +224,12 @@ describe('middleware host routing', () => {
 })
 
 describe('role-free federated session boundary', () => {
-  it('lets a baseline member read business pages and self-submit while denying writes and configuration', async () => {
-    mockExactOrgAuth({ token: 'baseline-token', orgId: 'org-a', authMethod: 'fxiaoke', roles: [{ roles: { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view', 'contract:view', 'customer:view'] } }] })
+  it('lets a baseline member exercise a saved personal shipping grant without gaining configuration access', async () => {
+    mockExactOrgAuth({
+      token: 'baseline-token', orgId: 'org-a', authMethod: 'fxiaoke',
+      roles: [{ roles: { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view', 'contract:view', 'customer:view'] } }],
+      settings: { shipping_owner_permission_overrides: { baseline: SHIPPING_OWNER_ACTION_KEYS } },
+    })
     const request = (path: string, method = 'GET') => {
       const req = makeRequest(`https://sales.cyanlog.icu${path}`, { host: 'sales.cyanlog.icu' }, method)
       req.cookies.get = vi.fn().mockReturnValue({ value: 'baseline-token' })
@@ -271,7 +276,9 @@ describe('role-free federated session boundary', () => {
     const baseline = { roles: { id: 'baseline', code: 'FXIAOKE_BASELINE', permissions: ['quote:view'] } }
     const operator = { roles: { id: 'operator', code: 'SHIPPING_OPERATOR', permissions: ['shipping:operate'] } }
     const bind = (overrides: Partial<Parameters<typeof mockExactOrgAuth>[0]> = {}) => mockExactOrgAuth({
-      token, orgId: 'org-a', authMethod: 'fxiaoke', roles: [baseline, operator], ...overrides,
+      token, orgId: 'org-a', authMethod: 'fxiaoke', roles: [baseline, operator],
+      settings: { shipping_owner_permission_overrides: { baseline: ['shipping:owner_view', 'shipping:owner_submit'] } },
+      ...overrides,
     })
     const request = (path: string, method = 'GET') => middleware(makeRequest(
       `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
@@ -331,10 +338,10 @@ describe('role-free federated session boundary', () => {
     }
 
     bind({ roles: [baseline], authMethod: 'fxiaoke', shippingOperatorStatus: 'disabled' })
-    expect((await post('/api/shipping/owner/orders')).status).toBe(200)
+    expect((await post('/api/shipping/owner/orders')).status).toBe(403)
 
     bind({ roles: [{ roles: { id: 'sales', code: 'SALES', permissions: ['quote:view'] } }], authMethod: 'fxiaoke', shippingOperatorStatus: 'disabled' })
-    expect((await post('/api/shipping/owner/orders')).status).toBe(200)
+    expect((await post('/api/shipping/owner/orders')).status).toBe(403)
   })
 
   it('admits the department directory only to the exact configuration and department paths', async () => {
@@ -502,17 +509,30 @@ describe('role-free federated session boundary', () => {
     expect((await request('/api/shipping/ledger/example/carrier-changes', 'POST')).status).toBe(403)
   })
 
+  it('does not give shipping settings access to the ordinary admin role without a shipping grant', async () => {
+    const token = 'business-admin-without-shipping'
+    mockExactOrgAuth({ token, orgId: 'org-a', roles: [
+      { roles: { id: 'admin', code: 'ADMIN', permissions: ['config:read'] } },
+    ] })
+    const response = await middleware(makeRequest('https://sales.cyanlog.icu/api/shipping/settings', {
+      authorization: `Bearer ${token}`,
+    }))
+    expect(response.status).toBe(403)
+  })
+
   it.each([
-    { roleCodes: ['READONLY'], ownerWriteStatus: 403 },
-    { roleCodes: ['FXIAOKE_BASELINE'], ownerWriteStatus: 200 },
-    { roleCodes: ['FXIAOKE_BASELINE', 'READONLY'], ownerWriteStatus: 200 },
-  ])('applies the exact federated owner permission to $roleCodes', async ({ roleCodes, ownerWriteStatus }) => {
+    { roleCodes: ['READONLY'], grants: null, ownerReadStatus: 403, ownerWriteStatus: 403 },
+    { roleCodes: ['FXIAOKE_BASELINE'], grants: [], ownerReadStatus: 403, ownerWriteStatus: 403 },
+    { roleCodes: ['READONLY'], grants: ['shipping:owner_view'], ownerReadStatus: 200, ownerWriteStatus: 403 },
+    { roleCodes: ['FXIAOKE_BASELINE', 'READONLY'], grants: SHIPPING_OWNER_ACTION_KEYS, ownerReadStatus: 200, ownerWriteStatus: 200 },
+  ])('applies the stored personal shipping permissions $grants', async ({ roleCodes, grants, ownerReadStatus, ownerWriteStatus }) => {
     const token = 'viewer-token'
     mockExactOrgAuth({
       token, orgId: 'org-a', authMethod: 'fxiaoke', shippingOperatorStatus: 'disabled',
       roles: roleCodes.map(code => ({ roles: {
         id: code, code, permissions: ['quote:view', 'contract:view', 'customer:view'],
       } })),
+      settings: grants ? { shipping_owner_permission_overrides: { [roleCodes[0]]: grants } } : {},
     })
     const request = (path: string, method = 'GET') => middleware(makeRequest(
       `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
@@ -523,7 +543,7 @@ describe('role-free federated session boundary', () => {
     const receipt = `/api/shipping/public/orders/${'a'.repeat(43)}`
 
     for (const path of [orders, profile, receipt]) {
-      expect((await request(path)).status, path).toBe(200)
+      expect((await request(path)).status, path).toBe(ownerReadStatus)
     }
     for (const path of [`${order}/resubmit`, `${order}/carrier-changes`]) {
       expect((await request(path)).status, path).toBe(ownerWriteStatus)
@@ -540,6 +560,20 @@ describe('role-free federated session boundary', () => {
     expect((await request('/api/contracts/example', 'PATCH')).status).toBe(403)
     expect((await request('/api/shipping/orders', 'POST')).status).toBe(403)
     expect((await request(`${order}/tracking/unrelated`, 'POST')).status).toBe(403)
+  })
+
+  it('admits a historical bearer receipt through ledger view without granting personal shipping', async () => {
+    const token = 'receipt-ledger-viewer'
+    mockExactOrgAuth({
+      token, orgId: 'org-a', authMethod: 'local',
+      roles: [{ roles: { id: 'ledger-viewer', code: 'LOGISTICS', permissions: ['shipping:ledger_view'] } }],
+      shippingActions: { 'shipping:ledger_view': { status: 'published', dependencies: [] } },
+    })
+    const request = (path: string) => middleware(makeRequest(
+      `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` },
+    ))
+    expect((await request(`/api/shipping/public/orders/${'a'.repeat(43)}`)).status).toBe(200)
+    expect((await request('/api/shipping/owner/orders')).status).toBe(403)
   })
 
   it('revokes owner submission while keeping a separately granted workbench intake for the same employee', async () => {

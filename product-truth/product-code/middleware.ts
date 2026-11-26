@@ -487,11 +487,9 @@ export async function middleware(request: NextRequest) {
     const ownerPermission = shippingOwnerPermissionRequirement(pathname, request.method)
     const receiptLookup = read && /^\/api\/shipping\/public\/orders\/[^/]+$/.test(pathname)
     // The receipt handler distinguishes actor-owned orders from old anonymous bearer receipts.
-    const legacyReceiptAdmission = receiptLookup && authContext.activeMembership && (
-      authContext.authMethod === 'fxiaoke' || await allowsShippingPermission(authContext.shippingPermissions, ['shipping:ledger_view'])
-    )
-    if (ownerPermission && !legacyReceiptAdmission
-      && !await allowsShippingOwnerPermission(authContext.ownerShippingPermissions, ownerPermission)) {
+    if (ownerPermission && !await allowsShippingOwnerPermission(authContext.ownerShippingPermissions, ownerPermission)
+      && !(receiptLookup && authContext.activeMembership
+        && await allowsShippingPermission(authContext.shippingPermissions, ['shipping:ledger_view']))) {
       return NextResponse.json({ error: 'Forbidden', required: ownerPermission }, {
         status: 403, headers: { 'Cache-Control': 'private, no-store' },
       })

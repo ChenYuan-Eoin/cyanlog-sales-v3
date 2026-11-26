@@ -39,11 +39,12 @@ async function loadShippingSession(user: AuthUser, token: string | null, current
   ])
   if (session.error) throw session.error
   if (!access || session.data?.user_id !== user.id) return null
-  const isOwnerSession = session.data.auth_method === 'fxiaoke' && user.org_id === access.orgId
+  const ownerPermissions = session.data.auth_method === 'fxiaoke' && user.org_id === access.orgId
+    ? access.ownerPermissions : []
   return {
     ...access,
-    ownerPermissions: isOwnerSession ? access.ownerPermissions : [],
-    canReadLegacyReceipt: (isOwnerSession && access.roleCodes.length > 0)
+    ownerPermissions,
+    canReadLegacyReceipt: ownerPermissions.includes('shipping:owner_view')
       || access.permissions.includes('shipping:ledger_view'),
   }
 }
