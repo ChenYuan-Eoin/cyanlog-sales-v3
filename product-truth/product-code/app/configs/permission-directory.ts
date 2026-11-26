@@ -258,14 +258,3 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
 export function getDirectoryActions(group: PermissionDirectoryGroup): PermissionDirectoryAction[] {
   return [...(group.actions ?? []), ...(group.children ?? []).flatMap(getDirectoryActions)]
 }
-
-export function buildDepartmentPermissionDirectory(available: ReadonlySet<string>): PermissionDirectoryGroup[] {
-  function departmentGroups(group: PermissionDirectoryGroup): PermissionDirectoryGroup[] {
-    const actions = (group.actions ?? []).filter(action => available.has(action.key))
-      .map(action => ({ ...action, available: true }))
-    const children = (group.children ?? []).flatMap(departmentGroups)
-    return actions.length || children.length ? [{ id: group.id, label: group.label, entry: group.entry, actions, children }] : []
-  }
-
-  return buildRolePermissionDirectory().flatMap(departmentGroups)
-}

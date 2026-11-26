@@ -144,6 +144,30 @@ it('lists a pending member and revokes only this role before first login', async
   expect(JSON.parse(send.mock.calls[0][1].body)).toEqual({ role_ids: ['another'], expected_role_ids: ['ship', 'another'] })
 })
 
+it('opens the same tenant-scoped employee permission table from a role member', async () => {
+  const shipping = { id: 'ship', code: 'SHIP', name: '寄件', description: null, permissions: [] }
+  const member = {
+    id: 'employee', display_name: '收寄成员', email: '', title: '', primary_dept_name: '华南',
+    role_names: '寄件', role_ids: [shipping.id], status: 'active', login_enabled: true,
+    membership_status: 'active' as const, employment_status: 'active' as const,
+  }
+  const path = '/api/admin/users/employee/permission-overrides?orgId=org-a'
+  const fetchEmployeePermissions = vi.fn().mockResolvedValue(Response.json({
+    org_id: 'org-a', user_id: member.id, permissions: [], departments: [],
+    shipping_permission_publication: { registered: [], published: [] },
+  }))
+  vi.stubGlobal('fetch', fetchEmployeePermissions)
+  const props = { ...defaults, role: shipping, users: [member], onSave: vi.fn() }
+  const { rerender } = render(<RoleDetailPanel {...props} />)
+  expect(screen.queryByRole('button', { name: '员工权限设置 收寄成员' })).not.toBeInTheDocument()
+  rerender(<RoleDetailPanel {...props} systemSuperAdminAuthority={{ orgId: 'org-a' }} />)
+  fireEvent.click(within(screen.getByRole('table')).getByRole('button', { name: '员工权限设置 收寄成员' }))
+  expect(await screen.findByRole('dialog', { name: '员工权限设置 · 收寄成员' })).toBeInTheDocument()
+  await waitFor(() => expect(fetchEmployeePermissions).toHaveBeenCalledExactlyOnceWith(path, expect.objectContaining({
+    cache: 'no-store',
+  })))
+})
+
 it('retains the selected member snapshot across a directory refresh and clears selection on conflict', async () => {
   const shipping = { id: 'ship', code: 'SHIP', name: '寄件', description: null, permissions: [] }
   const member = {

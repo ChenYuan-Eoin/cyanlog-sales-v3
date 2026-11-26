@@ -49,6 +49,7 @@ interface DirectoryTableProps {
 interface GrantTableProps extends DirectoryTableProps {
   perms: string[]
   ownerPerms: string[]
+  departmentView?: boolean
   availableModuleKeys: ReadonlySet<string>
   shippingPublication?: { registered: ReadonlySet<string>; published: ReadonlySet<string> }
   entryStates?: Partial<Record<ShippingDirectoryEntry, { checked: boolean; canClear: boolean }> & { config: boolean }>
@@ -208,12 +209,14 @@ export function PermissionSettingTable(props: GrantTableProps | EmployeeTablePro
   const grant = 'perms' in props ? props : undefined
   const {
     perms = [], ownerPerms = [], availableModuleKeys = new Set<string>(), shippingPublication,
+    departmentView = false,
     entryStates, isSuperAdmin = false, readOnly = true, ownerReadOnly = true, blockReason,
     onToggle, onSetGroup, onClearEntry,
   } = grant ?? {}
   const tableId = useId()
   const actions = groups.flatMap(getDirectoryActions)
-  const availableKeys = new Set(actions.filter(item => item.available).map(item => item.key))
+  const isAvailable = (item: { key: string; available: boolean }) => departmentView ? availableModuleKeys.has(item.key) : item.available
+  const availableKeys = new Set(actions.filter(isAvailable).map(item => item.key))
   const publication = shippingPublication ?? {
     registered: registeredShippingPermissionKeys,
     published: availableModuleKeys,
@@ -286,10 +289,10 @@ export function PermissionSettingTable(props: GrantTableProps | EmployeeTablePro
     const isExpanded = !collapsedGroups.has(group.id)
     const items = group.actions ?? []
     const groupReadOnly = items.length > 0 && items.every(item => isShippingOwnerPermission(item.key)) ? ownerReadOnly : readOnly
-    const directKeys = items.filter(item => item.available).map(item => item.key)
+    const directKeys = items.filter(isAvailable).map(item => item.key)
     const expandedKeys = getDirectoryActions(group).filter(item => employee
       ? employee.permissions.has(item.key)
-      : item.available || effectiveShippingKeys.has(item.key)).map(item => item.key)
+      : isAvailable(item) || effectiveShippingKeys.has(item.key)).map(item => item.key)
     const effectiveCount = expandedKeys.filter(isEffective).length
     const allEffective = expandedKeys.length > 0 && effectiveCount === expandedKeys.length
     const grantableKeys = directKeys.filter(key => !hasRetainedLegacyGrant(key) && (legacyShippingPermission(key)
@@ -320,7 +323,7 @@ export function PermissionSettingTable(props: GrantTableProps | EmployeeTablePro
           {renderEntry(group)}
           {expandedKeys.length > 0 && (
             <Badge variant={allEffective ? 'default' : effectiveCount > 0 ? 'secondary' : 'outline'}>
-              {employee ? effectiveCount + ' 项已开启' : allEffective ? '全部生效' : effectiveCount > 0 ? '部分生效' : '未生效'}
+              {employee || departmentView ? effectiveCount + ' 项已开启' : allEffective ? '全部生效' : effectiveCount > 0 ? '部分生效' : '未生效'}
             </Badge>
           )}
           {!groupReadOnly && directKeys.length > 0 && (
@@ -376,17 +379,22 @@ export function PermissionSettingTable(props: GrantTableProps | EmployeeTablePro
                 const explicit = isExplicit(item.key)
                 const effective = isEffective(item.key)
                 const shippingAction = legacyShippingPermission(item.key) !== null
+                const available = isAvailable(item)
                 const inheritedLegacy = hasRetainedLegacyGrant(item.key)
                 const checked = isSuperAdmin || ownerAction || shippingAction || inheritedLegacy ? effective : explicit
                 const source = effective && !ownerAction ? getPermissionGrantSource(perms, item.key, undefined, isSuperAdmin) : null
                 const dependent = explicit && actions.find(action =>
-                  action.available && action.dependencies?.includes(item.key) && isEffective(action.key))
+                  isAvailable(action) && action.dependencies?.includes(item.key) && isEffective(action.key))
                 const missingDependency = item.dependencies?.find(key => !isEffective(key))
-                const unavailableForRevoke = item.available && shippingAction && checked
+                const unavailableForRevoke = available && shippingAction && checked
                   && !canRevokeShippingAction(perms, item.key, availableModuleKeys)
+                const unavailableLabel = effective ? '旧授权生效'
+                  : departmentView && item.available
+                    ? item.grantSubjectTypes?.includes('department') ? '部门授权未开放' : '部门不可直接授权'
+                    : '待接入'
                 return (
                   <li key={item.key} className="flex items-start gap-3 py-2.5">
-                    {item.available && (
+                    {available && (
                       <input
                         type="checkbox"
                         aria-label={item.label}
@@ -402,12 +410,12 @@ export function PermissionSettingTable(props: GrantTableProps | EmployeeTablePro
                         {item.capabilityLevel && <Badge variant="outline">{item.capabilityLevel}</Badge>}
                         {item.scopeTypes?.includes('department') && item.grantSubjectTypes?.length === 1 && item.grantSubjectTypes[0] === 'role'
                           && <Badge variant="outline">角色可按部门授权</Badge>}
-                        {!item.available && <Badge variant="outline">{effective ? '旧授权生效' : '待接入'}</Badge>}
-                        {explicit && item.available && <Badge variant="outline">{ownerAction ? '角色授权' : '显式授权'}</Badge>}
-                        {item.available && effective && !explicit && <Badge variant="secondary">当前有效</Badge>}
+                        {!available && <Badge variant="outline">{unavailableLabel}</Badge>}
+                        {explicit && available && <Badge variant="outline">{ownerAction ? '角色授权' : '显式授权'}</Badge>}
+                        {available && effective && !explicit && <Badge variant="secondary">当前有效</Badge>}
                         {source?.via === 'bundle' && <Badge variant="secondary">由 {labelFor(source.grant)} 汇总</Badge>}
                         {source?.via === 'dependency' && <Badge variant="secondary">由 {labelFor(source.grant)} 依赖生效</Badge>}
-                        {missingDependency && <Badge variant="outline">勾选时补齐 {labelFor(missingDependency)}</Badge>}
+                        {(!departmentView || available) && missingDependency && <Badge variant="outline">勾选时补齐 {labelFor(missingDependency)}</Badge>}
                         {dependent && <Badge variant="outline">供 {dependent.label} 使用</Badge>}
                       </div>
                       <div className="mt-0.5 text-xs text-slate-500">{item.description}</div>

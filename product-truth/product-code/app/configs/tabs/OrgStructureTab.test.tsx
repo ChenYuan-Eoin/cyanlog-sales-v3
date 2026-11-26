@@ -49,6 +49,18 @@ const permissionDepartmentId = 'd3e767ac-0fb4-4f20-947f-a5ad0870b23d'
 const permissionOrganizationId = '267550ba-359e-4259-873d-844538fa52a1'
 const departmentPermissionsPath = `/api/admin/departments/${permissionDepartmentId}/permissions`
 const shippingLedger = 'shipping:ledger_view'
+const departmentPermissionCatalog = [{
+  id: 'shipping', label: '自助收寄', description: '',
+  items: [{
+    key: shippingLedger, label: '查看收寄台账', description: '查看授权范围内的寄件工单。',
+    moduleKey: 'shipping', capabilityLevel: 'L3', grantSubjectTypes: ['role', 'department'],
+    scopeTypes: ['org', 'department'], dependencies: [], selectable: true,
+  }, {
+    key: 'shipping:order_confirm', label: '确认并下单', description: '权限字典中的下单说明。',
+    moduleKey: 'shipping', capabilityLevel: 'L3', grantSubjectTypes: ['role'],
+    scopeTypes: ['org'], dependencies: [shippingLedger], selectable: true,
+  }],
+}]
 const departmentPermissionPayload: OrgSummaryPayload = {
   organization: { id: permissionOrganizationId, name: '测试组织' },
   users: [], roles: [], spaces: [],
@@ -61,6 +73,7 @@ function departmentPermissionResponse(overrides: Record<string, unknown> = {}) {
     department_id: permissionDepartmentId,
     permissions: [],
     available_permissions: [shippingLedger],
+    permission_catalog: departmentPermissionCatalog,
     permissions_editable: true,
     include_subdepartments: false,
     ...overrides,
@@ -91,7 +104,14 @@ it('saves department grants with their original scope and shows success after a 
   expect(subtree).toBeDisabled()
   expect(entry).not.toBeChecked()
   expect(entry).toBeDisabled()
+  const roleOnlyRow = screen.getByText('确认并下单', { exact: true }).closest('li')!
+  expect(within(roleOnlyRow).getByText('权限字典中的下单说明。')).toBeInTheDocument()
+  expect(within(roleOnlyRow).getByText('L3')).toBeInTheDocument()
+  expect(within(roleOnlyRow).getByText('部门不可直接授权')).toBeInTheDocument()
   expect(screen.queryByRole('checkbox', { name: '确认并下单' })).not.toBeInTheDocument()
+  const pendingRow = screen.getByText('同步运单物流', { exact: true }).closest('li')!
+  expect(within(pendingRow).getByText('待接入')).toBeInTheDocument()
+  expect(within(pendingRow).queryByRole('checkbox')).not.toBeInTheDocument()
   fireEvent.click(action)
   expect(entry).toBeChecked()
   fireEvent.click(subtree)

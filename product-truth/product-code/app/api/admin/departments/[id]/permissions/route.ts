@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { AuthError, requireAuth } from '@/lib/auth'
 import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
-import { loadShippingModulePermissionState } from '@/lib/permission-registry'
+import { loadRoleModulePermissionProjection } from '@/lib/permission-registry'
 import type { AsyncRouteParams } from '@/lib/route-params'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -58,7 +58,7 @@ async function handle(req: NextRequest, { params }: AsyncRouteParams, write: boo
       if (parsed.data.expected_org_id !== context.orgId) return failure('40001')
       change = parsed.data
     }
-    const { departmentLedgerPublished } = await loadShippingModulePermissionState()
+    const { catalog, publication: { departmentLedgerPublished } } = await loadRoleModulePermissionProjection()
     if (change?.permissions.length && !departmentLedgerPublished) return failure('23514')
     const { data, error } = change
       ? await supabaseAdmin.rpc('admin_set_department_permissions_v1', {
@@ -79,6 +79,7 @@ async function handle(req: NextRequest, { params }: AsyncRouteParams, write: boo
       department_id: departmentId.data,
       ...state.data,
       available_permissions: departmentLedgerPublished ? [ledgerView] : [],
+      permission_catalog: catalog,
       permissions_editable: true,
     })
   } catch (error) {

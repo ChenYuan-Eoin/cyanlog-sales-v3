@@ -2,12 +2,17 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { parseModuleCatalog, type RoleModulePermissionCatalog } from '@/lib/org-role-permission-readback'
 import { DEPARTMENT_LEDGER_VIEW } from '@/lib/shipping/department-ledger-access'
-import { buildDepartmentPermissionDirectory, getDirectoryActions } from '../permission-directory'
+import { buildRolePermissionDirectory } from '../permission-directory'
 import { PermissionSettingTable } from './PermissionSettingTable'
 
 type DepartmentGrant = { permissions: string[]; includeSubdepartments: boolean }
-type DepartmentPermissionSnapshot = DepartmentGrant & { availablePermissions: string[]; editable: boolean }
+type DepartmentPermissionSnapshot = DepartmentGrant & {
+  availablePermissions: string[]
+  editable: boolean
+  permissionCatalog: RoleModulePermissionCatalog
+}
 type DepartmentPermissionState = { saved: DepartmentPermissionSnapshot; draft: DepartmentGrant }
 type Feedback = { kind: 'error' | 'success'; message: string }
 
@@ -43,6 +48,7 @@ async function readDepartmentPermissions(
     permissions: data.permissions,
     includeSubdepartments: data.include_subdepartments,
     availablePermissions: data.available_permissions,
+    permissionCatalog: parseModuleCatalog(data.permission_catalog),
     editable: data.permissions_editable,
   }
 }
@@ -77,8 +83,7 @@ export function DepartmentPermissions({ orgId, departmentId, authHeaders }: {
   if (!state && !feedback) return null
 
   const available = new Set(state?.saved.availablePermissions)
-  const groups = buildDepartmentPermissionDirectory(available)
-  const displayedKeys = new Set(groups.flatMap(getDirectoryActions).map(action => action.key))
+  const groups = buildRolePermissionDirectory(state?.saved.permissionCatalog)
   const unavailableKeys = state?.draft.permissions.filter(key => !available.has(key)) ?? []
   const editable = state?.saved.editable === true
   const canSave = editable && state && unavailableKeys.length === 0 && !sameGrant(state.saved, state.draft)
@@ -92,8 +97,8 @@ export function DepartmentPermissions({ orgId, departmentId, authHeaders }: {
       const permissions = new Set(current.draft.permissions)
       for (const key of keys) {
         if (enabled ?? !permissions.has(key)) {
-          if (displayedKeys.has(key)) permissions.add(key)
-        } else if (displayedKeys.has(key) || !available.has(key)) {
+          if (available.has(key)) permissions.add(key)
+        } else {
           permissions.delete(key)
         }
       }
@@ -170,7 +175,7 @@ export function DepartmentPermissions({ orgId, departmentId, authHeaders }: {
               }} />
             授权范围包含下级部门
           </label>
-          {editable && (groups.length > 0 || state.saved.permissions.length > 0) && (
+          {editable && (available.size > 0 || state.saved.permissions.length > 0) && (
             <Button type="button" size="sm" onClick={() => void save()} disabled={!canSave || busy}>
               {busy ? '正在核对授权…' : '保存部门授权'}
             </Button>
@@ -184,17 +189,18 @@ export function DepartmentPermissions({ orgId, departmentId, authHeaders }: {
           </div>
         )}
         <PermissionSettingTable
-          description="设置当前部门的明确数据授权。"
+          description="在完整权限目录中设置此部门支持的直接授权。"
           perms={state.draft.permissions}
           ownerPerms={[]}
+          departmentView
           groups={groups}
           availableModuleKeys={available}
           entryStates={{ shipping: { checked: ledgerEntry, canClear: ledgerEntry && editable && !busy } }}
           isSuperAdmin={false}
-          readOnly={!editable || busy || groups.length === 0}
+          readOnly={!editable || busy || available.size === 0}
           ownerReadOnly
           blockReason={!state.saved.editable ? '当前账号仅可查看部门授权。'
-            : groups.length === 0 ? '当前没有可配置的部门权限。' : null}
+            : available.size === 0 ? '当前没有可配置的部门权限。' : null}
           onToggle={key => changePermissions([key])}
           onSetGroup={changePermissions}
           onClearEntry={entry => { if (entry === 'shipping') changePermissions([DEPARTMENT_LEDGER_VIEW], false) }}
