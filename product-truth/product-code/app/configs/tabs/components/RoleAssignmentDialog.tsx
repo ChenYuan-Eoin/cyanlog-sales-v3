@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { BuildingIcon, ShieldIcon, XIcon } from 'lucide-react'
 import type { OrgSummaryDepartment, OrgSummaryRole, ScopedRoleAssignment } from '../../types'
-import { isRoleAssignableInScope } from '@/lib/role-permission-resolution'
+import { isRetiredRoleCode, isRoleAssignableInScope } from '@/lib/role-permission-resolution'
 import { isGenericallyAssignableRole } from '../role-assignment-policy'
 import { EmployeePermissionReview } from '../EmployeePermissionOverrides'
 
@@ -22,11 +22,13 @@ interface RoleAssignmentDialogProps {
   userName: string
   pendingRoles?: { id: string }[]
   organizationOnly?: boolean
+  currentSystemAdmin?: boolean
+  departmentAssignmentRestricted?: boolean
   employeePermissionOrgId?: string
   currentRoles: string[]
   departments: OrgSummaryDepartment[]
   scopedRoles?: ScopedRoleAssignment[]
-  onSubmit: (roleIds: string[]) => Promise<void>
+  onSubmit: (roleIds: string[], systemAdmin?: boolean) => Promise<void>
   onSubmitScoped?: (roleId: string, departmentId: string) => Promise<void>
   onRevokeScoped?: (roleId: string, scopeType: 'department' | 'space', scopeId: string) => Promise<void>
   trigger?: React.ReactNode
@@ -40,6 +42,8 @@ export function RoleAssignmentDialog({
   currentRoles,
   pendingRoles,
   organizationOnly = false,
+  currentSystemAdmin,
+  departmentAssignmentRestricted = currentSystemAdmin === true,
   employeePermissionOrgId,
   departments,
   scopedRoles = [],
@@ -54,12 +58,17 @@ export function RoleAssignmentDialog({
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen
   const onOpenChange = controlledOnOpenChange ?? setInternalOpen
   const [loading, setLoading] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [roles, setRoles] = useState<OrgSummaryRole[]>([])
   const [selectedOrgRoles, setSelectedOrgRoles] = useState<string[]>(currentRoles)
+  const [selectedSystemAdmin, setSelectedSystemAdmin] = useState(currentSystemAdmin ?? false)
   const [selectedScopedRoleId, setSelectedScopedRoleId] = useState('')
   const [fetchingRoles, setFetchingRoles] = useState(false)
   const [rolesError, setRolesError] = useState(false)
-  const [scopeType, setScopeType] = useState<'org' | 'department'>('org')
+  const [requestedScopeType, setScopeType] = useState<'org' | 'department'>('org')
+  const scopeLocked = organizationOnly || departmentAssignmentRestricted
+  const scopeType = scopeLocked ? 'org' : requestedScopeType
+  const showSystemAdmin = scopeType === 'org' && !organizationOnly && currentSystemAdmin !== undefined
   const [scopeId, setScopeId] = useState('')
   const [revokingKey, setRevokingKey] = useState<string | null>(null)
   const assignableRoles = roles.filter(role => isRoleAssignableInScope(role.code, scopeType))
@@ -93,7 +102,7 @@ export function RoleAssignmentDialog({
           const result = await res.json()
           if (!result.success || !Array.isArray(result.data?.roles)) throw new Error('无效的角色列表')
           for (const role of result.data.roles as OrgSummaryRole[]) {
-            if (isGenericallyAssignableRole(role.code)) collected.set(role.id, role)
+            if (isGenericallyAssignableRole(role.code) && !isRetiredRoleCode(role.code)) collected.set(role.id, role)
           }
           if (result.meta?.hasMore !== true) break
           const { offset: pageOffset, limit } = result.meta
@@ -114,10 +123,19 @@ export function RoleAssignmentDialog({
     return () => controller.abort()
   }, [open])
 
-  // 同步 currentRoles 变化
+  // 每次打开时使用当前编辑快照。
   useEffect(() => {
-    setSelectedOrgRoles(currentRoles)
-  }, [currentRoles])
+    if (open) setSelectedOrgRoles(currentRoles)
+  }, [open, currentRoles])
+  useEffect(() => {
+    if (open) {
+      setSelectedSystemAdmin(currentSystemAdmin ?? false)
+      setSaveError('')
+      setScopeType('org')
+      setScopeId('')
+      setSelectedScopedRoleId('')
+    }
+  }, [open, userId, currentSystemAdmin])
 
   const handleToggleRole = useCallback((roleId: string) => {
     if (scopeType !== 'org') {
@@ -130,19 +148,27 @@ export function RoleAssignmentDialog({
   }, [scopeType])
 
   const handleSubmit = useCallback(async () => {
+    if (fetchingRoles || rolesError || loading) return
     setLoading(true)
+    setSaveError('')
     try {
       if (scopeType === 'org') {
-        await onSubmit(selectedOrgRoles)
+        if (showSystemAdmin) await onSubmit(selectedOrgRoles, selectedSystemAdmin)
+        else await onSubmit(selectedOrgRoles)
       } else {
         if (!onSubmitScoped || !selectedDepartment || !selectedScopedRole) return
         await onSubmitScoped(selectedScopedRole.id, selectedDepartment.id)
       }
       onOpenChange(false)
+    } catch (failure) {
+      setSaveError(failure instanceof Error && failure.message ? failure.message : '角色保存失败，请重试。')
     } finally {
       setLoading(false)
     }
-  }, [scopeType, onSubmit, selectedOrgRoles, onSubmitScoped, selectedScopedRole, selectedDepartment, onOpenChange])
+  }, [
+    fetchingRoles, rolesError, loading, scopeType, showSystemAdmin, selectedSystemAdmin,
+    onSubmit, selectedOrgRoles, onSubmitScoped, selectedScopedRole, selectedDepartment, onOpenChange,
+  ])
 
   const nonOrgScopedRoles = scopedRoles.filter(
     assignment => (assignment.scopeType === 'department' || assignment.scopeType === 'space')
@@ -167,6 +193,8 @@ export function RoleAssignmentDialog({
           </DialogTitle>
         </DialogHeader>
 
+        {saveError && <p role="alert" className="text-sm text-red-700">{saveError}</p>}
+
         {open && employeePermissionOrgId && (
           <EmployeePermissionReview orgId={employeePermissionOrgId} userId={userId} />
         )}
@@ -175,10 +203,17 @@ export function RoleAssignmentDialog({
           <div className="py-8 text-center text-slate-500">加载角色列表...</div>
         ) : rolesError ? (
           <p className="py-8 text-center text-slate-600" role="alert">无法读取可分配角色，请关闭后重试。</p>
-        ) : assignableRoles.length === 0 ? (
+        ) : assignableRoles.length === 0 && !showSystemAdmin ? (
           <div className="py-8 text-center text-slate-500">当前作用域没有可分配的角色</div>
         ) : (
           <div className="space-y-4 max-h-[400px] overflow-y-auto">
+            {showSystemAdmin && (
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
+                <Checkbox checked={selectedSystemAdmin} disabled={loading}
+                  onCheckedChange={value => setSelectedSystemAdmin(value === true)} />
+                <span className="font-medium">系统超级管理员</span>
+              </label>
+            )}
             {assignableRoles.map((role) => (
               <div
                 key={role.id}
@@ -187,6 +222,7 @@ export function RoleAssignmentDialog({
                 <Checkbox
                   id={`role-${role.id}`}
                   checked={scopeType === 'org' ? selectedOrgRoles.includes(role.id) : selectedScopedRoleId === role.id}
+                  disabled={loading}
                   onCheckedChange={() => handleToggleRole(role.id)}
                 />
                 <div className="flex-1">
@@ -256,7 +292,7 @@ export function RoleAssignmentDialog({
           </div>
         )}
 
-        {roles.length > 0 && (
+        {!fetchingRoles && !rolesError && (roles.length > 0 || showSystemAdmin) && (
           <>
             <div className="border-t pt-4">
               <div className="flex items-center gap-2 text-sm text-slate-600">
@@ -265,7 +301,7 @@ export function RoleAssignmentDialog({
               </div>
               <select
                 aria-label="角色作用域类型"
-                disabled={organizationOnly}
+                disabled={scopeLocked}
                 className="mt-2 h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
                 value={scopeType}
                 onChange={(event) => {
@@ -278,6 +314,7 @@ export function RoleAssignmentDialog({
                 <option value="department">指定部门</option>
               </select>
               {organizationOnly && <p className="mt-2 text-xs text-slate-500">预分配的组织角色将在首次登录后生效。</p>}
+              {departmentAssignmentRestricted && <p className="mt-2 text-xs text-slate-500">撤销系统超管后可调整部门角色。</p>}
               {scopeType === 'department' && (
                 <select
                   aria-label="选择部门角色作用域"

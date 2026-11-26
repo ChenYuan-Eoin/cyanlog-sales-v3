@@ -151,6 +151,84 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
+  const memberOrg = 'f0000000-0000-4000-8000-000000000001'
+  const memberRoleEdit = {
+    role_ids: [roleId], expected_role_ids: [roleId], expected_org_id: memberOrg,
+    system_admin: false, expected_system_admin: true,
+  }
+
+  function setMemberAuthority() {
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValueOnce({
+      ...activeAuthority, orgId: memberOrg, assignments: [{ ...systemGrant, scopeId: memberOrg }],
+    })
+  }
+
+  it('saves the selected business roles and revokes the system role in one command', async () => {
+    setMemberAuthority()
+    vi.mocked(userHasOrgRoleCode).mockResolvedValue(true)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: 'saved', error: null } as any)
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(makeRoleListQuery({ data: [], error: null }))
+      .mockReturnValueOnce(makeRoleListQuery({ data: [{
+        role_id: roleId, role: { code: 'SALES' }, scope_type: 'org', scope_id: memberOrg,
+      }], error: null }))
+
+    const res = await POST(jsonRequest(memberRoleEdit), routeContext)
+
+    expect(res.status).toBe(200)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledTimes(1)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_save_member_org_roles_v1', {
+      p_actor_id: 'admin-user', p_org_id: memberOrg, p_user_id: (await routeContext.params).id,
+      p_role_ids: [roleId], p_expected_role_ids: [roleId],
+      p_system_admin: false, p_expected_system_admin: true, p_request_id: null,
+    })
+    expect(userHasOrgRoleCode).not.toHaveBeenCalled()
+  })
+
+  it('does not write if the dialog was opened under a different active organization', async () => {
+    const res = await POST(jsonRequest(memberRoleEdit), routeContext)
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ code: 'ROLE_ASSIGNMENT_CHANGED' })
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it('does not fall through to a legacy write for an incomplete system role edit', async () => {
+    setMemberAuthority()
+    const res = await POST(jsonRequest({ role_ids: [roleId], system_admin: false }), routeContext)
+    expect(res.status).toBe(400)
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [{ data: 'conflict', error: null }, 'ROLE_ASSIGNMENT_CHANGED'],
+    [{ data: null, error: { code: '23514', details: 'LAST_SYSTEM_SUPER_ADMIN_PROTECTED' } }, 'LAST_SYSTEM_SUPER_ADMIN_PROTECTED'],
+  ])('reports an unapplied member role edit with its specific reason', async (rpcResponse, code) => {
+    setMemberAuthority()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce(rpcResponse as any)
+    const res = await POST(jsonRequest(memberRoleEdit), routeContext)
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ code })
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('requires readback of both the regular role set and the canonical binding before reporting success', async () => {
+    setMemberAuthority()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: 'saved', error: null } as any)
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(makeRoleListQuery({ data: [], error: null }))
+      .mockReturnValueOnce(makeRoleListQuery({ data: [{
+        role_id: roleId, role: { code: 'SALES' },
+      }, {
+        role_id: '99999999-9999-4999-8999-999999999999', role: { code: 'SUPER_ADMIN' },
+      }], error: null }))
+
+    const res = await POST(jsonRequest(memberRoleEdit), routeContext)
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ code: 'ROLE_ASSIGNMENT_CHANGED' })
+  })
+
   it('目标用户不存在时返回 404 且不替换角色', async () => {
     const query = makeUserLookupQuery({ data: null, error: null })
     ;(supabaseAdmin.from as any).mockReturnValue(query)

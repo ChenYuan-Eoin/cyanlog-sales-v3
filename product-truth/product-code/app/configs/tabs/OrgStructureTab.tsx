@@ -33,7 +33,10 @@ import { DepartmentFormDialog } from './components/DepartmentFormDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
 import { IdentityBindingDialog } from './components/IdentityBindingDialog'
-import { editableOrgRoleIds, getRoleMutationRestriction } from './role-assignment-policy'
+import {
+  editableCurrentOrgBusinessRoleIds, editableOrgRoleIds, getMemberRoleMutationRestriction, getRoleMutationRestriction,
+  userHasSystemAdminAssignment,
+} from './role-assignment-policy'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -484,12 +487,15 @@ interface MemberTableProps {
   actions: MemberActionAvailability
   onEditUser: (user: OrgSummaryUser) => void
   onAssignRole: (user: OrgSummaryUser) => void
+  systemAdminOrgIdForUser: (user: OrgSummaryUser) => string | undefined
   onOpenEmployeePermissions?: (user: OrgSummaryUser) => void
   onBindIdentity: (user: OrgSummaryUser) => void
   onRefresh?: () => void | Promise<void>
 }
 
-function MemberTable({ users, currentUserId, actions, onEditUser, onAssignRole, onOpenEmployeePermissions, onBindIdentity, onRefresh }: MemberTableProps) {
+function MemberTable({
+  users, currentUserId, actions, onEditUser, onAssignRole, systemAdminOrgIdForUser, onOpenEmployeePermissions, onBindIdentity, onRefresh,
+}: MemberTableProps) {
   const [globalFilter, setGlobalFilter] = useState('')
 
   // 使用 Fuse.js 进行模糊搜索
@@ -597,7 +603,8 @@ function MemberTable({ users, currentUserId, actions, onEditUser, onAssignRole, 
         const isDirectoryPending = user.directory_pending_account === true
         const isDirectoryManaged = Boolean(user.directory_identity_id)
         const directoryUnavailable = isDirectoryManaged && memberEmployment(user) !== 'active'
-        const roleMutationRestriction = getRoleMutationRestriction(user, currentUserId)
+        const lifecycleRestriction = getRoleMutationRestriction(user, currentUserId)
+        const roleMutationRestriction = getMemberRoleMutationRestriction(user, currentUserId, systemAdminOrgIdForUser(user))
 
         return (
           <DropdownMenu>
@@ -645,12 +652,7 @@ function MemberTable({ users, currentUserId, actions, onEditUser, onAssignRole, 
 
               <DropdownMenuSeparator />
 
-              {isDirectoryManaged ? (
-                <DropdownMenuItem disabled>
-                  <FingerprintIcon className="h-4 w-4 mr-2" />
-                  已由纷享目录关联，无需逐人绑定
-                </DropdownMenuItem>
-              ) : (
+              {!isDirectoryManaged && (
                 <DropdownMenuItem
                   disabled={!actions.bindExternalIdentity || isInvited || isDisabled}
                   onSelect={() => onBindIdentity(user)}
@@ -660,14 +662,8 @@ function MemberTable({ users, currentUserId, actions, onEditUser, onAssignRole, 
                 </DropdownMenuItem>
               )}
 
-              {isDirectoryManaged ? (
-                <DropdownMenuItem disabled>
-                  在职状态由{user.directory_source === 'fxiaoke' ? '纷享销客' : '外部目录'}管理；请在来源系统变更后同步
-                </DropdownMenuItem>
-              ) : <>
-              {isDirectoryPending ? (
-                <DropdownMenuItem disabled>纷享员工无需邀请码；首次登录即可查看，业务操作另按授权</DropdownMenuItem>
-              ) : <>
+              {!isDirectoryManaged && <>
+              {!isDirectoryPending && <>
               <DropdownMenuItem
                 disabled={!actions.invite || !isInvited}
                 onSelect={async () => {
@@ -721,7 +717,7 @@ function MemberTable({ users, currentUserId, actions, onEditUser, onAssignRole, 
 
               {/* P1: 停用/启用 */}
               <DropdownMenuItem
-                disabled={!actions.manageEmployment || isInvited || Boolean(roleMutationRestriction)}
+                disabled={!actions.manageEmployment || isInvited || Boolean(lifecycleRestriction)}
                 onSelect={async () => {
                   const isRehire = user.status === 'inactive'
                   const action = isRehire ? '恢复在职' : isDisabled ? '启用' : '停用'
@@ -768,7 +764,7 @@ function MemberTable({ users, currentUserId, actions, onEditUser, onAssignRole, 
 
               {/* P1: 允许/禁止登录 */}
               <DropdownMenuItem
-                disabled={!actions.manageLogin || isInvited || Boolean(roleMutationRestriction)}
+                disabled={!actions.manageLogin || isInvited || Boolean(lifecycleRestriction)}
                 onSelect={async () => {
                   const action = isLoginDisabled ? '允许' : '禁止'
                   if (!await confirmAction(`确定要${action}用户 "${user.display_name}" 登录吗？`, { confirmText: action, danger: !isLoginDisabled })) return
@@ -808,7 +804,7 @@ function MemberTable({ users, currentUserId, actions, onEditUser, onAssignRole, 
               {!isInvited && (
                 <DropdownMenuItem
                   className="text-red-600"
-                  disabled={!actions.manageEmployment || Boolean(roleMutationRestriction)}
+                  disabled={!actions.manageEmployment || Boolean(lifecycleRestriction)}
                   onSelect={async () => {
                     if (!await confirmAction(`确定要为 "${user.display_name}" 办理离职吗？\n成员关系、角色和部门授权会结束，历史审计保留，可在之后明确复职。`, { confirmText: '办理离职', danger: true })) return
                     try {
@@ -837,7 +833,7 @@ function MemberTable({ users, currentUserId, actions, onEditUser, onAssignRole, 
               {!isInvited && (
                 <DropdownMenuItem
                   className="text-red-600"
-                  disabled={!actions.removeMembership || Boolean(roleMutationRestriction)}
+                  disabled={!actions.removeMembership || Boolean(lifecycleRestriction)}
                   onSelect={async () => {
                     if (!await confirmAction(
                       `确定要将 "${user.display_name}" 移出当前组织吗？\n只结束当前租户的成员关系、角色和数据授权，人员账户与历史审计保留。`,
@@ -871,7 +867,7 @@ function MemberTable({ users, currentUserId, actions, onEditUser, onAssignRole, 
         )
       },
     },
-  ], [currentUserId, actions, onEditUser, onAssignRole, onOpenEmployeePermissions, onBindIdentity, onRefresh])
+  ], [currentUserId, actions, onEditUser, onAssignRole, systemAdminOrgIdForUser, onOpenEmployeePermissions, onBindIdentity, onRefresh])
 
   const table = useReactTable({
     data: filteredUsers,
@@ -1046,9 +1042,10 @@ export default function OrgStructureTab({
 
   // 编辑用户状态
   const [editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)
-  const [assigningUser, setAssigningUser] = useState<OrgSummaryUser | null>(null)
+  const [assignmentDraft, setAssignmentDraft] = useState<{
+    user: OrgSummaryUser; actorId: string; orgId?: string; roleIds: string[]; systemAdmin?: boolean
+  } | null>(null)
   const [employeePermissions, setEmployeePermissions] = useState<{ orgId: string; user: OrgSummaryUser } | null>(null)
-  const assigningRoleIds = useMemo(() => assigningUser ? editableOrgRoleIds(assigningUser) : [], [assigningUser])
   const [bindingUser, setBindingUser] = useState<OrgSummaryUser | null>(null)
 
   const actions = orgSummary?.member_actions ?? unavailableMemberActions
@@ -1057,6 +1054,23 @@ export default function OrgStructureTab({
   const canDeleteDepartments = departmentAccess?.canDelete ?? actions.manageDepartments
   const isEmptyState = departments.length === 0 && users.length === 0
   const orgId = orgSummary?.organization?.id
+  const eligibleSystemAdminIds = orgSummary?.role_membership_stats?.systemSuperAdminAssignableMemberIds
+  const systemAdminOrgIdForUser = useCallback((user: OrgSummaryUser) => {
+    if (!orgId || !currentUserId || !actions.assignRoles || user.id === currentUserId
+      || user.status !== 'active' || user.membership_status !== 'active' || user.employment_status !== 'active') return undefined
+    if (userHasSystemAdminAssignment(user, orgId)) return orgId
+    return user.login_enabled === true && isEmployeePermissionTarget(user) && eligibleSystemAdminIds?.includes(user.id) ? orgId : undefined
+  }, [orgId, currentUserId, actions.assignRoles, eligibleSystemAdminIds])
+  const assignment = actions.assignRoles && assignmentDraft?.orgId === orgId && assignmentDraft?.actorId === currentUserId
+    ? assignmentDraft : null
+  const latestAssignmentUser = assignment ? users.find(user => user.id === assignment.user.id) : undefined
+  const departmentAssignmentRestricted = assignment?.systemAdmin === true
+    || Boolean(orgId && latestAssignmentUser && userHasSystemAdminAssignment(latestAssignmentUser, orgId))
+
+  useEffect(() => {
+    setAssignmentDraft(draft => draft && (draft.orgId !== orgId || draft.actorId !== currentUserId || !actions.assignRoles)
+      ? null : draft)
+  }, [orgId, currentUserId, actions.assignRoles])
 
   if (orgSummary?.member_access === false) {
     return (
@@ -1206,13 +1220,20 @@ export default function OrgStructureTab({
                 currentUserId={currentUserId}
                 actions={actions}
                 onEditUser={setEditingUser}
+                systemAdminOrgIdForUser={systemAdminOrgIdForUser}
                 onAssignRole={(user) => {
-                  const restriction = getRoleMutationRestriction(user, currentUserId)
+                  if (!actions.assignRoles || !currentUserId) return
+                  const systemAdminOrgId = systemAdminOrgIdForUser(user)
+                  const restriction = getMemberRoleMutationRestriction(user, currentUserId, systemAdminOrgId)
                   if (restriction) {
                     error(restriction.reason)
                     return
                   }
-                  setAssigningUser(user)
+                  setAssignmentDraft({
+                    user, actorId: currentUserId, orgId,
+                    roleIds: systemAdminOrgId ? editableCurrentOrgBusinessRoleIds(user, systemAdminOrgId) : editableOrgRoleIds(user),
+                    systemAdmin: systemAdminOrgId ? userHasSystemAdminAssignment(user, systemAdminOrgId) : undefined,
+                  })
                 }}
                 onBindIdentity={setBindingUser}
                 onOpenEmployeePermissions={currentUserId && orgId && actions.assignRoles
@@ -1399,39 +1420,50 @@ export default function OrgStructureTab({
       )}
 
       {/* 分配角色 Dialog */}
-      {assigningUser && actions.assignRoles && (
+      {assignment && (
         <RoleAssignmentDialog
-          userId={assigningUser.id}
-          userName={assigningUser.display_name}
-          currentRoles={assigningRoleIds}
-          pendingRoles={assigningUser.pending_org_roles}
-          organizationOnly={assigningUser.membership_status === 'invited'}
-          employeePermissionOrgId={currentUserId && isEmployeePermissionTarget(assigningUser) ? orgId : undefined}
+          key={JSON.stringify([assignment.actorId, assignment.orgId, assignment.user.id])}
+          userId={assignment.user.id}
+          userName={assignment.user.display_name}
+          currentRoles={assignment.roleIds}
+          pendingRoles={assignment.user.pending_org_roles}
+          currentSystemAdmin={assignment.systemAdmin}
+          organizationOnly={assignment.user.membership_status === 'invited'}
+          departmentAssignmentRestricted={departmentAssignmentRestricted}
+          employeePermissionOrgId={isEmployeePermissionTarget(assignment.user) ? orgId : undefined}
           departments={departments}
-          scopedRoles={users.find(user => user.id === assigningUser.id)?.scoped_roles}
+          scopedRoles={latestAssignmentUser?.scoped_roles}
           open={true}
-          onOpenChange={(open) => !open && setAssigningUser(null)}
-          onSubmit={async (roleIds) => {
-            const res = await fetch(`/api/admin/users/${assigningUser.id}/roles`, {
+          onOpenChange={(open) => !open && setAssignmentDraft(null)}
+          onSubmit={async (roleIds, systemAdmin) => {
+            const systemAdminFields = assignment.systemAdmin === undefined ? {} : {
+              expected_org_id: assignment.orgId,
+              system_admin: systemAdmin ?? assignment.systemAdmin,
+              expected_system_admin: assignment.systemAdmin,
+            }
+            const res = await fetch(`/api/admin/users/${assignment.user.id}/roles`, {
               method: 'POST',
               headers: buildAuthHeaders(true),
-              body: JSON.stringify({ role_ids: roleIds, expected_role_ids: assigningRoleIds, scope_type: 'org' }),
+              body: JSON.stringify({
+                role_ids: roleIds, expected_role_ids: assignment.roleIds, scope_type: 'org', ...systemAdminFields,
+              }),
             })
-            const result = await res.json()
-            if (!res.ok) {
-              error(result.error || '分配角色失败')
-              if (result.code === 'ROLE_ASSIGNMENT_CHANGED') {
-                setAssigningUser(null)
+            const result = await res.json().catch(() => null)
+            if (!res.ok || !result) {
+              const message = result?.error || '无法确认角色保存结果，请刷新后重试。'
+              if (result?.code === 'ROLE_ASSIGNMENT_CHANGED') {
+                error(message)
+                setAssignmentDraft(null)
                 await onRefresh?.()
                 return
               }
-              throw new Error(result.error)
+              throw new Error(message)
             }
             success(result.pending_role_ids?.length ? '组织角色已预分配，首次登录后生效' : '角色已保存')
             await onRefresh?.()
           }}
-          onSubmitScoped={async (roleId, departmentId) => {
-            const res = await fetch(`/api/admin/users/${assigningUser.id}/role-scopes`, {
+          onSubmitScoped={departmentAssignmentRestricted ? undefined : async (roleId, departmentId) => {
+            const res = await fetch(`/api/admin/users/${assignment.user.id}/role-scopes`, {
               method: 'POST',
               headers: buildAuthHeaders(true),
               body: JSON.stringify({
@@ -1449,8 +1481,8 @@ export default function OrgStructureTab({
             success('作用域角色分配成功')
             await onRefresh?.()
           }}
-          onRevokeScoped={async (roleId, scopeType, scopeId) => {
-            const res = await fetch(`/api/admin/users/${assigningUser.id}/role-scopes`, {
+          onRevokeScoped={departmentAssignmentRestricted ? undefined : async (roleId, scopeType, scopeId) => {
+            const res = await fetch(`/api/admin/users/${assignment.user.id}/role-scopes`, {
               method: 'DELETE',
               headers: buildAuthHeaders(true),
               body: JSON.stringify({

@@ -240,3 +240,62 @@ it('keeps a preassigned role selected and allows its removal at organization sco
   fireEvent.click(screen.getByRole('button', { name: '保存' }))
   await waitFor(() => expect(onSubmit).toHaveBeenCalledWith([]))
 })
+
+it('submits a canonical demotion and ordinary role changes together without permitting department writes', async () => {
+  const onSubmit = vi.fn(async () => undefined)
+  const onSubmitScoped = vi.fn(async () => undefined)
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ success: true, data: { roles: [
+    { id: 'role-1', code: 'SALES', name: '销售' },
+    { id: 'role-2', code: 'LEGAL', name: '法务' },
+    { id: 'canonical-role', code: 'SUPER_ADMIN', name: '重复超管' },
+    { id: 'legacy-role', code: 'FXIAOKE_BASELINE', name: '纷享基础查看' },
+    { id: 'legacy-admin', code: 'ORG_SUPER_ADMIN', name: '组织超级管理员' },
+  ] } }))
+  render(<RoleAssignmentDialog userId="employee" userName="已任命成员" currentRoles={['role-1']}
+    currentSystemAdmin open onOpenChange={vi.fn()} departments={[]} onSubmit={onSubmit} onSubmitScoped={onSubmitScoped} />)
+
+  const system = await screen.findByRole('checkbox', { name: '系统超级管理员' })
+  expect(system).toBeChecked()
+  expect(screen.getByRole('checkbox', { name: /销售/ })).toBeChecked()
+  expect(screen.queryByRole('checkbox', { name: /重复超管|纷享基础查看|组织超级管理员/ })).not.toBeInTheDocument()
+  const scope = screen.getByRole('combobox', { name: '角色作用域类型' })
+  expect(scope).toBeDisabled()
+  fireEvent.click(system)
+  expect(system).not.toBeChecked()
+  expect(scope).toBeDisabled()
+  fireEvent.click(screen.getByRole('checkbox', { name: /销售/ }))
+  fireEvent.click(screen.getByRole('checkbox', { name: /法务/ }))
+  fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledExactlyOnceWith(['role-2'], false))
+  expect(onSubmitScoped).not.toHaveBeenCalled()
+})
+
+it('allows appointing an eligible employee even when the ordinary role catalog is empty', async () => {
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ success: true, data: { roles: [] } }))
+  const onSubmit = vi.fn(async () => undefined)
+  render(<RoleAssignmentDialog userId="employee" userName="候选成员" currentRoles={[]}
+    currentSystemAdmin={false} open onOpenChange={vi.fn()} departments={[]} onSubmit={onSubmit} />)
+
+  const system = await screen.findByRole('checkbox', { name: '系统超级管理员' })
+  expect(system).not.toBeChecked()
+  fireEvent.click(system)
+  fireEvent.click(screen.getByRole('button', { name: '保存' }))
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledExactlyOnceWith([], true))
+})
+
+it('keeps role changes available to review when the server rejects a system administrator revocation', async () => {
+  const onSubmit = vi.fn(async () => { throw new Error('组织必须保留至少一名可登录的系统超管') })
+  const onOpenChange = vi.fn()
+  render(<RoleAssignmentDialog userId="employee" userName="已任命成员" currentRoles={['role-1']}
+    currentSystemAdmin open onOpenChange={onOpenChange} departments={[]} onSubmit={onSubmit} />)
+
+  const system = await screen.findByRole('checkbox', { name: '系统超级管理员' })
+  fireEvent.click(system)
+  fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('组织必须保留至少一名可登录的系统超管')
+  expect(system).not.toBeChecked()
+  expect(screen.getByRole('checkbox', { name: /销售/ })).toBeChecked()
+  expect(onOpenChange).not.toHaveBeenCalled()
+})

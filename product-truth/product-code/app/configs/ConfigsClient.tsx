@@ -473,6 +473,8 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
   const roleRequestEpochRef = useRef(0)
   const roleViewRef = useRef<{ orgId: string; token: string | null } | null>(null)
   const orgRequestEpochRef = useRef(0)
+  const orgViewRef = useRef<{ orgId: string; token: string | null } | null>(null)
+  const [orgViewVersion, setOrgViewVersion] = useState(0)
   const previousOrganizationAccess = useRef(canReadOrganization)
   const [loadedOrgSummary, setOrgSummary] = useState<OrgSummaryPayload | null>(null)
   const orgSummary = canReadOrganization ? loadedOrgSummary : null
@@ -495,6 +497,18 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
     setRoles([])
   }, [])
 
+  const handleOrgReadFailure = useCallback(() => {
+    if (orgViewRef.current) setOrgViewVersion(version => version + 1)
+    orgViewRef.current = null
+    setOrgSummary(null)
+  }, [])
+
+  const applyOrgSummary = useCallback((summary: OrgSummaryPayload, token: string | null) => {
+    const orgId = summary.organization?.id
+    orgViewRef.current = orgId ? { orgId, token } : null
+    setOrgSummary(summary)
+  }, [])
+
   const applyRoleSnapshot = useCallback((snapshot: OrgRolePermissionSnapshot, token: string | null, preserveRoleDraft: boolean) => {
     const { roles: nextRoles, ...authority } = snapshot
     const keepBaseline = preserveRoleDraft && roleViewRef.current?.orgId === snapshot.orgId && snapshot.permissionsEditable
@@ -502,12 +516,8 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
     setRoles(current => keepBaseline ? preserveUnchangedRolePermissions(nextRoles, current) : nextRoles)
     setRoleAuthority(authority)
     setRoleLoadError(null)
-    setOrgSummary(current => current && current.organization?.id !== snapshot.orgId ? null : current)
-  }, [])
-
-  const handleOrgReadFailure = useCallback(() => {
-    setOrgSummary(null)
-  }, [])
+    if (orgViewRef.current && orgViewRef.current.orgId !== snapshot.orgId) handleOrgReadFailure()
+  }, [handleOrgReadFailure])
 
   const handleRoleReadFailure = useCallback((reason: unknown) => {
     clearRoleView()
@@ -530,6 +540,8 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
     options?: { force?: boolean; background?: boolean; preserveRoleDraft?: boolean },
   ) => {
     if (!allowedTabs.has(tab)) return
+    const usesOrgAccess = tab === 'role-access' || tab === 'org-structure'
+    if (usesOrgAccess && options?.background && !options.force) return
     // 防重复请求：如果已经在加载该 tab，则跳过
     if (loadingTabRef.current === tab && !options?.force) return
     // 如果已经加载过，则跳过
@@ -547,8 +559,12 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
       const token = localStorage.getItem('token')
       const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
       const cacheKey = scopedCacheKey(token, `configs:${tab}`)
-      const usesOrgAccess = tab === 'role-access' || tab === 'org-structure'
-      if (usesOrgAccess) clearOrgAccessBrowserCache(token)
+      const verifiedOrg = usesOrgAccess && canReadOrganization && token !== null && orgViewRef.current?.token === token
+        ? orgViewRef.current : null
+      if (usesOrgAccess) {
+        clearOrgAccessBrowserCache(token)
+        if (!verifiedOrg) handleOrgReadFailure()
+      }
       const cachedEntry = options?.force || usesOrgAccess ? null : readBrowserCacheEntry<unknown>(cacheKey)
       const cacheAgeMs = cachedEntry ? Date.now() - cachedEntry.savedAt : Number.POSITIVE_INFINITY
       const cached = cacheAgeMs <= TAB_CACHE_TTL_MS ? cachedEntry?.value : null
@@ -741,7 +757,6 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
           if (!preserveRoleDraft) {
             clearRoleView()
             setRoleLoadError(null)
-            handleOrgReadFailure()
           }
           const [roleResult, orgResult] = await Promise.allSettled([
             readRoleSnapshot(headers),
@@ -750,8 +765,10 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
           if (roleEpoch !== roleRequestEpochRef.current || orgEpoch !== orgRequestEpochRef.current) break
           const sessionChanged = token !== localStorage.getItem('token')
           const summary = orgResult.status === 'fulfilled' ? orgResult.value : null
-          const organizationMismatch = summary && roleResult.status === 'fulfilled'
-            && roleResult.value.orgId !== summary.organization?.id
+          const readOrgId = summary?.organization?.id
+          const readRoleOrgId = roleResult.status === 'fulfilled' ? roleResult.value.orgId : null
+          const expectedOrgId = verifiedOrg?.orgId ?? readRoleOrgId ?? readOrgId
+          const organizationMismatch = [readOrgId, readRoleOrgId].some(orgId => orgId && orgId !== expectedOrgId)
           if (sessionChanged || organizationMismatch) {
             const reason = new ConfigsRequestError(sessionChanged
               ? '当前登录会话已变化，请重新载入角色权限。'
@@ -769,7 +786,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
             setError(requestMessage(roleResult.reason, '角色权限加载失败'))
           }
           if (summary) {
-            setOrgSummary(summary)
+            applyOrgSummary(summary, token)
             setLoadedTabs(prev => new Set(prev).add('org-structure'))
           } else if (orgResult.status === 'rejected') {
             handleOrgReadFailure()
@@ -785,16 +802,23 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
 
         case 'org-structure': {
           const orgEpoch = ++orgRequestEpochRef.current
-          setOrgSummary(null)
           try {
             const summary = await readOrgSummary(headers)
             if (orgEpoch !== orgRequestEpochRef.current) break
+            const sessionChanged = token !== localStorage.getItem('token')
+            if (sessionChanged || (verifiedOrg && verifiedOrg.orgId !== summary.organization?.id)) {
+              roleRequestEpochRef.current += 1
+              clearRoleView()
+              throw new ConfigsRequestError(sessionChanged
+                ? '当前登录会话已变化，请重新载入组织架构。'
+                : '当前组织已切换，请刷新后重试。', 409)
+            }
             const roleView = roleViewRef.current
             if (roleView && (roleView.orgId !== summary.organization?.id || roleView.token !== token)) {
               roleRequestEpochRef.current += 1
               clearRoleView()
             }
-            setOrgSummary(summary)
+            applyOrgSummary(summary, token)
             setRoleAuthority(current => current?.orgId === summary.organization?.id ? current : null)
             didLoad = true
           } catch (error) {
@@ -823,7 +847,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
         loadingTabRef.current = null
       }
     }
-  }, [allowedTabs, applyRoleSnapshot, canReadOrganization, clearRoleView, handleOrgReadFailure, handleRoleReadFailure, readOrgSummary, readRoleSnapshot])
+  }, [allowedTabs, applyOrgSummary, applyRoleSnapshot, canReadOrganization, clearRoleView, handleOrgReadFailure, handleRoleReadFailure, readOrgSummary, readRoleSnapshot])
 
   const refreshTabData = useCallback(async (tab: ConfigTabId) => {
     const token = localStorage.getItem('token')
@@ -879,7 +903,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
     if (organizationAccessChanged) {
       previousOrganizationAccess.current = canReadOrganization
       orgRequestEpochRef.current += 1
-      setOrgSummary(null)
+      handleOrgReadFailure()
       setLoadedTabs(current => {
         if (!current.has('org-structure')) return current
         const next = new Set(current)
@@ -902,11 +926,12 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
     } else if (!loadedTabsRef.current.has(activeTab) && loadingTabRef.current !== activeTab) {
       void loadTabData(activeTab)
     }
-  }, [activeTab, canReadOrganization, tabReady, loadTabData])
+  }, [activeTab, canReadOrganization, handleOrgReadFailure, tabReady, loadTabData])
 
   const refreshOrgSummary = useCallback(async () => {
-    await loadTabData(allowedTabs.has('role-access') ? 'role-access' : 'org-structure', { force: true })
-  }, [allowedTabs, loadTabData])
+    const tab = activeTab !== 'org-structure' && allowedTabs.has('role-access') ? 'role-access' : 'org-structure'
+    await loadTabData(tab, { force: true })
+  }, [activeTab, allowedTabs, loadTabData])
 
   useEffect(() => {
     if (activeTab !== 'role-access' && activeTab !== 'org-structure') return
@@ -1147,7 +1172,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
       // Refresh labels on existing scoped and pending bindings without reloading the open role detail.
       const orgEpoch = ++orgRequestEpochRef.current
       void readOrgSummary(headers).then(summary => {
-        if (isCurrent() && orgEpoch === orgRequestEpochRef.current && summary.organization?.id === orgId) setOrgSummary(summary)
+        if (isCurrent() && orgEpoch === orgRequestEpochRef.current && summary.organization?.id === orgId) applyOrgSummary(summary, token)
       }).catch(() => {
         // The verified role metadata already updated both current role lists.
       })
@@ -1894,6 +1919,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
 
             <div className={activeTab === 'shipping' ? 'space-y-6' : 'mt-6 space-y-6'}>
               <TabsContent
+                key={activeTab === 'org-structure' ? 'organization-' + orgViewVersion : undefined}
                 activeTab={activeTab}
                 loading={loading && !loadedTabs.has(activeTab)}
                 products={products}

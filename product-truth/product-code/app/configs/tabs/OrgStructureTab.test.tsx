@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
-import type { OrgSummaryPayload } from '../types'
+import type { OrgSummaryPayload, OrgSummaryUser, ScopedRoleAssignment } from '../types'
 
 vi.mock('./components/DepartmentFormDialog', () => ({ DepartmentFormDialog: () => null }))
 vi.mock('./components/UserFormDialog', () => ({
@@ -9,8 +9,14 @@ vi.mock('./components/UserFormDialog', () => ({
     editingUser ? null : <button onClick={() => void onSubmit({ display_name: '已新增的邀请成员' })}>提交新增成员</button>,
 }))
 vi.mock('./components/RoleAssignmentDialog', () => ({
-  RoleAssignmentDialog: ({ onSubmit }: { onSubmit: (ids: string[]) => Promise<void> }) =>
-    <button onClick={() => onSubmit([])}>保存组织角色</button>,
+  RoleAssignmentDialog: ({ onSubmit, currentSystemAdmin, departmentAssignmentRestricted }: {
+    onSubmit: (ids: string[], systemAdmin?: boolean) => Promise<void>
+    currentSystemAdmin?: boolean
+    departmentAssignmentRestricted?: boolean
+  }) => <>
+    <button onClick={() => currentSystemAdmin === true ? onSubmit(['new-role'], false) : onSubmit([])}>保存组织角色</button>
+    {departmentAssignmentRestricted && <span>仅可调整组织级角色</span>}
+  </>,
 }))
 vi.mock('./components/IdentityBindingDialog', () => ({ IdentityBindingDialog: () => null }))
 import OrgStructureTab from './OrgStructureTab'
@@ -409,7 +415,8 @@ it('shows stopped Fxiaoke employees as departed and unable to log in without inv
   expect(within(row).queryByText('待首次登录')).not.toBeInTheDocument()
   expect(screen.queryByText('在职待登录甲')).not.toBeInTheDocument()
   fireEvent.keyDown(within(row).getByRole('button', { name: '管理纷享离职乙' }), { key: 'ArrowDown' })
-  expect(await screen.findByRole('menuitem', { name: /在职状态由纷享销客管理/ })).toHaveAttribute('aria-disabled', 'true')
+  expect(await screen.findByRole('menu')).toBeInTheDocument()
+  expect(screen.queryByRole('menuitem', { name: /在职状态由纷享销客管理|已由纷享目录关联/ })).not.toBeInTheDocument()
   expect(screen.queryByRole('menuitem', { name: /启用用户|允许登录|恢复在职|办理离职/ })).not.toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: '编辑' })).toHaveAttribute('aria-disabled', 'true')
 })
@@ -469,4 +476,55 @@ it('checks the original roles when the directory refreshes while a member is bei
   expect(JSON.parse(send.mock.calls[0][1].body)).toEqual({ role_ids: [], expected_role_ids: ['ship'], scope_type: 'org' })
   expect(screen.queryByRole('button', { name: '保存组织角色' })).not.toBeInTheDocument()
   expect(send).toHaveBeenCalledTimes(1)
+})
+
+it.each([true, false])('updates a promoted member’s roles once when login_enabled is %s', async (loginEnabled) => {
+  const orgId = 'org-test'
+  const binding: ScopedRoleAssignment = {
+    roleId: 'ordinary-role', roleCode: 'SALES', roleName: '销售', scopeType: 'org', scopeId: orgId, scopeName: '组织', grantedAt: null,
+  }
+  const user: OrgSummaryUser = {
+    ...statusPayload.users[3],
+    status: 'active', membership_status: 'active', employment_status: 'active', login_enabled: loginEnabled,
+    role_codes: ['SUPER_ADMIN', 'SALES'],
+    role_ids: ['system-role', 'ordinary-role', 'baseline-role', 'old-org-admin', 'department-role', 'another-org-role'],
+    scoped_roles: [
+      binding,
+      { ...binding, roleId: 'system-role', roleCode: 'SUPER_ADMIN' },
+      { ...binding, roleId: 'old-org-admin', roleCode: 'ORG_SUPER_ADMIN' },
+      { ...binding, roleId: 'baseline-role', roleCode: 'FXIAOKE_BASELINE' },
+      { ...binding, roleId: 'department-role', scopeType: 'department', scopeId: 'dept' },
+      { ...binding, roleId: 'another-org-role', scopeId: 'another-org' },
+    ],
+  }
+  const send = vi.fn(async (url: string) => url.endsWith('/roles')
+    ? Response.json({ success: true }) : Response.json({}, { status: 403 }))
+  vi.stubGlobal('fetch', send)
+  const props = { currentUserId: 'actor', onRefresh: vi.fn() }
+  const summary: OrgSummaryPayload = {
+    ...statusPayload, organization: { id: orgId, name: '当前组织' }, users: [user], departments: [],
+    directory_roster: { status: 'ready', asOf: appliedAt, members: [{ id: user.id, departmentIds: [] }] },
+  }
+
+  const view = render(<OrgStructureTab {...props} orgSummary={summary} />)
+  fireEvent.keyDown(screen.getByRole('button', { name: `管理${user.display_name}` }), { key: 'ArrowDown' })
+  expect(screen.queryByText('平台根管理员只读')).not.toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: '停用用户' })).toHaveAttribute('aria-disabled', 'true')
+  fireEvent.click(await screen.findByRole('menuitem', { name: '分配角色' }))
+  expect(screen.getByText('仅可调整组织级角色')).toBeInTheDocument()
+
+  const refreshed = { ...user, scoped_roles: user.scoped_roles?.filter(role => role.roleId !== 'ordinary-role') }
+  view.rerender(<OrgStructureTab {...props} orgSummary={{ ...summary, users: [refreshed] }} />)
+  fireEvent.click(screen.getByRole('button', { name: '保存组织角色' }))
+  await waitFor(() => expect(props.onRefresh).toHaveBeenCalledOnce())
+
+  const writes = send.mock.calls.filter(([url]) => url.endsWith('/roles'))
+  expect(writes).toHaveLength(1)
+  expect(send).toHaveBeenCalledWith(`/api/admin/users/${user.id}/roles`, expect.objectContaining({
+    method: 'POST',
+    body: JSON.stringify({
+      role_ids: ['new-role'], expected_role_ids: ['ordinary-role'], scope_type: 'org',
+      expected_org_id: orgId, system_admin: false, expected_system_admin: true,
+    }),
+  }))
 })

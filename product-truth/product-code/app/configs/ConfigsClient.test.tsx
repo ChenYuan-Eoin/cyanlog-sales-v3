@@ -9,9 +9,10 @@ import ConfigsClient from './ConfigsClient'
 
 vi.mock('next/dynamic', () => ({ default: () => () => null }))
 vi.mock('./tabs/TabsContent', async () => {
+  const { useState } = await import('react')
   const { RoleDetailPanel } = await import('./tabs/RoleDetailPanel')
   return {
-    default: ({ activeTab, roles, orgSummary, savingRoleId, permissionsEditable, onSaveRole, onMaintainRole }: {
+    default: function MockTabsContent({ activeTab, roles, orgSummary, savingRoleId, permissionsEditable, onSaveRole, onMaintainRole, onRefreshOrg }: {
       activeTab: ConfigTabId
       roles: ConfigRoleRecord[]
       orgSummary: OrgSummaryPayload | null
@@ -19,7 +20,15 @@ vi.mock('./tabs/TabsContent', async () => {
       permissionsEditable: boolean
       onSaveRole: (roleId: string, permissions: string[]) => void
       onMaintainRole: (change: RoleMetadataChange) => Promise<string>
-    }) => {
+      onRefreshOrg: () => void | Promise<void>
+    }) {
+      const [editingMember, setEditingMember] = useState(false)
+      if (activeTab === 'org-structure') return orgSummary && <>
+        <output aria-label="组织成员">{orgSummary.users.map(user => user.display_name).join(',')}</output>
+        <button type="button" onClick={() => setEditingMember(true)}>编辑成员</button>
+        {editingMember && <input aria-label="成员编辑草稿" />}
+        <button type="button" onClick={() => void onRefreshOrg()}>回读组织成员</button>
+      </>
       if (activeTab !== 'role-access') return null
       const role = roles[0]
       if (!role) return null
@@ -58,6 +67,10 @@ function rolesResponse(permissions = existingPermissions, orgId = organization, 
 
 function organizationResponse(id = organization) {
   return Response.json({ organization: { id }, users: [], roles: [], departments: [], spaces: [] })
+}
+
+function organizationRoster(label: string, id = organization) {
+  return Response.json({ organization: { id }, users: [{ id: 'employee', display_name: label }], roles: [], departments: [], spaces: [] })
 }
 
 const roleDirectoryOnly = { general: false, organization: false, integrations: false, roles: true, shipping: false }
@@ -261,6 +274,72 @@ it('opens the organization directory when member-only access requests the role t
   expect(screen.queryByRole('button', { name: /外部系统接入|角色权限|定价与审批/ })).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: /^组织架构/ })).toHaveAttribute('aria-current', 'page')
   expect(window.location.search).toBe('?tab=org-structure')
+})
+
+it('keeps the organization roster and member draft mounted through focus and explicit readback', async () => {
+  window.history.replaceState({}, '', '/configs?tab=org-structure')
+  const focusResponse = deferredResponse()
+  const explicitResponse = deferredResponse()
+  const readOrg = vi.fn().mockResolvedValueOnce(organizationRoster('已核验成员'))
+    .mockReturnValueOnce(focusResponse.promise).mockReturnValueOnce(explicitResponse.promise)
+  fetcher.mockImplementation(async input => {
+    if (input === '/api/admin/org') return readOrg()
+    throw new Error('Unexpected fetch')
+  })
+  render(<ConfigsClient tabAccess={{ ...roleDirectoryOnly, organization: true }} />)
+
+  fireEvent.click(await screen.findByRole('button', { name: '编辑成员' }))
+  const draft = screen.getByRole('textbox', { name: '成员编辑草稿' })
+  fireEvent.change(draft, { target: { value: '当前草稿' } })
+  const roleTab = screen.getByRole('button', { name: /^角色权限/ })
+  fireEvent.mouseEnter(roleTab)
+  fireEvent.focus(roleTab)
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/admin/org'])
+  expect(screen.getByLabelText('组织成员')).toHaveTextContent('已核验成员')
+
+  fireEvent.focus(window)
+  await waitFor(() => expect(readOrg).toHaveBeenCalledTimes(2))
+  expect(screen.getByLabelText('组织成员')).toHaveTextContent('已核验成员')
+  expect(screen.getByRole('textbox', { name: '成员编辑草稿' })).toBe(draft)
+  await act(async () => focusResponse.resolve(organizationRoster('同组织成员')))
+  expect(screen.getByLabelText('组织成员')).toHaveTextContent('同组织成员')
+  expect(draft).toHaveValue('当前草稿')
+
+  fireEvent.click(screen.getByRole('button', { name: '回读组织成员' }))
+  await waitFor(() => expect(readOrg).toHaveBeenCalledTimes(3))
+  expect(fetcher.mock.calls.every(([url]) => url === '/api/admin/org')).toBe(true)
+  expect(screen.getByRole('textbox', { name: '成员编辑草稿' })).toBe(draft)
+  await act(async () => explicitResponse.resolve(organizationRoster('保存回读成员')))
+  expect(screen.getByLabelText('组织成员')).toHaveTextContent('保存回读成员')
+  expect(draft).toHaveValue('当前草稿')
+  expect(window.location.search).toBe('?tab=org-structure')
+})
+
+it.each(['token', 'organization', 'forbidden'] as const)('clears the organization roster after a %s change during readback', async unsafeChange => {
+  window.history.replaceState({}, '', '/configs?tab=org-structure')
+  const pending = deferredResponse()
+  const currentOrg = unsafeChange === 'organization' ? 'org-b' : organization
+  const readOrg = vi.fn().mockResolvedValueOnce(organizationRoster('已核验成员')).mockReturnValueOnce(pending.promise)
+    .mockResolvedValueOnce(organizationRoster('重新核验的成员', currentOrg))
+  fetcher.mockImplementation(async input => {
+    if (input === '/api/admin/org') return readOrg()
+    throw new Error('Unexpected fetch')
+  })
+  render(<ConfigsClient tabAccess={{ ...roleDirectoryOnly, organization: true }} />)
+  expect(await screen.findByLabelText('组织成员')).toHaveTextContent('已核验成员')
+  fireEvent.click(screen.getByRole('button', { name: '编辑成员' }))
+
+  fireEvent.focus(window)
+  await waitFor(() => expect(readOrg).toHaveBeenCalledTimes(2))
+  if (unsafeChange === 'token') localStorage.setItem('token', 'other-session')
+  await act(async () => pending.resolve(unsafeChange === 'forbidden'
+    ? Response.json({ error: '组织架构访问已撤销' }, { status: 403 })
+    : organizationRoster('不应显示的成员', currentOrg)))
+  expect(screen.queryByLabelText('组织成员')).not.toBeInTheDocument()
+  expect(screen.queryByRole('textbox', { name: '成员编辑草稿' })).not.toBeInTheDocument()
+  fireEvent.focus(window)
+  expect(await screen.findByLabelText('组织成员')).toHaveTextContent('重新核验的成员')
+  expect(screen.queryByRole('textbox', { name: '成员编辑草稿' })).not.toBeInTheDocument()
 })
 
 it('opens only the standalone role directory without requesting the organization roster', async () => {
