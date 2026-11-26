@@ -193,13 +193,25 @@ describe('organization role permission storage', () => {
   it('requires a root assignment in this exact organization, including effective role:manage when overridden', () => {
     const root: any = { roleCode: 'SUPER_ADMIN', scopeType: 'org', scopeId: 'org-1', permissions: ['*'] }
     expect(canEditRolePermissions([root], 'org-1')).toBe(true)
-    expect(canEditRolePermissions([{ ...root, roleCode: 'ORG_SUPER_ADMIN', permissions: ['role:manage'] }], 'org-1')).toBe(true)
+    expect(canEditRolePermissions([{ ...root, roleCode: 'ORG_SUPER_ADMIN', permissions: ['role:manage'] }], 'org-1')).toBe(false)
     expect(canEditRolePermissions([{ ...root, roleCode: 'ADMIN', permissions: ['config:write', 'role:manage'] }], 'org-1')).toBe(false)
     expect(canEditRolePermissions([{ ...root, scopeType: 'dept' }], 'org-1')).toBe(false)
     expect(canEditRolePermissions([{ ...root, scopeId: 'org-2' }], 'org-1')).toBe(false)
     expect(canEditRolePermissions([{ ...root, permissions: [] }], 'org-1')).toBe(false)
     expect(canEditRolePermissions([{ ...root, permissionsOverridden: true, permissions: [] }], 'org-1')).toBe(false)
     expect(canEditRolePermissions([{ ...root, permissionsOverridden: true, permissions: ['role:manage'] }], 'org-1')).toBe(true)
+  })
+
+  it('does not add role assignment to an ordinary role, but can remove a stored legacy key', async () => {
+    const assignmentKey = 'user:assign_roles'
+    const state = database({ settings: { role_permission_overrides: { 'role-1': ['user:view'] } } })
+    expect(await saveOrgRolePermissions('org-1', 'role-1', ['user:view', assignmentKey], ['user:view']))
+      .toEqual({ ok: false, reason: 'invalid' })
+    expect(state.operations.some(entry => entry.patch)).toBe(false)
+
+    database({ settings: { role_permission_overrides: { 'role-1': ['user:view', assignmentKey] } } })
+    expect(await saveOrgRolePermissions('org-1', 'role-1', ['user:view'], ['user:view', assignmentKey]))
+      .toMatchObject({ ok: true, role: { permissions: ['user:view'] } })
   })
 })
 

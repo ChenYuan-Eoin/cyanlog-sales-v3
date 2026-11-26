@@ -33,8 +33,8 @@ import type { NextRequest } from 'next/server'
 import { getRequestAuthToken } from '@/lib/auth-token'
 import { createMiddlewareRestClient, type MiddlewareRestClient } from '@/lib/middleware-rest-client'
 import {
-  canAccessOrgAdmin, canEnterConfigurationCenter, canListAssignableRoles, canReadRoleDirectory, hasConfigurationReadPermission, hasOrganizationSourcePermission,
-  hasOrgDepartmentDirectoryPermission, hasPermission, ORG_BUSINESS_ROLE_ASSIGN, ORG_MEMBER_EDIT,
+  canAccessOrgAdmin, canEnterConfigurationCenter, canReadRoleDirectory, hasConfigurationReadPermission, hasOrganizationSourcePermission,
+  hasOrgDepartmentDirectoryPermission, hasPermission, isSystemAuthorizationGrant, ORG_MEMBER_EDIT,
 } from '@/lib/permissions'
 import {
   ORG_MEMBER_INVITE, ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_REMOVE_MEMBERSHIP,
@@ -114,6 +114,7 @@ type MiddlewareAuthContext = {
   ownerShippingPermissions: string[]
   activeMembership: boolean
   departmentWorkspaceAccess: boolean
+  canManageSystemAuthorizations: boolean
 }
 
 type FxiaokeSourceRow = {
@@ -164,20 +165,26 @@ const BASELINE_READ_PATHS = new Set([
 
 const departmentDetailPath = /^\/api\/admin\/departments\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const memberDetailPath = /^\/api\/admin\/users\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/([a-z-]+))?$/i
+const memberAuthorizationPaths = new Set(['roles', 'role-scopes', 'org-super-admin'])
 const memberPathPermissions: Partial<Record<string, readonly string[]>> = {
   'PATCH ': [ORG_MEMBER_EDIT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_MANAGE_EMPLOYMENT],
   'DELETE ': [ORG_MEMBER_MANAGE_EMPLOYMENT],
   'PATCH report-to': [ORG_MEMBER_EDIT],
   'POST departments': [ORG_MEMBER_EDIT],
   'DELETE departments': [ORG_MEMBER_EDIT],
-  'POST roles': [ORG_BUSINESS_ROLE_ASSIGN],
-  'POST role-scopes': [ORG_BUSINESS_ROLE_ASSIGN],
-  'DELETE role-scopes': [ORG_BUSINESS_ROLE_ASSIGN],
   'POST invitations': [ORG_MEMBER_INVITE],
   'DELETE invitations': [ORG_MEMBER_INVITE],
   'PATCH login-enabled': [ORG_MEMBER_MANAGE_LOGIN],
   'POST restore': [ORG_MEMBER_MANAGE_EMPLOYMENT],
   'DELETE membership': [ORG_MEMBER_REMOVE_MEMBERSHIP],
+}
+
+function isSystemAuthorizationPath(pathname: string, request: NextRequest): boolean {
+  if (pathname === '/api/roles') return request.nextUrl.searchParams.get('view') === 'assignable'
+  if (pathname.startsWith('/api/roles/') && request.method === 'PATCH') return true
+  if (pathname === '/api/admin/departments/leader-access' || pathname === '/api/admin/departments/shipping-intake') return true
+  const memberPath = memberDetailPath.exec(pathname)?.[1]
+  return !!memberPath && memberAuthorizationPaths.has(memberPath)
 }
 
 function hasMemberRoutePermission(pathname: string, method: string, permissions: string[]): boolean {
@@ -338,6 +345,7 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
   const authorizationRoleCodes: string[] = []
   const activeMembership = organization.status === 'active'
     && membership.employment_status === 'active' && membership.left_at === null
+  let canManageSystemAuthorizations = false
 
   for (const ur of userRolesData ?? []) {
     if (ur.org_id !== orgId || ur.scope_type !== 'org' || ur.scope_id !== orgId) continue
@@ -346,6 +354,7 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
       if (!activeMembership && [ORG_SUPER_ADMIN_ROLE_CODE, SHIPPING_OPERATOR_ROLE_CODE].includes(r.code)) continue
       roleCodes.push(r.code)
       const effective = resolveRolePermissions(organization.settings, r)
+      canManageSystemAuthorizations ||= activeMembership && isSystemAuthorizationGrant(r.code, effective.permissions)
       allPermissions.push(...effective.permissions)
       if (usesFxiaoke && activeMembership) ownerShippingPermissions.push(...resolveOwnerShippingPermissions(organization.settings, r))
       if (!effective.overridden) authorizationRoleCodes.push(r.code)
@@ -370,6 +379,7 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
     ownerShippingPermissions,
     activeMembership,
     departmentWorkspaceAccess,
+    canManageSystemAuthorizations,
   }
 }
 
@@ -509,17 +519,20 @@ export async function middleware(request: NextRequest) {
     const organizationSourcePath = pathname === '/api/admin/organization-sources'
       || pathname.startsWith('/api/admin/organization-sources/')
     const organizationSourceAccess = organizationSourcePath && hasOrganizationSourcePermission(authContext.allPermissions)
+    const systemAuthorizationPath = isSystemAuthorizationPath(pathname, request)
+    if (systemAuthorizationPath && !authContext.canManageSystemAuthorizations) {
+      return NextResponse.json({ error: '仅系统超级管理员可管理授权', code: 'NO_PERMISSION' }, { status: 403 })
+    }
     const rolesIndexAccess = read && pathname === '/api/roles'
-      && (request.nextUrl.searchParams.get('view') === 'assignable'
-        ? canListAssignableRoles(authContext.allPermissions, authContext.authorizationRoleCodes)
-        : canReadRoleDirectory(authContext.allPermissions, authContext.authorizationRoleCodes))
+      && (systemAuthorizationPath || canReadRoleDirectory(authContext.allPermissions, authContext.authorizationRoleCodes))
     // Department write handlers independently enforce the exact edit/delete action.
     const departmentDirectoryPath = (read && pathname === '/api/admin/org')
       || (pathname === '/api/admin/departments' && (read || request.method === 'POST'))
       || (departmentDetailPath.test(pathname) && (request.method === 'PATCH' || request.method === 'DELETE'))
     const departmentDirectoryAccess = departmentDirectoryPath && hasOrgDepartmentDirectoryPermission(authContext.allPermissions)
     const memberAccess = hasMemberRoutePermission(pathname, request.method, authContext.allPermissions)
-    const specificConfigurationAccess = configurationShell || organizationSourceAccess || rolesIndexAccess || departmentDirectoryAccess || memberAccess
+    const specificConfigurationAccess = configurationShell || organizationSourceAccess || rolesIndexAccess
+      || departmentDirectoryAccess || memberAccess || systemAuthorizationPath
     if (restrictedMember && !specificConfigurationAccess && required && (required === 'config:read' || required === 'admin:access')) {
       return pathname.startsWith('/api/')
         ? NextResponse.json({ error: 'Forbidden', required }, { status: 403 })

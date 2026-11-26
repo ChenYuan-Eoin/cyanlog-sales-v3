@@ -54,6 +54,7 @@ export const legacyPermissionLabels: Readonly<Record<string, string>> = {
   'role:manage': '角色权限管理',
   'user:*': '成员管理旧组合授权',
   'user:write': '成员管理旧授权',
+  [ORG_BUSINESS_ROLE_ASSIGN]: '业务角色分配旧授权',
   'dept:write': '部门维护旧授权',
   'report:dept': '部门经营数据旧授权',
   'report:finance': '财务报表旧授权',
@@ -154,13 +155,15 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
                     availableAction(ORG_DEPARTMENT_STRUCTURE_EDIT, '维护部门', '新建部门或编辑资料。现有部门改隶仍须核验超管资格。', [ORG_DEPARTMENT_DIRECTORY_VIEW]),
                     availableAction(ORG_DEPARTMENT_STRUCTURE_DELETE, '删除部门', '停用符合条件的空部门。', [ORG_DEPARTMENT_DIRECTORY_VIEW]),
                   ],
+                  notes: [
+                    { label: '维护部门寄件提报资格', description: '由系统超管设置哪些部门符合提报范围。', status: '系统控制' },
+                  ],
                 },
                 {
                   id: 'org-members', label: '成员',
                   actions: [
                     availableAction('user:view', '查看成员', '查看组织架构中的成员档案及分配记录。'),
                     availableAction(ORG_MEMBER_EDIT, '编辑成员', '修改成员档案。', ['user:view']),
-                    availableAction(ORG_BUSINESS_ROLE_ASSIGN, '分配或撤销业务角色', '变更成员的业务角色。', ['user:view']),
                     availableAction(ORG_MEMBER_INVITE, '邀请成员', '添加、重发或撤销待激活邀请。预分配角色和部门另校验权限。', ['user:view']),
                     availableAction(ORG_MEMBER_MANAGE_LOGIN, '管理成员登录', '允许或禁止成员登录。', ['user:view']),
                     availableAction(ORG_MEMBER_MANAGE_EMPLOYMENT, '管理成员在职状态', '停用、恢复在职或办理离职。', ['user:view']),
@@ -173,7 +176,8 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
               id: 'role-access', label: '角色权限',
               actions: [availableAction('role:view', '查看角色及成员', '查看当前组织的角色、有效成员和权限配置。', ['user:view'])],
               notes: [
-                { label: '保存角色权限', description: '由当前组织具有角色管理资格的超级管理员操作。', status: '系统控制' },
+                { label: '保存角色授权', description: '由系统超管设置这个角色可以执行哪些业务动作。', status: '系统控制' },
+                { label: '分配或撤销业务角色', description: '由系统超管为员工设置角色与数据范围。', status: '系统控制' },
                 { label: '任免超级管理员', description: '由后端依据操作人和目标成员的资格校验。', status: '系统控制' },
               ],
             },

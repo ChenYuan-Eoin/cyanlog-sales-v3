@@ -25,9 +25,8 @@ export function canReadRoleDirectory(permissions: string[], authorizationRoleCod
     || authorizationRoleCodes.some(code => code === 'ADMIN' || code === 'SALES_OPS' || code === 'SUPER_ADMIN')
 }
 
-export function canListAssignableRoles(permissions: string[], authorizationRoleCodes: string[]): boolean {
-  return hasLegacyOrgMemberWrite(permissions, authorizationRoleCodes)
-    || (hasPermission(permissions, ORG_BUSINESS_ROLE_ASSIGN) && hasPermission(permissions, 'user:view'))
+export function isSystemAuthorizationGrant(roleCode: string, permissions: string[]): boolean {
+  return roleCode === 'SUPER_ADMIN' && hasPermission(permissions, 'role:manage')
 }
 
 export function hasOrganizationSourcePermission(permissions: string[]): boolean {

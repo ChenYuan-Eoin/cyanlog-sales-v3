@@ -17,6 +17,10 @@ vi.mock('@/lib/scoped-access', () => ({
   getFreshUserScopedRoleAssignments: vi.fn(),
 }))
 
+vi.mock('@/lib/org-role-permissions', () => ({
+  loadOrgRolePermissionContext: vi.fn(),
+}))
+
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     from: vi.fn(),
@@ -25,16 +29,17 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { canAccessOrgAdmin } from '@/lib/permissions'
+import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
 import { getFreshDefaultOrgId } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import { GET, POST } from './route'
 
-function makeRequest(orgId = 'org-1'): any {
+function makeRequest(orgId = 'org-1', roleCode = 'ADMIN'): any {
   return new Request('https://example.test/api/admin/org', {
     headers: {
       'x-user-id': 'u-1',
       'x-org-id': orgId,
-      'x-user-role-codes': 'ADMIN',
+      'x-user-role-codes': roleCode,
       'x-user-permissions': 'admin:access',
     },
   })
@@ -60,6 +65,7 @@ describe('GET /api/admin/org', () => {
       : makeQuery({ data: [], error: null, count: 0 }))
     ;(canAccessOrgAdmin as any).mockReturnValue(true)
     ;(getFreshDefaultOrgId as any).mockResolvedValue('org-1')
+    vi.mocked(loadOrgRolePermissionContext).mockResolvedValue(null)
   })
 
   it('RPC 成功时返回聚合数据和分段耗时头', async () => {
@@ -94,7 +100,7 @@ describe('GET /api/admin/org', () => {
       },
       member_access: true,
       member_actions: {
-        edit: true, assignRoles: true, invite: true, manageLogin: true, manageEmployment: true,
+        edit: true, assignRoles: false, invite: true, manageLogin: true, manageEmployment: true,
         removeMembership: true, manageDepartments: true, bindExternalIdentity: false,
       },
       department_access: { canRead: true, canEdit: true, canDelete: true },
@@ -112,6 +118,27 @@ describe('GET /api/admin/org', () => {
       'organization_sources', 'organizations', 'sales_spaces', 'user_organizations',
     ])
     expect(offlineProvider).not.toHaveBeenCalled()
+  })
+
+  it('exposes role assignment only with fresh system authority in the current organization', async () => {
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: { organization: { id: 'org-1' }, users: [], roles: [], departments: [], spaces: [] }, error: null,
+      success: true, count: null, status: 200, statusText: 'OK',
+    })
+    const authority = {
+      settings: {}, orgId: 'org-1', canRead: true, canEdit: true, canEditPlatformRoot: true, actorPermissions: ['role:manage'],
+      canAppointOrganizationSuperAdmin: true, canListAssignableRoles: true,
+    }
+    const request = makeRequest('org-1', 'SUPER_ADMIN')
+
+    vi.mocked(loadOrgRolePermissionContext).mockResolvedValueOnce(authority)
+    expect(await (await GET(request)).json()).toMatchObject({ member_actions: { assignRoles: true } })
+
+    vi.mocked(loadOrgRolePermissionContext).mockResolvedValueOnce({ ...authority, orgId: 'org-2' })
+    expect(await (await GET(request)).json()).toMatchObject({ member_actions: { assignRoles: false, invite: true } })
+
+    vi.mocked(loadOrgRolePermissionContext).mockRejectedValueOnce(new Error('Authority lookup failed'))
+    expect(await (await GET(request)).json()).toMatchObject({ member_actions: { assignRoles: false, invite: true } })
   })
 
   it('目录聚合读取失败时不回退成缺少目录关系的成功列表', async () => {
@@ -132,7 +159,7 @@ describe('GET /api/admin/org', () => {
       directory_roster: { status: 'unavailable', reason: 'DIRECTORY_UNCONFIRMED' },
       member_access: true,
       member_actions: {
-        edit: true, assignRoles: true, invite: true, manageLogin: true, manageEmployment: true,
+        edit: true, assignRoles: false, invite: true, manageLogin: true, manageEmployment: true,
         removeMembership: true, manageDepartments: true, bindExternalIdentity: false,
       },
       department_access: { canRead: true, canEdit: true, canDelete: true },

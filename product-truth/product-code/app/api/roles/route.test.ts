@@ -85,16 +85,23 @@ describe('GET /api/roles organization permissions', () => {
     },
   )
 
-  it('业务角色分配者只读取精简选项，不读取角色权限或保护角色', async () => {
-    const { roleQuery } = database({
+  it('已有业务角色分配旧授权不能读取分配选项', async () => {
+    database({
       assignments: [{ ...assignment, role: { ...assignment.role, permissions: ['user:view', 'user:assign_roles'] } }],
+    })
+    expect((await GET(makeRequest('https://example.test/api/roles?view=assignable'))).status).toBe(403)
+    expect(supabaseAdmin.from).not.toHaveBeenCalledWith('roles')
+  })
+
+  it('系统超管读取精简的普通角色分配选项', async () => {
+    const { roleQuery } = database({
+      assignments: [root],
       globalRoles: [
         roles[1],
         { id: 'root', code: 'SUPER_ADMIN', name: '平台超管', permissions: ['*'] },
         { id: 'delegated', code: 'ORG_SUPER_ADMIN', name: '组织超管', permissions: ['role:manage'] },
       ],
     })
-    expect((await GET(makeRequest())).status).toBe(403)
     const res = await GET(makeRequest('https://example.test/api/roles?view=assignable'))
     expect(res.status).toBe(200)
     expect((await res.json()).data).toEqual({ roles: [{ id: 'role-2', code: 'SALES', name: '销售' }] })
@@ -130,7 +137,7 @@ describe('GET /api/roles organization permissions', () => {
         permission_keys: expect.arrayContaining(['config:read', 'config:write', 'role:manage']),
         permissions_editable: false,
         can_assign_org_super_admin: false,
-        permissions_edit_block_reason: expect.stringContaining('仅当前组织的超级管理员'),
+        permissions_edit_block_reason: '仅系统超管可以保存角色授权。',
       },
       meta: { total: 2, limit: 20, offset: 0, hasMore: false },
     })

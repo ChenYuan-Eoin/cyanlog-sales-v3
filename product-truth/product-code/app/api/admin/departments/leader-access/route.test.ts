@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthError, requireAuth } from '@/lib/auth'
+import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
 import { supabaseAdmin } from '@/lib/supabase'
 import { GET, PUT } from './route'
 
@@ -9,6 +10,7 @@ vi.mock('@/lib/auth', async (importOriginal) => ({
   requireAuth: vi.fn(),
 }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: vi.fn(), rpc: vi.fn() } }))
+vi.mock('@/lib/org-role-permissions', () => ({ loadOrgRolePermissionContext: vi.fn() }))
 
 const actorId = '11111111-1111-4111-8111-111111111111'
 const orgId = '22222222-2222-4222-8222-222222222222'
@@ -16,11 +18,9 @@ const departmentId = '33333333-3333-4333-8333-333333333333'
 const leaderId = '44444444-4444-4444-8444-444444444444'
 const url = 'https://example.test/api/admin/departments/leader-access'
 
-const membership = {
-  select: vi.fn().mockReturnThis(),
-  eq: vi.fn().mockReturnThis(),
-  is: vi.fn().mockReturnThis(),
-  maybeSingle: vi.fn(),
+const authority = {
+  orgId, settings: {}, actorPermissions: ['*'], canEdit: true, canEditPlatformRoot: true,
+  canAppointOrganizationSuperAdmin: true, canRead: true, canListAssignableRoles: true,
 }
 
 function changeRequest(body: object) {
@@ -35,8 +35,7 @@ describe('department leader access administrator route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(requireAuth).mockResolvedValue({ id: actorId, org_id: 'legacy-home-org', email: null, display_name: null, phone: null })
-    vi.mocked(supabaseAdmin.from).mockReturnValue(membership as never)
-    membership.maybeSingle.mockResolvedValue({ data: { org_id: orgId }, error: null })
+    vi.mocked(loadOrgRolePermissionContext).mockResolvedValue(authority)
   })
 
   it('reads only the current organization selection from a root-checked RPC', async () => {
@@ -45,11 +44,7 @@ describe('department leader access administrator route', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('Cache-Control')).toBe('no-store')
     expect(await response.json()).toEqual({ success: true, leaderId, userId: null })
-    expect(supabaseAdmin.from).toHaveBeenCalledWith('user_organizations')
-    expect(membership.eq.mock.calls).toEqual([
-      ['user_id', actorId], ['is_default', true], ['status', 'active'], ['employment_status', 'active'],
-    ])
-    expect(membership.is).toHaveBeenCalledWith('left_at', null)
+    expect(loadOrgRolePermissionContext).toHaveBeenCalledExactlyOnceWith(actorId)
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_get_department_lead_access_v1', {
       p_actor_id: actorId, p_org_id: orgId, p_department_id: departmentId,
     })
@@ -60,8 +55,15 @@ describe('department leader access administrator route', () => {
     vi.mocked(requireAuth).mockRejectedValueOnce(new AuthError())
     expect((await PUT(changeRequest(requestBody))).status).toBe(401)
 
-    membership.maybeSingle.mockResolvedValueOnce({ data: null, error: null })
+    vi.mocked(loadOrgRolePermissionContext).mockResolvedValueOnce(null)
     expect((await PUT(changeRequest(requestBody))).status).toBe(403)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it('denies department lead grants without system super administrator authority', async () => {
+    vi.mocked(loadOrgRolePermissionContext).mockResolvedValue({ ...authority, canEditPlatformRoot: false })
+    expect((await GET(new NextRequest(`${url}?departmentId=${departmentId}`))).status).toBe(403)
+    expect((await PUT(changeRequest({ departmentId, userId: leaderId, expectedUserId: null }))).status).toBe(403)
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 

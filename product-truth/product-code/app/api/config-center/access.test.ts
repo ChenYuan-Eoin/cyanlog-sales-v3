@@ -110,6 +110,18 @@ describe('legacy configuration actions', () => {
     expect((await publish(request('POST'), taxDomain)).status).toBe(403)
   })
 
+  it('lets an explicitly authorized configuration editor change a business parameter', async () => {
+    allow(['config:write'])
+    const payload = { param_key: 'PRIVATE_MIN_SUB', name: '私有部署订阅起售', value: 50000, category: 'pricing' }
+    mocks.from.mockReturnValueOnce(dbQuery(item))
+    const change = dbQuery({ ...item, ...payload })
+    mocks.from.mockReturnValueOnce(change)
+
+    expect((await update(request('PUT', payload), domain)).status).toBe(200)
+    expect(change.update).toHaveBeenCalledWith(expect.objectContaining({ value: 50000 }))
+    expect(mocks.from.mock.calls).toEqual([['business_params'], ['business_params']])
+  })
+
   it('rejects editing or rolling back a live config without publish permission', async () => {
     allow(['config:write'])
     mocks.from.mockReturnValue(dbQuery({ ...item, status: 'PUBLISHED' }))

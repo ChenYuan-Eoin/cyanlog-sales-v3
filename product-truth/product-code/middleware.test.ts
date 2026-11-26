@@ -366,22 +366,34 @@ describe('role-free federated session boundary', () => {
     expect((await request('/configs?tab=org-structure')).status).toBe(307)
   })
 
-  it('admits an explicitly authorized member role assigner without giving generic configuration or login writes', async () => {
-    const token = 'member-role-assigner'
+  it('keeps member reads available while reserving authorization routes to the system super administrator', async () => {
+    const token = 'role-assignment-boundary'
     const id = '4cf0681d-dcb2-45f2-bfa2-71c1bc253213'
     const role = { id: 'member-role', code: 'READONLY', permissions: ['user:view', 'user:assign_roles'] }
-    mockExactOrgAuth({ token, orgId: 'org-a', authMethod: 'fxiaoke', roles: [{ roles: role }] })
     const request = (path: string, method = 'GET') => middleware(makeRequest(
       `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
     ))
+    const authorizationPaths = [
+      ['/api/roles?view=assignable', 'GET'], ['/api/roles/role-id', 'PATCH'],
+      [`/api/admin/users/${id}/roles`, 'POST'], [`/api/admin/users/${id}/role-scopes`, 'DELETE'],
+      [`/api/admin/users/${id}/org-super-admin`, 'PATCH'],
+      ['/api/admin/departments/leader-access', 'PUT'], ['/api/admin/departments/shipping-intake', 'PATCH'],
+    ]
+    mockExactOrgAuth({ token, orgId: 'org-a', authMethod: 'fxiaoke', roles: [{ roles: role }] })
     expect((await request('/configs?tab=org-structure')).status).toBe(200)
     expect((await request('/api/admin/org')).status).toBe(200)
     expect((await request('/api/roles')).status).toBe(403)
-    expect((await request('/api/roles?view=assignable')).status).toBe(200)
-    expect((await request(`/api/admin/users/${id}/roles`, 'POST')).status).toBe(200)
     expect((await request(`/api/admin/users/${id}/login-enabled`, 'PATCH')).status).toBe(403)
-    expect((await request(`/api/admin/users/${id}/org-super-admin`, 'PATCH')).status).toBe(403)
     expect((await request('/api/configs')).status).toBe(403)
+    for (const [path, method] of authorizationPaths) expect((await request(path, method)).status, path).toBe(403)
+
+    const root = { id: 'root-role', code: 'SUPER_ADMIN', permissions: ['*'] }
+    mockExactOrgAuth({ token, orgId: 'org-a', roles: [{ roles: root }] })
+    for (const [path, method] of authorizationPaths) expect((await request(path, method)).status, path).toBe(200)
+
+    mockExactOrgAuth({ token, orgId: 'org-a', roles: [{ roles: root }, { roles: { ...role, permissions: ['role:manage'] } }],
+      settings: { role_permission_overrides: { 'root-role': ['admin:access'] } } })
+    for (const [path, method] of authorizationPaths) expect((await request(path, method)).status, path).toBe(403)
   })
 
   it('admits settings-only viewers to both settings entries while preserving the generic config boundary', async () => {

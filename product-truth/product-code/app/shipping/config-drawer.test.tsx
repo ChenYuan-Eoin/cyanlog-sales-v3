@@ -30,26 +30,19 @@ describe('shipping configuration drawer', () => {
   })
 
 
-  it('delegates operator assignment to the existing role center without a member picker', async () => {
-    render(<ShippingConfigDrawer embedded />)
+  it.each([undefined, '/' as const])('shows business rules without grant controls for settings entry %s', async (standaloneReturn) => {
+    fetcher.mockImplementation(async (url: string) => url === '/api/shipping/intake-settings'
+      ? Response.json({ rules: DEFAULT_INTAKE_RULES })
+      : Response.json({ permissions: ['shipping:settings_view', 'shipping:intake_write'], configuration: { connections: [], billingAccounts: [], sender: null } }))
+    render(<ShippingConfigDrawer embedded standaloneReturn={standaloneReturn} />)
     await waitForConfiguration()
-    fireEvent.click(screen.getByText('审核与下单权限'))
+    fireEvent.click(screen.getByText('寄件提报规则'))
+    expect(await screen.findByRole('button', { name: '保存寄件提报规则' })).toBeTruthy()
+    expect(screen.getByLabelText('公司名称最少字数')).toBeTruthy()
+    expect(screen.queryByText('审核与下单权限')).toBeNull()
+    expect(screen.queryByText('寄件部门授权')).toBeNull()
     expect(screen.queryByRole('group', { name: '操作员名单' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '保存操作员授权' })).toBeNull()
-    expect(screen.getByRole('link', { name: '前往组织与权限配置角色' }).getAttribute('href')).toBe('/configs?tab=role-access')
-    expect(fetcher.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true)
-  })
-  it('keeps department authorization inside permissions and company rules separate', async () => {
-    fetcher.mockImplementation(async (url: string) => url.includes('intake-settings')
-      ? Response.json({ rules: DEFAULT_INTAKE_RULES, departments: [{id:'root',name:'总部',path:'总部',parentId:null}] })
-      : Response.json({ configuration:{connections:[],billingAccounts:[],sender:null},operatorAccess:{operators:[],legacyImportAvailable:false} }))
-    render(<ShippingConfigDrawer embedded />)
-    await waitForConfiguration()
-    const permissions=screen.getByText('审核与下单权限').closest('details')!
-    const rules=screen.getByText('寄件提报规则').closest('details')!
-    expect(await within(permissions).findByRole('radio',{name:'全部有效部门'})).toBeTruthy()
-    expect(within(rules).queryByRole('radio',{name:'全部有效部门'})).toBeNull()
-    expect(within(rules).getByLabelText('公司名称最少字数')).toBeTruthy()
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes('/api/admin/departments/shipping-intake'))).toBe(false)
   })
   it('distinguishes the preview site from the carrier production selector', async () => {
     fetcher.mockImplementation(async () => Response.json({ deploymentEnvironment: 'preview', configuration: { connections: [], billingAccounts: [], sender: null } }))
@@ -66,9 +59,6 @@ describe('shipping configuration drawer', () => {
     await waitForConfiguration()
     expect(screen.getByRole('link', { name: /前往正式站/ }).getAttribute('href')).toBe('https://sales.cyanlog.icu/shipping/settings')
     expect(screen.getByRole('link', { name: /返回工作台/ }).getAttribute('href')).toBe('/')
-    fireEvent.click(screen.getByText('审核与下单权限'))
-    expect(screen.getByText(/由组织管理员在“组织与权限”中/)).toBeTruthy()
-    expect(screen.queryByRole('link', { name: '前往组织与权限配置角色' })).toBeNull()
   })
 
   it('discards visible configuration and form drafts when the live write gate denies access', async () => {
@@ -141,7 +131,7 @@ describe('shipping configuration drawer', () => {
     expect(screen.queryByRole('button', { name: '保存月结账号' })).toBeNull()
     expect(screen.queryByText(/尚未保存月结账号/)).toBeNull()
   })
-  it('shows carrier, sender, rules and permissions together without legacy enterprise controls or requests', async () => {
+  it('shows carrier, sender and business rules without legacy enterprise controls or requests', async () => {
     render(<ShippingConfigDrawer embedded />)
     await waitForConfiguration()
     expect(screen.queryByRole('navigation', { name: '寄件设置分区' })).toBeNull()
@@ -149,7 +139,6 @@ describe('shipping configuration drawer', () => {
     expect(screen.getByRole('region', { name: '月结与服务' })).toBeTruthy()
     expect(screen.getByRole('region', { name: '默认寄件人内容' })).toBeTruthy()
     expect(screen.getByText('寄件提报规则')).toBeTruthy()
-    expect(screen.getByText('审核与下单权限')).toBeTruthy()
     expect(screen.queryByRole('heading', { name: '企业接入' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '企微自建应用' })).toBeNull()
     expect(screen.queryByRole('region', { name: '企微机器人配置' })).toBeNull()

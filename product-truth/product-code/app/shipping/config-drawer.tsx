@@ -324,15 +324,6 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
             </fieldset>
           </section>
           <details><summary>寄件提报规则</summary><IntakeConfiguration readOnly={!canSetIntake}/></details>
-          <details>
-            <summary>审核与下单权限</summary>
-            <IntakeConfiguration mode="departments" readOnly={!canSetIntake}/>
-            <section className={styles.permissionCard} aria-label="审核与下单角色管理">
-              <h3>操作与审核权限</h3>
-              <p className={styles.hint}>由组织管理员在“组织与权限”中为角色配置相应的寄件工作台权限，并将成员分配到对应角色。</p>
-              {!standaloneReturn && <a href="/configs?tab=role-access">前往组织与权限配置角色</a>}
-            </section>
-          </details>
         </section>
       </div>
     </aside>

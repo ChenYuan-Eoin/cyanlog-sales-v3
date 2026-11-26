@@ -26,6 +26,7 @@ import type { MemberActionAvailability } from '@/lib/admin/member-actions'
 import Fuse from 'fuse.js'
 import { success, error, confirmAction } from '@/lib/toast'
 import { buildDepartmentOptions, resolveDepartmentSpaceIds } from '@/lib/department-spaces'
+import { ShippingDepartmentAuthorization } from '@/app/shipping/intake-configuration'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
@@ -971,6 +972,9 @@ export default function OrgStructureTab({
   const departments = useMemo(() => orgSummary?.departments ?? [], [orgSummary?.departments])
   const users = useMemo(() => orgSummary?.users ?? [], [orgSummary?.users])
   const departmentTree = useMemo(() => buildDepartmentOptions(departments), [departments])
+  const shippingDepartments = useMemo(() => departmentTree.map(department => ({
+    id: department.department_id, name: department.name, parentId: department.parent_department_id,
+  })), [departmentTree])
   const orgDepartmentIds = useMemo(() => departmentTree.map(department => department.department_id), [departmentTree])
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null)
   const [includeSubdepartments, setIncludeSubdepartments] = useState(true)
@@ -1215,6 +1219,14 @@ export default function OrgStructureTab({
                 department={selectedDept}
               />
             </div>
+          )}
+          {currentUserId && orgSummary?.organization?.id && (
+            <ShippingDepartmentAuthorization
+              key={JSON.stringify([orgSummary.organization.id, currentUserId])}
+              orgId={orgSummary.organization.id}
+              departments={shippingDepartments}
+              authHeaders={buildAuthHeaders}
+            />
           )}
           <div className="rounded-lg border bg-white p-4">
             <h3 className="font-medium text-slate-900">员工登录</h3>

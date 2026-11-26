@@ -21,7 +21,7 @@ import {
 import { validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
 import { canPerformMemberAction } from '@/lib/admin/member-actions'
 import { ORG_MEMBER_INVITE } from '@/lib/admin/member-action-keys'
-import { ORG_BUSINESS_ROLE_ASSIGN } from '@/lib/permissions'
+import { canManageSystemAuthorizations, loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import { normalizeIdentityPhone } from '@/lib/fxiaoke/identity'
 
 const createUserSchema = z.object({
@@ -125,10 +125,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_DEPARTMENT_PERMISSION' }, { status: 403 })
     }
 
-    if (role_ids.length > 0 && !canPerformMemberAction(actorAssignments, orgId, ORG_BUSINESS_ROLE_ASSIGN)) {
-      return NextResponse.json({ error: '无权预分配成员角色', code: 'NO_ROLE_ASSIGN_PERMISSION' }, { status: 403 })
+    let roleAssignments = actorAssignments
+    if (role_ids.length > 0) {
+      const authority = await loadCurrentOrganizationRoleAssignments(currentUser.id)
+      if (!authority || authority.orgId !== orgId || !canManageSystemAuthorizations(authority.assignments, orgId)) {
+        return NextResponse.json({ error: '仅系统超级管理员可预分配成员角色', code: 'NO_ROLE_ASSIGN_PERMISSION' }, { status: 403 })
+      }
+      roleAssignments = authority.assignments
     }
-    const roleValidation = await validateOrgRoleAssignment(actorAssignments, orgId, role_ids)
+    const roleValidation = await validateOrgRoleAssignment(roleAssignments, orgId, role_ids)
     if (!roleValidation.ok && roleValidation.reason === 'ROLE_NOT_FOUND') {
       return NextResponse.json({ error: '部分角色不存在' }, { status: 400 })
     }

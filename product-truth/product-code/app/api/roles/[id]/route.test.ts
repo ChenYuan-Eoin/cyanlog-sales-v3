@@ -58,6 +58,7 @@ describe('PATCH /api/roles/[id] organization role permissions', () => {
 
   it.each([
     ['config writer without root identity', { ...root, role: { ...root.role, code: 'ADMIN', permissions: ['config:write', 'role:manage'] } }, {}],
+    ['non-system organization administrator', { ...root, role: { ...root.role, code: 'ORG_SUPER_ADMIN', permissions: ['role:manage'] } }, {}],
     ['department root', { ...root, scope_type: 'department' }, {}],
     ['another organization root', { ...root, org_id: 'org-other' }, {}],
     ['revoked root', root, { role_permission_overrides: { 'root-role': [] } }],

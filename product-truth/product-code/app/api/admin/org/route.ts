@@ -9,6 +9,7 @@ import { requireAuth } from '@/lib/auth'
 import { buildDepartmentSpaces } from '@/lib/department-spaces'
 import { readDirectoryRosterSource, verifyDirectoryRoster } from '@/lib/organization-directory-roster'
 import { canAccessOrgAdmin } from '@/lib/permissions'
+import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
 import { getMemberActionAvailability, getScopedMemberActionAvailability, type MemberActionAvailability } from '@/lib/admin/member-actions'
 import { evaluateDepartmentStructureAccess, getDepartmentStructureAccess } from '@/lib/admin/department-actions'
 import {
@@ -275,6 +276,14 @@ function hasMemberAction(actions: MemberActionAvailability) {
     || actions.manageEmployment || actions.removeMembership
 }
 
+async function canAssignOrganizationRoles(userId: string, orgId: string, roleCodes: string[]) {
+  if (!roleCodes.includes('SUPER_ADMIN')) return false
+  // Projection only: missing authority should hide the authorization controls,
+  // without interrupting unrelated organization and member reads.
+  const authority = await loadOrgRolePermissionContext(userId).catch(() => null)
+  return authority?.orgId === orgId && authority.canEditPlatformRoot
+}
+
 async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
   const headerUserId = req.headers.get('x-user-id')?.trim()
   const headerOrgId = req.headers.get('x-org-id')?.trim()
@@ -291,7 +300,8 @@ async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
 
     const authorizationRoleCodes = (req.headers.get('x-user-authorization-role-codes') ?? roleCodes.join(','))
       .split(',').map((code) => code.trim()).filter(Boolean)
-    const memberActions = getMemberActionAvailability(permissions, authorizationRoleCodes)
+    const assignRoles = await canAssignOrganizationRoles(headerUserId, headerOrgId, roleCodes)
+    const memberActions = getMemberActionAvailability(permissions, authorizationRoleCodes, assignRoles)
     const memberAccess = canAccessOrgAdmin(permissions, authorizationRoleCodes) || hasMemberAction(memberActions)
     const departmentAccess = evaluateDepartmentStructureAccess(permissions, authorizationRoleCodes)
     if (!memberAccess && !departmentAccess.canRead) return null
@@ -315,7 +325,8 @@ async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
   ])
   if (!orgId) return null
   const roleCodes = getOrgRoleCodes(assignments, orgId)
-  const memberActions = getScopedMemberActionAvailability(assignments, orgId)
+  const assignRoles = await canAssignOrganizationRoles(user.id, orgId, roleCodes)
+  const memberActions = getScopedMemberActionAvailability(assignments, orgId, assignRoles)
   const memberAccess = canManageOrg(assignments, orgId) || hasMemberAction(memberActions)
   const departmentAccess = getDepartmentStructureAccess(assignments, orgId)
   if (!memberAccess && !departmentAccess.canRead) return null

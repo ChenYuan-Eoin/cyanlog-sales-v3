@@ -1,4 +1,4 @@
-import { hasLegacyOrgMemberWrite, hasPermission, ORG_BUSINESS_ROLE_ASSIGN, ORG_MEMBER_EDIT } from '@/lib/permissions'
+import { hasLegacyOrgMemberWrite, hasPermission, ORG_MEMBER_EDIT } from '@/lib/permissions'
 import { canMutateOrgUsers, type ScopedRoleAssignment } from '@/lib/scoped-access'
 import {
   ORG_MEMBER_INVITE, ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN,
@@ -7,14 +7,13 @@ import {
 
 type MemberAction =
   | typeof ORG_MEMBER_EDIT
-  | typeof ORG_BUSINESS_ROLE_ASSIGN
   | typeof ORG_MEMBER_LIFECYCLE_ACTIONS[number]
 
-export function getMemberActionAvailability(permissions: string[], roleCodes: string[]) {
+export function getMemberActionAvailability(permissions: string[], roleCodes: string[], assignRoles = false) {
   const legacyWrite = hasLegacyOrgMemberWrite(permissions, roleCodes)
   return {
     edit: legacyWrite || hasPermission(permissions, ORG_MEMBER_EDIT),
-    assignRoles: legacyWrite || hasPermission(permissions, ORG_BUSINESS_ROLE_ASSIGN),
+    assignRoles,
     invite: legacyWrite || hasPermission(permissions, ORG_MEMBER_INVITE),
     manageLogin: legacyWrite || hasPermission(permissions, ORG_MEMBER_MANAGE_LOGIN),
     manageEmployment: legacyWrite || hasPermission(permissions, ORG_MEMBER_MANAGE_EMPLOYMENT),
@@ -27,11 +26,12 @@ export function getMemberActionAvailability(permissions: string[], roleCodes: st
 
 export type MemberActionAvailability = ReturnType<typeof getMemberActionAvailability>
 
-export function getScopedMemberActionAvailability(assignments: ScopedRoleAssignment[], orgId: string): MemberActionAvailability {
+export function getScopedMemberActionAvailability(assignments: ScopedRoleAssignment[], orgId: string, assignRoles = false): MemberActionAvailability {
   const organizationRoles = assignments.filter(assignment => assignment.scopeType === 'org' && assignment.scopeId === orgId)
   return getMemberActionAvailability(
     organizationRoles.flatMap(assignment => assignment.permissions ?? []),
     organizationRoles.filter(assignment => !assignment.permissionsOverridden).map(assignment => assignment.roleCode),
+    assignRoles,
   )
 }
 

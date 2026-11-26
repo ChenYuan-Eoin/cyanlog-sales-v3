@@ -241,8 +241,8 @@
     "kind": "product",
     "status": "active",
     "feature_id": "F003",
-    "objective": "按系统菜单、功能区、动作交付可验收权限表。组织与权限、自助收寄、寄件设置动作分别验证查看、执行、保存与撤销。其他模块只核对目录归属。权限点确认后再处理组织和部门绑定。",
-    "activation_basis": "IN-20261126-001 用户确认权限层级并明确要求更新目标开始工作。",
+    "objective": "按系统菜单、功能区、动作交付可验收权限表。业务参数由持对应查看、修改或发布权限的人操作；只有系统超管能发放、修改或撤销授权。首批验证自助收寄的表单规则与部门提报授权分开保存，以及角色授权、角色分配和部门负责人授权的服务端校验。其他模块只核对目录归属。",
+    "activation_basis": "IN-20261126-001 用户确认权限层级并要求开始工作。IN-20261126-002 明确业务参数与权限分配的边界。",
     "execution_workspace": "/Users/nsss/.codex/worktrees/wp82-permissions-current/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",

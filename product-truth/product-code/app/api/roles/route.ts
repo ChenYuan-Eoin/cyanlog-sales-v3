@@ -9,6 +9,7 @@ import { rolePermissionsEditBlockReason } from '@/lib/org-role-permissions'
 import { hasPublishedShippingBundle, REGISTERED_MODULE_PERMISSION_KEYS, SHIPPING_BUNDLE } from '@/lib/module-access'
 import { loadRoleModulePermissionCatalog } from '@/lib/permission-registry'
 import { PERMISSION_KEYS } from '@/lib/role-permission-policy'
+import { ORG_BUSINESS_ROLE_ASSIGN } from '@/lib/permissions'
 import { ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions, resolveRolePermissions } from '@/lib/role-permission-resolution'
 import { isRoleId, withRolePermissionContext } from './context'
 
@@ -66,7 +67,7 @@ export async function GET(req: NextRequest) {
     const publishedModuleKeys = permissionCatalog.flatMap(group => group.items.map(item => item.key))
     const shippingBundleAvailable = hasPublishedShippingBundle(new Set(publishedModuleKeys))
     const permissionKeys = [
-      ...PERMISSION_KEYS.filter(key => !REGISTERED_MODULE_PERMISSION_KEYS.some(registered => registered === key)
+      ...PERMISSION_KEYS.filter(key => key !== ORG_BUSINESS_ROLE_ASSIGN && !REGISTERED_MODULE_PERMISSION_KEYS.some(registered => registered === key)
         && (key !== SHIPPING_BUNDLE || shippingBundleAvailable)),
       ...publishedModuleKeys,
     ].sort()
@@ -78,7 +79,7 @@ export async function GET(req: NextRequest) {
         permission_catalog: permissionCatalog,
         permissions_editable: canEdit,
         can_assign_org_super_admin: canAppointOrganizationSuperAdmin === true,
-        permissions_edit_block_reason: canEdit ? null : '仅当前组织的超级管理员可修改角色权限。',
+        permissions_edit_block_reason: canEdit ? null : '仅系统超管可以保存角色授权。',
       },
       {
         total: count || 0,

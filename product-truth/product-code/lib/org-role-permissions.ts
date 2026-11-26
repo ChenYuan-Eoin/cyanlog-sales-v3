@@ -4,7 +4,7 @@ import {
   SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE,
 } from '@/lib/module-access'
 import {
-  canListAssignableRoles, canReadRoleDirectory, hasPermission, isOrgDelegationSensitivePermission, ORG_BUSINESS_ROLE_ASSIGN, ORG_MEMBER_EDIT,
+  canReadRoleDirectory, hasPermission, isOrgDelegationSensitivePermission, isSystemAuthorizationGrant, ORG_BUSINESS_ROLE_ASSIGN, ORG_MEMBER_EDIT,
   ORG_DEPARTMENT_DIRECTORY_VIEW, ORG_DEPARTMENT_STRUCTURE_DELETE, ORG_DEPARTMENT_STRUCTURE_EDIT,
   ROLE_DIRECTORY_VIEW,
 } from '@/lib/permissions'
@@ -22,17 +22,14 @@ export async function loadOrgRolePermissionSettings(orgId: string): Promise<unkn
   return data.settings
 }
 
-function hasOrgRoleManagement(assignments: ScopedRoleAssignment[], orgId: string, codes: string[]): boolean {
+export function canManageSystemAuthorizations(assignments: ScopedRoleAssignment[], orgId: string): boolean {
   return assignments.some((assignment) => (
     assignment.scopeType === 'org' && assignment.scopeId === orgId
-    && codes.includes(assignment.roleCode)
-    && hasPermission(assignment.permissions, 'role:manage')
+    && isSystemAuthorizationGrant(assignment.roleCode, assignment.permissions)
   ))
 }
 
-export function canEditRolePermissions(assignments: ScopedRoleAssignment[], orgId: string): boolean {
-  return hasOrgRoleManagement(assignments, orgId, ['SUPER_ADMIN', ORG_SUPER_ADMIN_ROLE_CODE])
-}
+export const canEditRolePermissions = canManageSystemAuthorizations
 
 type RolePermissionContext = {
   orgId: string
@@ -113,11 +110,11 @@ export async function loadOrgRolePermissionContext(userId: string): Promise<Role
     orgId,
     settings,
     canEdit,
-    canAppointOrganizationSuperAdmin: hasOrgRoleManagement(assignments, orgId, ['SUPER_ADMIN', ORG_SUPER_ADMIN_ROLE_CODE]),
-    canEditPlatformRoot: hasOrgRoleManagement(assignments, orgId, ['SUPER_ADMIN']),
+    canAppointOrganizationSuperAdmin: canEdit,
+    canEditPlatformRoot: canEdit,
     actorPermissions: permissions,
     canRead: canReadRoleDirectory(permissions, legacyRoleCodes),
-    canListAssignableRoles: canListAssignableRoles(permissions, legacyRoleCodes),
+    canListAssignableRoles: canEdit,
   }
 }
 
@@ -187,6 +184,7 @@ export async function saveOrgRolePermissions(
   const known = new Set<string>([...PERMISSION_KEYS, ...current.permissions])
   if (permissions.some((key) => !known.has(key))) return { ok: false, reason: 'invalid' }
   const newGrants = permissions.filter(key => !current.permissions.includes(key))
+  if (newGrants.includes(ORG_BUSINESS_ROLE_ASSIGN)) return { ok: false, reason: 'invalid' }
   if (permissions.some(key => key === ORG_MEMBER_EDIT || key === ORG_BUSINESS_ROLE_ASSIGN || key === ROLE_DIRECTORY_VIEW
     || ORG_MEMBER_LIFECYCLE_ACTIONS.some(action => action === key))
     && !hasPermission(permissions, 'user:view')) return { ok: false, reason: 'invalid' }

@@ -2,8 +2,8 @@ import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthError, requireAuth } from '@/lib/auth'
 import { userHasOrgRoleCode, validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
-import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
-import { canMutateOrgUsers, getFreshUserScopedRoleAssignments } from '@/lib/scoped-access'
+import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
+import type { ScopedRoleAssignment } from '@/lib/scoped-access'
 import { DELETE, POST } from './route'
 
 const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }))
@@ -15,10 +15,9 @@ vi.mock('@/lib/admin/org-role-authority', () => ({
   userHasOrgRoleCode: vi.fn(),
   validateOrgRoleAssignment: vi.fn(),
 }))
-vi.mock('@/lib/org-role-permissions', () => ({ loadOrgRolePermissionContext: vi.fn() }))
-vi.mock('@/lib/scoped-access', () => ({
-  canMutateOrgUsers: vi.fn(),
-  getFreshUserScopedRoleAssignments: vi.fn(),
+vi.mock('@/lib/org-role-permissions', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/org-role-permissions')>(),
+  loadCurrentOrganizationRoleAssignments: vi.fn(),
 }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc } }))
 
@@ -27,6 +26,11 @@ const target = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const org = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const role = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 const scope = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+const systemGrant: ScopedRoleAssignment = {
+  roleId: role, roleCode: 'SUPER_ADMIN', roleName: 'System administrator', grantedAt: null,
+  scopeType: 'org', scopeId: org, permissions: ['role:manage'],
+}
+const activeAuthority = { orgId: org, settings: {}, assignments: [systemGrant] }
 
 function context(id = target) {
   return { params: Promise.resolve({ id }) }
@@ -44,11 +48,7 @@ describe('scoped role assignment route', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     vi.mocked(requireAuth).mockResolvedValue({ id: actor, email: null, phone: null, display_name: 'Admin' })
-    vi.mocked(loadOrgRolePermissionContext).mockResolvedValue({
-      orgId: org, settings: {}, canRead: true, canEdit: false, canEditPlatformRoot: false, actorPermissions: ['user:write'],
-    })
-    vi.mocked(getFreshUserScopedRoleAssignments).mockResolvedValue([])
-    vi.mocked(canMutateOrgUsers).mockReturnValue(true)
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(activeAuthority)
     vi.mocked(userHasOrgRoleCode).mockResolvedValue(false)
     vi.mocked(validateOrgRoleAssignment).mockResolvedValue({ ok: true, roleIds: [role] })
     rpc.mockResolvedValue({ data: true, error: null })
@@ -58,9 +58,8 @@ describe('scoped role assignment route', () => {
     const response = await POST(request('POST'), context(target.toUpperCase()))
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ success: true })
-    expect(loadOrgRolePermissionContext).toHaveBeenCalledExactlyOnceWith(actor)
-    expect(getFreshUserScopedRoleAssignments).toHaveBeenCalledExactlyOnceWith(actor)
-    expect(validateOrgRoleAssignment).toHaveBeenCalledExactlyOnceWith([], org, [role], { scopeType: 'department', action: 'assign' })
+    expect(loadCurrentOrganizationRoleAssignments).toHaveBeenCalledExactlyOnceWith(actor)
+    expect(validateOrgRoleAssignment).toHaveBeenCalledExactlyOnceWith([systemGrant], org, [role], { scopeType: 'department', action: 'assign' })
     expect(rpc).toHaveBeenCalledExactlyOnceWith('admin_set_role_scope_assignment_v1', {
       p_actor_id: actor, p_org_id: org, p_user_id: target, p_role_id: role,
       p_scope_type: 'department', p_scope_id: scope, p_action: 'assign',
@@ -93,7 +92,7 @@ describe('scoped role assignment route', () => {
       role_id: role, scope_type: 'space', scope_id: scope, reason: '  Updated roster  ',
     }), context())
     expect(response.status).toBe(200)
-    expect(validateOrgRoleAssignment).toHaveBeenCalledExactlyOnceWith([], org, [role], { scopeType: 'space', action: 'revoke' })
+    expect(validateOrgRoleAssignment).toHaveBeenCalledExactlyOnceWith([systemGrant], org, [role], { scopeType: 'space', action: 'revoke' })
     expect(rpc).toHaveBeenCalledExactlyOnceWith('admin_set_role_scope_assignment_v1', {
       p_actor_id: actor, p_org_id: org, p_user_id: target, p_role_id: role,
       p_scope_type: 'space', p_scope_id: scope, p_action: 'revoke',
@@ -110,14 +109,20 @@ describe('scoped role assignment route', () => {
     expect(rpc).not.toHaveBeenCalled()
   })
 
-  it('rejects callers without active organization context, without write authority, or changing their own roles', async () => {
-    vi.mocked(loadOrgRolePermissionContext).mockResolvedValueOnce(null)
+  it('rejects callers without an active organization or changing their own roles', async () => {
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValueOnce(null)
     expect((await POST(request('POST'), context())).status).toBe(403)
     expect((await POST(request('POST'), context(actor.toUpperCase()))).status).toBe(403)
-    expect(getFreshUserScopedRoleAssignments).not.toHaveBeenCalled()
+    expect(validateOrgRoleAssignment).not.toHaveBeenCalled()
+    expect(rpc).not.toHaveBeenCalled()
+  })
 
-    vi.mocked(canMutateOrgUsers).mockReturnValueOnce(false)
+  it.each(['ADMIN', 'CUSTOM', 'ORG_SUPER_ADMIN'])('rejects unauthorized assignments and revocations for %s', async (roleCode) => {
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({
+      ...activeAuthority, assignments: [{ ...systemGrant, roleCode, permissions: ['user:assign_roles', 'role:manage'] }],
+    })
     expect((await POST(request('POST'), context())).status).toBe(403)
+    expect((await DELETE(request('DELETE'), context())).status).toBe(403)
     expect(validateOrgRoleAssignment).not.toHaveBeenCalled()
     expect(rpc).not.toHaveBeenCalled()
   })
@@ -156,7 +161,7 @@ describe('scoped role assignment route', () => {
     const response = await POST(request('POST'), context())
     expect(response.status).toBe(401)
     expect(await response.json()).toMatchObject({ code: 'UNAUTHORIZED' })
-    expect(loadOrgRolePermissionContext).not.toHaveBeenCalled()
+    expect(loadCurrentOrganizationRoleAssignments).not.toHaveBeenCalled()
     expect(rpc).not.toHaveBeenCalled()
   })
 })

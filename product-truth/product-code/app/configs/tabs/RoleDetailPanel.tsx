@@ -257,7 +257,7 @@ export function RoleDetailPanel({
               }}
               disabled={saving || !(canEditPermissions && hasChanges) && !(canEditOwnerPermissions && hasOwnerChanges)}
             >
-              {saving ? '保存中...' : (canEditPermissions && hasChanges) || (canEditOwnerPermissions && hasOwnerChanges) ? '保存更改' : '已保存'}
+              {saving ? '正在保存授权…' : (canEditPermissions && hasChanges) || (canEditOwnerPermissions && hasOwnerChanges) ? '保存授权' : '授权已保存'}
             </Button>
           )}
         </div>
@@ -1111,6 +1111,7 @@ function PermissionSettingTab({
 
   return (
     <div className="space-y-3 p-6">
+      <p className="text-sm text-slate-600">此处设置角色可以执行的操作。业务参数由各功能的设置页维护。</p>
       {isSuperAdmin && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <ShieldIcon className="mr-2 inline-block h-4 w-4" />

@@ -25,7 +25,7 @@ describe('RoleDetailPanel explicit permission editing', () => {
     openPermissions()
     expect(screen.getByText('纷享基础角色由系统管理，权限固定为只读。')).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: /配置发布/ })).toBeDisabled()
-    expect(screen.queryByRole('button', { name: '保存更改' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '保存授权' })).not.toBeInTheDocument()
     expect(onSave).not.toHaveBeenCalled()
   })
 
@@ -40,7 +40,7 @@ describe('RoleDetailPanel explicit permission editing', () => {
     expect(screen.getAllByText('当前有效').length).toBeGreaterThan(0)
     fireEvent.click(publish)
     expect(publish).toBeChecked()
-    fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
     const saved = onSave.mock.calls[0][0] as string[]
     expect(saved).toContain('config:publish')
     expect(hasPermission(saved, 'config:publish')).toBe(true)
@@ -103,7 +103,7 @@ describe('RoleDetailPanel explicit permission editing', () => {
     fireEvent.click(screen.getByRole('button', { name: '清除配置中心直接权限' }))
     expect(screen.getByRole('checkbox', { name: /配置中心查看/ })).not.toBeChecked()
     expect(screen.getByRole('checkbox', { name: /配置中心修改/ })).not.toBeChecked()
-    fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
     const saved = onSave.mock.calls[0][0] as string[]
     expect(saved.some((key) => key.startsWith('config:'))).toBe(false)
     expect(saved).not.toContain('role:manage')
@@ -121,7 +121,7 @@ describe('RoleDetailPanel explicit permission editing', () => {
     expect(screen.getByRole('checkbox', { name: /配置发布/ })).toBeDisabled()
     rerender(<RoleDetailPanel {...defaults} role={draftRole} permissionsEditable onSave={onSave} />)
     expect(screen.getByRole('checkbox', { name: /配置发布/ })).not.toBeChecked()
-    expect(screen.getByRole('button', { name: '保存更改' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '保存授权' })).toBeEnabled()
   })
 })
 
@@ -279,9 +279,9 @@ describe('organization super administrator membership', () => {
       orgSuperAdminAuthority={authority} onSave={vi.fn()} />)
     openPermissions()
     expect(screen.getByText('组织超级管理员的治理权限由系统固定。')).toBeInTheDocument()
-    expect(screen.getByText('保存角色权限')).toBeVisible()
+    expect(screen.getByText('保存角色授权')).toBeVisible()
     expect(screen.queryByRole('checkbox', { name: /角色权限管理/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '已保存' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '授权已保存' })).not.toBeInTheDocument()
   })
 })
 
@@ -298,8 +298,9 @@ it('places real actions under navigation paths and keeps unconnected points out 
   const config = within(screen.getByRole('region', { name: '配置中心' }))
   const organization = within(config.getByRole('region', { name: '组织与权限' }))
   const role = within(organization.getByRole('region', { name: '角色权限' }))
-  expect(role.getByText('保存角色权限')).toBeVisible()
-  expect(role.queryByRole('checkbox', { name: '保存角色权限' })).not.toBeInTheDocument()
+  expect(screen.getByText('此处设置角色可以执行的操作。业务参数由各功能的设置页维护。')).toBeVisible()
+  expect(role.getByText('保存角色授权')).toBeVisible()
+  expect(role.queryByRole('checkbox', { name: '保存角色授权' })).not.toBeInTheDocument()
   expect(role.getByText('任免超级管理员')).toBeVisible()
   expect(role.queryByRole('checkbox', { name: '任免超级管理员' })).not.toBeInTheDocument()
   const shipping = within(screen.getByRole('region', { name: '自助收寄' }))
@@ -329,7 +330,7 @@ it('makes only published shipping actions assignable while preserving saved and 
   expect(screen.queryByRole('checkbox', { name: 'tenant-unregistered:approve' })).not.toBeInTheDocument()
   expect(screen.getByText('已有兼容授权')).toBeVisible()
   fireEvent.click(operation)
-  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
   expect(onSave).toHaveBeenCalledWith(['shipping:manage_connections', 'tenant-unregistered:approve', 'shipping:ledger_view'])
 })
 
@@ -344,7 +345,7 @@ it('allows explicit removal of a stored shipping bundle without a bundle checkbo
   const remove = screen.getByRole('button', { name: '移除寄件旧组合授权' })
   fireEvent.click(remove)
   expect(screen.queryByRole('button', { name: '移除寄件旧组合授权' })).not.toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
   expect(onSave).toHaveBeenCalledWith(['quote:view'])
 })
 
@@ -369,25 +370,24 @@ it('revokes a published inherited shipping action while preserving other effecti
   fireEvent.click(create)
   expect(create).not.toBeChecked()
   expect(screen.getByRole('checkbox', { name: '查看收寄台账' })).toBeChecked()
-  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
   expect(onSave).toHaveBeenCalledWith([
     'quote:view', ...SHIPPING_WORKBENCH_ACTION_KEYS.filter(key => key !== 'shipping:record_create'),
   ])
 })
 
-it('grants business role assignment with its member read prerequisite and preserves other stored grants', () => {
+it('shows role assignment as system-controlled and preserves stored grants while editing member read access', () => {
   const onSave = vi.fn()
-  const role = { id: 'admin', code: 'ADMIN', name: '管理员', description: null, permissions: ['quote:view'] }
+  const role = { id: 'admin', code: 'ADMIN', name: '管理员', description: null, permissions: ['quote:view', 'user:assign_roles'] }
   render(<RoleDetailPanel {...defaults} role={role} permissionsEditable onSave={onSave} />)
   openPermissions()
-  const assignment = screen.getByRole('checkbox', { name: '分配或撤销业务角色' })
+  expect(screen.getByText('分配或撤销业务角色')).toBeVisible()
+  expect(screen.queryByRole('checkbox', { name: '分配或撤销业务角色' })).not.toBeInTheDocument()
   const view = screen.getByRole('checkbox', { name: '查看成员' })
-  fireEvent.click(assignment)
-  expect(assignment).toBeChecked()
+  fireEvent.click(view)
   expect(view).toBeChecked()
-  expect(view).toBeDisabled()
   expect(screen.getByRole('checkbox', { name: '编辑成员' })).not.toBeChecked()
-  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
   expect(onSave).toHaveBeenCalledWith(['quote:view', 'user:assign_roles', 'user:view'])
 })
 
@@ -402,7 +402,7 @@ it('keeps department maintenance separate from deletion and supplies directory r
   expect(group.getByRole('checkbox', { name: '查看部门树' })).toBeChecked()
   expect(group.getByRole('checkbox', { name: '查看部门树' })).toBeDisabled()
   expect(group.getByRole('checkbox', { name: '删除部门' })).not.toBeChecked()
-  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
   expect(onSave).toHaveBeenCalledWith(['quote:view', 'dept:edit_structure', 'dept:directory_view'])
 })
 
@@ -419,7 +419,7 @@ it('retains a legacy department grant when saving an unrelated action', () => {
   }
   expect(group.getByRole('button', { name: '清除部门直接权限' })).toBeDisabled()
   fireEvent.click(screen.getByRole('checkbox', { name: '配置发布' }))
-  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
   expect(onSave).toHaveBeenCalledWith(['dept:write', 'config:publish'])
 })
 
@@ -447,7 +447,7 @@ it('configures owner shipping on the base role without changing its fixed busine
   expect(resubmit).toBeChecked()
   expect(owner.getByRole('checkbox', { name: '查看本人寄件记录' })).toBeChecked()
   expect(owner.getByRole('checkbox', { name: '查看本人寄件记录' })).toBeDisabled()
-  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
   expect(onSave).toHaveBeenCalledWith(['quote:view'], ['shipping:owner_resubmit', 'shipping:owner_view'])
 })
 
@@ -462,6 +462,6 @@ it('keeps organization and owner shipping permission drafts separate', () => {
   openPermissions()
   expect(screen.getByRole('checkbox', { name: '查看本人寄件记录' })).not.toBeChecked()
   fireEvent.click(screen.getByRole('checkbox', { name: '配置发布' }))
-  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
   expect(onSave).toHaveBeenCalledExactlyOnceWith(['*', 'config:publish'])
 })

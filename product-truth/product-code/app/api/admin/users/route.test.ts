@@ -22,6 +22,11 @@ vi.mock('@/lib/fxiaoke/identity', () => ({
   normalizeIdentityPhone: vi.fn((value: string) => value ? '+8613900000000' : null),
 }))
 
+vi.mock('@/lib/org-role-permissions', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/org-role-permissions')>(),
+  loadCurrentOrganizationRoleAssignments: vi.fn(),
+}))
+
 vi.mock('@/lib/admin/org-role-authority', () => ({
   validateOrgRoleAssignment: vi.fn(),
 }))
@@ -46,6 +51,8 @@ import {
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
 import { validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
+import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
+import type { ScopedRoleAssignment } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import { POST } from './route'
 
@@ -53,6 +60,11 @@ const orgId = 'org-1'
 const userId = '11111111-1111-4111-8111-111111111111'
 const primaryDepartmentId = '22222222-2222-4222-8222-222222222222'
 const freshAssignments = [{ scopeType: 'org', scopeId: orgId, roleCode: 'ADMIN' }]
+const systemGrant: ScopedRoleAssignment = {
+  roleId: userId, roleCode: 'SUPER_ADMIN', roleName: 'System administrator', grantedAt: null,
+  scopeType: 'org', scopeId: orgId, permissions: ['role:manage'],
+}
+const activeAuthority = { orgId, settings: {}, assignments: [systemGrant] }
 
 function makeRequest(overrides: Record<string, unknown> = {}): any {
   return new Request('https://example.test/api/admin/users', {
@@ -122,6 +134,7 @@ describe('POST /api/admin/users', () => {
     ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue(freshAssignments)
     ;(canMutateOrgUsers as any).mockReturnValue(true)
     ;(canMutateOrgDepartments as any).mockReturnValue(true)
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(null)
     ;(validateOrgRoleAssignment as any).mockResolvedValue({ ok: true, roleIds: [] })
     ;(assertDepartmentInOrg as any).mockResolvedValue({ id: primaryDepartmentId })
     ;(ensureDefaultOrganizationMembership as any).mockResolvedValue(undefined)
@@ -203,8 +216,41 @@ describe('POST /api/admin/users', () => {
     expect(validateOrgRoleAssignment).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
 
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockClear()
     mockSuccessfulUserInsert()
     expect((await POST(makeRequest())).status).toBe(201)
+    expect(loadCurrentOrganizationRoleAssignments).not.toHaveBeenCalled()
+  })
+
+  it.each(['ADMIN', 'CUSTOM', 'ORG_SUPER_ADMIN'])('rejects invitation role assignments by %s', async (roleCode) => {
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({
+      ...activeAuthority, assignments: [{ ...systemGrant, roleCode, permissions: ['user:assign_roles', 'role:manage'] }],
+    })
+    const response = await POST(makeRequest({ role_ids: [userId] }))
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ code: 'NO_ROLE_ASSIGN_PERMISSION' })
+    expect(validateOrgRoleAssignment).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('requires the current organization even for a system administrator', async () => {
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({ ...activeAuthority, orgId: 'other-org' })
+    const response = await POST(makeRequest({ role_ids: [userId] }))
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ code: 'NO_ROLE_ASSIGN_PERMISSION' })
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('preserves verified role preassignment for the active organization system administrator', async () => {
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(activeAuthority)
+    vi.mocked(validateOrgRoleAssignment).mockResolvedValue({ ok: true, roleIds: [userId] })
+    const { invitationInsert } = mockSuccessfulUserInsert()
+
+    const response = await POST(makeRequest({ role_ids: [userId] }))
+
+    expect(response.status).toBe(201)
+    expect(validateOrgRoleAssignment).toHaveBeenCalledWith([systemGrant], orgId, [userId])
+    expect(invitationInsert.insert).toHaveBeenCalledWith(expect.objectContaining({ role_ids: [userId] }))
   })
 
   it('有主部门时使用同一组织双权限并把 orgId 传给关系 helper', async () => {

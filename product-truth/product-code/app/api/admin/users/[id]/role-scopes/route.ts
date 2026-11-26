@@ -2,10 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { AuthError, requireAuth } from '@/lib/auth'
 import { userHasOrgRoleCode, validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
-import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
-import { getFreshUserScopedRoleAssignments } from '@/lib/scoped-access'
-import { canPerformMemberAction } from '@/lib/admin/member-actions'
-import { ORG_BUSINESS_ROLE_ASSIGN } from '@/lib/permissions'
+import { canManageSystemAuthorizations, loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import { supabaseAdmin } from '@/lib/supabase'
 
 const SHIPPING_OPERATOR_ORG_SCOPE_MESSAGE = '顺丰寄件操作员只能分配到整个组织'
@@ -25,15 +22,11 @@ async function changeScope(req: NextRequest, userId: string, action: 'assign' | 
   try {
     const user = await requireAuth(req)
     const targetId = userId.toLowerCase()
-    const context = await loadOrgRolePermissionContext(user.id)
-    if (!context || user.id.toLowerCase() === targetId) {
-      return failure('当前账号无权变更该成员的作用域角色', 'NO_PERMISSION', 403)
+    const authority = await loadCurrentOrganizationRoleAssignments(user.id)
+    if (!authority || !canManageSystemAuthorizations(authority.assignments, authority.orgId) || user.id.toLowerCase() === targetId) {
+      return failure('当前账号无权分配或撤销该成员的作用域角色', 'NO_PERMISSION', 403)
     }
-    const { orgId } = context
-    const assignments = await getFreshUserScopedRoleAssignments(user.id)
-    if (!canPerformMemberAction(assignments, orgId, ORG_BUSINESS_ROLE_ASSIGN)) {
-      return failure('当前账号无权变更该成员的作用域角色', 'NO_PERMISSION', 403)
-    }
+    const { orgId, assignments } = authority
     const input = scopeSchema.safeParse(await req.json().catch(() => null))
     if (!input.success || !z.guid().safeParse(targetId).success) {
       return failure('请提供有效的成员、角色和作用域', 'VALIDATION_ERROR', 400)

@@ -91,7 +91,7 @@ it('preserves unsaved permission changes when a focus read verifies the same per
   await act(async () => focusRead.resolve(rolesResponse([...existingPermissions].reverse())))
 
   expect(screen.getByRole('checkbox', { name: /配置发布/ })).toBeChecked()
-  expect(screen.getByRole('button', { name: '保存更改' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: '保存授权' })).toBeEnabled()
 })
 
 it('keeps a pending save and renders the verified permission readback after focus', async () => {
@@ -106,8 +106,8 @@ it('keeps a pending save and renders the verified permission readback after focu
   })
   const publish = await openEditor()
   fireEvent.click(publish)
-  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
-  expect(screen.getByRole('button', { name: '保存中...' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
+  expect(screen.getByRole('button', { name: '正在保存授权…' })).toBeDisabled()
 
   await act(async () => fireEvent.focus(window))
   await act(async () => write.resolve(Response.json({ success: true, data: { org_id: organization, role: role(persisted) } })))
@@ -115,7 +115,7 @@ it('keeps a pending save and renders the verified permission readback after focu
   fireEvent.click(screen.getByRole('tab', { name: '权限设置' }))
 
   expect(screen.getByRole('checkbox', { name: /配置发布/ })).toBeChecked()
-  expect(screen.getByRole('button', { name: '已保存' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '授权已保存' })).toBeDisabled()
   expect(fetcher.mock.calls.filter(([url]) => url === roleList)).toHaveLength(1)
   const saveRequest = fetcher.mock.calls.find(([url]) => url === roleWrite)?.[1]
   expect(saveRequest?.method).toBe('PATCH')
@@ -142,7 +142,7 @@ it('clears a draft when the same-session role refresh verifies that editing was 
 
   expect(screen.getByRole('checkbox', { name: /配置发布/ })).toBeDisabled()
   expect(screen.getByRole('checkbox', { name: /配置发布/ })).not.toBeChecked()
-  expect(screen.queryByRole('button', { name: '保存更改' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '保存授权' })).not.toBeInTheDocument()
 })
 
 it('clears the previous editor if fresh role and directory reads disagree on the current organization', async () => {
@@ -192,7 +192,7 @@ it('reloads after a token change during save without applying the previous sessi
     throw new Error('Unexpected fetch')
   })
   fireEvent.click(await openEditor())
-  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存授权' }))
 
   localStorage.setItem('token', 'next-session')
   fireEvent(window, new StorageEvent('storage', { key: 'token' }))
@@ -205,7 +205,7 @@ it('reloads after a token change during save without applying the previous sessi
   expect(fetcher.mock.calls.some(([url, init]) => url === roleDetail
     && new Headers(init?.headers).get('Authorization') === 'Bearer current-session')).toBe(true)
   expect(screen.getByRole('checkbox', { name: /配置发布/ })).not.toBeChecked()
-  expect(screen.getByRole('button', { name: '已保存' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '授权已保存' })).toBeDisabled()
 })
 
 it('opens the organization directory when member-only access requests the role tab', async () => {

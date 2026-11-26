@@ -19,38 +19,50 @@ vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: () => {
  return query
 } } }))
 vi.mock('./department-access', () => ({ validateShippingDepartmentRoots: vi.fn() }))
-import { saveIntakeSettings } from './intake-settings'
+import { validateShippingDepartmentRoots } from './department-access'
+import { saveIntakeDepartmentScope, saveIntakeSettings } from './intake-settings'
 
 const root = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 beforeEach(() => {
   m.saved = { ...DEFAULT_INTAKE_RULES, allowedDepartmentIds: [root] }
   m.writes=[];m.conflict=false
+  vi.mocked(validateShippingDepartmentRoots).mockReset()
 })
 
-it('preserves an existing department restriction when an older settings client omits the new field', async () => {
-  const legacyInput = { ...DEFAULT_INTAKE_RULES }
-  delete legacyInput.allowedDepartmentIds
-  const saved = await saveIntakeSettings('org-1', 'manager-1', legacyInput)
-  expect(saved.allowedDepartmentIds).toEqual([root])
-  expect((m.writes[0] as {rules:{allowedDepartmentIds:string[]}}).rules.allowedDepartmentIds).toEqual([root])
+it.each([
+  { companyName: DEFAULT_INTAKE_RULES.companyName, allowedDepartmentIds: null },
+  { companyName: DEFAULT_INTAKE_RULES.companyName, allowedDepartmentIds: [root] },
+  { companyName: DEFAULT_INTAKE_RULES.companyName, teamOptions: ['部门 A'] },
+  { allowedDepartmentIds: [root] },
+  {},
+])('rejects a non-business field or missing company rule before writing %j', async input => {
+  await expect(saveIntakeSettings('org-1', 'manager-1', input)).rejects.toBeInstanceOf(Error)
+  expect(m.writes).toEqual([])
+  expect(vi.mocked(validateShippingDepartmentRoots)).not.toHaveBeenCalled()
 })
 
-it('only clears the restriction when the manager explicitly selects all departments', async () => {
-  const saved = await saveIntakeSettings('org-1', 'manager-1', DEFAULT_INTAKE_RULES)
-  expect(saved.allowedDepartmentIds).toBeNull()
+it.each([
+  { allowedDepartmentIds: null },
+  { allowedDepartmentIds: [root], companyName: DEFAULT_INTAKE_RULES.companyName },
+  {},
+])('rejects an implicit or mixed scope edit before writing %j', async input => {
+  await expect(saveIntakeDepartmentScope('org-1', 'root-1', input)).rejects.toBeInstanceOf(Error)
+  expect(m.writes).toEqual([])
 })
 
 it('updates field rules without overwriting current department authorization', async () => {
   const saved = await saveIntakeSettings('org-1', 'manager-1', { companyName: { enabled: true, required: true, minLength: 8 } })
   expect(saved.allowedDepartmentIds).toEqual([root])
   expect(saved.companyName.minLength).toBe(8)
+  expect(vi.mocked(validateShippingDepartmentRoots)).not.toHaveBeenCalled()
 })
 
 it('updates department authorization without overwriting current field rules', async () => {
   m.saved = { ...DEFAULT_INTAKE_RULES, companyName: { enabled: true, required: true, minLength: 9 } }
-  const saved = await saveIntakeSettings('org-1', 'manager-1', { allowedDepartmentIds: [root] })
+  const saved = await saveIntakeDepartmentScope('org-1', 'root-1', { allowedDepartmentIds: [root] })
   expect(saved.companyName.minLength).toBe(9)
   expect(saved.allowedDepartmentIds).toEqual([root])
+  expect(vi.mocked(validateShippingDepartmentRoots)).toHaveBeenCalledExactlyOnceWith('org-1', [root])
 })
 
 it('rejects a stale overlapping save instead of reopening a restricted department policy', async () => {
@@ -58,4 +70,17 @@ it('rejects a stale overlapping save instead of reopening a restricted departmen
  await expect(saveIntakeSettings('org-1','manager',{companyName:{enabled:true,required:true,minLength:8}})).rejects.toMatchObject({status:409})
  expect((m.saved as {allowedDepartmentIds:string[]}).allowedDepartmentIds).toEqual([root])
  expect(m.writes).toEqual([])
+})
+
+
+it('accepts an empty explicit scope and never expands it to all departments', async () => {
+  const saved = await saveIntakeDepartmentScope('org-1', 'root-1', { allowedDepartmentIds: [] })
+  expect(saved.allowedDepartmentIds).toEqual([])
+  expect(vi.mocked(validateShippingDepartmentRoots)).toHaveBeenCalledExactlyOnceWith('org-1', [])
+})
+
+it('uses the shared snapshot check if another write changes the rules before a scope save', async () => {
+  m.conflict = true
+  await expect(saveIntakeDepartmentScope('org-1', 'root-1', { allowedDepartmentIds: [] })).rejects.toMatchObject({ status: 409 })
+  expect(m.writes).toEqual([])
 })

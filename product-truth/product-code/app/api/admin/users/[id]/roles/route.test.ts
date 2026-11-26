@@ -5,10 +5,9 @@ vi.mock('@/lib/auth', () => ({
   requireAuth: vi.fn(),
 }))
 
-vi.mock('@/lib/scoped-access', () => ({
-  getFreshDefaultOrgId: vi.fn(),
-  getFreshUserScopedRoleAssignments: vi.fn(),
-  canMutateOrgUsers: vi.fn(),
+vi.mock('@/lib/org-role-permissions', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/org-role-permissions')>(),
+  loadCurrentOrganizationRoleAssignments: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -24,11 +23,8 @@ vi.mock('@/lib/admin/org-role-authority', () => ({
 }))
 
 import { requireAuth } from '@/lib/auth'
-import {
-  canMutateOrgUsers,
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
+import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
+import type { ScopedRoleAssignment } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import {
   userHasOrgRoleCode,
@@ -41,6 +37,11 @@ const routeContext: any = {
 }
 
 const roleId = '11111111-1111-1111-1111-111111111111'
+const systemGrant: ScopedRoleAssignment = {
+  roleId, roleCode: 'SUPER_ADMIN', roleName: 'System administrator', grantedAt: null,
+  scopeType: 'org', scopeId: 'org-1', permissions: ['role:manage'],
+}
+const activeAuthority = { orgId: 'org-1', settings: {}, assignments: [systemGrant] }
 
 function malformedJsonRequest(): any {
   return new Request('https://example.test/api/admin/users/u-1/roles', {
@@ -81,9 +82,7 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: 'admin-user' })
-    ;(getFreshDefaultOrgId as any).mockResolvedValue('org-1')
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue([{ scopeType: 'org', scopeId: 'org-1' }])
-    ;(canMutateOrgUsers as any).mockReturnValue(true)
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(activeAuthority)
     ;(userHasOrgRoleCode as any).mockResolvedValue(false)
     ;(validateOrgRoleAssignment as any).mockResolvedValue({ ok: true, roleIds: [roleId] })
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
@@ -108,50 +107,48 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
-  it('无组织管理权限时返回 403 且不访问数据库', async () => {
-    ;(canMutateOrgUsers as any).mockReturnValue(false)
-
+  it('requires an active organization before reading or changing role assignments', async () => {
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValueOnce(null)
     const res = await POST(jsonRequest({ role_ids: [roleId] }), routeContext)
-    const body = await res.json()
 
     expect(res.status).toBe(403)
-    expect(body.code).toBe('NO_PERMISSION')
-    expect(canMutateOrgUsers).toHaveBeenCalledWith(
-      [{ scopeType: 'org', scopeId: 'org-1' }],
-      'org-1'
-    )
+    expect(await res.json()).toMatchObject({ code: 'NO_PERMISSION' })
+    expect(loadCurrentOrganizationRoleAssignments).toHaveBeenCalledWith('admin-user')
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
   it.each([
-    { scopeType: 'org', scopeId: 'org-1', permissions: ['user:view', 'user:edit_profile'] },
-    { scopeType: 'org', scopeId: 'another-org', permissions: ['user:view', 'user:assign_roles'] },
-    { scopeType: 'department', scopeId: 'org-1', permissions: ['user:view', 'user:assign_roles'] },
-  ])('rejects unrelated actions or a different scope: %j', async (assignment) => {
-    vi.mocked(canMutateOrgUsers).mockReturnValue(false)
-    vi.mocked(getFreshUserScopedRoleAssignments).mockResolvedValue([{
-      roleId: roleId, roleCode: 'CUSTOM', roleName: 'Custom', grantedAt: null,
-      scopeType: assignment.scopeType as 'org' | 'department', scopeId: assignment.scopeId, permissions: assignment.permissions,
-    }])
-    expect((await POST(jsonRequest({ role_ids: [roleId] }), routeContext)).status).toBe(403)
+    { roleCode: 'ADMIN', permissions: ['user:write'] },
+    { roleCode: 'CUSTOM', permissions: ['user:view', 'user:assign_roles', 'role:manage'] },
+    { roleCode: 'ORG_SUPER_ADMIN', permissions: ['role:manage'] },
+    { scopeId: 'another-org' },
+    { scopeType: 'department' as const },
+    { permissions: ['user:view'] },
+  ])('rejects authority outside a system administrator’s current organization grant: %j', async (change) => {
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValueOnce({
+      ...activeAuthority, assignments: [{ ...systemGrant, ...change }],
+    })
+    const response = await POST(jsonRequest({ role_ids: [roleId] }), routeContext)
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ code: 'NO_PERMISSION' })
+    expect(validateOrgRoleAssignment).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
-  it('admits an exact organization business role grant without profile write authority', async () => {
-    vi.mocked(canMutateOrgUsers).mockReturnValue(false)
-    vi.mocked(getFreshUserScopedRoleAssignments).mockResolvedValue([{
-      roleId, roleCode: 'CUSTOM', roleName: 'Custom', grantedAt: null,
-      scopeType: 'org', scopeId: 'org-1', permissions: ['user:view', 'user:assign_roles'],
-    }])
-    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(makeUserLookupQuery({ data: { id: 'member' }, error: null }) as never)
-    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(makeRoleListQuery({ data: [], error: null }))
-    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(makeRoleListQuery({ data: [{ role_id: roleId }], error: null }))
+  it('requires role management on the system administrator binding itself', async () => {
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValueOnce({
+      ...activeAuthority,
+      assignments: [
+        { ...systemGrant, permissions: [] },
+        { ...systemGrant, roleCode: 'CUSTOM', permissions: ['role:manage'] },
+      ],
+    })
     const response = await POST(jsonRequest({ role_ids: [roleId] }), routeContext)
-    expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({ data: [{ role_id: roleId }] })
-    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_replace_org_roles_v1', expect.objectContaining({ p_role_ids: [roleId] }))
+    expect(response.status).toBe(403)
+    expect(validateOrgRoleAssignment).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
   it('目标用户不存在时返回 404 且不替换角色', async () => {

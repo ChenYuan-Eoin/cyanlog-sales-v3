@@ -5,16 +5,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import {
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
+import { canManageSystemAuthorizations, loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import {
   userHasOrgRoleCode,
   validateOrgRoleAssignment,
 } from '@/lib/admin/org-role-authority'
-import { canPerformMemberAction } from '@/lib/admin/member-actions'
-import { ORG_BUSINESS_ROLE_ASSIGN } from '@/lib/permissions'
 
 const orgRoleIds = z.array(z.string().regex(/^[0-9a-f-]{36}$/i, '角色 ID 格式不正确'))
 const assignOrgRolesSchema = z.object({
@@ -32,12 +27,11 @@ export async function POST(
   try {
     const { id: userId } = await params
     const currentUser = await requireAuth(req)
-    const orgId = await getFreshDefaultOrgId(currentUser.id)
-    const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
-
-    if (!canPerformMemberAction(actorAssignments, orgId, ORG_BUSINESS_ROLE_ASSIGN)) {
-      return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
+    const authority = await loadCurrentOrganizationRoleAssignments(currentUser.id)
+    if (!authority || !canManageSystemAuthorizations(authority.assignments, authority.orgId)) {
+      return NextResponse.json({ error: '仅系统超级管理员可分配或撤销角色', code: 'NO_PERMISSION' }, { status: 403 })
     }
+    const { orgId, assignments: actorAssignments } = authority
 
     // A user must never be able to alter the authorization source of their own
     // active session through this tenant API.

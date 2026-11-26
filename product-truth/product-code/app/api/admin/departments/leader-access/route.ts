@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { AuthError, requireAuth } from '@/lib/auth'
+import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
 import { supabaseAdmin } from '@/lib/supabase'
 
 const idSchema = z.guid()
@@ -22,17 +23,8 @@ function failure(error: string, code: string, status: number) {
 
 async function resolveActor(req: NextRequest) {
   const actor = await requireAuth(req)
-  const { data, error } = await supabaseAdmin
-    .from('user_organizations')
-    .select('org_id')
-    .eq('user_id', actor.id)
-    .eq('is_default', true)
-    .eq('status', 'active')
-    .eq('employment_status', 'active')
-    .is('left_at', null)
-    .maybeSingle()
-  if (error) throw error
-  return data ? { p_actor_id: actor.id, p_org_id: data.org_id } : null
+  const context = await loadOrgRolePermissionContext(actor.id)
+  return context?.canEditPlatformRoot ? { p_actor_id: actor.id, p_org_id: context.orgId } : null
 }
 
 function rpcFailure(code?: string) {
