@@ -9,6 +9,10 @@ export function isDepartmentLedgerReadPath(path: string) {
   return path === '/api/shipping/ledger' || LEDGER_ITEM_PATH.test(path)
 }
 
+export function isDepartmentLedgerReturnPath(path: string) {
+  return path.endsWith('/return') && LEDGER_ITEM_PATH.test(path.slice(0, -'/return'.length))
+}
+
 export type LedgerDepartment = { id: string; name: string; parentId: string | null }
 type DepartmentRow = { id: string; org_id: string; name: string; parent_id: string | null; status: string }
 type SubjectRow = { org_id: string; user_id: string; department_id: string }

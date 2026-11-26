@@ -2,7 +2,9 @@ import {
   ORG_BUSINESS_ROLE_ASSIGN, ORG_DEPARTMENT_DIRECTORY_VIEW, ORG_DEPARTMENT_STRUCTURE_DELETE,
   ORG_DEPARTMENT_STRUCTURE_EDIT, ORG_MEMBER_EDIT, ROLE_DIRECTORY_VIEW,
 } from './permissions'
-import { SHIPPING_ACTION_DEFINITIONS, shippingActionViewDependency } from './module-access'
+import {
+  SHIPPING_ACTION_DEFINITIONS, SHIPPING_RECORD_RETURN, SHIPPING_SETTINGS_ACTION_KEYS, shippingActionViewDependency,
+} from './module-access'
 import { isShippingOwnerPermission } from './shipping/owner-permission-keys'
 import {
   ORG_MEMBER_INVITE, ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_REMOVE_MEMBERSHIP,
@@ -11,8 +13,18 @@ import {
 export type PermissionKind = 'atomic' | 'bundle'
 export type PermissionLifecycleStatus = 'draft' | 'reviewed' | 'published' | 'deprecated' | 'disabled' | 'deleted'
 export type PermissionScopeType = 'org' | 'department' | 'space' | 'self'
+export const PERMISSION_CAPABILITY_LEVELS = ['L1', 'L2', 'L3', 'L4'] as const
+export type PermissionCapabilityLevel = typeof PERMISSION_CAPABILITY_LEVELS[number]
+export const PERMISSION_GRANT_SUBJECT_TYPES = ['role', 'department'] as const
+export type PermissionGrantSubjectType = typeof PERMISSION_GRANT_SUBJECT_TYPES[number]
 
-export interface PermissionDefinition {
+export interface PermissionDictionaryMetadata {
+  moduleKey: string | null
+  capabilityLevel: PermissionCapabilityLevel | null
+  grantSubjectTypes: PermissionGrantSubjectType[]
+}
+
+export interface PermissionDefinition extends PermissionDictionaryMetadata {
   id: string
   key: string
   version: number
@@ -35,7 +47,7 @@ export interface PermissionDefinition {
   deletedAt: string | null
 }
 
-export interface PermissionCatalogItem {
+export interface PermissionCatalogItem extends PermissionDictionaryMetadata {
   key: string
   label: string
   description: string
@@ -85,6 +97,32 @@ export const PERMISSION_GROUPS: Record<string, { label: string; description: str
 }
 
 const ALL_SCOPES: PermissionScopeType[] = ['org', 'department', 'space', 'self']
+const CONFIG_TEAM_ACTIONS = new Set<string>([
+  ORG_DEPARTMENT_DIRECTORY_VIEW,
+  'user:view', ORG_MEMBER_EDIT, ORG_MEMBER_INVITE, ORG_MEMBER_MANAGE_LOGIN,
+  ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_REMOVE_MEMBERSHIP,
+])
+const CONFIGURATION_ACTIONS = new Set<string>([
+  'config:read', 'config:write', 'config:publish',
+  ORG_DEPARTMENT_STRUCTURE_EDIT, ORG_DEPARTMENT_STRUCTURE_DELETE, ROLE_DIRECTORY_VIEW,
+  'org:source_view', 'org:source_connect', 'org:source_preview', 'org:source_apply',
+])
+const PROTECTED_CONFIGURATION_ACTIONS = new Set<string>(['role:manage', ORG_BUSINESS_ROLE_ASSIGN])
+const SHIPPING_CONFIGURATION_ACTIONS = new Set<string>(SHIPPING_SETTINGS_ACTION_KEYS)
+
+function builtinMetadata(key: string): PermissionDictionaryMetadata {
+  if (PROTECTED_CONFIGURATION_ACTIONS.has(key)) return { moduleKey: 'config', capabilityLevel: 'L4', grantSubjectTypes: [] }
+  if (CONFIG_TEAM_ACTIONS.has(key)) return { moduleKey: 'config', capabilityLevel: 'L3', grantSubjectTypes: ['role'] }
+  if (CONFIGURATION_ACTIONS.has(key)) return { moduleKey: 'config', capabilityLevel: 'L4', grantSubjectTypes: ['role'] }
+  if (SHIPPING_CONFIGURATION_ACTIONS.has(key)) {
+    return { moduleKey: 'shipping-settings', capabilityLevel: 'L4', grantSubjectTypes: ['role'] }
+  }
+  if (isShippingOwnerPermission(key)) return { moduleKey: 'shipping', capabilityLevel: 'L2', grantSubjectTypes: ['role'] }
+  if (Object.hasOwn(SHIPPING_ACTION_DEFINITIONS, key)) {
+    return { moduleKey: 'shipping', capabilityLevel: 'L3', grantSubjectTypes: key === 'shipping:ledger_view' ? ['role', 'department'] : ['role'] }
+  }
+  return { moduleKey: null, capabilityLevel: null, grantSubjectTypes: [] }
+}
 
 function definition(input: {
   key: string
@@ -110,6 +148,7 @@ function definition(input: {
     kind: input.kind ?? (input.key.endsWith(':*') ? 'bundle' : 'atomic'),
     status: input.status ?? 'published',
     category: input.category,
+    ...builtinMetadata(input.key),
     label: input.label,
     description: input.description,
     scopeTypes: input.scopes ?? ALL_SCOPES,
@@ -191,8 +230,10 @@ export const BUILTIN_PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   definition({ key: 'shipping:*', category: 'shipping', label: '寄件组合权限', description: '包含当前组织的寄件操作与连接管理。', scopes: ['org'], kind: 'bundle', enforcementConsumer: 'lib/permissions.ts#hasPermission' }),
   ...Object.entries(SHIPPING_ACTION_DEFINITIONS).map(([key, [label, description]]) => {
     const dependency = shippingActionViewDependency(key)
+    const scopes: PermissionScopeType[] = isShippingOwnerPermission(key) ? ['self']
+      : key === 'shipping:ledger_view' || key === SHIPPING_RECORD_RETURN ? ['org', 'department'] : ['org']
     return definition({
-      key, label, description, category: 'shipping', scopes: [isShippingOwnerPermission(key) ? 'self' : 'org'],
+      key, label, description, category: 'shipping', scopes,
       dependencies: dependency ? [dependency] : [],
       enforcementConsumer: 'lib/shipping/http.ts',
     })
@@ -205,20 +246,25 @@ export const BUILTIN_PERMISSION_BY_KEY = new Map(
   BUILTIN_PERMISSION_DEFINITIONS.map((item) => [item.key, item]),
 )
 
+type PermissionAvailability = Pick<PermissionDefinition,
+  'kind' | 'status' | 'enforcementConsumer' | 'moduleKey' | 'grantSubjectTypes'>
+
 export function isPermissionSelectable(
-  item: Pick<PermissionDefinition, 'kind' | 'status' | 'enforcementConsumer'>,
+  item: PermissionAvailability,
 ): boolean {
   return item.kind === 'atomic'
     && item.status === 'published'
     && Boolean(item.enforcementConsumer)
+    && (item.moduleKey === null || item.grantSubjectTypes.length > 0)
 }
 
 export function permissionUnavailableReason(
-  item: Pick<PermissionDefinition, 'kind' | 'status' | 'enforcementConsumer'>,
+  item: PermissionAvailability,
 ): string | null {
   if (isPermissionSelectable(item)) return null
   if (item.kind === 'bundle') return '组合能力由原子权限汇总，不作为独立复选框。'
   if (item.status !== 'published') return '尚未接入真实执行点，不能分配给租户。'
+  if (item.moduleKey !== null && item.grantSubjectTypes.length === 0) return '该权限点由系统管控，不接受分配。'
   return '缺少服务端执行消费者，不能分配给租户。'
 }
 
@@ -243,6 +289,9 @@ export function buildPermissionCatalog(
           kind: item.kind,
           status: item.status,
           version: item.version,
+          moduleKey: item.moduleKey,
+          capabilityLevel: item.capabilityLevel,
+          grantSubjectTypes: item.grantSubjectTypes,
           scopeTypes: item.scopeTypes,
           dependencies: item.dependencies,
           conflicts: item.conflicts,
@@ -266,6 +315,15 @@ export function permissionDefinitionIsValid(
   if (!definition.description.trim()) errors.push('权限说明不能为空。')
   if (!Object.prototype.hasOwnProperty.call(PERMISSION_GROUPS, definition.category)) {
     errors.push(`权限分类不可用：${definition.category}`)
+  }
+  if (definition.moduleKey !== null && !/^[a-z][a-z0-9_-]{0,62}$/.test(definition.moduleKey)) {
+    errors.push('模块 key 格式无效。')
+  }
+  if ((definition.moduleKey === null) !== (definition.capabilityLevel === null)) {
+    errors.push('模块和权限层级必须同时填写。')
+  }
+  if (definition.moduleKey === null && definition.grantSubjectTypes.length) {
+    errors.push('登记可授权对象前必须填写模块和权限层级。')
   }
   if (definition.kind === 'atomic' && definition.action === '*') {
     errors.push('原子权限不能使用通配 action。')

@@ -214,7 +214,9 @@ export async function saveOrgRolePermissions(
   if (grantsRequiringPublishedDefinition.length > 0) {
     const { loadRoleModulePermissionCatalog } = await import('@/lib/permission-registry')
     const catalog = await loadRoleModulePermissionCatalog()
-    const available = new Map(catalog.flatMap(group => group.items.map(item => [item.key, item.dependencies] as const)))
+    const available = new Map(catalog.flatMap(group => group.items
+      .filter(item => !item.moduleKey || item.grantSubjectTypes?.includes('role'))
+      .map(item => [item.key, item.dependencies] as const)))
     for (const key of grantsRequiringPublishedDefinition) {
       const dependencies = available.get(key)
       const hasDependency = isShippingOwnerPermission(key)

@@ -31,6 +31,10 @@ function record(orderNo: string): ShipmentOrder {
   }
 }
 
+function pendingRecord(canReturn: boolean) {
+  return { ...record('SO-RETURN'), status: 'awaiting_confirmation' as const, waybill: null, canReturn }
+}
+
 function ledgerPage(records: ShipmentOrder[] = [], nextPage: number | null = null) {
   return Response.json({ records, nextPage })
 }
@@ -119,10 +123,87 @@ it('reads scoped details and cached tracking through GET only', async () => {
   fireEvent.click(await screen.findByRole('button', { name: '查看寄件详情 SO-READONLY' }))
   expect(await screen.findByText(/快件已发出/)).toBeInTheDocument()
   expect(screen.getByRole('region', { name: '寄件详情' })).toHaveTextContent('样品')
-  expect(screen.queryByRole('button', { name: /下单|同步物流|取消运单|转寄/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /下单|同步物流|取消运单|转寄|退回/ })).not.toBeInTheDocument()
   expect(fetcher.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true)
   expect(readRequest(3).url.pathname).toBe(`/api/shipping/ledger/${orderId}`)
   expect(readRequest(3).url.searchParams.toString()).toBe(`departmentId=${parent}&includeSubdepartments=true`)
+})
+
+it('shows the return action only for pending records whose response permits it', async () => {
+  const pending = pendingRecord(false)
+  const statusChanged = { ...record('SO-IN-TRANSIT'), id: child, canReturn: true }
+  fetcher.mockResolvedValue(ledgerPage([pending, statusChanged]))
+  prepareLedger()
+  await screen.findByText('客户 SO-RETURN')
+
+  expect(screen.queryByRole('button', { name: '退回工单' })).not.toBeInTheDocument()
+  expect(fetcher).toHaveBeenCalledTimes(1)
+})
+
+it('returns a pending order with its reason and rereads the current department, page, and opened detail', async () => {
+  const pending = pendingRecord(true)
+  let resolvedRecord: ShipmentOrder & { canReturn: boolean } = pending
+  let finishReturn!: (response: Response) => void
+  const pendingReturn = new Promise<Response>(resolve => { finishReturn = resolve })
+  fetcher.mockImplementation(async (url, init) => {
+    const request = new URL(String(url), 'https://example.test')
+    if (init?.method === 'POST') return pendingReturn
+    if (request.pathname.endsWith(orderId)) return Response.json({ record: resolvedRecord })
+    return ledgerPage([resolvedRecord], request.searchParams.get('page') === '0' ? 1 : null)
+  })
+  prepareLedger()
+  await screen.findByRole('button', { name: '退回工单' })
+  selectDepartment(parent)
+  await screen.findByRole('button', { name: '退回工单' })
+  fireEvent.click(screen.getByRole('checkbox', { name: '含下级部门' }))
+  fireEvent.click(await screen.findByRole('button', { name: '下一页' }))
+  fireEvent.click(await screen.findByRole('button', { name: '查看寄件详情 SO-RETURN' }))
+  await screen.findByRole('region', { name: '寄件详情' })
+  fireEvent.click(screen.getByRole('button', { name: '退回工单' }))
+  const form = screen.getByRole('form', { name: '退回工单 SO-RETURN' })
+  fireEvent.change(screen.getByLabelText('退回原因'), { target: { value: ' ' } })
+  expect(screen.getByRole('button', { name: '确认退回' })).toBeDisabled()
+  fireEvent.submit(form)
+  expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+
+  fireEvent.change(screen.getByLabelText('退回原因'), { target: { value: ' 请补齐收件地址 ' } })
+  fireEvent.click(screen.getByRole('button', { name: '确认退回' }))
+  expect(screen.getByRole('button', { name: '退回中…' })).toBeDisabled()
+  fireEvent.submit(form)
+  const postRequests = fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')
+  expect(postRequests).toHaveLength(1)
+  expect(postRequests[0]).toEqual([`/api/shipping/ledger/${orderId}/return`, expect.objectContaining({
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: '请补齐收件地址' }),
+  })])
+
+  resolvedRecord = { ...pending, status: 'returned', canReturn: false }
+  await act(async () => finishReturn(Response.json({ id: orderId, status: 'returned' })))
+  expect(await screen.findByText('工单已退回')).toBeVisible()
+  expect(screen.getByText('工单已退回并记录原因。')).toBeVisible()
+  expect(screen.getByRole('combobox', { name: '查看部门' })).toHaveValue(parent)
+  expect(screen.getByRole('checkbox', { name: '含下级部门' })).toBeChecked()
+  expect(await screen.findByRole('region', { name: '寄件详情' })).toBeVisible()
+  expect(screen.queryByRole('button', { name: '退回工单' })).not.toBeInTheDocument()
+  const scope = `departmentId=${parent}&includeSubdepartments=true`
+  expect(fetcher.mock.calls.slice(-2).map(([url]) => String(url))).toEqual([
+    `/api/shipping/ledger?${scope}&page=1&limit=50`, `/api/shipping/ledger/${orderId}?${scope}`,
+  ])
+})
+
+it('reports a server refusal and loses the action after permission disappears from the reread', async () => {
+  fetcher.mockResolvedValueOnce(ledgerPage([pendingRecord(true)]))
+    .mockResolvedValueOnce(Response.json({ error: '当前账号没有退回权限。' }, { status: 403 }))
+    .mockResolvedValueOnce(ledgerPage([pendingRecord(false)]))
+  prepareLedger()
+  fireEvent.click(await screen.findByRole('button', { name: '退回工单' }))
+  fireEvent.change(screen.getByLabelText('退回原因'), { target: { value: '补充资料' } })
+  fireEvent.click(screen.getByRole('button', { name: '确认退回' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('当前账号没有退回权限。')
+  expect(await screen.findByText('客户 SO-RETURN')).toBeVisible()
+  expect(screen.queryByRole('button', { name: '退回工单' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('form')).not.toBeInTheDocument()
+  expect(screen.queryByText('工单已退回并记录原因。')).not.toBeInTheDocument()
 })
 
 it('refreshes records when the server supplies a narrower authorization tree', async () => {

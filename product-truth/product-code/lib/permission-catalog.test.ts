@@ -32,6 +32,36 @@ describe('permission catalog', () => {
       .toMatchObject({ selectable: false, unavailableReason: expect.stringContaining('尚未接入') })
   })
 
+  it('classifies actual actions independently of assignment scope and keeps unmapped rows readable', () => {
+    const items = buildPermissionCatalog(BUILTIN_PERMISSION_DEFINITIONS, { includeUnavailable: true })
+      .flatMap(group => group.items)
+    const byKey = new Map(items.map(item => [item.key, item]))
+    expect(byKey.get('shipping:owner_submit')).toMatchObject({
+      moduleKey: 'shipping', capabilityLevel: 'L2', grantSubjectTypes: ['role'], scopeTypes: ['self'],
+    })
+    expect(byKey.get('shipping:ledger_view')).toMatchObject({
+      moduleKey: 'shipping', capabilityLevel: 'L3', grantSubjectTypes: ['role', 'department'],
+      scopeTypes: ['org', 'department'],
+    })
+    expect(byKey.get('shipping:record_return')).toMatchObject({
+      moduleKey: 'shipping', capabilityLevel: 'L3', grantSubjectTypes: ['role'], scopeTypes: ['org', 'department'],
+    })
+    expect(byKey.get('shipping:intake_write')).toMatchObject({
+      moduleKey: 'shipping-settings', capabilityLevel: 'L4', grantSubjectTypes: ['role'],
+    })
+    expect(byKey.get('user:manage_employment')).toMatchObject({
+      moduleKey: 'config', capabilityLevel: 'L3', grantSubjectTypes: ['role'],
+    })
+    expect(byKey.get('org:source_apply')).toMatchObject({
+      moduleKey: 'config', capabilityLevel: 'L4', grantSubjectTypes: ['role'],
+    })
+    expect(byKey.get('role:manage')).toMatchObject({
+      moduleKey: 'config', capabilityLevel: 'L4', grantSubjectTypes: [], selectable: false,
+    })
+    expect(byKey.get('quote:view')).toMatchObject({ moduleKey: null, capabilityLevel: null, grantSubjectTypes: [] })
+    expect(items.some(item => item.capabilityLevel === 'L1')).toBe(false)
+  })
+
   it('rejects self, missing and cyclic dependencies before publication', () => {
     const base = BUILTIN_PERMISSION_DEFINITIONS[0]
     expect(permissionDefinitionIsValid({

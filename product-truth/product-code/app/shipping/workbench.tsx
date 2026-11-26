@@ -135,6 +135,10 @@ function ShippingWorkbenchContent({ settings: initialSettings, simulation, reque
   const allowed = (key: ShippingActionKey) => isSimulation || settings.permissions === undefined || settings.permissions.includes(key)
   const canCreate = allowed('shipping:record_create')
   const canReview = allowed('shipping:record_review')
+  const canReturnOrder = (order: ShipmentOrder & { canReturn?: boolean }) => order.status === 'awaiting_confirmation'
+    && (order.canReturn === undefined
+      ? isSimulation || settings.permissions?.includes('shipping:record_return') === true
+      : order.canReturn === true)
   const canConfirm = allowed('shipping:order_confirm')
   const canReconcile = allowed('shipping:order_reconcile')
   const canRefreshTracking = allowed('shipping:tracking_refresh')
@@ -627,6 +631,7 @@ function ShippingWorkbenchContent({ settings: initialSettings, simulation, reque
     setMessage(`${isSimulation ? '模拟' : '正式'}下单：成功 ${succeeded} 票；结果待确认 ${uncertain} 票；失败 ${failed} 票。${uncertain ? '下单结果待确认，请查回原单，勿重复下单。' : ''}${errors.join('；')}${refreshError}`)
   }
   function beginReturn(order: ShipmentOrder) {
+    if (!canReturnOrder(order)) return
     const issues: string[] = []
     if (!senderForReview(order, settings.sender).contact) issues.push('请补齐本票实际寄件人姓名、联系电话和完整揽收地址')
     if (!contactSchema.safeParse(order.input.recipient).success) issues.push('请补齐收件人姓名、联系电话和完整收件地址')
@@ -637,7 +642,7 @@ function ShippingWorkbenchContent({ settings: initialSettings, simulation, reque
     setReturnDraft({ orderId: order.id, reason: issues.length ? issues.join('；') : '请核对收寄资料，补充说明后重新提报。', error: '' })
   }
   async function returnOrder(order: ShipmentOrder) {
-    if (!canReview || busy || confirmationRunning.current || returnRunning.current || returnDraft?.orderId !== order.id) return
+    if (!canReturnOrder(order) || busy || confirmationRunning.current || returnRunning.current || returnDraft?.orderId !== order.id) return
     const reason = returnDraft.reason.trim()
     if (reason.length < 2 || reason.length > 300) { setReturnDraft(current => current && { ...current, error: '退回原因需填写2至300个字符。' }); return }
     returnRunning.current = true
@@ -949,13 +954,13 @@ function ShippingWorkbenchContent({ settings: initialSettings, simulation, reque
                   disabled={!!busy || trackingBusy || confirmationBusy || batchBusy}
                   onClick={() => void cancelOrder(order)}>取消</button>
               </div>}
-            {(canReview || canConfirm) && order.status === 'awaiting_confirmation' && <>
+            {(canReview || canConfirm || canReturnOrder(order)) && order.status === 'awaiting_confirmation' && <>
               <div className={styles.cardActions} onClick={event => event.stopPropagation()}>
                 {canConfirm && <label className={styles.reviewSelection}><input type="checkbox" aria-label={`核对并选择工单 ${order.orderNo}`} disabled={confirmationBusy || !!busy} checked={reviewIds.includes(order.id)} onChange={() => toggleReview(order)}/>核对工单</label>}
                 {canReview && <button className={styles.secondaryButton} disabled={confirmationBusy || !!busy} onClick={() => beginAmendment(order)}>修改工单</button>}
-                {canReview && <button className={styles.reject} disabled={confirmationBusy || !!busy} onClick={() => beginReturn(order)}>退回工单</button>}
+                {canReturnOrder(order) && <button className={styles.reject} disabled={confirmationBusy || !!busy} onClick={() => beginReturn(order)}>退回工单</button>}
               </div>
-              {canReview && returnDraft?.orderId === order.id && <form className={styles.returnForm} aria-label={`退回工单 ${order.orderNo}`} onClick={event => event.stopPropagation()} onSubmit={event => { event.preventDefault(); void returnOrder(order) }}>
+              {canReturnOrder(order) && returnDraft?.orderId === order.id && <form className={styles.returnForm} aria-label={`退回工单 ${order.orderNo}`} onClick={event => event.stopPropagation()} onSubmit={event => { event.preventDefault(); void returnOrder(order) }}>
                 <label>退回原因<textarea aria-label="退回原因" value={returnDraft.reason} minLength={2} maxLength={300} required disabled={!!busy} onChange={event => setReturnDraft({ orderId: order.id, reason: event.target.value, error: '' })}/></label>
                 <small>已按当前缺项预填，可修改。确认后将退回给提报人补充。</small>
                 {returnDraft.reason.trim().length < 2 && <p role="alert">请填写至少2个字符的退回原因。</p>}

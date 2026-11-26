@@ -1,4 +1,4 @@
-import type { RoleModulePermissionCatalog } from '@/lib/org-role-permission-readback'
+import type { PermissionDirectoryPlacement, RoleModulePermissionCatalog } from '@/lib/org-role-permission-readback'
 import {
   ORG_BUSINESS_ROLE_ASSIGN,
   ORG_DEPARTMENT_DIRECTORY_VIEW,
@@ -28,7 +28,7 @@ import {
 
 export const registeredShippingPermissionKeys: ReadonlySet<string> = new Set(REGISTERED_MODULE_PERMISSION_KEYS)
 
-type PermissionDirectoryAction = {
+type PermissionDirectoryAction = PermissionDirectoryPlacement & {
   key: string
   label: string
   description: string
@@ -116,12 +116,12 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
     const required = shippingActionViewDependency(key)
     const [label, description] = SHIPPING_ACTION_DEFINITIONS[key]
     return published
-      ? { ...published, available: (!required || published.dependencies.includes(required))
+      ? { ...published, available: (!published.moduleKey || published.grantSubjectTypes?.includes('role') === true) && (!required || published.dependencies.includes(required))
         && published.dependencies.every(dependency => registered.has(dependency)) }
       : { key, label, description, available: false }
   })
 
-  return [
+  const groups: PermissionDirectoryGroup[] = [
     {
       id: 'workbench', label: '工作台',
       notes: [existing('查看工作台'), existing('查看部门经营数据', '按当前部门数据规则查询。')],
@@ -232,6 +232,27 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
       ],
     },
   ]
+
+  function addRegisteredPlacement(group: PermissionDirectoryGroup): PermissionDirectoryGroup {
+    return {
+      ...group,
+      actions: group.actions?.map(action => {
+        const item = registered.get(action.key)
+        if (!item?.moduleKey) return action
+        return {
+          ...action,
+          moduleKey: item.moduleKey,
+          capabilityLevel: item.capabilityLevel,
+          grantSubjectTypes: item.grantSubjectTypes,
+          scopeTypes: item.scopeTypes,
+          available: action.available && item.grantSubjectTypes?.includes('role') === true,
+        }
+      }),
+      children: group.children?.map(addRegisteredPlacement),
+    }
+  }
+
+  return groups.map(addRegisteredPlacement)
 }
 
 export function getDirectoryActions(group: PermissionDirectoryGroup): PermissionDirectoryAction[] {

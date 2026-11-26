@@ -5,7 +5,7 @@ import {
 } from '@/lib/permissions'
 import {
   hasPublishedShippingBundle, legacyShippingPermission, REGISTERED_MODULE_PERMISSION_KEYS, SHIPPING_BUNDLE,
-  SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE, SHIPPING_SETTINGS_ACTION_KEYS, SHIPPING_WORKBENCH_ACTION_KEYS,
+  SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE, SHIPPING_RECORD_RETURN, SHIPPING_SETTINGS_ACTION_KEYS, SHIPPING_WORKBENCH_ACTION_KEYS,
 } from '@/lib/module-access'
 import { ORG_MEMBER_LIFECYCLE_ACTIONS } from '@/lib/admin/member-action-keys'
 import { isShippingOwnerPermission } from '@/lib/shipping/owner-permission-keys'
@@ -65,6 +65,7 @@ function getLegacyOrganizationGrant(permissions: string[], key: string): string 
 }
 
 export function isRolePermissionEnabled(permissions: string[], key: string): boolean {
+  if (key === SHIPPING_RECORD_RETURN) return permissions.includes(key)
   if (isOrganizationSourcePermissionKey(key)) return permissionSources(key).some(source => permissions.includes(source))
   if (permissionSources(key).some(source => hasPermission(permissions, source))) return true
   if (getLegacyOrganizationGrant(permissions, key)) return true
@@ -101,7 +102,7 @@ export function getPermissionGrantSource(
     return { grant: exact, via: 'direct', label: exact }
   }
 
-  if (isOrganizationSourcePermissionKey(key)) {
+  if (key === SHIPPING_RECORD_RETURN || isOrganizationSourcePermissionKey(key)) {
     if (systemAdministrator) return { grant: '*', via: 'bundle', label: '*' }
     const source = (impliedBy ?? IMPLIED_PERMISSION_SOURCES[key] ?? []).find(permission => permissions.includes(permission))
     return source ? { grant: source, via: 'dependency', label: source } : null
@@ -221,7 +222,7 @@ export function revokeRolePermissions(
   availableModuleKeys?: ReadonlySet<string>,
 ): string[] {
   const shippingBundleAvailable = !availableModuleKeys || hasPublishedShippingBundle(availableModuleKeys)
-  const canExpand = (key: string) => !isOrganizationSourcePermissionKey(key)
+  const canExpand = (key: string) => key !== SHIPPING_RECORD_RETURN && !isOrganizationSourcePermissionKey(key)
     && (key === SHIPPING_BUNDLE ? shippingBundleAvailable
       : !availableModuleKeys || !registeredModuleKeys.has(key) || availableModuleKeys.has(key))
   const next = Array.from(new Set(keys)).reduce((draft, key) => {

@@ -12,11 +12,25 @@ export type ConfigRoleRecord = {
   owner_shipping_permissions?: string[]
 }
 
+export type PermissionDirectoryPlacement = {
+  moduleKey?: string
+  capabilityLevel?: 'L1' | 'L2' | 'L3' | 'L4'
+  grantSubjectTypes?: Array<'role' | 'department'>
+  scopeTypes?: string[]
+}
+
+type RoleModulePermissionItem = {
+  key: string
+  label: string
+  description: string
+  dependencies: string[]
+} & PermissionDirectoryPlacement
+
 export type RoleModulePermissionCatalog = Array<{
   id: string
   label: string
   description: string
-  items: Array<{ key: string; label: string; description: string; dependencies: string[] }>
+  items: RoleModulePermissionItem[]
 }>
 
 export type ShippingPermissionPublication = {
@@ -83,11 +97,19 @@ function parseModuleCatalog(value: unknown): RoleModulePermissionCatalog {
   return value.flatMap((group) => {
     if (!isObject(group) || typeof group.id !== 'string' || typeof group.label !== 'string'
       || typeof group.description !== 'string' || !Array.isArray(group.items)) return []
-    const items = group.items.flatMap((item) => (
+    const items = group.items.flatMap<RoleModulePermissionItem>((item) => (
       isObject(item) && item.selectable === true
         && typeof item.key === 'string' && typeof item.label === 'string' && typeof item.description === 'string'
         && permissionList(item.dependencies)
-        ? [{ key: item.key, label: item.label, description: item.description, dependencies: item.dependencies }]
+        ? [{
+          key: item.key, label: item.label, description: item.description, dependencies: item.dependencies,
+          ...(typeof item.moduleKey === 'string' ? { moduleKey: item.moduleKey } : {}),
+          ...(item.capabilityLevel === 'L1' || item.capabilityLevel === 'L2' || item.capabilityLevel === 'L3' || item.capabilityLevel === 'L4'
+            ? { capabilityLevel: item.capabilityLevel } : {}),
+          ...(Array.isArray(item.grantSubjectTypes) && item.grantSubjectTypes.every(value => value === 'role' || value === 'department')
+            ? { grantSubjectTypes: item.grantSubjectTypes as Array<'role' | 'department'> } : {}),
+          ...(permissionList(item.scopeTypes) ? { scopeTypes: item.scopeTypes } : {}),
+        }]
         : []
     ))
     return items.length > 0 ? [{ id: group.id, label: group.label, description: group.description, items }] : []

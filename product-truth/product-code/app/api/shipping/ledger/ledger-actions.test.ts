@@ -7,6 +7,9 @@ vi.mock('@/lib/auth', () => ({ requireAuth: auth, AuthError: class AuthError ext
 vi.mock('@/lib/shipping/workflow', () => ({ confirmAndSubmitShipment: confirm, returnShipmentOrder: returned, reconcileShipmentOrder: reconcile, cancelShipmentOrder: cancel }))
 vi.mock('@/lib/shipping/collaboration', () => ({ assignShipmentRelation: assign }))
 vi.mock('@/lib/shipping/operator-access', () => ({ requireShippingOperator: requireOperator }))
+vi.mock('@/lib/shipping/entry-access', () => ({
+  loadPublishedShippingAccess: async () => ({ orgId: 'org-1', returnRegistered: false, permissions: ['shipping:record_review'] }),
+}))
 import { POST as confirmRoute } from './[id]/confirm/route'
 import { POST as returnRoute } from './[id]/return/route'
 import { POST as reconcileRoute } from './[id]/reconcile/route'

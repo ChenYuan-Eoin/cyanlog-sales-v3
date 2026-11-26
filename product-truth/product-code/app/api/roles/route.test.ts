@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: vi.fn(), rpc: vi.fn() } }))
 vi.mock('@/lib/auth', () => ({ requireAuth: vi.fn(async () => ({ id: 'user-1' })) }))
 import { supabaseAdmin } from '@/lib/supabase'
-import { REGISTERED_MODULE_PERMISSION_KEYS } from '@/lib/module-access'
+import { ROLE_PERMISSION_PROJECTION_KEYS } from '@/lib/permission-registry'
 import { GET, POST } from './route'
 import { DELETE, PATCH } from './[id]/metadata/route'
 
@@ -251,7 +251,7 @@ it.each([false, true])('advertises the shipping bundle only when both actions ar
     }],
   })
   const { data } = await (await GET(makeRequest())).json()
-  expect(permissionQuery.in).toHaveBeenCalledWith('code', [...REGISTERED_MODULE_PERMISSION_KEYS])
+  expect(permissionQuery.in).toHaveBeenCalledWith('code', [...ROLE_PERMISSION_PROJECTION_KEYS])
   expect(data.roles[0].permissions).toEqual(['preserved:legacy', 'shipping:manage_connections'])
   expect(data.permission_keys).toContain('shipping:operate')
   if (bothPublished) {

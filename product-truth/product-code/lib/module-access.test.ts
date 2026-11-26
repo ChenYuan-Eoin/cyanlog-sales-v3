@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  getEffectiveShippingPermissions, getPublishedModulePermissionKeys, getShippingPermissionPublication, SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE, shippingPermissionRequirement,
+  getEffectiveShippingPermissions, getPublishedModulePermissionKeys, getShippingPermissionPublication, SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE, SHIPPING_RECORD_RETURN, shippingPermissionRequirement,
 } from './module-access'
 
 const operator = {
@@ -48,6 +48,19 @@ describe('shipping-only registered actions', () => {
       [{ ...scopedLedger, supported_scope_types: ['org', 'space'] }],
       [{ ...granularPermission('record_review', 'ledger_view'), supported_scope_types: ['org', 'department'] }],
     ]) expect(getShippingPermissionPublication(rows).departmentLedgerPublished).toBe(false)
+  })
+
+  it('requires the new exact return leaf and a valid dual-scope registration', () => {
+    const ledger = { ...granularPermission('ledger_view'), supported_scope_types: ['org', 'department'] }
+    const review = granularPermission('record_review', 'ledger_view')
+    const point = { ...granularPermission('record_return', 'ledger_view'), supported_scope_types: ['org', 'department'] }
+    const publication = getShippingPermissionPublication([operator, ledger, review, point])
+    expect(getEffectiveShippingPermissions([ledger.code, point.code], publication)).toContain(SHIPPING_RECORD_RETURN)
+    for (const grants of [[point.code], [ledger.code, review.code], [operator.code], ['shipping:*']]) {
+      expect(getEffectiveShippingPermissions(grants, publication)).not.toContain(SHIPPING_RECORD_RETURN)
+    }
+    expect(getShippingPermissionPublication([ledger, { ...point, supported_scope_types: ['org'] }]).published.has(point.code)).toBe(false)
+    expect(shippingPermissionRequirement('/api/shipping/ledger/id/return', 'POST', false)).toBe(SHIPPING_RECORD_RETURN)
   })
 
   it('makes saved granular grants independent and bridges legacy permissions only while registered', () => {

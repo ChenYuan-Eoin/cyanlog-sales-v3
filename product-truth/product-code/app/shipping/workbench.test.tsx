@@ -497,7 +497,7 @@ describe('self-service shipping workbench', () => {
   })
 
   it('returns an unsubmitted work order without invoking cancellation or carrier creation', async () => {
-    const order = { ...fixtureOrders[0], status: 'awaiting_confirmation' as const, waybill: null }
+    const order = { ...fixtureOrders[0], status: 'awaiting_confirmation' as const, waybill: null, canReturn: true }
     useLedger([order])
     {
       render(<ShippingWorkbench settings={settings}/>)
@@ -514,7 +514,7 @@ describe('self-service shipping workbench', () => {
 
   it('prefills actual defects, prevents blank returns, and keeps failed returns editable', async () => {
     const emptySender = { name: '', phone: '', province: '', city: '', county: '', address: '' }
-    const order = { ...fixtureOrders[0], status: 'awaiting_confirmation' as const, intakeSource: 'owner_web' as const, input: { ...fixtureOrders[0].input, sender: emptySender } }
+    const order = { ...fixtureOrders[0], status: 'awaiting_confirmation' as const, intakeSource: 'owner_web' as const, canReturn: true, input: { ...fixtureOrders[0].input, sender: emptySender } }
     fetcher.mockImplementation(async (url: string) => url.endsWith('/return') ? Response.json({ error: '服务暂不可用' }, { status: 503 }) : Response.json({ records: [order] }))
     render(<ShippingWorkbench settings={{ ...settings, sender: emptySender }}/>)
     fireEvent.click(await screen.findByRole('button', { name: '退回工单' }))
@@ -528,6 +528,19 @@ describe('self-service shipping workbench', () => {
     await screen.findAllByText('退回未完成：服务暂不可用')
     expect(screen.getByLabelText('退回原因')).toHaveProperty('value', '请补齐寄方资料')
     expect(screen.queryByText('工单已退回')).toBeNull()
+  })
+
+  it.each([
+    { permission: 'shipping:record_review', canReturn: undefined, expected: false },
+    { permission: 'shipping:record_return', canReturn: undefined, expected: true },
+    { permission: 'shipping:record_return', canReturn: false, expected: false },
+  ])('uses the specific $permission permission and respects the record decision ($canReturn)', async ({ permission, canReturn, expected }) => {
+    const order = { ...fixtureOrders[0], status: 'awaiting_confirmation' as const, waybill: null, canReturn }
+    useLedger([order])
+    render(<ShippingWorkbench settings={{ ...settings, permissions: ['shipping:ledger_view', permission] }} />)
+    await screen.findAllByText('华东建筑设计院')
+    expect(Boolean(screen.queryByRole('button', { name: '退回工单' }))).toBe(expected)
+    expect(Boolean(screen.queryByRole('button', { name: '修改工单' }))).toBe(permission === 'shipping:record_review')
   })
 
   it.each([['real', 'order_unknown'], ['real', 'ordering'], ['simulation', 'order_unknown'], ['simulation', 'ordering']] as const)('retains %s middle-column %s outcomes for reconciliation without retrying confirmation', async (mode, status) => {
@@ -1088,7 +1101,7 @@ it('removes one draft independently and preserves edits when replacement is canc
 })
 
  it('does not suggest changing a verified employee department to a manually configured team', async () => {
-  const order={...fixtureOrders[0],identityVerified:true,status:'awaiting_confirmation' as const,waybill:null,input:{...fixtureOrders[0].input,submittedBy:{name:'陈源',phone:'13800000000',team:'企微同步部门'}}}
+  const order={...fixtureOrders[0],identityVerified:true,status:'awaiting_confirmation' as const,waybill:null,canReturn:true,input:{...fixtureOrders[0].input,submittedBy:{name:'陈源',phone:'13800000000',team:'企微同步部门'}}}
   useLedger([order])
   render(<ShippingWorkbench settings={{...settings,intakeRules:{...settings.intakeRules!,team:{enabled:true,required:true,minLength:4},teamOptions:['南区一组']}}}/>)
   fireEvent.click(await screen.findByRole('button',{name:'退回工单'}))

@@ -1,6 +1,6 @@
 import type { AuthUser } from '@/lib/auth'
 import {
-  getEffectiveOwnerShippingPermissions, getEffectiveShippingPermissions,
+  getEffectiveOwnerShippingPermissions, getEffectiveShippingPermissions, SHIPPING_RECORD_RETURN,
 } from '@/lib/module-access'
 import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import { loadShippingModulePermissionState } from '@/lib/permission-registry'
@@ -10,6 +10,7 @@ import { DEPARTMENT_LEDGER_VIEW, loadDepartmentLedgerScope, type LedgerDepartmen
 
 type PublishedShippingAccess = {
   orgId: string
+  returnRegistered?: boolean
   permissions: string[]
   roleCodes: string[]
   ownerPermissions: string[]
@@ -25,7 +26,10 @@ async function loadShippingAuthorization(userId: string) {
   ])
   if (!context) return null
   const permissions = context.assignments.flatMap(assignment => assignment.permissions)
-  return { context, publication, permissions: getEffectiveShippingPermissions(permissions, publication) }
+  const hasExplicitReturn = permissions.includes(SHIPPING_RECORD_RETURN)
+    || context.assignments.some(assignment => assignment.roleCode === 'SUPER_ADMIN')
+  return { context, publication, permissions: getEffectiveShippingPermissions(permissions, publication)
+    .filter(key => key !== SHIPPING_RECORD_RETURN || hasExplicitReturn) }
 }
 
 export async function loadPublishedShippingAccess(userId: string, departmentOptions: DepartmentOptions = 'none'): Promise<PublishedShippingAccess | null> {
@@ -38,6 +42,7 @@ export async function loadPublishedShippingAccess(userId: string, departmentOpti
     ? await loadDepartmentLedgerScope(createMiddlewareRestClient(), context.orgId, userId, context.settings, organizationWide) : []
   return {
     orgId: context.orgId,
+    returnRegistered: publication.registered.has(SHIPPING_RECORD_RETURN),
     permissions,
     ownerPermissions: getEffectiveOwnerShippingPermissions(
       context.assignments.flatMap(assignment => assignment.ownerShippingPermissions ?? []), publication,
@@ -52,12 +57,15 @@ export async function loadShippingLedgerAccess(userId: string, filterByDepartmen
   if (!authorization) return null
   const { context, publication, permissions } = authorization
   const organizationWide = permissions.includes(DEPARTMENT_LEDGER_VIEW)
-  if (organizationWide && !filterByDepartment) return { orgId: context.orgId, organizationWide, departments: [] }
+  const organizationReturn = publication.registered.has(SHIPPING_RECORD_RETURN)
+    ? permissions.includes(SHIPPING_RECORD_RETURN) : permissions.includes('shipping:record_review')
+  const access = { orgId: context.orgId, organizationWide, organizationReturn, returnPublished: publication.published.has(SHIPPING_RECORD_RETURN) }
+  if (organizationWide && !filterByDepartment) return { ...access, departments: [] }
   if (!publication.departmentLedgerPublished) return null
   const departments = await loadDepartmentLedgerScope(
     createMiddlewareRestClient(), context.orgId, userId, context.settings, organizationWide,
   )
-  return organizationWide || departments.length ? { orgId: context.orgId, organizationWide, departments } : null
+  return organizationWide || departments.length ? { ...access, departments } : null
 }
 
 /** The caller has already verified the session and active account for this token. */

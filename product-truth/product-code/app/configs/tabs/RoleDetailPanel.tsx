@@ -160,7 +160,7 @@ export function RoleDetailPanel({
     : { registered: registeredShippingPermissionKeys, published: catalogKeys }, [shippingPermissionPublication, catalogKeys])
   const availableModuleKeys = useMemo(() => new Set([...catalogKeys].filter(key => shippingPublication.published.has(key))), [catalogKeys, shippingPublication])
   const permissionGroups = useMemo(() => buildRolePermissionDirectory(modulePermissionCatalog?.map(group => ({
-    ...group, items: group.items.filter(item => availableModuleKeys.has(item.key)),
+    ...group, items: group.items.filter(item => !registeredShippingPermissionKeys.has(item.key) || availableModuleKeys.has(item.key)),
   }))), [modulePermissionCatalog, availableModuleKeys])
 
   const effectiveShipping = getEffectiveShippingPermissions(perms, shippingPublication)

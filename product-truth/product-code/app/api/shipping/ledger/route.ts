@@ -7,9 +7,9 @@ import { submitShippingWorkorder } from '@/lib/shipping/owner-submission'
 export const runtime = 'nodejs'
 
 export async function GET(req: NextRequest) {
-  return shippingLedgerRead(req, async ({ orgId, departmentIds, query }) => {
+  return shippingLedgerRead(req, async ({ orgId, departmentIds, query, returnAccess }) => {
     const filters = shipmentLedgerQuerySchema.parse(query)
-    const records = await listShipmentLedger(orgId, filters, departmentIds)
+    const records = await listShipmentLedger(orgId, filters, departmentIds, returnAccess)
     if (filters.page !== undefined) {
       return {
         records: records.slice(0, filters.limit),

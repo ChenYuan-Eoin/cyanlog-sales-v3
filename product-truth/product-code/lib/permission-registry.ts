@@ -3,37 +3,27 @@ import { getShippingPermissionPublication, REGISTERED_MODULE_PERMISSION_KEYS } f
 import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
 import {
   BUILTIN_PERMISSION_DEFINITIONS,
+  PERMISSION_CAPABILITY_LEVELS,
+  PERMISSION_GRANT_SUBJECT_TYPES,
   buildPermissionCatalog,
   permissionDefinitionIsValid,
+  type PermissionCapabilityLevel,
   type PermissionCatalogGroup,
   type PermissionDefinition,
+  type PermissionDictionaryMetadata,
+  type PermissionGrantSubjectType,
   type PermissionKind,
   type PermissionLifecycleStatus,
   type PermissionScopeType,
 } from '@/lib/permission-catalog'
 
-const PERMISSION_COLUMNS = [
-  'id',
-  'code',
-  'name',
-  'description',
-  'resource',
-  'action',
-  'kind',
-  'status',
-  'category',
-  'semantic_version',
-  'lifecycle_version',
-  'supported_scope_types',
-  'dependencies',
-  'conflicts',
-  'implied_by',
-  'enforcement_consumer',
-  'published_at',
-  'deprecated_at',
-  'disabled_at',
-  'deleted_at',
-].join(',')
+// fromRow is the response allowlist. A row remains readable while the
+// database does not yet have the additive dictionary columns.
+const PERMISSION_COLUMNS = '*'
+const shippingPermissionKeys = new Set<string>(REGISTERED_MODULE_PERMISSION_KEYS)
+const configDictionaryKeys = new Set(BUILTIN_PERMISSION_DEFINITIONS
+  .filter(definition => definition.moduleKey === 'config').map(definition => definition.key))
+export const ROLE_PERMISSION_PROJECTION_KEYS = [...REGISTERED_MODULE_PERMISSION_KEYS, ...configDictionaryKeys]
 
 type PermissionRow = {
   id: string
@@ -47,6 +37,9 @@ type PermissionRow = {
   category?: string | null
   semantic_version?: string | null
   lifecycle_version?: number | null
+  module_key?: string | null
+  capability_level?: string | null
+  grant_subject_types?: string[] | null
   supported_scope_types?: PermissionScopeType[] | null
   dependencies?: string[] | null
   conflicts?: string[] | null
@@ -64,6 +57,9 @@ export type PermissionDefinitionInput = {
   description?: unknown
   category?: unknown
   kind?: unknown
+  moduleKey?: unknown
+  capabilityLevel?: unknown
+  grantSubjectTypes?: unknown
   scopeTypes?: unknown
   dependencies?: unknown
   conflicts?: unknown
@@ -80,8 +76,19 @@ export class PermissionRegistryError extends Error {
   }
 }
 
+function capabilityLevelOf(value: unknown): PermissionCapabilityLevel | null {
+  return PERMISSION_CAPABILITY_LEVELS.find(level => level === value) ?? null
+}
+
+function grantSubjectTypesOf(value: unknown): PermissionGrantSubjectType[] | null {
+  if (!Array.isArray(value) || value.some(subject => !PERMISSION_GRANT_SUBJECT_TYPES.some(type => type === subject))) return null
+  return [...new Set<PermissionGrantSubjectType>(value)]
+}
+
 function fromRow(row: PermissionRow): PermissionDefinition {
   const [resource, action = '*'] = row.code.split(':')
+  const capabilityLevel = capabilityLevelOf(row.capability_level)
+  const moduleKey = capabilityLevel && row.module_key ? row.module_key : null
   return {
     id: row.id,
     key: row.code,
@@ -92,6 +99,9 @@ function fromRow(row: PermissionRow): PermissionDefinition {
     kind: row.kind ?? (row.code.endsWith(':*') ? 'bundle' : 'atomic'),
     status: row.status ?? 'published',
     category: row.category ?? 'console',
+    moduleKey,
+    capabilityLevel: moduleKey ? capabilityLevel : null,
+    grantSubjectTypes: moduleKey ? grantSubjectTypesOf(row.grant_subject_types) ?? [] : [],
     label: row.name,
     description: row.description ?? '',
     scopeTypes: row.supported_scope_types ?? ['org', 'department', 'space', 'self'],
@@ -116,6 +126,18 @@ function scopeList(value: unknown): PermissionScopeType[] {
   const allowed = new Set<PermissionScopeType>(['org', 'department', 'space', 'self'])
   const scopes = stringList(value).filter((item): item is PermissionScopeType => allowed.has(item as PermissionScopeType))
   return scopes.length > 0 ? scopes : ['org', 'department', 'space', 'self']
+}
+
+function dictionaryInput(input: PermissionDefinitionInput, current?: PermissionDefinition): PermissionDictionaryMetadata {
+  const moduleKey = input.moduleKey === undefined ? current?.moduleKey ?? null : input.moduleKey
+  const level = input.capabilityLevel === undefined ? current?.capabilityLevel ?? null : input.capabilityLevel
+  const capabilityLevel = capabilityLevelOf(level)
+  const grantSubjectTypes = input.grantSubjectTypes === undefined
+    ? current?.grantSubjectTypes ?? [] : grantSubjectTypesOf(input.grantSubjectTypes)
+  if ((moduleKey !== null && typeof moduleKey !== 'string') || (level !== null && !capabilityLevel) || !grantSubjectTypes) {
+    throw new PermissionRegistryError('INVALID', '模块、权限层级或可授权对象格式无效。')
+  }
+  return { moduleKey: moduleKey?.trim() ?? null, capabilityLevel, grantSubjectTypes }
 }
 
 function inputDefinition(
@@ -145,6 +167,7 @@ function inputDefinition(
     kind,
     status: current?.status ?? 'draft',
     category: category ?? '',
+    ...dictionaryInput(input, current),
     label: label ?? '',
     description: description ?? '',
     scopeTypes: input.scopeTypes === undefined ? current?.scopeTypes ?? ['org', 'department', 'space', 'self'] : scopeList(input.scopeTypes),
@@ -159,7 +182,7 @@ function inputDefinition(
   }
 }
 
-function toRow(definition: PermissionDefinition) {
+function toRow(definition: PermissionDefinition, writeMetadata = definition.moduleKey !== null) {
   return {
     code: definition.key,
     name: definition.label,
@@ -171,6 +194,11 @@ function toRow(definition: PermissionDefinition) {
     category: definition.category,
     semantic_version: definition.semanticVersion,
     lifecycle_version: definition.version,
+    ...(writeMetadata ? {
+      module_key: definition.moduleKey,
+      capability_level: definition.capabilityLevel,
+      grant_subject_types: definition.grantSubjectTypes,
+    } : {}),
     supported_scope_types: definition.scopeTypes,
     dependencies: definition.dependencies,
     conflicts: definition.conflicts,
@@ -193,6 +221,9 @@ function snapshot(definition: PermissionDefinition) {
     kind: definition.kind,
     category: definition.category,
     semanticVersion: definition.semanticVersion,
+    moduleKey: definition.moduleKey,
+    capabilityLevel: definition.capabilityLevel,
+    grantSubjectTypes: definition.grantSubjectTypes,
     scopeTypes: definition.scopeTypes,
     dependencies: definition.dependencies,
     conflicts: definition.conflicts,
@@ -269,12 +300,12 @@ export async function loadPublishedPermissionCatalog(): Promise<{
   }
 }
 
-async function readLiveModulePermissionRows(): Promise<PermissionRow[]> {
+async function readLiveModulePermissionRows(keys: readonly string[] = REGISTERED_MODULE_PERMISSION_KEYS): Promise<PermissionRow[]> {
   try {
     const { data, error } = await supabaseAdmin
       .from('permission_points')
       .select(PERMISSION_COLUMNS)
-      .in('code', [...REGISTERED_MODULE_PERMISSION_KEYS])
+      .in('code', keys)
 
     if (error || !Array.isArray(data)) return []
     return data as unknown as PermissionRow[]
@@ -298,11 +329,14 @@ export async function loadRoleModulePermissionCatalog(): Promise<PermissionCatal
 }
 
 export async function loadRoleModulePermissionProjection() {
-  const rows = await readLiveModulePermissionRows()
-  const publication = getShippingPermissionPublication(rows)
+  const rows = await readLiveModulePermissionRows(ROLE_PERMISSION_PROJECTION_KEYS)
+  const publication = getShippingPermissionPublication(rows.filter(row => row && shippingPermissionKeys.has(row.code)))
+  const definitions = rows.filter(row => row && (publication.published.has(row.code)
+    || (configDictionaryKeys.has(row.code) && row.module_key === 'config')))
+    .map(fromRow)
   return {
     publication,
-    catalog: buildPermissionCatalog(rows.filter(row => row && publication.published.has(row.code)).map(fromRow)),
+    catalog: buildPermissionCatalog(definitions, { includeUnavailable: true }),
   }
 }
 
@@ -352,7 +386,7 @@ export async function updatePermissionDefinition(
   const errors = permissionDefinitionIsValid(next, all.definitions)
   if (errors.length) throw new PermissionRegistryError('INVALID', errors.join(' '))
   const { data, error } = await supabaseAdmin.from('permission_points')
-    .update({ ...toRow(next), updated_by: actorId })
+    .update({ ...toRow(next, current.moduleKey !== null || next.moduleKey !== null), updated_by: actorId })
     .eq('id', id)
     .eq('lifecycle_version', current.version)
     .select(PERMISSION_COLUMNS)

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { LedgerDepartment } from '@/lib/shipping/department-ledger-access'
 import type { ShipmentOrder, ShipmentOrderStatus } from '@/lib/shipping/types'
 import { shippingWorkbenchRequest } from '@/lib/shipping/workbench-client'
@@ -20,7 +20,8 @@ const statusLabels: Record<ShipmentOrderStatus, string> = {
 }
 
 type Selection = LedgerDepartmentSelection & { page: number }
-type LedgerPage = { records: ShipmentOrder[]; nextPage: number | null }
+type LedgerRecord = ShipmentOrder & { canReturn?: boolean }
+type LedgerPage = { records: LedgerRecord[]; nextPage: number | null }
 
 function formatTime(value: string) {
   const date = new Date(value)
@@ -73,13 +74,27 @@ function SavedShipmentDetails({ recordId, scopeQuery }: { recordId: string; scop
   </section>
 }
 
-function DepartmentLedgerRecords({ requestUrl, scopeQuery, page, onPageChange }: {
-  requestUrl: string; scopeQuery: string; page: number; onPageChange: (next: number) => void
+function canReturnRecord(record: LedgerRecord) {
+  return record.status === 'awaiting_confirmation' && record.canReturn === true
+}
+
+function DepartmentLedgerRecords({ requestUrl, scopeQuery, page, refresh, returning, onPageChange, onReturn }: {
+  requestUrl: string
+  scopeQuery: string
+  page: number
+  refresh: number
+  returning: boolean
+  onPageChange: (next: number) => void
+  onReturn: (id: string, reason: string) => Promise<boolean>
 }) {
-  const [result, setResult] = useState<LedgerPage | null>(null)
-  const [error, setError] = useState('')
+  const [loaded, setLoaded] = useState<{ refresh: number; page?: LedgerPage; error?: string } | null>(null)
   const [retry, setRetry] = useState(0)
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null)
+  const [returnDraft, setReturnDraft] = useState<{ id: string; reason: string } | null>(null)
+  const result = loaded?.refresh === refresh ? loaded.page : null
+  const error = loaded?.refresh === refresh ? loaded.error : null
+  const returnReason = returnDraft?.reason.trim() ?? ''
+  const reasonValid = returnReason.length >= 2 && returnReason.length <= 300
 
   useEffect(() => {
     const controller = new AbortController()
@@ -90,15 +105,15 @@ function DepartmentLedgerRecords({ requestUrl, scopeQuery, page, onPageChange }:
           || data.records.some(record => typeof record?.id !== 'string' || typeof record.orderNo !== 'string')) {
           throw new Error('寄件台账响应不完整，请重试。')
         }
-        setResult(data)
+        setLoaded({ refresh, page: data })
       })
-      .catch(problem => { if (!controller.signal.aborted) setError(readError(problem)) })
+      .catch(problem => { if (!controller.signal.aborted) setLoaded({ refresh, error: readError(problem) }) })
     return () => controller.abort()
-  }, [page, requestUrl, retry])
+  }, [page, requestUrl, refresh, retry])
 
   if (error) return <div className="space-y-2 py-3">
     <p role="alert" className={styles.error}>{error}</p>
-    <button type="button" className={styles.secondary} onClick={() => { setError(''); setRetry(current => current + 1) }}>重新读取</button>
+    <button type="button" className={styles.secondary} onClick={() => { setLoaded(null); setRetry(current => current + 1) }}>重新读取</button>
   </div>
   if (!result) return <p role="status" className={styles.subtle}>正在读取寄件台账…</p>
 
@@ -119,8 +134,32 @@ function DepartmentLedgerRecords({ requestUrl, scopeQuery, page, onPageChange }:
                   onClick={() => setSelectedRecordId(current => current === record.id ? null : record.id)}>
                   {selectedRecordId === record.id ? '收起详情' : '查看详情'}
                 </button>
+                {canReturnRecord(record) && <button type="button" className={styles.secondary} disabled={returning}
+                  aria-expanded={returnDraft?.id === record.id} onClick={() => setReturnDraft({ id: record.id, reason: '' })}>
+                  退回工单
+                </button>}
               </div>
             </article>
+            {canReturnRecord(record) && returnDraft?.id === record.id && (
+              <form className={`mt-3 ${styles.confirmBox}`} aria-label={`退回工单 ${record.orderNo}`}
+                onSubmit={event => {
+                  event.preventDefault()
+                  if (returning || !reasonValid) return
+                  void onReturn(record.id, returnReason).then(completed => {
+                    if (completed) setReturnDraft(current => current?.id === record.id ? null : current)
+                  })
+                }}>
+                <label>
+                  退回原因
+                  <textarea value={returnDraft.reason} required minLength={2} maxLength={300} disabled={returning}
+                    onChange={event => setReturnDraft({ id: record.id, reason: event.target.value })} />
+                </label>
+                <div className={styles.confirmButtons}>
+                  <button type="submit" className={styles.primary} disabled={returning || !reasonValid}>{returning ? '退回中…' : '确认退回'}</button>
+                  <button type="button" className={styles.secondary} disabled={returning} onClick={() => setReturnDraft(null)}>取消</button>
+                </div>
+              </form>
+            )}
             {selectedRecordId === record.id && <SavedShipmentDetails recordId={record.id} scopeQuery={scopeQuery} />}
           </div>
         ))}
@@ -139,6 +178,10 @@ export default function DepartmentLedger({ departments, canViewOwn, canManageCon
   departments: LedgerDepartment[]; canViewOwn: boolean; canManageConnections: boolean
 }) {
   const [selection, setSelection] = useState<Selection>({ ...allLedgerDepartments, page: 0 })
+  const [refresh, setRefresh] = useState(0)
+  const [returning, setReturning] = useState(false)
+  const returnInProgress = useRef(false)
+  const [returnFeedback, setReturnFeedback] = useState<{ message: string; failed: boolean } | null>(null)
   const authorizedTreeKey = useMemo(() => JSON.stringify(departments.map(department => [department.id, department.parentId]).sort()), [departments])
   const selectionAllowed = !selection.departmentId || departments.some(department => department.id === selection.departmentId)
   const visibleSelection = selectionAllowed ? selection : { ...allLedgerDepartments, page: 0 }
@@ -148,6 +191,28 @@ export default function DepartmentLedger({ departments, canViewOwn, canManageCon
   query.set('page', String(page))
   query.set('limit', String(pageSize))
   const requestUrl = `${ledgerUrl}?${query}`
+
+  async function returnOrder(id: string, reason: string): Promise<boolean> {
+    if (returnInProgress.current) return false
+    returnInProgress.current = true
+    setReturning(true)
+    setReturnFeedback(null)
+    try {
+      const result = await shippingWorkbenchRequest<{ id: string; status: string }>(`${ledgerUrl}/${encodeURIComponent(id)}/return`, {
+        method: 'POST', body: JSON.stringify({ reason }),
+      })
+      if (result.id !== id || result.status !== 'returned') throw new Error('暂时无法确认工单退回结果，请查看最新工单状态。')
+      setReturnFeedback({ message: '工单已退回并记录原因。', failed: false })
+      return true
+    } catch (error) {
+      setReturnFeedback({ message: readError(error), failed: true })
+      return false
+    } finally {
+      setRefresh(current => current + 1)
+      setReturning(false)
+      returnInProgress.current = false
+    }
+  }
 
   return <main className={styles.workspace}>
     <header className={styles.header}>
@@ -163,7 +228,10 @@ export default function DepartmentLedger({ departments, canViewOwn, canManageCon
           <DepartmentLedgerFilter departments={departments} selection={visibleSelection}
             onChange={scope => setSelection({ ...scope, page: 0 })} />
         </div>
+        {returnFeedback && <p role={returnFeedback.failed ? 'alert' : 'status'}
+          className={returnFeedback.failed ? styles.error : styles.success}>{returnFeedback.message}</p>}
         <DepartmentLedgerRecords key={`${authorizedTreeKey}:${requestUrl}`} requestUrl={requestUrl} scopeQuery={scope.toString()} page={page}
+          refresh={refresh} returning={returning} onReturn={returnOrder}
           onPageChange={nextPage => setSelection({ ...visibleSelection, page: nextPage })} />
       </div>
     </section>

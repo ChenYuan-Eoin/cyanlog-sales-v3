@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
-const mocks = vi.hoisted(() => ({ access: vi.fn(), operator: vi.fn(), list: vi.fn(), detail: vi.fn() }))
+const mocks = vi.hoisted(() => ({ access: vi.fn(), operator: vi.fn(), list: vi.fn(), detail: vi.fn(), rpc: vi.fn() }))
+vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: mocks.rpc } }))
 vi.mock('@/lib/shipping/entry-access', () => ({ loadShippingLedgerAccess: mocks.access }))
 vi.mock('@/lib/auth', () => ({ requireAuth: async () => ({ id: 'operator' }), AuthError: class extends Error {} }))
 vi.mock('@/lib/shipping/operator-access', () => ({ requireShippingOperator: mocks.operator }))
@@ -10,6 +11,7 @@ import { GET, POST } from './route'
 import { GET as getRecord } from './[id]/route'
 import { ShippingError } from '@/lib/shipping/config'
 
+const noReturn = { organizationWide: false, departmentIds: new Set() }
 const orgWide = { orgId: 'org-authorized', organizationWide: true, departments: [] }
 const parent = 'c4a05f87-2940-4991-a409-634ce320640b'
 const child = 'b3462c70-d6f1-4448-9d80-cddc7b03b0a1'
@@ -23,6 +25,7 @@ const deptAccess = { ...orgWide, organizationWide: false, departments: [
 const ledgerUrl = 'https://example.test/api/shipping/ledger'
 
 beforeEach(() => {
+  mocks.rpc.mockReset()
   mocks.access.mockReset().mockResolvedValue(orgWide)
   mocks.operator.mockReset()
   mocks.list.mockReset().mockResolvedValue([])
@@ -31,7 +34,7 @@ beforeEach(() => {
 describe('ledger route uses the authorized organization', () => {
   it('passes the server-authorized organization to the data query', async () => {
     expect((await GET(new NextRequest('https://example.test/api/shipping/ledger?limit=50'))).status).toBe(200)
-    expect(mocks.list).toHaveBeenCalledWith('org-authorized', { limit: 50 }, undefined)
+    expect(mocks.list).toHaveBeenCalledWith('org-authorized', { limit: 50 }, undefined, noReturn)
   })
   it('filters authorized pages by both time bounds and returns only the requested page size', async () => {
     mocks.list.mockResolvedValue([{ id: 'first' }, { id: 'lookahead' }])
@@ -41,7 +44,7 @@ describe('ledger route uses the authorized organization', () => {
     expect(await result.json()).toEqual({ records: [{ id: 'first' }], nextPage: 1 })
     expect(mocks.list).toHaveBeenCalledWith('org-authorized', {
       limit: 1, page: 0, submittedFrom: '2026-11-17T16:00:00Z', submittedBefore: '2026-11-18T16:00:00Z',
-    }, undefined)
+    }, undefined, noReturn)
   })
   it('rejects backwards time bounds without querying orders', async () => {
     const result = await GET(new NextRequest(
@@ -62,11 +65,26 @@ describe('ledger route uses the authorized organization', () => {
   it('passes the authorized union or the selected subset before looking up any records', async () => {
     mocks.access.mockResolvedValue(deptAccess)
     expect((await GET(new NextRequest(ledgerUrl))).status).toBe(200)
-    expect(mocks.list).toHaveBeenLastCalledWith('org-authorized', { limit: 50 }, [parent, child, second])
+    expect(mocks.list).toHaveBeenLastCalledWith('org-authorized', { limit: 50 }, [parent, child, second], noReturn)
     expect((await GET(new NextRequest(`${ledgerUrl}?departmentId=${parent}`))).status).toBe(200)
-    expect(mocks.list).toHaveBeenLastCalledWith('org-authorized', { limit: 50 }, [parent])
+    expect(mocks.list).toHaveBeenLastCalledWith('org-authorized', { limit: 50 }, [parent], noReturn)
     expect((await GET(new NextRequest(`${ledgerUrl}?departmentId=${parent}&includeSubdepartments=true`))).status).toBe(200)
-    expect(mocks.list).toHaveBeenLastCalledWith('org-authorized', { limit: 50 }, [parent, child])
+    expect(mocks.list).toHaveBeenLastCalledWith('org-authorized', { limit: 50 }, [parent, child], noReturn)
+  })
+  it('keeps view selection distinct from the authorized return scope', async () => {
+    mocks.access.mockResolvedValue({ ...deptAccess, returnPublished: true })
+    mocks.rpc.mockResolvedValue({ data: [child], error: null })
+    expect((await GET(new NextRequest(ledgerUrl))).status).toBe(200)
+    expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('shipping_department_return_scope_v1', {
+      p_actor_id: 'operator', p_org_id: 'org-authorized',
+    })
+    expect(mocks.list).toHaveBeenLastCalledWith('org-authorized', { limit: 50 }, [parent, child, second], {
+      organizationWide: false, departmentIds: new Set([child]),
+    })
+
+    mocks.rpc.mockResolvedValue({ data: null, error: { code: 'PGRST202' } })
+    expect((await GET(new NextRequest(ledgerUrl))).status).toBe(200)
+    expect(mocks.list).toHaveBeenLastCalledWith('org-authorized', { limit: 50 }, [parent, child, second], noReturn)
   })
   it('does not query records for foreign selections or invalid scope filters', async () => {
     mocks.access.mockResolvedValue(deptAccess)
@@ -80,12 +98,12 @@ describe('ledger route uses the authorized organization', () => {
     const req = new NextRequest(`${ledgerUrl}/${unrelated}?departmentId=${second}`)
     const params = Promise.resolve({ id: unrelated })
     expect(await (await getRecord(req, { params })).json()).toEqual({ record: { id: unrelated } })
-    expect(mocks.detail).toHaveBeenLastCalledWith('org-authorized', unrelated, [second])
+    expect(mocks.detail).toHaveBeenLastCalledWith('org-authorized', unrelated, [second], noReturn)
     mocks.access.mockResolvedValue({ ...deptAccess, departments: [deptAccess.departments[0]] })
     expect((await getRecord(req, { params })).status).toBe(403)
     expect(mocks.detail).toHaveBeenCalledTimes(1)
     expect((await getRecord(new NextRequest(`${ledgerUrl}/${unrelated}`), { params })).status).toBe(404)
-    expect(mocks.detail).toHaveBeenLastCalledWith('org-authorized', unrelated, [parent])
+    expect(mocks.detail).toHaveBeenLastCalledWith('org-authorized', unrelated, [parent], noReturn)
   })
   it('does not use department reader authorization for creation', async () => {
     mocks.access.mockResolvedValue(deptAccess)

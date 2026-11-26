@@ -4,6 +4,7 @@ export { SHIPPING_OWNER_ACTION_KEYS } from './shipping/owner-permission-keys'
 export const SHIPPING_OPERATE = 'shipping:operate'
 export const SHIPPING_MANAGE_CONNECTIONS = 'shipping:manage_connections'
 export const SHIPPING_BUNDLE = 'shipping:*'
+export const SHIPPING_RECORD_RETURN = 'shipping:record_return'
 
 export const SHIPPING_ACTION_DEFINITIONS = {
   'shipping:owner_view': ['查看本人寄件记录', '查看本人提报的工单、回执和系统已保存的物流。'],
@@ -15,7 +16,8 @@ export const SHIPPING_ACTION_DEFINITIONS = {
   'shipping:owner_change': ['本人运单在途转寄与退回', '对符合条件的本人运单发起在途转寄或退回。'],
   'shipping:ledger_view': ['查看收寄台账', '查看授权范围内的寄件工单和系统已保存的物流。'],
   'shipping:record_create': ['录入寄件工单', '在工作台录入或批量提报工单。'],
-  'shipping:record_review': ['核对与处理工单', '分配归属、修改、退回或重新核对工单。'],
+  'shipping:record_review': ['核对与处理工单', '分配归属、修改或重新核对工单。'],
+  [SHIPPING_RECORD_RETURN]: ['退回工单', '退回已获授权范围内的待审核工单。仅可配置给角色。'],
   'shipping:order_confirm': ['确认并下单', '确认审核后的工单并向顺丰下单。'],
   'shipping:order_reconcile': ['查回下单结果', '从承运商核实并回写下单结果。'],
   'shipping:tracking_refresh': ['同步运单物流', '向承运商查询运单轨迹并在有依据时更新平台记录。'],
@@ -30,7 +32,7 @@ export const SHIPPING_ACTION_DEFINITIONS = {
 
 export type ShippingActionKey = keyof typeof SHIPPING_ACTION_DEFINITIONS
 export const SHIPPING_WORKBENCH_ACTION_KEYS = [
-  'shipping:ledger_view', 'shipping:record_create', 'shipping:record_review', 'shipping:order_confirm',
+  'shipping:ledger_view', 'shipping:record_create', 'shipping:record_review', SHIPPING_RECORD_RETURN, 'shipping:order_confirm',
   'shipping:order_reconcile', 'shipping:tracking_refresh', 'shipping:order_cancel', 'shipping:order_change',
 ] as const satisfies readonly ShippingActionKey[]
 export const SHIPPING_SETTINGS_ACTION_KEYS = [
@@ -57,7 +59,7 @@ const workbenchActions = new Set<string>(SHIPPING_WORKBENCH_ACTION_KEYS)
 const settingsActions = new Set<string>(SHIPPING_SETTINGS_ACTION_KEYS)
 
 export function legacyShippingPermission(key: string) {
-  if (workbenchActions.has(key)) return SHIPPING_OPERATE
+  if (key !== SHIPPING_RECORD_RETURN && workbenchActions.has(key)) return SHIPPING_OPERATE
   if (settingsActions.has(key)) return SHIPPING_MANAGE_CONNECTIONS
   return null
 }
@@ -76,7 +78,7 @@ function contains(grants: ShippingGrants, key: string): boolean {
 }
 
 function explicitlyAllows(grants: ShippingGrants, key: string) {
-  return contains(grants, key) || contains(grants, SHIPPING_BUNDLE) || contains(grants, '*')
+  return contains(grants, key) || contains(grants, '*') || (key !== SHIPPING_RECORD_RETURN && contains(grants, SHIPPING_BUNDLE))
 }
 
 export function hasShippingPermission(grants: ShippingGrants, key: string): boolean {
@@ -107,15 +109,16 @@ export function getPublishedModulePermissionKeys(rows: readonly unknown[]): stri
       && row.category === 'shipping' && row.action === code.slice('shipping:'.length)
       && row.enforcement_consumer === consumer
       && Array.isArray(row.supported_scope_types)
-      && ((row.supported_scope_types.length === 1
-        && row.supported_scope_types[0] === (isShippingOwnerPermission(code) ? 'self' : 'org'))
-        || (code === 'shipping:ledger_view' && hasDepartmentLedgerScope(row)))
+      && (code === SHIPPING_RECORD_RETURN ? supportsOrganizationAndDepartment(row)
+        : (row.supported_scope_types.length === 1
+          && row.supported_scope_types[0] === (isShippingOwnerPermission(code) ? 'self' : 'org'))
+          || (code === 'shipping:ledger_view' && supportsOrganizationAndDepartment(row)))
       && Array.isArray(row.dependencies)
       && (dependency ? row.dependencies.length === 1 && row.dependencies[0] === dependency : row.dependencies.length === 0)
   })
 }
 
-function hasDepartmentLedgerScope(row: Record<string, unknown>) {
+function supportsOrganizationAndDepartment(row: Record<string, unknown>) {
   const scopes = row.supported_scope_types
   return Array.isArray(scopes) && scopes.length === 2 && scopes.includes('org') && scopes.includes('department')
 }
@@ -126,7 +129,7 @@ export function getShippingPermissionPublication(rows: readonly unknown[]) {
   const published = new Set(getPublishedModulePermissionKeys(rows))
   const departmentLedgerPublished = published.has('shipping:ledger_view') && rows.some(row => (
     !!row && typeof row === 'object' && 'code' in row && row.code === 'shipping:ledger_view'
-    && hasDepartmentLedgerScope(row as Record<string, unknown>)
+    && supportsOrganizationAndDepartment(row as Record<string, unknown>)
   ))
   return { registered, published, departmentLedgerPublished }
 }
@@ -213,7 +216,8 @@ export function shippingPermissionRequirement(path: string, method: string, work
   const action = LEDGER_ITEM.exec(path)?.[1]
   if (read) return action === 'carrier-changes' ? 'shipping:ledger_view' : null
   switch (action) {
-    case 'assign': case 'amend': case 'return': case 'reopen': return 'shipping:record_review'
+    case 'assign': case 'amend': case 'reopen': return 'shipping:record_review'
+    case 'return': return SHIPPING_RECORD_RETURN
     case 'confirm': return 'shipping:order_confirm'
     case 'reconcile': return 'shipping:order_reconcile'
     case 'cancel': return 'shipping:order_cancel'

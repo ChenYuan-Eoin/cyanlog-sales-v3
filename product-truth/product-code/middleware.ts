@@ -56,7 +56,7 @@ import {
   type ShippingPermissionKey,
 } from '@/lib/module-access'
 import { sessionDeadline } from '@/lib/auth/fxiaoke-session'
-import { DEPARTMENT_LEDGER_VIEW, isDepartmentLedgerReadPath, loadDepartmentLedgerScope } from '@/lib/shipping/department-ledger-access'
+import { DEPARTMENT_LEDGER_VIEW, isDepartmentLedgerReadPath, isDepartmentLedgerReturnPath, loadDepartmentLedgerScope } from '@/lib/shipping/department-ledger-access'
 
 const PUBLIC_PATHS = ['/login', '/accept-invitation']
 const RETIRED_EXACT_PATHS = new Set([
@@ -480,8 +480,9 @@ export async function middleware(request: NextRequest) {
     // source until default-org changes can invalidate it atomically.
     const read = request.method === 'GET' || request.method === 'HEAD'
     const ledgerPath = read && isDepartmentLedgerReadPath(pathname)
+    const ledgerReturnPath = request.method === 'POST' && isDepartmentLedgerReturnPath(pathname)
     const checkDepartmentWorkspace = read && DEPARTMENT_WORKSPACE_READ_PATHS.has(pathname)
-    const checkDepartmentLedger = ledgerPath || (read && DEPARTMENT_LEDGER_ENTRY_PATHS.has(pathname))
+    const checkDepartmentLedger = ledgerPath || ledgerReturnPath || (read && DEPARTMENT_LEDGER_ENTRY_PATHS.has(pathname))
     const authContext = await getMiddlewareAuthContext(token, checkDepartmentWorkspace, checkDepartmentLedger)
 
     if (!authContext) {
@@ -523,13 +524,13 @@ export async function middleware(request: NextRequest) {
         status: 403, headers: { 'Cache-Control': 'private, no-store' },
       })
     }
-    const shippingPermission = ledgerPath ? DEPARTMENT_LEDGER_VIEW
+    const shippingPermission = ledgerPath || ledgerReturnPath ? DEPARTMENT_LEDGER_VIEW
       : shippingPermissionRequirement(pathname, request.method, request.nextUrl.searchParams.get('workspace') === '1')
     const shippingSettingsWrite = request.method === 'POST' && pathname === '/api/shipping/settings'
     const requiredShipping: readonly ShippingPermissionKey[] = shippingSettingsWrite
       ? [...SHIPPING_SETTINGS_ACTION_KEYS.slice(1), SHIPPING_MANAGE_CONNECTIONS]
       : shippingPermission ? [shippingPermission] : []
-    if (requiredShipping.length && !(ledgerPath && authContext.departmentLedgerAccess)
+    if (requiredShipping.length && !((ledgerPath || ledgerReturnPath) && authContext.departmentLedgerAccess)
       && !await allowsShippingPermission(authContext.shippingPermissions, requiredShipping)) {
       return pathname.startsWith('/api/')
         ? NextResponse.json({ error: 'Forbidden', required: requiredShipping[0] }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } })

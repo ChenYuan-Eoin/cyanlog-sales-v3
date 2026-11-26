@@ -8,7 +8,7 @@ import type { Contact, ShipmentOrder, ShipmentOrderStatus, ShipmentReceipt, Ship
 const orderColumns = 'id,employee_profile_id,order_no,intake_source,confirmation_policy,status,sales_ref,customer_ref,assignment_status,shipment_payload,payload_hash,revision,amended_at,next_review_at,created_at,org_id,carrier_connection_id,billing_account_id,sender_profile_id,connection_environment,billing_account_tail,shipping_config_snapshot'
 const waybillColumns = 'waybill_no,latest_status,latest_event_at'
 const select = `${orderColumns},shipping_waybills(${waybillColumns})`
-const ledgerSelect = `${orderColumns},cancel_phase:cancellation->>phase,provider_key,provider_order_id,shipping_waybills(${waybillColumns},provider_order_id,carrier_key,shipping_tracking_events(event_at,location,description,status))`
+const ledgerSelect = `${orderColumns},attributed_department_id,cancel_phase:cancellation->>phase,provider_key,provider_order_id,shipping_waybills(${waybillColumns},provider_order_id,carrier_key,shipping_tracking_events(event_at,location,description,status))`
 const ledgerEvents = 'shipping_waybills.shipping_tracking_events'
 type ShipmentWaybill = {
   waybill_no: string
@@ -21,6 +21,7 @@ type ShipmentWaybill = {
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 type ShipmentRow = {
   id: string
+  attributed_department_id?: string | null
   order_no: string
   intake_source: ShipmentOrder['intakeSource']
   confirmation_policy: ShipmentOrder['confirmationPolicy']
@@ -240,7 +241,9 @@ function scopedLedgerRows(orgId: string, departmentIds?: readonly string[]) {
   return departmentIds ? query.in('attributed_department_id', departmentIds) : query
 }
 
-function mapLedgerOrder(row: ShipmentRow): ShipmentOrder {
+export type ShipmentReturnAccess = { organizationWide: boolean; departmentIds: ReadonlySet<string> }
+
+function mapLedgerOrder(row: ShipmentRow, returnAccess?: ShipmentReturnAccess): ShipmentOrder {
   const order = map(row)
   const waybills = Array.isArray(row.shipping_waybills) ? row.shipping_waybills : row.shipping_waybills ? [row.shipping_waybills] : []
   const failure = row.shipping_config_snapshot?.orderFailure as { stage?: unknown } | undefined
@@ -248,10 +251,12 @@ function mapLedgerOrder(row: ShipmentRow): ShipmentOrder {
     ...order,
     canCancel: canCancelShipment(row, order.status, waybills, failure?.stage),
     cancellationState: row.cancel_phase ?? null,
+    ...(returnAccess ? { canReturn: row.status === 'awaiting_confirmation' &&
+      (returnAccess.organizationWide || !!row.attributed_department_id && returnAccess.departmentIds.has(row.attributed_department_id)) } : {}),
   }
 }
 
-export async function listShipmentLedger(orgId: string, filters: { salesRef?: string; customerRef?: string; contact?: string; status?: ShipmentOrderStatus; cursor?: string; page?: number; submittedFrom?: string; submittedBefore?: string; limit: number }, departmentIds?: readonly string[]) {
+export async function listShipmentLedger(orgId: string, filters: { salesRef?: string; customerRef?: string; contact?: string; status?: ShipmentOrderStatus; cursor?: string; page?: number; submittedFrom?: string; submittedBefore?: string; limit: number }, departmentIds?: readonly string[], returnAccess?: ShipmentReturnAccess) {
   requireOrganization(orgId)
   if (departmentIds?.length === 0) return []
   let query = scopedLedgerRows(orgId, departmentIds)
@@ -271,15 +276,15 @@ export async function listShipmentLedger(orgId: string, filters: { salesRef?: st
   }
   const { data, error } = await query
   if (error) throw new ShippingError(503, '收寄件台账暂不可用。')
-  return (data || []).map(raw => mapLedgerOrder(raw as unknown as ShipmentRow))
+  return (data || []).map(raw => mapLedgerOrder(raw as unknown as ShipmentRow, returnAccess))
 }
 
-export async function getScopedShipmentLedgerRecord(orgId: string, id: string, departmentIds?: readonly string[]): Promise<ShipmentOrder | null> {
+export async function getScopedShipmentLedgerRecord(orgId: string, id: string, departmentIds?: readonly string[], returnAccess?: ShipmentReturnAccess): Promise<ShipmentOrder | null> {
   requireOrganization(orgId)
   if (departmentIds?.length === 0) return null
   const { data, error } = await scopedLedgerRows(orgId, departmentIds).eq('id', id).maybeSingle()
   if (error) throw new ShippingError(503, '收寄件台账暂不可用。')
-  return data ? mapLedgerOrder(data as unknown as ShipmentRow) : null
+  return data ? mapLedgerOrder(data as unknown as ShipmentRow, returnAccess) : null
 }
 
 export async function assignShipmentRelation(id: string, orgId: string, salesRef: string, customerRef?: string) {

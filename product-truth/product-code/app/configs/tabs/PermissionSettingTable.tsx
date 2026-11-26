@@ -5,7 +5,7 @@ import { CheckCheckIcon, ChevronDownIcon, ChevronUpIcon, EraserIcon } from 'luci
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ORG_MEMBER_LIFECYCLE_ACTIONS } from '@/lib/admin/member-action-keys'
-import { getEffectiveOwnerShippingPermissions, getEffectiveShippingPermissions, legacyShippingPermission } from '@/lib/module-access'
+import { getEffectiveOwnerShippingPermissions, getEffectiveShippingPermissions, legacyShippingPermission, SHIPPING_RECORD_RETURN } from '@/lib/module-access'
 import { isOrganizationSourcePermissionKey, ORG_BUSINESS_ROLE_ASSIGN, ORG_DEPARTMENT_STRUCTURE_PERMISSION_KEYS, ORG_MEMBER_EDIT } from '@/lib/permissions'
 import { canRevokeShippingAction, getPermissionGrantSource, isRolePermissionEnabled, isRolePermissionExplicitlyGranted } from '@/lib/role-permission-policy'
 import { isShippingOwnerPermission } from '@/lib/shipping/owner-permission-keys'
@@ -59,6 +59,7 @@ export function PermissionSettingTable({
   function isEffective(key: string): boolean {
     if (isShippingOwnerPermission(key)) return effectiveOwnerKeys.has(key)
     if (isSuperAdmin && isOrganizationSourcePermissionKey(key)) return true
+    if (key === SHIPPING_RECORD_RETURN) return isSuperAdmin ? effectiveShippingKeys.has(key) : perms.includes(key) && effectiveShippingKeys.has(key)
     return legacyShippingPermission(key)
       ? effectiveShippingKeys.has(key)
       : isRolePermissionEnabled(perms, key)
@@ -209,6 +210,9 @@ export function PermissionSettingTable({
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-medium text-slate-900">{item.label}</span>
+                        {item.capabilityLevel && <Badge variant="outline">{item.capabilityLevel}</Badge>}
+                        {item.scopeTypes?.includes('department') && item.grantSubjectTypes?.length === 1 && item.grantSubjectTypes[0] === 'role'
+                          && <Badge variant="outline">角色可按部门授权</Badge>}
                         {!item.available && <Badge variant="outline">{effective ? '旧授权生效' : '待接入'}</Badge>}
                         {explicit && item.available && <Badge variant="outline">{ownerAction ? '角色授权' : '显式授权'}</Badge>}
                         {item.available && effective && !explicit && <Badge variant="secondary">当前有效</Badge>}

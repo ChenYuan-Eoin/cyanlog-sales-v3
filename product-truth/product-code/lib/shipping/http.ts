@@ -1,11 +1,15 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { requireAuth, AuthError, type AuthUser } from '@/lib/auth'
+import { supabaseAdmin } from '@/lib/supabase'
 import { ShippingError } from './config'
 import { requireShippingConnectionManager } from './connection-authorization'
 import { requireShippingOperator } from './operator-access'
-import { loadShippingLedgerAccess, resolveShippingOwnerAccess } from './entry-access'
+import { loadPublishedShippingAccess, loadShippingLedgerAccess, resolveShippingOwnerAccess } from './entry-access'
 import { selectLedgerDepartments } from './department-ledger-access'
+import type { ShipmentReturnAccess } from './collaboration'
+import { returnShipmentOrder } from './workflow'
+import { returnShipmentSchema } from './validation'
 import { getRequestAuthToken } from '@/lib/auth-token'
 import {
   SHIPPING_MANAGE_CONNECTIONS, SHIPPING_OPERATE,
@@ -24,6 +28,7 @@ type LedgerRead = {
   orgId: string
   departmentIds?: string[]
   query: Record<string, string>
+  returnAccess: ShipmentReturnAccess
 }
 
 export async function shippingLedgerRead(req: NextRequest, read: (context: LedgerRead) => Promise<unknown>) {
@@ -40,7 +45,16 @@ export async function shippingLedgerRead(req: NextRequest, read: (context: Ledge
       ? undefined
       : selectLedgerDepartments(access.departments, selection.departmentId, selection.includeSubdepartments === 'true')
     if (departmentIds === null) throw new ShippingError(403, '当前账号没有所选部门的收寄台账查看权限。')
-    return NextResponse.json(await read({ orgId: access.orgId, departmentIds, query }), { headers })
+    // A failed return projection hides its action without interrupting the authorized ledger read.
+    const returnScope = !access.organizationReturn && access.returnPublished
+      ? await supabaseAdmin.rpc('shipping_department_return_scope_v1', { p_actor_id: user.id, p_org_id: access.orgId })
+        .then(result => result.error ? [] : result.data, () => [])
+      : []
+    const returnAccess = {
+      organizationWide: access.organizationReturn === true,
+      departmentIds: new Set<string>(Array.isArray(returnScope) ? returnScope.filter(id => typeof id === 'string') : []),
+    }
+    return NextResponse.json(await read({ orgId: access.orgId, departmentIds, query, returnAccess }), { headers })
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: '请先登录。' }, { status: 401, headers })
     if (error instanceof ShippingError) return NextResponse.json({ error: error.message }, { status: error.status, headers })
@@ -54,8 +68,7 @@ export async function shippingHandler(
   action: (user: AuthUser, orgId: string, receiptAccess?: ReceiptAccess) => Promise<unknown>,
   mode: 'operator' | 'owner' | 'receipt' = 'operator',
 ) {
-  try {
-    const user = await requireAuth(req)
+  return shippingActionResponse(req, async user => {
     const { pathname } = req.nextUrl
     let orgId: string
     let receiptAccess: ReceiptAccess | undefined
@@ -76,12 +89,41 @@ export async function shippingHandler(
       orgId = await requireShippingOperator(user.id, shippingPermissionRequirement(pathname, req.method, false) ?? SHIPPING_OPERATE)
     }
     if (!orgId) throw new ShippingError(403, '当前账号没有可用的组织寄件授权。')
-    if (req.method !== 'GET') {
-      const origin = req.headers.get('origin')
-      if (origin && origin !== req.nextUrl.origin) throw new ShippingError(403, '请求来源不受信任。')
+    return receiptAccess ? action(user, orgId, receiptAccess) : action(user, orgId)
+  })
+}
+
+export async function shippingLedgerReturn(req: NextRequest, orderId: string) {
+  return shippingActionResponse(req, async user => {
+    const id = z.guid().transform(value => value.toLowerCase()).parse(orderId)
+    const { reason } = returnShipmentSchema.parse(await shippingJson(req))
+    const access = await loadPublishedShippingAccess(user.id)
+    if (!access) throw new ShippingError(403, '当前账号没有退回工单权限。')
+    const { orgId } = access
+
+    // Preserve established organization-level workflow. The scoped permission
+    // has its own live authorization and state transition in a single transaction.
+    if (!access.returnRegistered) {
+      if (!access.permissions.includes('shipping:record_review')) throw new ShippingError(403, '当前账号没有退回工单权限。')
+      return returnShipmentOrder(id, user.id, orgId, reason)
     }
-    const result = receiptAccess ? await action(user, orgId, receiptAccess) : await action(user, orgId)
-    return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } })
+    const { data, error } = await supabaseAdmin.rpc('shipping_return_department_record_v1', {
+      p_actor_id: user.id, p_org_id: orgId, p_order_id: id, p_reason: reason,
+    })
+    if (error?.code === '42501') throw new ShippingError(403, '当前账号没有退回工单权限。')
+    if (error?.code === 'P0002') throw new ShippingError(404, '寄件单不存在或超出退回范围。')
+    if (error?.code === '23514') throw new ShippingError(409, '寄件单状态已变化，请刷新后重试。')
+    if (error || !data) throw new ShippingError(503, '暂时无法退回工单。')
+    return data
+  })
+}
+
+async function shippingActionResponse(req: NextRequest, action: (user: AuthUser) => Promise<unknown>) {
+  try {
+    const user = await requireAuth(req)
+    const origin = req.headers.get('origin')
+    if (req.method !== 'GET' && origin && origin !== req.nextUrl.origin) throw new ShippingError(403, '请求来源不受信任。')
+    return NextResponse.json(await action(user), { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     const status = e instanceof AuthError ? 401 : e instanceof ShippingError ? e.status : e instanceof ZodError || e instanceof SyntaxError ? 400 : 500
     const message = e instanceof AuthError ? '请先登录。' : e instanceof ShippingError ? e.message : status === 400 ? '请核对必填字段、电话、重量和运单号。' : '操作暂未完成，请稍后重试查询。'
