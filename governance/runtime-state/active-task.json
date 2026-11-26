@@ -241,9 +241,9 @@
     "kind": "product",
     "status": "active",
     "feature_id": "F003",
-    "objective": "按系统菜单、功能区、动作交付可验收权限表。业务参数由持对应查看、修改或发布权限的人操作；只有系统超管能发放、修改或撤销授权。分批核对自助收寄业务配置与授权的写入、系统超管任免与末位保护、停用登录默认授权。历史组织治理授权仅可撤销。其他模块只核对目录归属。",
-    "activation_basis": "IN-20261126-001 用户确认权限层级并要求开始工作。IN-20261126-002 明确业务参数与权限分配的边界。",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/wp82-permissions-current/Price-v3",
+    "objective": "部门、角色和员工复用按真实系统功能组织的唯一 L1–L4 权限表。员工先按部门与角色取基础并集，再应用按权限点保存的个人差异。业务参数的查看、修改和发布与权限分配分别校验。只有系统超管可以维护授权，保留任免和末位保护，停用默认发权。组织与自助收寄先贯通员工的入口、数据范围和服务端动作。其他模块先核对目录归属。",
+    "activation_basis": "IN-20261126-017 确认部门与角色并集及个人差异，替代 IN-20261126-016。IN-20261126-001 确认权限层级，IN-20261126-002 区分业务参数和权限分配。",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/wp82-personal-overrides/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
