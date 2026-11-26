@@ -57,7 +57,7 @@ beforeEach(() => {
   m.submitShipment.mockReset().mockResolvedValue({ status: 'waybill_created' })
   m.publishedKeys.mockReset().mockResolvedValue(['shipping:operate'])
   m.tables = {
-    user_organizations: [operatorAssignment().membership],
+    user_organizations: [{ ...operatorAssignment().membership, account: operatorAssignment().user }],
     organizations: [operatorAssignment().membership.organization],
     user_roles: [operatorAssignment()],
     user_permission_assignments: [{ user_id: userId, org_id: orgId, permission_point_id: 'shipping-operate' }],
@@ -122,9 +122,13 @@ describe('organization-scoped shipping operator access', () => {
     await expect(loadShippingOperatorDecision(userId)).resolves.toBeNull()
   })
 
-  it('keeps an enabled platform wildcard while denying a manager-only role', async () => {
+  it('uses fixed shipping authority only for an eligible system super administrator', async () => {
     m.tables.user_roles[0].role = { id: 'root-role', code: 'SUPER_ADMIN', name: '系统超管', permissions: [] }
+    m.tables.organizations[0].settings = { role_permission_overrides: { 'root-role': [] } }
     await expect(requireShippingOperator(userId)).resolves.toBe(orgId)
+    m.tables.user_organizations[0].account = { id: userId, status: 'active', login_enabled: false }
+    await expect(requireShippingOperator(userId)).rejects.toMatchObject({ status: 403 })
+    m.tables.user_organizations[0].account = operatorAssignment().user
     m.tables.user_roles[0].role = { id: 'other-role', code: 'CARRIER_MANAGER', name: '连接管理员', permissions: ['shipping:manage_connections'] }
     await expect(requireShippingOperator(userId)).rejects.toMatchObject({ status: 403 })
   })
