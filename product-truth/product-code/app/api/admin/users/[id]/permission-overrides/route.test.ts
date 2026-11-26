@@ -54,6 +54,7 @@ function projection(overrides: Partial<Omit<Snapshot['permissions'][number], 'ke
       { id: departmentId, name: '大部门', parent_id: null },
       { id: childId, name: '子部门', parent_id: departmentId },
     ],
+    permission_catalog: [],
     shipping_permission_publication: { registered: [point], published: published ? [point] : [] },
   }
 }
