@@ -20,6 +20,7 @@ type RoleJoinRow = {
 
 type UserRoleRow = {
   org_id: string | null
+  user_id: string | null
   scope_type: ScopeType
   scope_id: string | null
   granted_at: string | null
@@ -45,6 +46,19 @@ type SalesSpaceMembershipRow = {
 
 type OrgMembershipRow = {
   org_id: string
+}
+
+type ActiveRootUser = { id: string; status: string; login_enabled: boolean }
+type ActiveRootOrganization = { id: string; status: string }
+type SystemAdministratorMembership = {
+  user_id: string
+  org_id: string
+  status: string
+  employment_status: string
+  is_default: boolean
+  left_at: string | null
+  user: ActiveRootUser | ActiveRootUser[] | null
+  organization: ActiveRootOrganization | ActiveRootOrganization[] | null
 }
 
 type DepartmentPathRow = {
@@ -141,6 +155,11 @@ function unwrapOne<T>(value: T | T[] | null | undefined): T | null {
     return value[0] ?? null
   }
   return value ?? null
+}
+
+function unwrapExact<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value) && value.length !== 1) return null
+  return unwrapOne(value)
 }
 
 function normalizePermissions(value: unknown): string[] {
@@ -310,10 +329,32 @@ async function listDepartmentSubtreeIds(orgId: string, rootDepartmentIds: string
     .map((department) => department.id)
 }
 
+function isSystemAdministratorBinding(row: UserRoleRow, userId: string): boolean {
+  return row.user_id === userId && Boolean(row.org_id) && row.scope_type === 'org' && row.scope_id === row.org_id
+    && unwrapExact(row.role)?.code === 'SUPER_ADMIN'
+}
+
+async function loadActiveSystemAdministratorOrgId(userId: string): Promise<string | null> {
+  const { data, error } = await supabaseAdmin.from('user_organizations')
+    .select(`user_id, org_id, status, employment_status, is_default, left_at,
+      user:users!user_organizations_user_id_fkey!inner(id, status, login_enabled),
+      organization:organizations!user_organizations_org_id_fkey!inner(id, status)`)
+    .eq('user_id', userId).eq('is_default', true).maybeSingle()
+  if (error) throw error
+  const membership = data as SystemAdministratorMembership | null
+  if (!membership?.org_id || membership.user_id !== userId || membership.is_default !== true
+    || membership.status !== 'active' || membership.employment_status !== 'active' || membership.left_at !== null) return null
+
+  const user = unwrapExact(membership.user)
+  const organization = unwrapExact(membership.organization)
+  return user?.id === userId && user.status === 'active' && user.login_enabled === true
+    && organization?.id === membership.org_id && organization.status === 'active' ? membership.org_id : null
+}
+
 async function loadUserScopedRoleAssignments(userId: string): Promise<ScopedRoleAssignment[]> {
   const { data, error } = await supabaseAdmin
     .from('user_roles')
-    .select('org_id, scope_type, scope_id, granted_at, role:roles(id, code, name, permissions)')
+    .select('user_id, org_id, scope_type, scope_id, granted_at, role:roles(id, code, name, permissions)')
     .eq('user_id', userId)
 
   if (error) {
@@ -321,6 +362,8 @@ async function loadUserScopedRoleAssignments(userId: string): Promise<ScopedRole
   }
 
   const rows = (data || []) as UserRoleRow[]
+  const activeSystemAdminOrgId = rows.some(row => isSystemAdministratorBinding(row, userId))
+    ? await loadActiveSystemAdministratorOrgId(userId) : null
   const hasOrgSuperAdmin = rows.some(row => unwrapOne(row.role)?.code === ORG_SUPER_ADMIN_ROLE_CODE)
   let activeAdminOrgId: string | null = null
   if (hasOrgSuperAdmin) {
@@ -337,6 +380,9 @@ async function loadUserScopedRoleAssignments(userId: string): Promise<ScopedRole
     .map((row) => {
       const role = unwrapOne(row.role)
       if (!role?.id || !role.code || !role.name) {
+        return null
+      }
+      if (role.code === 'SUPER_ADMIN' && (row.org_id !== activeSystemAdminOrgId || !isSystemAdministratorBinding(row, userId))) {
         return null
       }
       if (role.code === ORG_SUPER_ADMIN_ROLE_CODE && (
@@ -452,6 +498,7 @@ async function getCachedRoleTemplates(userId: string): Promise<ScopedRoleAssignm
 
 export async function getUserScopedRoleAssignments(userId: string): Promise<ScopedRoleAssignment[]> {
   const assignments = await getCachedRoleTemplates(userId)
+  // A previous privileged assignment only signals that a fresh check is needed.
   if (assignments.some(assignment => assignment.roleCode === 'SUPER_ADMIN' || assignment.roleCode === ORG_SUPER_ADMIN_ROLE_CODE)) {
     return getFreshUserScopedRoleAssignments(userId)
   }

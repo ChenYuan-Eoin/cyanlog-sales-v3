@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: vi.fn() } }))
+vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: vi.fn(), rpc: vi.fn() } }))
 vi.mock('@/lib/permission-registry', () => ({ loadRoleModulePermissionCatalog: vi.fn() }))
 
 import { supabaseAdmin } from '@/lib/supabase'
@@ -12,8 +12,6 @@ import { SHIPPING_OWNER_ACTION_KEYS, SHIPPING_OWNER_VIEW } from './shipping/owne
 
 const salesPermissions = ['quote:create']
 
-// Model the DB predicates so tests fail if the implementation loses either
-// exact-org scoping or the full-settings compare-and-swap condition.
 function database(options: { settings?: any; code?: string; permissions?: string[] } = {}) {
   const state = {
     roles: [{ id: 'role-1', code: options.code ?? 'SALES', permissions: options.permissions ?? ['quote:create'] }],
@@ -24,6 +22,7 @@ function database(options: { settings?: any; code?: string; permissions?: string
     operations: [] as any[],
     readError: null as Error | null,
     beforeUpdate: null as (() => void) | null,
+    denied: false,
   }
   vi.mocked(supabaseAdmin.from).mockImplementation(((table: 'roles' | 'organizations') => {
     const filters: Array<[string, unknown]> = []
@@ -32,19 +31,35 @@ function database(options: { settings?: any; code?: string; permissions?: string
     const query: any = {
       select: vi.fn(() => query),
       eq: vi.fn((column: string, value: unknown) => { filters.push([column, value]); return query }),
-      is: vi.fn((column: string, value: unknown) => { filters.push([column, value]); return query }),
-      update: vi.fn((patch: any) => { operation.patch = patch; return query }),
       maybeSingle: vi.fn(async () => {
-        if (table === 'organizations' && !operation.patch && state.readError) return { data: null, error: state.readError }
-        if (operation.patch) state.beforeUpdate?.()
-        const row = state[table].find((entry: any) => filters.every(([column, value]) => column === 'settings' && value !== null
-          ? JSON.stringify(entry[column]) === value : entry[column] === value))
-        if (row && operation.patch) Object.assign(row, structuredClone(operation.patch))
+        if (table === 'organizations' && state.readError) return { data: null, error: state.readError }
+        const row = state[table].find((entry: any) => filters.every(([column, value]) => entry[column] === value))
         return { data: row ? structuredClone(row) : null, error: null }
       }),
     }
     return query
   }) as any)
+  vi.mocked(supabaseAdmin.rpc).mockImplementation((async (name: string, input: any) => {
+    expect(name).toBe('admin_save_org_role_permissions_v1')
+    expect(input.p_actor_id).toBe('actor-1')
+    state.beforeUpdate?.()
+    if (state.denied) return { data: null, error: { code: '42501' } }
+    const org = state.organizations.find(org => org.id === input.p_org_id && org.status === 'active')
+    const role = state.roles.find(role => role.id === input.p_role_id)
+    if (!role) return { data: 'not_found', error: null }
+    if (!org || JSON.stringify(org.settings) !== JSON.stringify(input.p_expected_settings)
+      || role.code !== input.p_expected_role_code || JSON.stringify(role.permissions) !== JSON.stringify(input.p_expected_role_template)) {
+      return { data: 'conflict', error: null }
+    }
+    const next = { ...(org.settings ?? {}) }
+    if (input.p_permissions !== null) next.role_permission_overrides = { ...next.role_permission_overrides, [role.id]: input.p_permissions }
+    if (input.p_owner_permissions !== null) next.shipping_owner_permission_overrides = { ...next.shipping_owner_permission_overrides, [role.id]: input.p_owner_permissions }
+    if (input.p_permissions !== null || input.p_owner_permissions !== null) {
+      state.operations.push({ table: 'organizations', patch: { settings: next } })
+      org.settings = next
+    }
+    return { data: 'saved', error: null }
+  }) as never)
   return state
 }
 
@@ -57,7 +72,7 @@ describe('organization role permission storage', () => {
     const state = database()
     const template = structuredClone(state.roles)
     const otherOrg = structuredClone(state.organizations[1])
-    expect(await saveOrgRolePermissions('org-1', 'role-1', ['quote:view'], salesPermissions))
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', ['quote:view'], salesPermissions))
       .toEqual({ ok: true, role: { ...template[0], permissions: ['quote:view'], owner_shipping_permissions: [] } })
     expect(state.organizations[0].settings).toEqual({
       locale: 'zh', role_permission_overrides: { 'role-other': ['config:read'], 'role-1': ['quote:view'] },
@@ -65,43 +80,48 @@ describe('organization role permission storage', () => {
     expect(state.organizations[1]).toEqual(otherOrg)
     expect(state.roles).toEqual(template)
     expect(state.operations.filter((entry) => entry.patch).map((entry) => entry.table)).toEqual(['organizations'])
-    expect(state.operations.find((entry) => entry.patch).filters).toEqual([
-      ['id', 'org-1'], ['status', 'active'], ['settings', JSON.stringify({ locale: 'zh', role_permission_overrides: { 'role-other': ['config:read'] } })],
-    ])
+    expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith('admin_save_org_role_permissions_v1', {
+      p_actor_id: 'actor-1', p_org_id: 'org-1', p_role_id: 'role-1',
+      p_expected_settings: { locale: 'zh', role_permission_overrides: { 'role-other': ['config:read'] } },
+      p_expected_role_code: 'SALES', p_expected_role_template: ['quote:create'],
+      p_permissions: ['quote:view'], p_owner_permissions: null,
+    })
   })
 
   it('persists an empty override as a complete revocation', async () => {
     const state = database()
-    expect(await saveOrgRolePermissions('org-1', 'role-1', [], salesPermissions)).toMatchObject({ ok: true, role: { permissions: [] } })
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [], salesPermissions)).toMatchObject({ ok: true, role: { permissions: [] } })
     expect(state.organizations[0].settings.role_permission_overrides['role-1']).toEqual([])
-    expect(await saveOrgRolePermissions('org-1', 'role-1', ['quote:view'], [])).toMatchObject({ ok: true })
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', ['quote:view'], [])).toMatchObject({ ok: true })
   })
 
   it('rejects an outdated expected permissions snapshot before any write', async () => {
     const state = database({ settings: { role_permission_overrides: { 'role-1': ['quote:view'] } } })
-    expect(await saveOrgRolePermissions('org-1', 'role-1', [], ['quote:create'])).toEqual({ ok: false, reason: 'conflict' })
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [], ['quote:create'])).toEqual({ ok: false, reason: 'conflict' })
     expect(state.operations.some((entry) => entry.patch)).toBe(false)
   })
 
   it('rejects a full-settings CAS conflict without clobbering concurrent unrelated settings', async () => {
     const state = database()
     state.beforeUpdate = () => { state.organizations[0].settings.locale = 'en' }
-    expect(await saveOrgRolePermissions('org-1', 'role-1', [], salesPermissions)).toEqual({ ok: false, reason: 'conflict' })
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [], salesPermissions)).toEqual({ ok: false, reason: 'conflict' })
     expect(state.organizations[0].settings).toEqual({ locale: 'en', role_permission_overrides: { 'role-other': ['config:read'] } })
   })
 
-  it('compares null settings with IS NULL and initializes only that organization', async () => {
+  it('carries a null settings snapshot into the atomic save and initializes only that organization', async () => {
     const state = database({ settings: null })
-    expect(await saveOrgRolePermissions('org-1', 'role-1', [], salesPermissions)).toMatchObject({ ok: true })
-    expect(state.operations.find((entry) => entry.patch).filters).toEqual([['id', 'org-1'], ['status', 'active'], ['settings', null]])
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [], salesPermissions)).toMatchObject({ ok: true })
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_save_org_role_permissions_v1', expect.objectContaining({
+      p_org_id: 'org-1', p_expected_settings: null,
+    }))
     expect(state.organizations[0].settings).toEqual({ role_permission_overrides: { 'role-1': [] } })
   })
 
   it('rejects any change to the system super administrator definition', async () => {
     const state = database({ code: 'SUPER_ADMIN', permissions: ['*'] })
-    expect(await saveOrgRolePermissions('org-1', 'role-1', ['role:manage', 'config:read'], ['*']))
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', ['role:manage', 'config:read'], ['*']))
       .toMatchObject({ ok: false, reason: 'fixed_role' })
-    expect(await saveOrgRolePermissions('org-1', 'role-1', ['*'], ['*'], undefined, {
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', ['*'], ['*'], undefined, {
       permissions: [], expected: SHIPPING_OWNER_ACTION_KEYS,
     })).toMatchObject({ ok: false, reason: 'fixed_role' })
     expect(state.operations.some(entry => entry.patch)).toBe(false)
@@ -109,7 +129,7 @@ describe('organization role permission storage', () => {
 
   it('never writes an override for the fixed Fxiaoke baseline role', async () => {
     const state = database({ code: 'FXIAOKE_BASELINE' })
-    const result = await saveOrgRolePermissions('org-1', 'role-1', [], ['quote:view', 'contract:view', 'customer:view'])
+    const result = await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [], ['quote:view', 'contract:view', 'customer:view'])
     expect(result).toMatchObject({ ok: false, reason: 'fixed_role' })
     expect(state.operations.some(entry => entry.patch)).toBe(false)
   })
@@ -123,7 +143,7 @@ describe('organization role permission storage', () => {
         shipping_owner_permission_overrides: { 'role-1': SHIPPING_OWNER_ACTION_KEYS },
       },
     })
-    const result = await saveOrgRolePermissions('org-1', 'role-1', core, core, undefined, {
+    const result = await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', core, core, undefined, {
       permissions: [], expected: SHIPPING_OWNER_ACTION_KEYS,
     })
     expect(result).toMatchObject({ ok: true, role: { permissions: core, owner_shipping_permissions: [] } })
@@ -132,44 +152,44 @@ describe('organization role permission storage', () => {
       role_permission_overrides: { 'role-other': ['config:read'] },
       shipping_owner_permission_overrides: { 'role-1': [] },
     })
-    expect(await saveOrgRolePermissions('org-1', 'role-1', core, core, undefined, {
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', core, core, undefined, {
       permissions: [SHIPPING_OWNER_VIEW], expected: SHIPPING_OWNER_ACTION_KEYS,
     })).toEqual({ ok: false, reason: 'conflict' })
-    expect(await saveOrgRolePermissions('org-1', 'role-1', [], core, undefined, {
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [], core, undefined, {
       permissions: [], expected: [],
     })).toMatchObject({ ok: false, reason: 'fixed_role' })
   })
 
   it('rejects owner actions without their view or when sent as organization permissions', async () => {
     const state = database()
-    expect(await saveOrgRolePermissions('org-1', 'role-1', salesPermissions, salesPermissions, undefined, {
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', salesPermissions, salesPermissions, undefined, {
       permissions: ['shipping:owner_submit'], expected: [],
     })).toEqual({ ok: false, reason: 'invalid' })
-    expect(await saveOrgRolePermissions('org-1', 'role-1', [SHIPPING_OWNER_VIEW], salesPermissions))
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [SHIPPING_OWNER_VIEW], salesPermissions))
       .toEqual({ ok: false, reason: 'invalid' })
     expect(state.operations.some(entry => entry.patch)).toBe(false)
   })
 
-  it.each(['ORG_SUPER_ADMIN', 'SUPER_ADMIN'])('denies tenant admins editing protected %s', async code => {
+  it.each(['ORG_SUPER_ADMIN', 'SUPER_ADMIN'])('rejects edits to protected %s before the write', async code => {
     const state = database({ code })
-    const result = await saveOrgRolePermissions('org-1', 'role-1', ['*'], [], {
-      settings: state.organizations[0].settings, canEditPlatformRoot: false, actorPermissions: ['role:manage'],
+    const result = await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', ['*'], [], {
+      settings: state.organizations[0].settings,
     })
     expect(result).toMatchObject({ ok: false, reason: 'fixed_role' })
     expect(state.operations.some(entry => entry.patch)).toBe(false)
   })
 
-  it('allows organization role edits while rejecting newly delegated admin capabilities above the actor', async () => {
+  it('honors a live authority denial even after valid input and snapshot checks', async () => {
     const state = database()
-    const actor = {
-      settings: state.organizations[0].settings, canEditPlatformRoot: false, actorPermissions: ['role:manage', 'config:write'],
-    }
-    for (const grant of ['*', 'config:*', 'report:finance']) {
-      expect(await saveOrgRolePermissions('org-1', 'role-1', [grant], salesPermissions, actor))
-        .toEqual({ ok: false, reason: 'escalation_forbidden' })
+    const snapshot = { settings: state.organizations[0].settings }
+    state.denied = true
+    for (const grants of [salesPermissions, ['quote:view', 'config:write']]) {
+      expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', grants, salesPermissions, snapshot))
+        .toEqual({ ok: false, reason: 'forbidden' })
     }
     expect(state.operations.some(entry => entry.patch)).toBe(false)
-    expect(await saveOrgRolePermissions('org-1', 'role-1', ['quote:view', 'config:write'], salesPermissions, actor))
+    state.denied = false
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', ['quote:view', 'config:write'], salesPermissions, snapshot))
       .toMatchObject({ ok: true })
   })
 
@@ -180,7 +200,7 @@ describe('organization role permission storage', () => {
     ['duplicate snapshot', ['quote:view'], [...salesPermissions, 'quote:create']],
   ])('rejects %s', async (_label, permissions, expected) => {
     const state = database()
-    expect(await saveOrgRolePermissions('org-1', 'role-1', permissions, expected)).toEqual({ ok: false, reason: 'invalid' })
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', permissions, expected)).toEqual({ ok: false, reason: 'invalid' })
     expect(state.operations.some((entry) => entry.patch)).toBe(false)
   })
 
@@ -188,7 +208,7 @@ describe('organization role permission storage', () => {
     const state = database()
     state.readError = new Error('settings unavailable')
     await expect(loadOrgRolePermissionSettings('org-1')).rejects.toThrow('settings unavailable')
-    await expect(saveOrgRolePermissions('org-1', 'role-1', [], ['quote:create'])).rejects.toThrow('settings unavailable')
+    await expect(saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [], ['quote:create'])).rejects.toThrow('settings unavailable')
     expect(state.operations.some((entry) => entry.patch)).toBe(false)
   })
 
@@ -207,12 +227,12 @@ describe('organization role permission storage', () => {
   it('does not add role assignment to an ordinary role, but can remove a stored legacy key', async () => {
     const assignmentKey = 'user:assign_roles'
     const state = database({ settings: { role_permission_overrides: { 'role-1': ['user:view'] } } })
-    expect(await saveOrgRolePermissions('org-1', 'role-1', ['user:view', assignmentKey], ['user:view']))
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', ['user:view', assignmentKey], ['user:view']))
       .toEqual({ ok: false, reason: 'invalid' })
     expect(state.operations.some(entry => entry.patch)).toBe(false)
 
     database({ settings: { role_permission_overrides: { 'role-1': ['user:view', assignmentKey] } } })
-    expect(await saveOrgRolePermissions('org-1', 'role-1', ['user:view'], ['user:view', assignmentKey]))
+    expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', ['user:view'], ['user:view', assignmentKey]))
       .toMatchObject({ ok: true, role: { permissions: ['user:view'] } })
   })
 })
@@ -222,18 +242,18 @@ it('requires just the shipping action being added to have valid published regist
   const code = 'shipping:operate'
   const permissions = ['quote:create', code]
   vi.mocked(loadRoleModulePermissionCatalog).mockResolvedValueOnce([])
-  expect(await saveOrgRolePermissions('org-1', 'role-1', permissions, salesPermissions))
+  expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', permissions, salesPermissions))
     .toEqual({ ok: false, reason: 'invalid' })
   expect(state.operations.some(entry => entry.patch)).toBe(false)
 
   vi.mocked(loadRoleModulePermissionCatalog).mockResolvedValueOnce(buildPermissionCatalog(
     BUILTIN_PERMISSION_DEFINITIONS.filter(definition => definition.key === code),
   ))
-  expect(await saveOrgRolePermissions('org-1', 'role-1', permissions, salesPermissions))
+  expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', permissions, salesPermissions))
     .toMatchObject({ ok: true, role: { permissions } })
 
   // A disabled stored grant is still removable; the old value never becomes a selectable action.
-  expect(await saveOrgRolePermissions('org-1', 'role-1', [], permissions))
+  expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [], permissions))
     .toMatchObject({ ok: true, role: { permissions: [] } })
 })
 
@@ -245,15 +265,15 @@ it('saves a separate shipping action only with its published view and can withdr
   const catalog = buildPermissionCatalog(BUILTIN_PERMISSION_DEFINITIONS.filter(item => [view, confirm].includes(item.key)))
   vi.mocked(loadRoleModulePermissionCatalog).mockResolvedValue(catalog)
 
-  expect(await saveOrgRolePermissions('org-1', 'role-1', [...salesPermissions, confirm], salesPermissions))
+  expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [...salesPermissions, confirm], salesPermissions))
     .toEqual({ ok: false, reason: 'invalid' })
   expect(state.operations.some(entry => entry.patch)).toBe(false)
 
-  expect(await saveOrgRolePermissions('org-1', 'role-1', granted, salesPermissions))
+  expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', granted, salesPermissions))
     .toMatchObject({ ok: true, role: { permissions: granted } })
-  expect(await saveOrgRolePermissions('org-1', 'role-1', [...salesPermissions, confirm], granted))
+  expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [...salesPermissions, confirm], granted))
     .toEqual({ ok: false, reason: 'invalid' })
-  expect(await saveOrgRolePermissions('org-1', 'role-1', [...salesPermissions, view], granted))
+  expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [...salesPermissions, view], granted))
     .toMatchObject({ ok: true, role: { permissions: [...salesPermissions, view] } })
   expect(state.organizations[1].settings).toEqual({ isolated: true })
 })
@@ -263,20 +283,20 @@ it('validates both published shipping actions when saving a new bundle and prese
   const bundle = ['shipping:*']
   const operationsOnly = buildPermissionCatalog(BUILTIN_PERMISSION_DEFINITIONS.filter(item => item.key === 'shipping:operate'))
   vi.mocked(loadRoleModulePermissionCatalog).mockResolvedValueOnce(operationsOnly)
-  expect(await saveOrgRolePermissions('org-1', 'role-1', bundle, salesPermissions))
+  expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', bundle, salesPermissions))
     .toEqual({ ok: false, reason: 'invalid' })
   expect(state.operations.some(entry => entry.patch)).toBe(false)
 
   const bothActions = buildPermissionCatalog(BUILTIN_PERMISSION_DEFINITIONS.filter(item =>
     item.key === 'shipping:operate' || item.key === 'shipping:manage_connections'))
   vi.mocked(loadRoleModulePermissionCatalog).mockResolvedValueOnce(bothActions)
-  expect(await saveOrgRolePermissions('org-1', 'role-1', bundle, salesPermissions))
+  expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', bundle, salesPermissions))
     .toMatchObject({ ok: true, role: { permissions: bundle } })
 
   vi.mocked(loadRoleModulePermissionCatalog).mockClear()
-  expect(await saveOrgRolePermissions('org-1', 'role-1', [...bundle, 'quote:view'], bundle))
+  expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', [...bundle, 'quote:view'], bundle))
     .toMatchObject({ ok: true, role: { permissions: [...bundle, 'quote:view'] } })
   expect(loadRoleModulePermissionCatalog).not.toHaveBeenCalled()
-  expect(await saveOrgRolePermissions('org-1', 'role-1', ['quote:view'], [...bundle, 'quote:view']))
+  expect(await saveOrgRolePermissions('actor-1', 'org-1', 'role-1', ['quote:view'], [...bundle, 'quote:view']))
     .toMatchObject({ ok: true, role: { permissions: ['quote:view'] } })
 })

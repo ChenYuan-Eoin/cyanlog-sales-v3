@@ -18,26 +18,26 @@ vi.mock('@/lib/scoped-access', () => ({
   getUserScopedRoleAssignments: vi.fn(),
 }))
 
-const role = { id: 'root-role', code: 'SUPER_ADMIN', permissions: ['*'] }
+const role = { id: 'business-role', code: 'QUOTES', permissions: ['quote:view'] }
 
 describe('organization role permission policy', () => {
   it('keeps templates when no override exists, but does not restore an empty override', () => {
-    expect(resolveRolePermissions({}, role)).toEqual({ permissions: ['*'], overridden: false })
-    expect(resolveRolePermissions({ role_permission_overrides: { 'root-role': [] } }, role))
+    expect(resolveRolePermissions({}, role)).toEqual({ permissions: ['quote:view'], overridden: false })
+    expect(resolveRolePermissions({ role_permission_overrides: { [role.id]: [] } }, role))
       .toEqual({ permissions: [], overridden: true })
   })
   it('fails closed for malformed override containers and entries', () => {
     for (const settings of ['damaged', [], 1]) {
       expect(resolveRolePermissions(settings, role)).toEqual({ permissions: [], overridden: true })
     }
-    for (const overrides of [null, [], { 'root-role': null }, { 'root-role': ['report:dept', 1] }]) {
+    for (const overrides of [null, [], { [role.id]: null }, { [role.id]: ['report:dept', 1] }]) {
       expect(resolveRolePermissions({ role_permission_overrides: overrides }, role))
         .toEqual({ permissions: [], overridden: true })
     }
   })
   it('keeps another role untouched and preserves unknown stored capabilities', () => {
     expect(resolveRolePermissions({ role_permission_overrides: { other: [] } }, role).overridden).toBe(false)
-    expect(resolveRolePermissions({ role_permission_overrides: { 'root-role': ['future:read'] } }, role).permissions)
+    expect(resolveRolePermissions({ role_permission_overrides: { [role.id]: ['future:read'] } }, role).permissions)
       .toEqual(['future:read'])
   })
   it('preserves legacy role-code capabilities only until the organization saves an override', () => {
@@ -49,7 +49,6 @@ describe('organization role permission policy', () => {
     expect(defaults.permissions).not.toContain('shipping:manage_connections')
     expect(resolveRolePermissions({ role_permission_overrides: { admin: ['quote:view'] } }, admin))
       .toEqual({ permissions: ['quote:view'], overridden: true })
-    expect(resolveRolePermissions({}, { ...role, permissions: [] }).permissions).toEqual(['*'])
     expect(resolveRolePermissions({}, { id: 'legal', code: 'LEGAL', permissions: [] }).permissions).toEqual([
       'contract:review',
     ])

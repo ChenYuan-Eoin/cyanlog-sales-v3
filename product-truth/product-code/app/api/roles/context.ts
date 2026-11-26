@@ -6,13 +6,13 @@ import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
 
 export async function withRolePermissionContext(
   req: NextRequest,
-  handler: (context: NonNullable<Awaited<ReturnType<typeof loadOrgRolePermissionContext>>>) => Promise<Response>,
+  handler: (context: NonNullable<Awaited<ReturnType<typeof loadOrgRolePermissionContext>>>, actorId: string) => Promise<Response>,
 ): Promise<Response> {
   try {
     const user = await requireAuth(req)
     const context = await loadOrgRolePermissionContext(user.id)
     if (!context) return errorResponse(createApiError('FORBIDDEN', '没有有效的组织成员资格'))
-    return await handler(context)
+    return await handler(context, user.id)
   } catch (error) {
     if (error instanceof Error && error.name === 'AuthError') {
       return errorResponse(createApiError('UNAUTHORIZED'))

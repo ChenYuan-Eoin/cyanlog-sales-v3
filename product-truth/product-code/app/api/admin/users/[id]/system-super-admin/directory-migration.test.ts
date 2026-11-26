@@ -50,6 +50,7 @@ async function database() {
       migration('20261125055213_organization_super_admin.sql'),
       migration('20261126045425_system_super_admin_authority.sql'),
       migration('20261126050925_directory_system_super_admin_guard.sql'),
+      migration('20261126054302_immutable_system_super_admin.sql'),
     ]) await db.exec(sql)
     await db.exec(`
       insert into public.organizations(id, name) values ('${organization}','Organization'), ('${otherOrganization}','Other organization');
@@ -158,6 +159,9 @@ describe('directory and identity safeguards for system super administrators', ()
   }
 
   it('rolls back the whole directory application when it suspends the last controller and permits a safe retry', async () => {
+    await db.query('update public.organizations set settings = $1 where id = $2', [
+      { role_permission_overrides: { [canonicalRole]: ['config:read'] } }, organization,
+    ])
     const args = await storePlan(db, false, administrator)
     await db.exec('set role service_role')
     await expect(db.query(applySql, args)).rejects.toMatchObject(lastAdministrator)

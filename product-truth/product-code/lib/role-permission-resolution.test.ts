@@ -20,10 +20,18 @@ describe('explicit personal shipping grants', () => {
     expect(resolveOwnerShippingPermissions({ shipping_owner_permission_overrides: { another: stored } }, role)).toEqual([])
   })
 
-  it('keeps personal shipping for the system super administrator with the effective full grant', () => {
-    const root = { ...role, code: 'SUPER_ADMIN' }
-    expect(resolveOwnerShippingPermissions({}, root)).toEqual(SHIPPING_OWNER_ACTION_KEYS)
-    expect(resolveOwnerShippingPermissions({ role_permission_overrides: { [root.id]: ['role:manage'] } }, root)).toEqual([])
+  it('keeps the system super administrator definition fixed despite legacy stored overrides', () => {
+    const root = { ...role, code: 'SUPER_ADMIN', permissions: [] }
+    for (const settings of [null, {}, [], {
+      role_permission_overrides: { [root.id]: ['role:manage'] },
+      shipping_owner_permission_overrides: { [root.id]: [] },
+    }, {
+      role_permission_overrides: { [root.id]: [] },
+      shipping_owner_permission_overrides: null,
+    }]) {
+      expect(resolveRolePermissions(settings, root)).toEqual({ permissions: ['*'], overridden: false })
+      expect(resolveOwnerShippingPermissions(settings, root)).toEqual(SHIPPING_OWNER_ACTION_KEYS)
+    }
   })
 })
 

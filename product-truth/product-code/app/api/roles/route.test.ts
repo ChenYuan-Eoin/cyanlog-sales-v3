@@ -16,7 +16,10 @@ const roles = [
   { id: 'role-2', code: 'SALES', name: '销售', permissions: ['quote:create'] },
 ]
 
-const currentMember = { org_id: 'org-1', status: 'active', employment_status: 'active', is_default: true, left_at: null }
+const currentMember = {
+  org_id: 'org-1', status: 'active', employment_status: 'active', is_default: true, left_at: null,
+  account: { id: 'user-1', status: 'active', login_enabled: true },
+}
 const assignment = {
   scope_type: 'org', scope_id: 'org-1', org_id: 'org-1', user_id: 'user-1', granted_at: null,
   role: { id: 'reader', code: 'READ_ONLY', name: '角色只读', permissions: ['role:view', 'user:view'] },
@@ -154,7 +157,7 @@ describe('GET /api/roles organization permissions', () => {
     ['another organization root', { ...root, org_id: 'org-2' }, {}, false],
     ['department root', { ...root, scope_type: 'department' }, {}, false],
     ['config writer', { ...root, role: { ...root.role, code: 'ADMIN', permissions: ['config:write'] } }, {}, false],
-    ['revoked root', root, { role_permission_overrides: { root: [] } }, false],
+    ['current root with a historical override', root, { role_permission_overrides: { root: [] } }, true],
   ])('计算 %s 的真实 editable 状态', async (_label, grant, settings, editable) => {
     database({ assignments: [assignment, grant], settings })
     const res = await GET(makeRequest())
@@ -163,6 +166,15 @@ describe('GET /api/roles organization permissions', () => {
     expect(body.data.permissions_editable).toBe(editable)
     expect(body.data.can_appoint_system_super_admin).toBe(editable)
     expect(body.data.permissions_edit_block_reason).toEqual(editable ? null : expect.any(String))
+  })
+
+  it.each([
+    null, { id: 'user-1', status: 'active', login_enabled: false },
+    { id: 'user-2', status: 'active', login_enabled: true },
+    { id: 'user-1', status: 'suspended', login_enabled: true },
+  ])('rejects protected role options without the exact active account (%j)', async account => {
+    database({ assignments: [root], members: [{ ...currentMember, account }] })
+    expect((await GET(makeRequest('https://example.test/api/roles?view=assignable'))).status).toBe(403)
   })
 
   it.each([[], [{ ...currentMember, employment_status: 'ended' }], [currentMember, currentMember]])(

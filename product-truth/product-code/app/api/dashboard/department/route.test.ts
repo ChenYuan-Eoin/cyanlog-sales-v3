@@ -210,17 +210,17 @@ describe('GET /api/dashboard/department', () => {
     expect((await request('?departmentId=new-department')).status).toBe(200)
   })
 
-  it('组织级超管可以选择所有启用部门，明确撤回业务权限不会恢复模板通配', async () => {
+  it('有效系统超管按部门读取数据，历史角色覆盖不改变系统权限', async () => {
     tables.user_roles = [grant('org', orgId, role('root', [], 'SUPER_ADMIN'))]
     const unrestricted = await request('?departmentId=sales-c')
     expect(unrestricted.status).toBe(200)
     expect((await unrestricted.json()).opportunities).toMatchObject([{ id: 'c-opp' }])
 
     tables.organizations[0].settings = { role_permission_overrides: { root: ['role:manage'] } }
-    const metadataOnly = await request('?departmentId=sales-c')
-    expect(await metadataOnly.json()).toMatchObject({
+    const withLegacyOverride = await request('?departmentId=sales-c')
+    expect(await withLegacyOverride.json()).toMatchObject({
       departmentSpaces: expect.arrayContaining([expect.objectContaining({ department_id: 'sales-c' })]),
-      opportunities: [],
+      opportunities: [expect.objectContaining({ id: 'c-opp' })],
     })
   })
 

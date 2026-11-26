@@ -12,7 +12,10 @@ const migrations = [
   '20261118095000_fxiaoke_prelogin_role_assignment.sql',
   '20261125051750_department_lead_access.sql',
   '20261125055213_organization_super_admin.sql',
+].map(file => readFileSync(join(process.cwd(), 'supabase/migrations', file), 'utf8'))
+const administratorMigrations = [
   '20261126045425_system_super_admin_authority.sql',
+  '20261126054302_immutable_system_super_admin.sql',
 ].map(file => readFileSync(join(process.cwd(), 'supabase/migrations', file), 'utf8'))
 
 const organization = '11111111-1111-4111-8111-111111111111'
@@ -89,11 +92,11 @@ describe('system super administrator migration', () => {
       department, organization, candidate,
     ])
 
-    for (const migration of migrations.slice(0, -1)) await db.exec(migration)
+    for (const migration of migrations) await db.exec(migration)
     await db.query('select public.admin_set_org_super_admin_v1($1, $2, $3, true, false)', [
       root, organization, legacyAdministrator,
     ])
-    await db.exec(migrations[migrations.length - 1])
+    for (const migration of administratorMigrations) await db.exec(migration)
   })
 
   afterEach(async () => db.close())
@@ -150,16 +153,46 @@ describe('system super administrator migration', () => {
     await expect(assigned(outsider)).rejects.toMatchObject({ code: 'P0002' })
     await expect(assigned(outsider, root, otherOrganization)).rejects.toMatchObject({ code: '42501' })
 
-    await db.query('update public.organizations set settings = $1 where id = $2', [
-      { role_permission_overrides: { [rootRole]: ['config:read'] } }, organization,
-    ])
+    await db.query('update public.users set login_enabled = false where id = $1', [root])
     await expect(assigned()).rejects.toMatchObject({ code: '42501' })
-    await db.query('update public.organizations set settings = $1 where id = $2', [
-      { role_permission_overrides: { [rootRole]: ['role:manage'] } }, organization,
-    ])
-    expect(await assigned()).toBe(false)
+    await db.query('update public.users set login_enabled = true where id = $1', [root])
+    await db.query('update public.organizations set status = $2 where id = $1', [organization, 'inactive'])
+    await expect(assigned()).rejects.toMatchObject({ code: '42501' })
+    await db.query('update public.organizations set status = $2 where id = $1', [organization, 'active'])
     await db.query('update public.user_organizations set is_default = false where user_id = $1', [root])
     await expect(assigned()).rejects.toMatchObject({ code: '42501' })
+  })
+
+  it('keeps effective authority through old settings and permits an actual role revocation', async () => {
+    const legacyValues = [
+      { role_permission_overrides: { [rootRole]: ['config:read'] } },
+      { role_permission_overrides: { [rootRole]: ['role:manage', null] } },
+      { role_permission_overrides: { [rootRole]: [] } },
+    ]
+    for (const legacy of legacyValues) {
+      await db.query('update public.organizations set settings = $1 where id = $2', [legacy, organization])
+      expect(await assigned()).toBe(false)
+    }
+    expect(await setAssigned(true, false)).toBe(true)
+    expect(await assigned(legacyAdministrator, candidate)).toBe(false)
+    expect(await setAssigned(false, true)).toBe(false)
+    await expect(assigned(legacyAdministrator, candidate)).rejects.toMatchObject({ code: '42501' })
+    const settings = await db.query('select settings from public.organizations where id = $1', [organization])
+    expect(settings.rows).toEqual([{ settings: legacyValues.at(-1) }])
+  })
+
+  it('excludes non-organization and mismatched organization bindings even when the role is canonical', async () => {
+    for (const [bindingOrg, scopeType, scopeId] of [
+      [organization, 'department', department],
+      [organization, 'space', department],
+      [organization, 'org', otherOrganization],
+      [otherOrganization, 'org', organization],
+    ]) {
+      await db.query('update public.user_roles set org_id = $2, scope_type = $3, scope_id = $4 where user_id = $1', [
+        root, bindingOrg, scopeType, scopeId,
+      ])
+      await expect(assigned()).rejects.toMatchObject({ code: '42501' })
+    }
   })
 
   it('requires an active login for a new grant and permits revoking a dormant exact binding', async () => {
@@ -179,6 +212,9 @@ describe('system super administrator migration', () => {
   it('protects the last effective controller from login, offboarding and membership commands', async () => {
     expect(await setAssigned(true, false)).toBe(true)
     await db.query('update public.user_organizations set is_default = false where user_id = $1', [candidate])
+    await db.query('update public.organizations set settings = $1 where id = $2', [
+      { role_permission_overrides: { [rootRole]: [] } }, organization,
+    ])
     const lastAdministrator = { code: '23514', detail: 'LAST_SYSTEM_SUPER_ADMIN_PROTECTED' }
 
     await expect(db.query("select public.admin_set_account_state_v1($1, $2, $3, 'active', false)", [

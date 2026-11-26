@@ -45,11 +45,11 @@ type TestDepartmentAccess = { org_id: string; user_id: string; department_id: st
 function mockExactOrgAuth(options: {
   token: string
   orgId: string
-  roles: Array<{ org_id?: string; user_id?: string; scope_type?: string; scope_id?: string; roles: { id?: string; code: string; permissions: string[] } }>
+  roles: Array<{ org_id?: string; user_id?: string; scope_type?: string; scope_id?: string | null; roles: unknown }>
   departments?: TestDepartment[]
   departmentLeads?: TestDepartmentAccess[]
   departmentLeadsStatus?: number
-  memberships?: Array<{ org_id: string; employment_status: string; left_at?: string | null }>
+  memberships?: Array<{ org_id: string; employment_status: string; left_at?: string | null; status?: string; is_default?: boolean }>
   settings?: unknown
   settingsError?: unknown
   status?: string
@@ -83,7 +83,7 @@ function mockExactOrgAuth(options: {
           status: options.status ?? 'active',
           login_enabled: options.loginEnabled ?? true,
           memberships: (options.memberships ?? [{ org_id: options.orgId, employment_status: options.employmentStatus ?? 'active' }])
-            .map(member => ({ left_at: null, ...member })),
+            .map(member => ({ left_at: null, status: 'active', is_default: true, ...member })),
         },
       }])
     }
@@ -408,7 +408,7 @@ describe('role-free federated session boundary', () => {
 
     mockExactOrgAuth({ token, orgId: 'org-a', roles: [{ roles: root }, { roles: { ...role, permissions: ['role:manage'] } }],
       settings: { role_permission_overrides: { 'root-role': ['admin:access'] } } })
-    for (const [path, method] of authorizationPaths) expect((await request(path, method)).status, path).toBe(403)
+    for (const [path, method] of authorizationPaths) expect((await request(path, method)).status, path).toBe(200)
   })
 
   it('admits settings-only viewers to both settings entries while preserving the generic config boundary', async () => {
@@ -980,7 +980,7 @@ describe('middleware exact organization authorization', () => {
     expect(new URL(String(roleCall?.[0])).searchParams.getAll('scope_id')).toEqual(['eq.org-a'])
   })
 
-  it('超管覆盖后的权限和兼容授权头都不重新获得通配符', async () => {
+  it('有效组织超管忽略历史覆盖，固定投影一次通配权限', async () => {
     mockExactOrgAuth({ token:'example-override-token', orgId:'org-a',
       roles:[{roles:{id:'root-role',code:'SUPER_ADMIN',permissions:['*']}}],
       settings:{role_permission_overrides:{'root-role':['config:read']}},
@@ -989,9 +989,9 @@ describe('middleware exact organization authorization', () => {
     req.cookies.get = vi.fn().mockReturnValue({value:'example-override-token'})
     const res = await middleware(req)
     expect(res.status).toBe(200)
-    expect(res.headers.get('x-middleware-request-x-user-permissions')).toBe('config:read')
+    expect(res.headers.get('x-middleware-request-x-user-permissions')).toBe('*')
     expect(res.headers.get('x-middleware-request-x-user-role-codes')).toBe('SUPER_ADMIN')
-    expect(res.headers.get('x-middleware-request-x-user-authorization-role-codes')).toBe('')
+    expect(res.headers.get('x-middleware-request-x-user-authorization-role-codes')).toBe('SUPER_ADMIN')
   })
 
   it('缺失角色ID的异常行不会恢复超管通配权限', async () => {
@@ -1004,16 +1004,44 @@ describe('middleware exact organization authorization', () => {
     expect((await middleware(req)).headers.get('location')).toBe('https://sales.cyanlog.icu/pending-access')
   })
 
-  it('空覆盖阻止超管访问后台且覆盖读取失败时关闭访问', async () => {
+  it('历史空覆盖不收窄有效超管，组织读取失败时仍关闭访问', async () => {
     mockExactOrgAuth({token:'example-empty-override',orgId:'org-a',
       roles:[{roles:{id:'root-role',code:'SUPER_ADMIN',permissions:['*']}}],
       settings:{role_permission_overrides:{'root-role':[]}},
     })
     const req = makeRequest('https://sales.cyanlog.icu/admin', {host:'sales.cyanlog.icu'})
     req.cookies.get = vi.fn().mockReturnValue({value:'example-empty-override'})
-    expect((await middleware(req)).headers.get('location')).toContain('denied=admin%3Aaccess')
+    expect((await middleware(req)).status).toBe(200)
     mockExactOrgAuth({token:'example-empty-override',orgId:'org-a',roles:[],settingsError:new Error('read failed')})
     expect((await middleware(req)).status).toBe(503)
+  })
+
+  it('requires the live account, current membership and an exact organization binding to use fixed root permissions', async () => {
+    const token = 'canonical-root-scope'
+    const role = { id: 'root-role', code: 'SUPER_ADMIN', permissions: [] }
+    const grant = { roles: role }
+    const request = () => middleware(makeRequest('https://sales.cyanlog.icu/api/roles?view=assignable', { authorization: `Bearer ${token}` }))
+    mockExactOrgAuth({ token, orgId: 'org-a', roles: [grant] })
+    expect((await request()).status).toBe(200)
+    for (const state of [
+      { roles: [] },
+      { roles: [{ ...grant, user_id: 'other-user' }] },
+      { roles: [{ ...grant, org_id: 'other-org' }] },
+      { roles: [{ ...grant, scope_type: 'department' }] },
+      { roles: [{ ...grant, scope_type: 'space' }] },
+      { roles: [{ ...grant, scope_id: null }] },
+      { roles: [{ roles: [role, role] }] },
+      { loginEnabled: false },
+      { organizationStatus: 'inactive' },
+      { employmentStatus: 'suspended' },
+      { memberships: [{ org_id: 'org-a', employment_status: 'active', is_default: false }] },
+      { memberships: [{ org_id: 'org-a', employment_status: 'active', left_at: '2026-11-01' }] },
+    ]) {
+      mockExactOrgAuth({ token, orgId: 'org-a', roles: [grant], ...state })
+      const denied = await request()
+      expect([401, 403]).toContain(denied.status)
+      expect(denied.headers.get('x-middleware-request-x-user-permissions')).toBeNull()
+    }
   })
 
   it('requires an unambiguous active default membership before reading tenant permissions', async () => {

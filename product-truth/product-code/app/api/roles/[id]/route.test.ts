@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: vi.fn() } }))
+vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: vi.fn(), rpc: vi.fn() } }))
 vi.mock('@/lib/auth', () => ({ requireAuth: vi.fn(async () => ({ id: 'user-1' })) }))
 import { supabaseAdmin } from '@/lib/supabase'
 import { PATCH } from './route'
@@ -19,10 +19,13 @@ const root = {
   org_id: 'org-fresh', user_id: 'user-1', scope_type: 'org', scope_id: 'org-fresh', granted_at: null,
   role: { id: 'root-role', code: 'SUPER_ADMIN', name: '超管', permissions: ['*'] },
 }
-const currentMember = { org_id: 'org-fresh', status: 'active', employment_status: 'active', is_default: true, left_at: null }
+const currentMember = {
+  org_id: 'org-fresh', status: 'active', employment_status: 'active', is_default: true, left_at: null,
+  account: { id: 'user-1', status: 'active', login_enabled: true },
+}
 function database(options: {
   code?: string; permissions?: string[]; settings?: any; conflict?: boolean; readError?: boolean;
-  assignments?: unknown[]; members?: unknown[]; permissionRows?: unknown[];
+  assignments?: unknown[]; members?: unknown[]; permissionRows?: unknown[]; writeDenied?: boolean;
 } = {}) {
   const role = { id: 'role-1', code: options.code ?? 'SALES', name: '角色', permissions: options.permissions ?? ['quote:create'] }
   const operations: any[] = []
@@ -33,14 +36,11 @@ function database(options: {
       select: vi.fn(() => query),
       in: vi.fn(async () => ({ data: options.permissionRows ?? [], error: null })),
       eq: vi.fn((...filter: any[]) => { operation.filters.push(filter); return query }),
-      is: vi.fn((...filter: any[]) => { operation.filters.push(filter); return query }),
-      update: vi.fn((patch: any) => { operation.patch = patch; return query }),
       limit: vi.fn(async () => ({ data: options.members ?? [currentMember], error: null })),
       then(resolve: (data: object) => void) { return Promise.resolve({ data: options.assignments ?? [root], error: null }).then(resolve) },
       maybeSingle: vi.fn(async () => {
         if (table === 'roles') return { data: role, error: null }
         if (table !== 'organizations') throw new Error(`Unexpected table ${table}`)
-        if (operation.patch) return { data: options.conflict ? null : { id: 'org-fresh' }, error: null }
         return {
           data: options.readError ? null : { id: 'org-fresh', status: 'active', settings: options.settings ?? {} },
           error: options.readError ? new Error('settings unavailable') : null,
@@ -49,6 +49,12 @@ function database(options: {
     }
     return query
   }) as any)
+  vi.mocked(supabaseAdmin.rpc).mockImplementation((async (_name: string, payload: unknown) => {
+    if (options.writeDenied) return { data: null, error: { code: '42501' } }
+    if (options.conflict) return { data: 'conflict', error: null }
+    operations.push({ table: 'rpc', patch: payload, filters: [] })
+    return { data: 'saved', error: null }
+  }) as never)
   return { role, operations }
 }
 
@@ -60,7 +66,6 @@ describe('PATCH /api/roles/[id] organization role permissions', () => {
     ['non-system organization administrator', { ...root, role: { ...root.role, code: 'ORG_SUPER_ADMIN', permissions: ['role:manage'] } }, {}],
     ['department root', { ...root, scope_type: 'department' }, {}],
     ['another organization root', { ...root, org_id: 'org-other' }, {}],
-    ['revoked root', root, { role_permission_overrides: { 'root-role': [] } }],
   ])('rejects %s with 403', async (_label, assignment, settings) => {
     const { operations } = database({ assignments: [assignment], settings })
     const req = jsonRequest({ permissions: [], expected_permissions: salesPermissions })
@@ -69,6 +74,25 @@ describe('PATCH /api/roles/[id] organization role permissions', () => {
     expect((await res.json()).error.code).toBe('A002')
     expect(req.json).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalledWith('roles')
+    expect(operations.some(operation => operation.patch)).toBe(false)
+  })
+
+  it('allows an exact system root to save a business grant despite a stored legacy override', async () => {
+    database({ settings: { role_permission_overrides: { 'root-role': [] } } })
+    expect((await PATCH(jsonRequest({ permissions: [], expected_permissions: salesPermissions }), routeContext)).status).toBe(200)
+  })
+
+  it('rejects a root whose login has been disabled before the role lookup', async () => {
+    const { operations } = database({ members: [{ ...currentMember, account: { ...currentMember.account, login_enabled: false } }] })
+    expect((await PATCH(jsonRequest({ permissions: [], expected_permissions: salesPermissions }), routeContext)).status).toBe(403)
+    expect(operations.some(operation => operation.patch)).toBe(false)
+  })
+
+  it('returns 403 when the database finds that authority was lost after the request started', async () => {
+    const { operations } = database({ writeDenied: true })
+    const response = await PATCH(jsonRequest({ permissions: [], expected_permissions: salesPermissions }), routeContext)
+    expect(response.status).toBe(403)
+    expect((await response.json()).error).toMatchObject({ code: 'A002', message: expect.stringContaining('系统超管') })
     expect(operations.some(operation => operation.patch)).toBe(false)
   })
 
@@ -82,9 +106,12 @@ describe('PATCH /api/roles/[id] organization role permissions', () => {
       ['org_id', 'org-fresh'], ['user_id', 'user-1'], ['scope_type', 'org'], ['scope_id', 'org-fresh'],
     ])
     expect(operations.filter((operation) => operation.table === 'organizations').every((operation) => operation.filters.some(([key, value]: any[]) => key === 'id' && value === 'org-fresh'))).toBe(true)
-    expect(operations.filter((operation) => operation.patch)).toEqual([expect.objectContaining({ table: 'organizations', patch: {
-      settings: { theme: 'dark', role_permission_overrides: { 'role-other': ['config:read'], 'role-1': [] } },
-    } })])
+    expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith('admin_save_org_role_permissions_v1', {
+      p_actor_id: 'user-1', p_org_id: 'org-fresh', p_role_id: 'role-1',
+      p_expected_settings: { theme: 'dark', role_permission_overrides: { 'role-other': ['config:read'] } },
+      p_expected_role_code: 'SALES', p_expected_role_template: ['quote:create'],
+      p_permissions: [], p_owner_permissions: null,
+    })
     expect(role.permissions).toEqual(['quote:create'])
   })
 

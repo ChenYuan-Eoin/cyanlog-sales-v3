@@ -12,9 +12,7 @@ export async function PATCH(
   req: NextRequest,
   context: AsyncRouteParams
 ) {
-  return withRolePermissionContext(req, async ({
-    orgId, settings, canEdit, canEditPlatformRoot, actorPermissions,
-  }) => {
+  return withRolePermissionContext(req, async ({ orgId, settings, canEdit }, actorId) => {
     if (!canEdit) {
       return errorResponse(createApiError('FORBIDDEN'))
     }
@@ -33,14 +31,12 @@ export async function PATCH(
     const ownerChange = Object.hasOwn(input, 'owner_shipping_permissions') || Object.hasOwn(input, 'expected_owner_shipping_permissions')
       ? { permissions: input.owner_shipping_permissions, expected: input.expected_owner_shipping_permissions }
       : undefined
-    const result = await saveOrgRolePermissions(orgId, id, input.permissions, input.expected_permissions, {
-      settings, canEditPlatformRoot, actorPermissions,
-    }, ownerChange)
+    const result = await saveOrgRolePermissions(actorId, orgId, id, input.permissions, input.expected_permissions, { settings }, ownerChange)
     if (result.ok) return successResponse({ org_id: orgId, role: result.role })
     if (result.reason === 'not_found') return errorResponse(createApiError('NOT_FOUND'))
     if (result.reason === 'conflict') return errorResponse(createApiError('CONFLICT', '权限已被其他管理员更新，请刷新后重试。'))
     if (result.reason === 'fixed_role') return errorResponse(createApiError('BUSINESS_RULE_VIOLATION', result.message))
-    if (result.reason === 'escalation_forbidden') return errorResponse(createApiError('FORBIDDEN', '不能授予超出当前组织治理权限的配置项。'))
+    if (result.reason === 'forbidden') return errorResponse(createApiError('FORBIDDEN', '仅系统超管可以保存角色授权。'))
     return errorResponse(createApiError('VALIDATION_ERROR', '权限内容无效，请刷新角色列表后重试。'))
   })
 }

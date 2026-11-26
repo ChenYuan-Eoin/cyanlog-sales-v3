@@ -229,6 +229,10 @@ export async function POST(req: NextRequest) {
         && syncError.details === DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN) {
         return NextResponse.json({ error: '仅系统超级管理员可以调整已获收寄台账权限的部门成员。', code: DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN }, { status: 403 })
       }
+      if (syncError && typeof syncError === 'object' && 'code' in syncError && 'details' in syncError
+        && syncError.code === '42501' && syncError.details === 'PERSONNEL_INVITATION_ROLE_AUTHORITY_REQUIRED') {
+        return NextResponse.json({ error: '仅系统超级管理员可预分配成员角色', code: 'NO_ROLE_ASSIGN_PERMISSION' }, { status: 403 })
+      }
       console.error('Create user consistency error:', syncError)
       return NextResponse.json({ error: '创建用户关联数据失败' }, { status: 500 })
     }

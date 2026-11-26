@@ -234,7 +234,7 @@ function buildRedirectUrl(request: NextRequest, pathname: string, search = ''): 
 
 function roleRecordOf(value: unknown): { id: string; code: string; permissions: string[] | null } | null {
   if (Array.isArray(value)) {
-    return roleRecordOf(value[0])
+    return value.length === 1 ? roleRecordOf(value[0]) : null
   }
   if (!value || typeof value !== 'object') return null
   return value as { id: string; code: string; permissions: string[] | null }
@@ -300,13 +300,13 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
       id: string
       status: string
       login_enabled: boolean | null
-      memberships: Array<{ org_id: string; employment_status: string; left_at: string | null }>
+      memberships: Array<{ org_id: string; is_default: boolean; status: string; employment_status: string; left_at: string | null }>
     } | null
   }>(
     'auth_tokens',
     { token, 'user.memberships.status': 'active', 'user.memberships.is_default': 'true' },
     'user_id,created_at,expires_at,auth_method,user:users!auth_tokens_user_id_fkey('
-      + 'id,status,login_enabled,memberships:user_organizations!user_organizations_user_id_fkey(org_id,employment_status,left_at))',
+      + 'id,status,login_enabled,memberships:user_organizations!user_organizations_user_id_fkey(org_id,is_default,status,employment_status,left_at))',
   )
   const tokenRecord = tokenRows[0]
   if (!tokenRecord || (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date())) return null
@@ -320,13 +320,14 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
   if (user.memberships?.length !== 1) return null
   const membership = user.memberships[0]
   const orgId = membership.org_id
-  if (!orgId || (usesFxiaoke && membership.employment_status !== 'active')) return null
+  if (!orgId || membership.is_default !== true || membership.status !== 'active'
+    || (usesFxiaoke && membership.employment_status !== 'active')) return null
 
   const [userRolesData, organizationRows, sources] = await Promise.all([
-    rest.selectRows<{ org_id: string; scope_type: string; scope_id: string | null; roles: unknown }>(
+    rest.selectRows<{ org_id: string; user_id: string; scope_type: string; scope_id: string | null; roles: unknown }>(
       'user_roles',
       { user_id: userId, org_id: orgId, scope_type: 'org', scope_id: orgId },
-      'org_id,scope_type,scope_id,roles:roles(id,code,permissions)',
+      'org_id,user_id,scope_type,scope_id,roles:roles(id,code,permissions)',
       100,
     ),
     rest.selectRows<{ status: string; settings: unknown }>('organizations', { id: orgId }, 'status,settings'),
@@ -352,10 +353,10 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
   let canManageSystemAuthorizations = false
 
   for (const ur of userRolesData ?? []) {
-    if (ur.org_id !== orgId || ur.scope_type !== 'org' || ur.scope_id !== orgId) continue
-    const r = roleRecordOf((ur as { roles?: unknown }).roles)
+    if (ur.org_id !== orgId || ur.user_id !== userId || ur.scope_type !== 'org' || ur.scope_id !== orgId) continue
+    const r = roleRecordOf(ur.roles)
     if (r?.id && r.code) {
-      if (!activeMembership && [ORG_SUPER_ADMIN_ROLE_CODE, SHIPPING_OPERATOR_ROLE_CODE].includes(r.code)) continue
+      if (!activeMembership && ['SUPER_ADMIN', ORG_SUPER_ADMIN_ROLE_CODE, SHIPPING_OPERATOR_ROLE_CODE].includes(r.code)) continue
       roleCodes.push(r.code)
       const effective = resolveRolePermissions(organization.settings, r)
       canManageSystemAuthorizations ||= activeMembership && isSystemAuthorizationGrant(r.code, effective.permissions)
@@ -363,10 +364,6 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
       if (usesFxiaoke && activeMembership) ownerShippingPermissions.push(...resolveOwnerShippingPermissions(organization.settings, r))
       if (!effective.overridden) authorizationRoleCodes.push(r.code)
     }
-  }
-
-  if (authorizationRoleCodes.includes('SUPER_ADMIN')) {
-    allPermissions.push('*')
   }
 
   const departmentWorkspaceAccess = checkDepartmentWorkspace && activeMembership && roleCodes.length === 0

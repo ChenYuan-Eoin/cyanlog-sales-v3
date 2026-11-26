@@ -294,7 +294,8 @@
       "product-truth/product-code/.next",
       "product-truth/product-code/next-env.d.ts",
       "product-truth/product-code/tsconfig.tsbuildinfo",
-      "product-truth/product-code/app/api/auth/me"
+      "product-truth/product-code/app/api/auth/me",
+      "product-truth/product-code/app/api/dashboard/department/route.test.ts"
     ],
     "delivery_contract": {
       "target_state": "code_green",

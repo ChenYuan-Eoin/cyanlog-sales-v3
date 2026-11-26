@@ -254,6 +254,26 @@ describe('POST /api/admin/users', () => {
     expect(invitationInsert.insert).toHaveBeenCalledWith(expect.objectContaining({ role_ids: [userId] }))
   })
 
+  it('rolls back the new member and returns 403 when role authority changes before saving their invitation', async () => {
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(activeAuthority)
+    vi.mocked(validateOrgRoleAssignment).mockResolvedValue({ ok: true, roleIds: [userId] })
+    const { invitationInsert } = mockSuccessfulUserInsert()
+    const cleanup = makeQuery({ data: null, error: null })
+    invitationInsert.insert.mockResolvedValueOnce({
+      data: null, error: { code: '42501', details: 'PERSONNEL_INVITATION_ROLE_AUTHORITY_REQUIRED' },
+    })
+    ;(supabaseAdmin.from as any).mockReturnValueOnce(cleanup)
+
+    const response = await POST(makeRequest({ role_ids: [userId] }))
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ code: 'NO_ROLE_ASSIGN_PERMISSION' })
+    expect(supabaseAdmin.from).toHaveBeenLastCalledWith('users')
+    expect(cleanup.delete).toHaveBeenCalledOnce()
+    expect(cleanup.eq).toHaveBeenCalledWith('id', userId)
+    expect(cleanup.eq).toHaveBeenCalledWith('org_id', orgId)
+  })
+
   it('有主部门时使用同一组织双权限并把 orgId 传给关系 helper', async () => {
     const { userInsert } = mockSuccessfulUserInsert()
     userInsert.single.mockResolvedValueOnce({

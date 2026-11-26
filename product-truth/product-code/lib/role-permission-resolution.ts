@@ -29,6 +29,7 @@ function normalizePermissions(value: unknown): string[] {
 }
 
 export function resolveOwnerShippingPermissions(settings: unknown, role: { id: string; code: string; permissions: unknown }): string[] {
+  if (role.code === 'SUPER_ADMIN') return [...SHIPPING_OWNER_ACTION_KEYS]
   if (settings != null && !isRecord(settings)) return []
   if (isRecord(settings) && Object.hasOwn(settings, 'shipping_owner_permission_overrides')) {
     const overrides = settings.shipping_owner_permission_overrides
@@ -39,16 +40,12 @@ export function resolveOwnerShippingPermissions(settings: unknown, role: { id: s
       return [...new Set(grants)]
     }
   }
-  if (role.code === 'SUPER_ADMIN' && resolveRolePermissions(settings, role).permissions.includes('*')) {
-    return [...SHIPPING_OWNER_ACTION_KEYS]
-  }
   return []
 }
 
 function templatePermissions(role: { code: string; permissions: unknown }): string[] {
   // Preserve capabilities that existing authorization granted by role code before the first edit.
   const legacyCapabilities: Record<string, string[]> = {
-    SUPER_ADMIN: ['*'],
     ADMIN: ['admin:access', 'user:write', 'dept:write', 'contract:write', ...ORGANIZATION_SOURCE_PERMISSION_KEYS],
     SALES_OPS: ['admin:access'],
     LEGAL: ['contract:review'],
@@ -56,11 +53,12 @@ function templatePermissions(role: { code: string; permissions: unknown }): stri
   return Array.from(new Set([...normalizePermissions(role.permissions), ...(legacyCapabilities[role.code] ?? [])]))
 }
 
-/** Empty overrides revoke everything; malformed overrides must never restore templates. */
+/** Resolves a role definition. Callers must validate the actor's binding before applying it. */
 export function resolveRolePermissions(
   settings: unknown,
   role: { id: string; code: string; permissions: unknown },
 ): { permissions: string[]; overridden: boolean } {
+  if (role.code === 'SUPER_ADMIN') return { permissions: ['*'], overridden: false }
   if (role.code === 'FXIAOKE_BASELINE') {
     return { permissions: ['quote:view', 'contract:view', 'customer:view'], overridden: true }
   }

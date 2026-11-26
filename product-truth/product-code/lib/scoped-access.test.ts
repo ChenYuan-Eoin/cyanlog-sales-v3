@@ -17,6 +17,7 @@ import {
   canReviewContracts,
   getDefaultOrgId,
   getFreshDefaultOrgId,
+  getFreshUserScopedRoleAssignments,
   getOrgPermissions,
   getOrgAuthorizationRoleCodes,
   getUserScopedRoleAssignments,
@@ -49,6 +50,21 @@ function makeCollectionQuery(result: unknown) {
     query[method] = vi.fn().mockReturnValue(query)
   })
   return query
+}
+
+function rootBinding(userId: string, orgId: string) {
+  return {
+    user_id: userId, org_id: orgId, scope_type: 'org', scope_id: orgId, granted_at: null,
+    role: { id: 'system-admin', code: 'SUPER_ADMIN', name: '系统超管', permissions: ['*'] },
+  }
+}
+
+function rootMembership(userId: string, orgId: string) {
+  return {
+    user_id: userId, org_id: orgId, status: 'active', employment_status: 'active', is_default: true, left_at: null,
+    user: { id: userId, status: 'active', login_enabled: true },
+    organization: { id: orgId, status: 'active' },
+  }
 }
 
 function deferred<T>() {
@@ -324,15 +340,78 @@ describe('organization role permission overrides', () => {
   })
 
   it('rechecks a cached system super administrator binding after a member is removed from that role', async () => {
+    const userId = 'revoked-root'
     const orgId = 'org-with-system-admin'
-    const role = { id: 'system-admin', code: 'SUPER_ADMIN', name: '系统超管', permissions: ['*'] }
-    const exact = { org_id: orgId, scope_type: 'org', scope_id: orgId, granted_at: null, role }
-    vi.mocked(supabaseAdmin.from).mockReturnValue(makeCollectionQuery({ data: [exact], error: null }))
+    const membership = makeDefaultOrgQuery({ data: rootMembership(userId, orgId), error: null })
+    let granted = true
+    vi.mocked(supabaseAdmin.from).mockImplementation(table => table === 'user_organizations' ? membership
+      : makeCollectionQuery({ data: granted ? [rootBinding(userId, orgId)] : [], error: null }))
 
-    expect(getOrgRoleCodes(await getUserScopedRoleAssignments('revoked-root'), orgId)).toEqual(['SUPER_ADMIN'])
+    const current = await getUserScopedRoleAssignments(userId)
+    expect(getOrgRoleCodes(current, orgId)).toEqual(['SUPER_ADMIN'])
+    expect(getOrgPermissions(current, orgId)).toEqual(['*'])
+    expect(membership.eq).toHaveBeenCalledWith('user_id', userId)
+    expect(membership.eq).toHaveBeenCalledWith('is_default', true)
 
-    vi.mocked(supabaseAdmin.from).mockReturnValue(makeCollectionQuery({ data: [], error: null }))
-    expect(await getUserScopedRoleAssignments('revoked-root')).toEqual([])
+    granted = false
+    expect(await getUserScopedRoleAssignments(userId)).toEqual([])
+  })
+
+  it.each([
+    ['department scope', { scope_type: 'department' }],
+    ['space scope', { scope_type: 'space' }],
+    ['null scope id', { scope_id: null }],
+    ['scope in another organization', { scope_id: 'foreign-org' }],
+    ['organizational binding outside the default organization', { org_id: 'foreign-org', scope_id: 'foreign-org' }],
+    ['binding for another user', { user_id: 'foreign-user' }],
+    ['ambiguous role relation', { role: [rootBinding('unused', 'unused').role, { code: 'OTHER' }] }],
+  ])('rejects a system super administrator with %s', async (scenario, binding) => {
+    const userId = `root-binding-${scenario}`
+    const orgId = 'active-org'
+    vi.mocked(supabaseAdmin.from).mockImplementation(table => table === 'user_organizations'
+      ? makeDefaultOrgQuery({ data: rootMembership(userId, orgId), error: null })
+      : makeCollectionQuery({ data: [{ ...rootBinding(userId, orgId), ...binding }], error: null }))
+
+    expect(await getFreshUserScopedRoleAssignments(userId)).toEqual([])
+    expect(await getUserScopedRoleAssignments(userId)).toEqual([])
+    expect(loadOrgRolePermissionSettings).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['no default membership', () => null],
+    ['non-default membership', (row: ReturnType<typeof rootMembership>) => ({ ...row, is_default: false })],
+    ['inactive membership', (row: ReturnType<typeof rootMembership>) => ({ ...row, status: 'suspended' })],
+    ['inactive employment', (row: ReturnType<typeof rootMembership>) => ({ ...row, employment_status: 'ended' })],
+    ['organization departure', (row: ReturnType<typeof rootMembership>) => ({ ...row, left_at: '2026-11-26T05:00:00Z' })],
+    ['inactive organization', (row: ReturnType<typeof rootMembership>) => ({ ...row, organization: { ...row.organization, status: 'inactive' } })],
+    ['foreign organization relation', (row: ReturnType<typeof rootMembership>) => ({ ...row, organization: { ...row.organization, id: 'foreign' } })],
+    ['inactive account', (row: ReturnType<typeof rootMembership>) => ({ ...row, user: { ...row.user, status: 'inactive' } })],
+    ['disabled login', (row: ReturnType<typeof rootMembership>) => ({ ...row, user: { ...row.user, login_enabled: false } })],
+  ])('removes cached system authority when the current state has %s', async (scenario, change) => {
+    const userId = `root-account-${scenario}`
+    const orgId = 'active-org'
+    const membership = rootMembership(userId, orgId)
+    let current: unknown = membership
+    vi.mocked(supabaseAdmin.from).mockImplementation(table => table === 'user_organizations'
+      ? makeDefaultOrgQuery({ data: current, error: null })
+      : makeCollectionQuery({ data: [rootBinding(userId, orgId)], error: null }))
+
+    expect(getOrgPermissions(await getUserScopedRoleAssignments(userId), orgId)).toEqual(['*'])
+    current = change(membership)
+    expect(await getUserScopedRoleAssignments(userId)).toEqual([])
+  })
+
+  it('does not use cached authorization when the current root eligibility read fails', async () => {
+    const userId = 'root-eligibility-unavailable'
+    const orgId = 'active-org'
+    let failure: Error | null = null
+    vi.mocked(supabaseAdmin.from).mockImplementation(table => table === 'user_organizations'
+      ? makeDefaultOrgQuery({ data: failure ? null : rootMembership(userId, orgId), error: failure })
+      : makeCollectionQuery({ data: [rootBinding(userId, orgId)], error: null }))
+
+    expect(getOrgPermissions(await getUserScopedRoleAssignments(userId), orgId)).toEqual(['*'])
+    failure = new Error('root eligibility unavailable')
+    await expect(getUserScopedRoleAssignments(userId)).rejects.toThrow('root eligibility unavailable')
   })
 
   it('角色模板被缓存时仍每次读取当前组织覆盖，并保留组织隔离', async () => {
@@ -356,7 +435,7 @@ describe('organization role permission overrides', () => {
 
   it('已缓存模板不会在组织覆盖读取失败时恢复授权', async () => {
     vi.mocked(supabaseAdmin.from).mockReturnValue(makeCollectionQuery({data:[
-      {scope_type:'org',scope_id:'org-unavailable',granted_at:null,role:{id:'r',code:'SUPER_ADMIN',name:'管理员',permissions:['*']}},
+      {scope_type:'org',scope_id:'org-unavailable',granted_at:null,role:{id:'r',code:'ADMIN',name:'管理员',permissions:['config:read']}},
     ],error:null}))
     await getUserScopedRoleAssignments('override-failure-user')
     vi.mocked(loadOrgRolePermissionSettings).mockRejectedValueOnce(new Error('permission store unavailable'))
