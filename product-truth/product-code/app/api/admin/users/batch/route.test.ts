@@ -2,21 +2,22 @@ import type { NextRequest } from 'next/server'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
 import { requireAuth } from '@/lib/auth'
+import { createMiddlewareRestClient, readMiddlewareRpcRows } from '@/lib/middleware-rest-client'
 import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
-import { getFreshDefaultOrgId, getFreshUserScopedRoleAssignments, type ScopedRoleAssignment } from '@/lib/scoped-access'
+import { type ScopedRoleAssignment } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 import { POST } from './route'
 
 vi.mock('@/lib/admin/org-role-authority', () => ({ validateOrgRoleAssignment: vi.fn() }))
 vi.mock('@/lib/auth', () => ({ requireAuth: vi.fn() }))
+vi.mock('@/lib/middleware-rest-client', () => ({
+  createMiddlewareRestClient: vi.fn(),
+  readMiddlewareRpcRows: vi.fn(),
+}))
+
 vi.mock('@/lib/org-role-permissions', async (original) => ({
   ...await original<typeof import('@/lib/org-role-permissions')>(),
   loadCurrentOrganizationRoleAssignments: vi.fn(),
-}))
-vi.mock('@/lib/scoped-access', async (original) => ({
-  ...await original<typeof import('@/lib/scoped-access')>(),
-  getFreshDefaultOrgId: vi.fn(),
-  getFreshUserScopedRoleAssignments: vi.fn(),
 }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: vi.fn() } }))
 
@@ -47,8 +48,8 @@ function mockDatabase(data: unknown, error: unknown = null) {
 beforeEach(() => {
   vi.resetAllMocks()
   vi.mocked(requireAuth).mockResolvedValue({ id: actor, email: null, phone: null, display_name: null })
-  vi.mocked(getFreshDefaultOrgId).mockResolvedValue(org)
-  vi.mocked(getFreshUserScopedRoleAssignments).mockResolvedValue([authority])
+
+
   vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({ orgId: org, settings: {}, assignments: [authority] })
   vi.mocked(validateOrgRoleAssignment).mockResolvedValue({ ok: true, roleIds: [role] })
 })
@@ -65,8 +66,8 @@ it('rejects invalid parameters and a changed organization before mutation', asyn
 })
 
 it('enforces separate lifecycle permissions and requires the canonical administrator for batch role assignment', async () => {
-  const loginOnly = { ...authority, roleCode: 'CUSTOM', permissions: ['user:manage_login'] }
-  vi.mocked(getFreshUserScopedRoleAssignments).mockResolvedValue([loginOnly])
+  const loginOnly = { ...authority, roleCode: 'CUSTOM', permissions: ['user:view', 'user:manage_login'] }
+
   vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({ orgId: org, settings: {}, assignments: [loginOnly] })
   const lifecycleBody = { expected_org_id: org, user_ids: [member] }
   expect((await POST(request({ ...lifecycleBody, action: 'offboard' }))).status).toBe(403)
@@ -78,6 +79,38 @@ it('enforces separate lifecycle permissions and requires the canonical administr
   expect(rpc).toHaveBeenCalledWith('admin_apply_org_member_batch_v1', {
     p_actor_id: actor, p_org_id: org, p_user_ids: [member], p_action: 'suspend', p_role_ids: [], p_request_id: 'batch-test',
   })
+})
+
+
+it('applies a personal ALLOW and fresh DENY in the same session without exposing other actions', async () => {
+  vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({
+    orgId: org, settings: { employee_organization_permission_overrides_enabled: true }, assignments: [],
+  })
+  vi.mocked(createMiddlewareRestClient).mockReturnValue({
+    selectRows: vi.fn().mockResolvedValue([
+      { code: 'user:view', resource: 'user', action: 'view', capability_level: 'L3',
+        enforcement_consumer: 'lib/permissions.ts#canAccessOrgAdmin',
+        supported_scope_types: ['org'], grant_subject_types: ['role'], dependencies: [] },
+      { code: 'user:manage_login', resource: 'user', action: 'manage_login', capability_level: 'L3',
+        enforcement_consumer: 'lib/admin/member-actions.ts',
+        supported_scope_types: ['org'], grant_subject_types: ['role'], dependencies: ['user:view'] },
+    ]),
+  } as unknown as ReturnType<typeof createMiddlewareRestClient>)
+  const allow = (permission_code: string) => ({ permission_code, effect: 'ALLOW', scope: { type: 'org' } })
+  const deny = (permission_code: string) => ({ permission_code, effect: 'DENY', scope: null })
+  vi.mocked(readMiddlewareRpcRows).mockResolvedValue([allow('user:view'), allow('user:manage_login')])
+  const payload = { action: 'suspend', expected_org_id: org, user_ids: [member] }
+  mockDatabase([{ user_id: member, outcome: 'saved' }])
+
+  expect((await POST(request(payload))).status).toBe(200)
+  expect((await POST(request({ ...payload, action: 'offboard' }))).status).toBe(403)
+  vi.mocked(readMiddlewareRpcRows).mockResolvedValue([deny('user:view'), allow('user:manage_login')])
+  expect((await POST(request(payload))).status).toBe(403)
+
+  expect(readMiddlewareRpcRows).toHaveBeenNthCalledWith(3, 'employee_permission_overrides_v1', {
+    p_org_id: org, p_user_id: actor,
+  })
+  expect(rpc).toHaveBeenCalledOnce()
 })
 
 it('uses one organization-scoped additive command and reports effective, pending and rejected members separately', async () => {

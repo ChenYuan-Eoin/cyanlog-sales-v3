@@ -8,7 +8,8 @@ import { requireAuth } from '@/lib/auth'
 import { loadDepartmentStructureContext } from '@/lib/admin/department-actions'
 
 const uuidSchema = z.guid({ error: 'ID 格式不正确' }).transform(value => value.toLowerCase())
-const DEPARTMENT_FIELDS = 'id, name, code, depth, member_count, parent_id, leader_id, sort_order'
+const DEPARTMENT_STRUCTURE_FIELDS = 'id, name, code, depth, parent_id, sort_order'
+const DEPARTMENT_FULL_FIELDS = 'id, name, code, depth, parent_id, sort_order, member_count, leader_id'
 const updateDepartmentSchema = z.object({
   name: z.string().trim().min(1, '部门名称不能为空').max(80, '部门名称不能超过 80 字').optional(),
   code: z.string().trim().min(1, '部门编码不能为空').max(50, '部门编码不能超过 50 字').optional(),
@@ -54,8 +55,8 @@ export async function PATCH(
   try {
     const { id } = await params
     const user = await requireAuth(req)
-    const { orgId, canEdit } = await loadDepartmentStructureContext(user.id)
-    if (!canEdit) {
+    const access = await loadDepartmentStructureContext(user.id)
+    if (!access?.canEdit) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
@@ -64,11 +65,16 @@ export async function PATCH(
       return validationError(parseResult.error)
     }
     const { name, code, parent_id, leader_id, sort_order } = parseResult.data
+    const { orgId, memberAccess } = access
+    if (leader_id !== undefined && !memberAccess) {
+      return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
+    }
 
     // 检查部门是否存在
-    const { data: existing, error: checkError } = await supabaseAdmin
-      .from('departments')
-      .select(DEPARTMENT_FIELDS)
+    const departmentTable = supabaseAdmin.from('departments')
+    const departmentQuery = memberAccess
+      ? departmentTable.select(DEPARTMENT_FULL_FIELDS) : departmentTable.select(DEPARTMENT_STRUCTURE_FIELDS)
+    const { data: existing, error: checkError } = await departmentQuery
       .eq('id', id)
       .eq('org_id', orgId)
       .single()
@@ -171,7 +177,8 @@ export async function PATCH(
         ? mutation.is('parent_id', null)
         : mutation.eq('parent_id', existing.parent_id)
     }
-    const selection = mutation.select(DEPARTMENT_FIELDS)
+    const selection = memberAccess
+      ? mutation.select(DEPARTMENT_FULL_FIELDS) : mutation.select(DEPARTMENT_STRUCTURE_FIELDS)
     const { data, error } = movingDepartment ? await selection.maybeSingle() : await selection.single()
 
     if (error) {
@@ -204,10 +211,12 @@ export async function DELETE(
   try {
     const { id } = await params
     const user = await requireAuth(req)
-    const { orgId, canDelete } = await loadDepartmentStructureContext(user.id)
-    if (!canDelete) {
+    const access = await loadDepartmentStructureContext(user.id)
+    if (!access?.canDelete) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
+
+    const { orgId, memberAccess } = access
 
     // 检查部门是否存在
     const { data: existing, error: checkError } = await supabaseAdmin
@@ -225,7 +234,9 @@ export async function DELETE(
     if (existing.member_count > 0) {
       return NextResponse.json(
         {
-          error: `部门「${existing.name}」还有 ${existing.member_count} 条成员关联，请先调整成员的部门归属`,
+          error: memberAccess
+            ? `部门「${existing.name}」还有 ${existing.member_count} 条成员关联，请先调整成员的部门归属`
+            : `部门「${existing.name}」仍有成员关联，无法删除`,
           code: 'DEPARTMENT_HAS_MEMBER_BINDINGS',
         },
         { status: 400 }

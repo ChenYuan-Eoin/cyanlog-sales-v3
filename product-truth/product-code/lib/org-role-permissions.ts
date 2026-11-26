@@ -11,6 +11,7 @@ import {
 import { PERMISSION_KEYS, resolveRolePermissions } from '@/lib/role-permission-policy'
 import { FXIAOKE_BASELINE_ROLE_CODE, isRetiredRoleCode, isRoleAssignableInScope, ORG_SUPER_ADMIN_ROLE_CODE, resolveOwnerShippingPermissions } from '@/lib/role-permission-resolution'
 import type { ScopedRoleAssignment } from '@/lib/scoped-access'
+import { loadEmployeeOrganizationPermissionDecision } from '@/lib/admin/employee-organization-permissions'
 import { ORG_MEMBER_LIFECYCLE_ACTIONS } from '@/lib/admin/member-action-keys'
 import { isShippingOwnerPermission, SHIPPING_OWNER_VIEW } from '@/lib/shipping/owner-permission-keys'
 
@@ -118,13 +119,16 @@ export async function loadOrgRolePermissionContext(userId: string): Promise<Role
   const { orgId, settings, assignments } = context
   const permissions = assignments.flatMap(assignment => assignment.permissions)
   const canEdit = canEditRolePermissions(assignments, orgId)
+  const organizationActions = await loadEmployeeOrganizationPermissionDecision(permissions, {
+    orgId, userId, settings, systemAdministrator: canEdit,
+  })
   return {
     orgId,
     settings,
     canEdit,
     canEditPlatformRoot: canEdit,
     actorPermissions: permissions,
-    canRead: canReadRoleDirectory(permissions),
+    canRead: organizationActions?.['role:view'] ?? canReadRoleDirectory(permissions),
     canListAssignableRoles: canEdit,
   }
 }

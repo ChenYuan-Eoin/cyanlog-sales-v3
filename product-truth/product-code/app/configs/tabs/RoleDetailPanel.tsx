@@ -670,8 +670,8 @@ function MemberAssignmentTab({
       if (employeePermissionsOrgId && isEmployeePermissionTarget(user)) {
         const count = await readEmployeePermissionOverrideCount(employeePermissionsOrgId, user.id, AbortSignal.timeout(2000))
           .catch(() => null)
-        if (count === null) confirmation += '\n暂时无法核对该员工的寄件个人设置。'
-        else if (count > 0) confirmation += `\n此员工有 ${count} 项寄件个人设置，撤销角色授权后会保留。`
+        if (count === null) confirmation += '\n暂时无法核对该员工的个人权限设置。'
+        else if (count > 0) confirmation += `\n此员工有 ${count} 项个人权限设置，撤销角色授权后会保留。`
       }
       if (!await confirmAction(confirmation, { confirmText: '移除', danger: true })) return
       if (token !== localStorage.getItem('token')) {

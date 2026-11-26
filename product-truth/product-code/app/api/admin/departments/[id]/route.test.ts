@@ -5,10 +5,9 @@ vi.mock('@/lib/auth', () => ({
   requireAuth: vi.fn(),
 }))
 
-vi.mock('@/lib/scoped-access', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@/lib/scoped-access')>(),
-  getFreshDefaultOrgId: vi.fn(),
-  getFreshUserScopedRoleAssignments: vi.fn(),
+vi.mock('@/lib/org-role-permissions', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/org-role-permissions')>(),
+  loadCurrentOrganizationRoleAssignments: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -19,10 +18,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { requireAuth } from '@/lib/auth'
-import {
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
+import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import { supabaseAdmin } from '@/lib/supabase'
 import { DELETE, PATCH } from './route'
 
@@ -32,9 +28,9 @@ const newParentId = '00000000-0000-0000-0000-000000000003'
 const routeContext = { params: Promise.resolve({ id: departmentId }) }
 
 function grant(permissions: string[]) {
-  vi.mocked(getFreshUserScopedRoleAssignments).mockResolvedValue([{
+  vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({ orgId: 'org-1', settings: {}, assignments: [{
     scopeType: 'org', scopeId: 'org-1', permissions, roleCode: 'DEPARTMENTS', roleId: 'role-1', roleName: '部门', grantedAt: null,
-  }])
+  }] })
 }
 
 function patchDepartment(body: object) {
@@ -56,7 +52,7 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: 'admin-user' })
-    ;(getFreshDefaultOrgId as any).mockResolvedValue('org-1')
+
     grant(['dept:write'])
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { leaderId: null, userId: null }, error: null } as never)
   })
@@ -68,7 +64,7 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
     const res = await PATCH({ json } as any, routeContext)
 
     expect(res.status).toBe(403)
-    expect(getFreshUserScopedRoleAssignments).toHaveBeenCalledWith('admin-user')
+    expect(loadCurrentOrganizationRoleAssignments).toHaveBeenCalledWith('admin-user')
     expect(json).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
@@ -113,10 +109,10 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
     const update = makeQuery({ data: { id: departmentId }, error: null })
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup).mockReturnValueOnce(update)
 
-    const response = await patchDepartment({ name: '改名', sort_order: 2, leader_id: null, parent_id: oldParentId })
+    const response = await patchDepartment({ name: '改名', sort_order: 2, parent_id: oldParentId })
     expect(response.status).toBe(200)
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
-    expect(update.update).toHaveBeenCalledExactlyOnceWith({ name: '改名', sort_order: 2, leader_id: null })
+    expect(update.update).toHaveBeenCalledExactlyOnceWith({ name: '改名', sort_order: 2 })
   })
 
   it('上级字段与当前值一致且没有其他修改时返回当前信息', async () => {
@@ -212,7 +208,7 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
   })
 
   it('部门仍有成员关联时返回可定位的阻断原因，不更新部门', async () => {
-    grant(['dept:directory_view', 'dept:delete_structure'])
+    grant(['dept:directory_view', 'dept:delete_structure', 'user:view'])
     const lookup = makeQuery({ data: { id: departmentId, member_count: 2, name: '测试部门' }, error: null })
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup)
 

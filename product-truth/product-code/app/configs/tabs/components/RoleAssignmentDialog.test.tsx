@@ -19,8 +19,8 @@ beforeEach(() => {
 
 describe('RoleAssignmentDialog scoped assignment', () => {
   it.each([
-    { responseOrg: 'org-1', text: '此员工有 1 项寄件个人设置。保存角色分配后，个人设置仍覆盖对应权限点及数据范围。' },
-    { responseOrg: 'other-org', text: '暂时无法核对该员工的寄件个人设置。' },
+    { responseOrg: 'org-1', text: '此员工有 1 项个人权限设置。保存角色分配后，个人设置仍覆盖对应权限点及数据范围。' },
+    { responseOrg: 'other-org', text: '暂时无法核对该员工的个人权限设置。' },
   ])('checks stored overrides only for the requested organization', async ({ responseOrg, text }) => {
     const reviewEndpoint = '/api/admin/users/user-1/permission-overrides?orgId=org-1'
     const fetchMock = vi.fn(async (url: string) => url === reviewEndpoint

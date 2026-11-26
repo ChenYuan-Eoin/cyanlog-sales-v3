@@ -7,12 +7,6 @@ import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import {
-  canMutateOrgDepartments,
-  getDefaultOrgId,
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
-import {
   assertDepartmentInOrg,
   DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN,
   ensureDefaultOrganizationMembership,
@@ -20,9 +14,10 @@ import {
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
 import { validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
-import { canPerformMemberAction } from '@/lib/admin/member-actions'
+import { loadOrganizationPermissionAccess } from '@/lib/admin/member-actions'
 import { ORG_MEMBER_INVITE } from '@/lib/admin/member-action-keys'
-import { canManageSystemAuthorizations, loadCurrentOrganizationRoleAssignments, queryOrgRoles } from '@/lib/org-role-permissions'
+import { queryOrgRoles } from '@/lib/org-role-permissions'
+import { ORG_DEPARTMENT_DIRECTORY_VIEW, ORG_DEPARTMENT_STRUCTURE_EDIT } from '@/lib/permissions'
 import { normalizeIdentityPhone } from '@/lib/fxiaoke/identity'
 
 const createUserSchema = z.object({
@@ -39,10 +34,18 @@ const createUserSchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const orgId = await getDefaultOrgId(user.id)
+    const access = await loadOrganizationPermissionAccess(user.id)
+    if (!access?.decision['user:view']) {
+      return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
+    }
+    const { orgId } = access
+    const canReadDepartments = access.decision[ORG_DEPARTMENT_DIRECTORY_VIEW]
 
     const { searchParams } = new URL(req.url)
     const deptId = searchParams.get('dept_id')
+    if (deptId && !canReadDepartments) {
+      return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
+    }
 
     let query = supabaseAdmin
       .from('users')
@@ -66,6 +69,9 @@ export async function GET(req: NextRequest) {
     if (deptId) {
       query = query.eq('primary_dept_id', deptId)
     }
+    if (!canReadDepartments) {
+      query = query.eq('user_roles.scope_type', 'org').eq('user_roles.scope_id', orgId)
+    }
 
     const { data: users, error } = await query.order('created_at', { ascending: false })
 
@@ -80,7 +86,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: '获取用户角色失败' }, { status: 500 })
     }
     const rolesById = new Map(roles.map(({ id, name, code }) => [id, { name, code }]))
-    const formattedUsers = (users || []).map(({ user_roles, ...user }) => {
+    const formattedUsers = (users || []).map(({ user_roles, departments, primary_dept_id, ...user }) => {
       const bindings = (user_roles ?? []) as Array<{ role_id: string }>
       const resolvedRoles = bindings.flatMap(({ role_id }) => {
         const role = rolesById.get(role_id)
@@ -89,7 +95,11 @@ export async function GET(req: NextRequest) {
       return {
         ...user,
         user_roles: resolvedRoles,
-        primary_dept_name: (user.departments as { name?: string } | null)?.name || null,
+        ...(canReadDepartments ? {
+          departments,
+          primary_dept_id,
+          primary_dept_name: (departments as { name?: string } | null)?.name || null,
+        } : {}),
         role_names: resolvedRoles.map(({ role }) => role.name).join(', '),
       }
     })
@@ -111,12 +121,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const currentUser = await requireAuth(req)
-    const orgId = await getFreshDefaultOrgId(currentUser.id)
-    const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
-
-    if (!canPerformMemberAction(actorAssignments, orgId, ORG_MEMBER_INVITE)) {
+    const access = await loadOrganizationPermissionAccess(currentUser.id)
+    if (!access?.decision[ORG_MEMBER_INVITE]) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
+    const { orgId } = access
 
     const parseResult = createUserSchema.safeParse(await req.json().catch(() => null))
     if (!parseResult.success) {
@@ -133,19 +142,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '手机号格式不正确', code: 'INVALID_PHONE' }, { status: 400 })
     }
 
-    if (primary_dept_id && !canMutateOrgDepartments(actorAssignments, orgId)) {
+    if (primary_dept_id && !access.decision[ORG_DEPARTMENT_STRUCTURE_EDIT]) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_DEPARTMENT_PERMISSION' }, { status: 403 })
     }
 
-    let roleAssignments = actorAssignments
-    if (role_ids.length > 0) {
-      const authority = await loadCurrentOrganizationRoleAssignments(currentUser.id)
-      if (!authority || authority.orgId !== orgId || !canManageSystemAuthorizations(authority.assignments, orgId)) {
-        return NextResponse.json({ error: '仅系统超级管理员可预分配成员角色', code: 'NO_ROLE_ASSIGN_PERMISSION' }, { status: 403 })
-      }
-      roleAssignments = authority.assignments
+    if (role_ids.length > 0 && !access.systemAdministrator) {
+      return NextResponse.json({ error: '仅系统超级管理员可预分配成员角色', code: 'NO_ROLE_ASSIGN_PERMISSION' }, { status: 403 })
     }
-    const roleValidation = await validateOrgRoleAssignment(roleAssignments, orgId, role_ids)
+    const roleValidation = await validateOrgRoleAssignment(access.assignments, orgId, role_ids)
     if (!roleValidation.ok && roleValidation.reason === 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN') {
       return NextResponse.json({ error: '历史纷享基础角色仅可撤销', code: roleValidation.reason }, { status: 409 })
     }

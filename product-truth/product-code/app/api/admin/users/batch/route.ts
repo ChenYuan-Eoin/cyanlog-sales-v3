@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { canPerformMemberAction } from '@/lib/admin/member-actions'
+import { loadOrganizationPermissionAccess } from '@/lib/admin/member-actions'
 import { ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN } from '@/lib/admin/member-action-keys'
 import { validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
 import { requireAuth } from '@/lib/auth'
 import { canManageSystemAuthorizations, loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
-import { getFreshDefaultOrgId, getFreshUserScopedRoleAssignments } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
 
 const guid = z.guid().transform(id => id.toLowerCase())
@@ -62,11 +61,12 @@ export async function POST(req: NextRequest) {
       if (!validation.ok) return replyError('无法分配所选角色', validation.reason, 403)
       roleIds = validation.roleIds
     } else {
-      orgId = await getFreshDefaultOrgId(actor.id)
+      const access = await loadOrganizationPermissionAccess(actor.id)
+      if (!access) return replyError('当前账号无权执行该操作', 'NO_PERMISSION', 403)
+      orgId = access.orgId
       if (orgId !== request.expected_org_id) return replyError('当前组织已变更', 'ORGANIZATION_CHANGED', 409)
       const action = request.action === 'suspend' ? ORG_MEMBER_MANAGE_LOGIN : ORG_MEMBER_MANAGE_EMPLOYMENT
-      const assignments = await getFreshUserScopedRoleAssignments(actor.id)
-      if (!canPerformMemberAction(assignments, orgId, action)) {
+      if (!access.decision[action]) {
         return replyError('当前账号无权执行该操作', 'NO_PERMISSION', 403)
       }
     }

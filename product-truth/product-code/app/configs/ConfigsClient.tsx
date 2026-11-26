@@ -1047,8 +1047,12 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
       }
       case 'org-structure':
         return [
-          { label: '部门总数', value: countValue(orgSummary?.departments.length ?? 0) },
-          { label: '同步在职', value: countValue(orgSummary?.directory_roster?.status === 'ready' ? orgSummary.directory_roster.members.length : null) },
+          ...(orgSummary?.department_access?.canRead === false ? [] : [
+            { label: '部门总数', value: countValue(orgSummary?.departments.length ?? 0) },
+          ]),
+          ...(orgSummary?.member_access === false ? [] : [
+            { label: '同步在职', value: countValue(orgSummary?.directory_roster?.status === 'ready' ? orgSummary.directory_roster.members.length : null) },
+          ]),
         ]
       case 'role-access':
         return [
@@ -1059,7 +1063,9 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
       default:
         return []
     }
-  }, [activeRoleCount, activeTab, activeTabLoading, error, getConfigsByType, loadedTabs, orgSummary?.departments.length, orgSummary?.directory_roster, products, roleAuthority?.modulePermissionCatalog, rules])
+  }, [activeRoleCount, activeTab, activeTabLoading, error, getConfigsByType, loadedTabs,
+    orgSummary?.department_access?.canRead, orgSummary?.departments.length, orgSummary?.directory_roster,
+    orgSummary?.member_access, products, roleAuthority?.modulePermissionCatalog, rules])
 
   function switchSection(sectionId: ConfigSectionId) {
     const nextSection = visibleSections.find((section) => section.id === sectionId)

@@ -99,6 +99,34 @@ it('restores inherited access with a null override and uses the current base sco
   }))
 })
 
+it('edits an organization point in the same employee permission table using its fixed organization scope', async () => {
+  const key = 'user:view'
+  const noGrant = { key, base: false, effective: false, base_scope: null, effective_scope: null,
+    can_edit: true, override: null, scope_types: ['org'], sources: [] }
+  const override = { effect: 'ALLOW' as const, scope: { type: 'org' as const } }
+  const current = payload(null)
+  const before = { ...current, permissions: [...current.permissions, noGrant], organization_permission_publication: [key] }
+  const after = { ...before, permissions: [...current.permissions, {
+    ...noGrant, effective: true, effective_scope: override.scope, override,
+  }] }
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce(Response.json(before))
+    .mockResolvedValueOnce(Response.json(after))
+    .mockResolvedValueOnce(Response.json(after))
+  vi.stubGlobal('fetch', fetchMock)
+  open()
+  const select = await screen.findByRole('combobox', { name: '查看成员 个人设置' })
+  const row = select.closest('li')!
+  expect(within(row).getByText('最终关闭')).toBeInTheDocument()
+  fireEvent.change(select, { target: { value: 'ALLOW' } })
+  expect(within(row).getByText('数据范围 全组织')).toBeInTheDocument()
+  fireEvent.click(within(row).getByRole('button', { name: '保存查看成员' }))
+  expect(await within(row).findByText('最终开启')).toBeInTheDocument()
+  expect(fetchMock).toHaveBeenNthCalledWith(2, endpoint, expect.objectContaining({
+    method: 'PATCH', body: JSON.stringify({ permission_code: key, expected_override: null, override }),
+  }))
+})
+
 it.each([
   { key: 'shipping:owner_submit', label: '提交本人寄件', scopeType: 'self' as const, scopeLabel: '本人' },
   { key: 'shipping:connection_write', label: '维护顺丰连接', scopeType: 'org' as const, scopeLabel: '全组织' },

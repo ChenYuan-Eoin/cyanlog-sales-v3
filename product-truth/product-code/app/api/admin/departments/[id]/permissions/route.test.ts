@@ -43,6 +43,7 @@ function patch(body: object, headers?: HeadersInit) {
 function setPublished(departmentLedgerPublished: boolean) {
   vi.mocked(loadRoleModulePermissionProjection).mockResolvedValue({
     catalog,
+    organizationEmployeePublication: [],
     publication: { registered: new Set([point, roleOnlyPoint]), published: new Set([point, roleOnlyPoint]), departmentLedgerPublished },
   })
 }

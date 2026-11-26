@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { NextRequest } from 'next/server'
+import { ORGANIZATION_ACTIONS_HEADER, resolveOrganizationPermissionDecision } from '@/lib/admin/employee-organization-permissions'
+import { BUILTIN_PERMISSION_DEFINITIONS } from '@/lib/permission-catalog'
 import { SHIPPING_OWNER_ACTION_KEYS } from '@/lib/shipping/owner-permission-keys'
 import { middleware } from './middleware'
 
@@ -110,6 +112,65 @@ describe('employee shipping permissions', () => {
   })
 })
 
+describe('employee organization permissions', () => {
+  const fixture = { token: 'employee-organization', orgId: 'org-a', settings: { employee_organization_permission_overrides_enabled: true } }
+  const request = (path: string, method = 'GET', forwardedHeaders: Record<string, string> = {}) => middleware(makeRequest(
+    `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${fixture.token}`, ...forwardedHeaders }, method,
+  ))
+  const passThroughHeader = `x-middleware-request-${ORGANIZATION_ACTIONS_HEADER}`
+  const allow = (permission_code: string) => ({ permission_code, effect: 'ALLOW', scope: { type: 'org' } })
+  const deny = (permission_code: string) => ({ permission_code, effect: 'DENY', scope: null })
+
+  it('admits role-free members to organization tools only and removes access on their next request', async () => {
+    mockExactOrgAuth({ ...fixture, roles: [], employeeOverrides: [allow('user:view'), allow('user:manage_login'), allow('role:view')] })
+    expect((await request('/')).headers.get('location')).toBe('https://sales.cyanlog.icu/configs')
+    expect((await request('/configs')).status).toBe(200)
+    expect((await request('/admin/org')).status).toBe(200)
+    expect((await request('/api/admin/org')).status).toBe(200)
+    expect((await request('/api/admin/users/batch', 'POST')).status).toBe(200)
+    expect((await request('/api/roles')).status).toBe(200)
+    expect((await request('/api/roles?view=assignable')).status).toBe(403)
+    expect((await request('/api/quotes')).status).toBe(403)
+    const navigation = await request('/api/navigation')
+    expect(navigation.headers.get('x-middleware-request-x-user-navigation-scope')).toBe('scoped')
+    expect(JSON.parse(navigation.headers.get(passThroughHeader) || '{}')).toMatchObject({
+      'user:view': true, 'user:manage_login': true, 'user:manage_employment': false, 'role:view': true,
+    })
+
+    mockExactOrgAuth({ ...fixture, roles: [], employeeOverrides: [] })
+    expect((await request('/api/admin/org')).status).toBe(403)
+    expect((await request('/configs')).headers.get('location')).toBe('https://sales.cyanlog.icu/pending-access')
+  })
+
+  it('enforces individual denial and dependencies over inherited member, role, and department grants', async () => {
+    const roles = [{ roles: { id: 'org-operations', code: 'OPERATIONS', permissions: ['admin:access', 'user:*', 'dept:*', 'role:view', 'org:write'] } }]
+    mockExactOrgAuth({ ...fixture, roles, employeeOverrides: [deny('user:view')] })
+    expect((await request('/api/admin/org')).status).toBe(200)
+    expect((await request('/api/admin/users')).status).toBe(403)
+    expect((await request('/api/admin/users/batch', 'POST')).status).toBe(403)
+    expect((await request('/api/roles')).status).toBe(403)
+    expect((await request('/api/admin/departments')).status).toBe(200)
+    mockExactOrgAuth({ ...fixture, roles, employeeOverrides: [deny('dept:directory_view')] })
+    expect((await request('/api/admin/org')).status).toBe(200)
+    expect((await request('/api/admin/departments')).status).toBe(403)
+    expect((await request('/api/admin/departments', 'POST')).status).toBe(403)
+  })
+
+  it('replaces incoming projections and leaves the fixed system identity independent of personal records', async () => {
+    const spoofed = { [ORGANIZATION_ACTIONS_HEADER]: JSON.stringify(resolveOrganizationPermissionDecision(['*'])) }
+    mockExactOrgAuth({ ...fixture, roles: [], employeeOverrides: [allow('dept:directory_view')] })
+    const navigation = await request('/api/navigation', 'GET', spoofed)
+    expect(JSON.parse(navigation.headers.get(passThroughHeader) || '{}')).toMatchObject({ 'user:view': false, 'dept:directory_view': true })
+    expect((await request('/api/auth/activity', 'GET', spoofed)).headers.get(passThroughHeader)).toBeNull()
+    expect((await request('/login', 'GET', spoofed)).headers.get(passThroughHeader)).toBeNull()
+    const roles = [{ roles: { id: 'system', code: 'SUPER_ADMIN', permissions: ['*'] } }]
+    mockExactOrgAuth({ ...fixture, roles, employeeOverrides: [deny('user:view'), deny('role:view')] })
+    const rolesPage = await request('/api/roles', 'GET', spoofed)
+    expect(rolesPage.status).toBe(200)
+    expect(rolesPage.headers.get(passThroughHeader)).toBeNull()
+  })
+})
+
 type TestDepartment = { id: string; org_id: string; status: string; leader_id?: string; name?: string; parent_id?: string | null }
 type TestDepartmentAccess = { org_id: string; user_id: string; department_id: string; department: TestDepartment }
 
@@ -209,6 +270,14 @@ function mockExactOrgAuth(options: {
       }])
     }
     if (table === 'permission_points') {
+      if (url.searchParams.get('module_key') === 'eq.config') {
+        const keys = ['user:view', 'user:manage_login', 'dept:directory_view', 'role:view']
+        return Response.json(BUILTIN_PERMISSION_DEFINITIONS.filter(point => keys.includes(point.key)).map(point => ({
+          code: point.key, resource: point.resource, action: point.action, capability_level: point.capabilityLevel,
+          enforcement_consumer: point.enforcementConsumer, dependencies: point.dependencies,
+          supported_scope_types: ['org'], grant_subject_types: ['role'],
+        })))
+      }
       const code = url.searchParams.get('code')?.slice(3)
       if (code?.startsWith('shipping:owner_')) return Response.json([{
         code, kind: 'atomic', category: 'shipping', resource: 'shipping', action: code.slice('shipping:'.length),

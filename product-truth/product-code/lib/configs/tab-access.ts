@@ -1,3 +1,4 @@
+import { readOrganizationPermissionDecision, type OrganizationPermissionDecision } from '@/lib/admin/organization-permission-decision'
 import {
   canReadOrgDepartmentDirectory, canReadRoleDirectory, hasConfigurationReadPermission,
   hasOrganizationSourcePermission, isSystemAuthorizationGrant,
@@ -12,17 +13,20 @@ export interface ConfigsTabAccess {
 }
 
 export function getConfigsTabAccess({
-  permissions, systemAdministrator = false, shippingSettingsView = false,
+  permissions, systemAdministrator = false, shippingSettingsView = false, organizationActions,
 }: {
   permissions: string[]
   systemAdministrator?: boolean
   shippingSettingsView?: boolean
+  organizationActions?: OrganizationPermissionDecision | null
 }): ConfigsTabAccess {
   return {
     general: hasConfigurationReadPermission(permissions),
-    organization: canReadOrgDepartmentDirectory(permissions),
+    organization: organizationActions
+      ? organizationActions['user:view'] || organizationActions['dept:directory_view']
+      : canReadOrgDepartmentDirectory(permissions),
     integrations: hasOrganizationSourcePermission(permissions, systemAdministrator),
-    roles: canReadRoleDirectory(permissions),
+    roles: organizationActions?.['role:view'] ?? canReadRoleDirectory(permissions),
     shipping: shippingSettingsView,
   }
 }
@@ -41,5 +45,6 @@ export function readConfigsTabAccess(
     permissions,
     systemAdministrator: list('x-user-role-codes').some(code => isSystemAuthorizationGrant(code, permissions)),
     shippingSettingsView,
+    organizationActions: readOrganizationPermissionDecision(headers),
   })
 }

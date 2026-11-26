@@ -42,6 +42,7 @@ export interface EmployeePermissionState {
   override: EmployeePermissionOverride
   sources: Array<{ kind: 'role' | 'department'; name: string }>
   can_edit: boolean
+  scope_types?: EmployeeScopeType[]
 }
 
 interface DirectoryTableProps {
@@ -107,7 +108,7 @@ function EmployeePermissionControls({ state, label, employee }: {
   const initialScope = state.override?.scope ?? state.base_scope
   const [chosenScopeType, setChosenScopeType] = useState<EmployeeScopeType | ''>(initialScope?.type ?? '')
   const [ranges, setRanges] = useState<EmployeeDepartmentRanges>(initialScope?.type === 'department' ? initialScope.departments : [])
-  const scopes = employeeScopeTypes.filter(type => employeePermissionAllowsScope(state.key, type))
+  const scopes = state.scope_types ?? employeeScopeTypes.filter(type => employeePermissionAllowsScope(state.key, type))
   const fixedScope = scopes.length === 1 ? scopes[0] : null
   const scopeType = fixedScope ?? (chosenScopeType && scopes.includes(chosenScopeType) ? chosenScopeType : '')
   const scope: EmployeePermissionScope | null = scopeType === 'self' || scopeType === 'org' ? { type: scopeType }
@@ -128,7 +129,8 @@ function EmployeePermissionControls({ state, label, employee }: {
         : '无'}</p>
       {!state.can_edit ? (
         <p className="text-xs text-slate-600">
-          个人设置 {state.override?.effect === 'ALLOW' ? '开启' : state.override?.effect === 'DENY' ? '关闭' : '沿用'}（只读）
+          {state.override?.effect === 'ALLOW' ? '个人开启（只读）'
+            : state.override?.effect === 'DENY' ? '个人关闭（只读）' : '只读'}
         </p>
       ) : (
         <fieldset disabled={employee.disabled} className="space-y-2">
@@ -141,7 +143,7 @@ function EmployeePermissionControls({ state, label, employee }: {
                 value={effect}
                 onChange={event => setEffect(event.currentTarget.value as 'ALLOW' | 'DENY' | '')}
               >
-                <option value="">沿用</option>
+                <option value="">恢复基础授权</option>
                 <option value="ALLOW" disabled={!canSetOverride}>开启</option>
                 <option value="DENY" disabled={!canSetOverride}>关闭</option>
               </select>
@@ -362,19 +364,18 @@ export function PermissionSettingTable(props: GrantTableProps | EmployeeTablePro
               {items.map(item => {
                 if (employee) {
                   const state = employee.permissions.get(item.key)
+                  if (!state) return null
                   return (
                     <li key={item.key} className="space-y-1 py-2.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-medium text-slate-900">{item.label}</span>
                         {item.capabilityLevel && <Badge variant="outline">{item.capabilityLevel}</Badge>}
-                        {state ? <>
-                          <Badge variant="outline">基础{state.base ? '开启' : '关闭'}</Badge>
-                          <Badge variant={state.effective ? 'secondary' : 'outline'}>最终{state.effective ? '开启' : '关闭'}</Badge>
-                        </> : <Badge variant="outline">个人设置待接入</Badge>}
+                        <Badge variant="outline">基础{state.base ? '开启' : '关闭'}</Badge>
+                        <Badge variant={state.effective ? 'secondary' : 'outline'}>最终{state.effective ? '开启' : '关闭'}</Badge>
                       </div>
                       <div className="text-xs text-slate-500">{item.description}</div>
-                      {state && <EmployeePermissionControls key={JSON.stringify([state.override, state.base_scope])}
-                        state={state} label={item.label} employee={employee} />}
+                      <EmployeePermissionControls key={JSON.stringify([state.override, state.base_scope])}
+                        state={state} label={item.label} employee={employee} />
                     </li>
                   )
                 }

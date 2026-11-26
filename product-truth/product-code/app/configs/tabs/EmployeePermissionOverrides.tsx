@@ -29,9 +29,11 @@ const snapshotSchema = z.object({
     base_scope: scope.nullable(), effective_scope: scope.nullable(), override: overrideSchema,
     sources: z.array(z.object({ kind: z.enum(['role', 'department']), name: z.string() })),
     can_edit: z.boolean(),
+    scope_types: z.array(z.enum(['self', 'org', 'department'])).optional(),
   })),
   departments: z.array(z.object({ id: z.string(), name: z.string(), parent_id: z.string().nullable() })),
   shipping_permission_publication: z.object({ registered: z.array(z.string()), published: z.array(z.string()) }),
+  organization_permission_publication: z.array(z.string()).optional(),
   permission_catalog: z.array(z.unknown()).optional(),
 })
 type Snapshot = z.infer<typeof snapshotSchema>
@@ -87,11 +89,11 @@ export function EmployeePermissionReview({ orgId, userId, change = '角色分配
   if (review?.orgId !== orgId || review.userId !== userId || review.count === 0) return null
   return review.count === null ? (
     <p role="status" className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
-      暂时无法核对该员工的寄件个人设置。
+      暂时无法核对该员工的个人权限设置。
     </p>
   ) : (
     <p role="status" className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
-      此员工有 {review.count} 项寄件个人设置。保存{change}后，个人设置仍覆盖对应权限点及数据范围。
+      此员工有 {review.count} 项个人权限设置。保存{change}后，个人设置仍覆盖对应权限点及数据范围。
     </p>
   )
 }
@@ -115,7 +117,10 @@ export function EmployeePermissionOverrides({ orgId, userId, userName, onClose }
   const employee = useMemo(() => {
     if (!snapshot) return null
     const registered = new Set(snapshot.shipping_permission_publication.registered)
-    const published = new Set(snapshot.shipping_permission_publication.published.filter(key => registered.has(key)))
+    const published = new Set([
+      ...snapshot.shipping_permission_publication.published.filter(key => registered.has(key)),
+      ...(snapshot.organization_permission_publication ?? []),
+    ])
     return {
       permissions: new Map(snapshot.permissions.map(item => [item.key, item])),
       departments: snapshot.departments,
@@ -215,7 +220,7 @@ export function EmployeePermissionOverrides({ orgId, userId, userName, onClose }
         </div>}
         {!loading && employee && <PermissionSettingTable
           groups={employee.groups}
-          description="选择「沿用」并保存可清除个人设置，恢复当前部门和角色计算出的权限。"
+          description="选择「恢复基础授权」并保存可清除该项个人设置。"
           employee={{ ...employee, disabled: saving || reloadRequired, onChange: save }}
         />}
       </DialogContent>

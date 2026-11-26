@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getRequestAuthToken } from '@/lib/auth-token'
+import { ORGANIZATION_ACTIONS_HEADER, readOrganizationPermissionDecision } from '@/lib/admin/organization-permission-decision'
 import { canManageSystemAuthorizations, queryOrgRoles } from '@/lib/org-role-permissions'
 import { getConfigsTabAccess, hasConfigsTabAccess } from '@/lib/configs/tab-access'
 import {
@@ -23,7 +24,9 @@ export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
     const token = getRequestAuthToken(req)
+    const forwardedOrgId = req.headers.get('x-user-id') === user.id ? req.headers.get('x-org-id') : null
     const fresh = req.nextUrl.searchParams.get('fresh') === '1'
+      || (forwardedOrgId !== null && req.headers.has(ORGANIZATION_ACTIONS_HEADER))
     const [scopedAssignments, orgId, userResult, sessionResult] = await Promise.all([
       (fresh ? getFreshUserScopedRoleAssignments : getUserScopedRoleAssignments)(user.id),
       (fresh ? getFreshDefaultOrgId : getDefaultOrgId)(user.id),
@@ -41,6 +44,7 @@ export async function GET(req: NextRequest) {
     }
 
     const organizationRoles = getOrgScopedAssignments(scopedAssignments, orgId)
+    const organizationActions = forwardedOrgId === orgId ? readOrganizationPermissionDecision(req.headers) : null
     const roleIds = [...new Set(organizationRoles.map(assignment => assignment.roleId))]
     const names = new Map<string, string>()
     if (roleIds.length) {
@@ -60,11 +64,14 @@ export async function GET(req: NextRequest) {
         ...userRow,
         roles,
         scopedRoles: scopedAssignments,
-        canManageOrg: canManageOrg(scopedAssignments, orgId),
+        canManageOrg: organizationActions
+          ? organizationActions['user:view'] || organizationActions['dept:directory_view']
+          : canManageOrg(scopedAssignments, orgId),
         canViewConfigs: hasConfigsTabAccess(getConfigsTabAccess({
           permissions: organizationRoles.flatMap(assignment => assignment.permissions),
           systemAdministrator: canManageSystemAuthorizations(organizationRoles, orgId),
           shippingSettingsView: req.headers.get('x-user-shipping-settings-view') === '1',
+          organizationActions,
         })),
         authMethod: sessionResult.data?.user_id === user.id ? sessionResult.data.auth_method : null,
       },

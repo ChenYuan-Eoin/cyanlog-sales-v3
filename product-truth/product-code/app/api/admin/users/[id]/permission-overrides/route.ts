@@ -1,14 +1,15 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { isOrganizationEmployeePermissionKey, organizationEmployeePermissionKeys } from '@/lib/admin/employee-organization-permissions'
 import { AuthError, requireAuth } from '@/lib/auth'
 import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
 import type { AsyncRouteParams } from '@/lib/route-params'
 import { employeePermissionAllowsScope, employeeShippingPermissionKeys } from '@/lib/shipping/employee-permission-scope'
-import { loadEmployeeShippingPermissionTable } from '@/lib/shipping/entry-access'
+import { loadEmployeePermissionTable } from '@/lib/shipping/entry-access'
 import { supabaseAdmin } from '@/lib/supabase'
 
 const idSchema = z.guid().transform(id => id.toLowerCase())
-const permissionCodeSchema = z.enum(employeeShippingPermissionKeys)
+const permissionCodeSchema = z.enum([...employeeShippingPermissionKeys, ...organizationEmployeePermissionKeys])
 const departmentSelectorsSchema = z.array(z.strictObject({
   department_id: idSchema,
   include_subdepartments: z.boolean(),
@@ -29,7 +30,8 @@ type PermissionCode = z.infer<typeof permissionCodeSchema>
 type Override = z.infer<typeof overrideSchema>
 
 function supportsScope(key: PermissionCode, override: Override): boolean {
-  return override?.effect !== 'ALLOW' || employeePermissionAllowsScope(key, override.scope.type)
+  return override?.effect !== 'ALLOW' || (isOrganizationEmployeePermissionKey(key)
+    ? override.scope.type === 'org' : employeePermissionAllowsScope(key, override.scope.type))
 }
 
 const patchSchema = z.strictObject({
@@ -90,18 +92,23 @@ async function handle(req: NextRequest, { params }: AsyncRouteParams, write: boo
       change = parsed.data
     }
 
-    const snapshot = await loadEmployeeShippingPermissionTable(userId.data, orgId.data)
+    const snapshot = await loadEmployeePermissionTable(userId.data, orgId.data)
     if (!snapshot) return failure('P0002')
     if (!change) return json({ org_id: orgId.data, user_id: userId.data, ...snapshot })
 
     const point = snapshot.permissions.find(permission => permission.key === change.permission_code)
     if (!point) return failure('23514')
-    if (change.override !== null && !snapshot.shipping_permission_publication.published.includes(change.permission_code)) {
+    const organizationAction = isOrganizationEmployeePermissionKey(change.permission_code)
+    const published = organizationAction
+      ? snapshot.organization_permission_publication
+      : snapshot.shipping_permission_publication.published
+    if (change.override !== null && !published.includes(change.permission_code)) {
       return failure('23514')
     }
     if (!point.can_edit) return failure('42501', 'EMPLOYEE_PERMISSION_OVERRIDE_PROTECTED')
 
-    const { data, error } = await supabaseAdmin.rpc('admin_set_employee_permission_override_v1', {
+    const { data, error } = await supabaseAdmin.rpc(organizationAction
+      ? 'admin_set_employee_org_permission_override_v1' : 'admin_set_employee_permission_override_v1', {
       p_actor_id: actor.id,
       p_org_id: orgId.data,
       p_user_id: userId.data,
@@ -112,7 +119,7 @@ async function handle(req: NextRequest, { params }: AsyncRouteParams, write: boo
     if (error) return failure(error.code, error.details)
     if (!matchesOverride(data, change.override)) return failure()
 
-    const updated = await loadEmployeeShippingPermissionTable(userId.data, orgId.data)
+    const updated = await loadEmployeePermissionTable(userId.data, orgId.data)
     if (!updated) return failure('P0002')
     const saved = updated.permissions.find(permission => permission.key === change.permission_code)
     if (!matchesOverride(saved?.override, change.override)) return failure('40001')

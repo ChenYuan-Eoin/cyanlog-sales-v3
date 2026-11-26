@@ -2,21 +2,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/auth', () => ({ requireAuth: vi.fn() }))
-vi.mock('@/lib/scoped-access', () => ({
-  canMutateOrgUsers: vi.fn(),
-  getFreshDefaultOrgId: vi.fn(),
-  getFreshUserScopedRoleAssignments: vi.fn(),
+vi.mock('@/lib/org-role-permissions', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/org-role-permissions')>(),
+  loadCurrentOrganizationRoleAssignments: vi.fn(),
 }))
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: { rpc: vi.fn() },
 }))
 
 import { requireAuth } from '@/lib/auth'
-import {
-  canMutateOrgUsers,
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
+import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import { supabaseAdmin } from '@/lib/supabase'
 import { DELETE } from './route'
 
@@ -40,9 +35,9 @@ describe('/api/admin/users/[id]/membership', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: actorId })
-    ;(getFreshDefaultOrgId as any).mockResolvedValue(orgId)
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue([])
-    ;(canMutateOrgUsers as any).mockReturnValue(true)
+
+    ;(loadCurrentOrganizationRoleAssignments as any).mockResolvedValue({ orgId: orgId, settings: {}, assignments: [{ scopeType: 'org', scopeId: orgId, permissions: ['org:write'] }] })
+
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
   })
 
@@ -67,16 +62,16 @@ describe('/api/admin/users/[id]/membership', () => {
   })
 
   it('distinguishes removing membership from managing employment', async () => {
-    ;(canMutateOrgUsers as any).mockReturnValue(false)
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValueOnce([
-      { scopeType: 'org', scopeId: orgId, permissions: ['user:manage_employment'] },
-    ])
+
+    ;(loadCurrentOrganizationRoleAssignments as any).mockResolvedValueOnce({ orgId, settings: {}, assignments: [
+      { scopeType: 'org', scopeId: orgId, permissions: ['user:view', 'user:manage_employment'] },
+    ] })
     expect((await DELETE(request(), context)).status).toBe(403)
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
 
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValueOnce([
-      { scopeType: 'org', scopeId: orgId, permissions: ['user:remove_membership'] },
-    ])
+    ;(loadCurrentOrganizationRoleAssignments as any).mockResolvedValueOnce({ orgId, settings: {}, assignments: [
+      { scopeType: 'org', scopeId: orgId, permissions: ['user:view', 'user:remove_membership'] },
+    ] })
     expect((await DELETE(request(), context)).status).toBe(200)
     expect(supabaseAdmin.rpc).toHaveBeenCalledOnce()
   })

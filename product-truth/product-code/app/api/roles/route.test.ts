@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: vi.fn(), rpc: vi.fn() } }))
 vi.mock('@/lib/auth', () => ({ requireAuth: vi.fn(async () => ({ id: 'user-1' })) }))
+vi.mock('@/lib/middleware-rest-client', () => ({ createMiddlewareRestClient: vi.fn(), readMiddlewareRpcRows: vi.fn() }))
 import { supabaseAdmin } from '@/lib/supabase'
+import { createMiddlewareRestClient, readMiddlewareRpcRows } from '@/lib/middleware-rest-client'
+import { BUILTIN_PERMISSION_DEFINITIONS } from '@/lib/permission-catalog'
 import { ROLE_PERMISSION_PROJECTION_KEYS } from '@/lib/permission-registry'
 import { GET, POST } from './route'
 import { DELETE, PATCH } from './[id]/metadata/route'
@@ -83,6 +86,33 @@ describe('GET /api/roles organization permissions', () => {
     expect(res.status).toBe(403)
     expect((await res.json()).error.code).toBe('A002')
     expect(supabaseAdmin.from).not.toHaveBeenCalledWith('roles')
+  })
+
+  it('读取个人生效权限和成员查看依赖，同时保留系统专用分配入口', async () => {
+    const settings = { employee_organization_permission_overrides_enabled: true }
+    const currentDefinition = BUILTIN_PERMISSION_DEFINITIONS.filter(point => ['user:view', 'role:view'].includes(point.key))
+      .map(point => ({
+        code: point.key, resource: point.resource, action: point.action, capability_level: point.capabilityLevel,
+        enforcement_consumer: point.enforcementConsumer, dependencies: point.dependencies,
+        supported_scope_types: ['org'], grant_subject_types: ['role'],
+      }))
+    vi.mocked(createMiddlewareRestClient).mockReturnValue({
+      selectRows: vi.fn().mockResolvedValue(currentDefinition),
+    })
+    vi.mocked(readMiddlewareRpcRows).mockResolvedValue([
+      { permission_code: 'user:view', effect: 'DENY', scope: null },
+    ])
+    database({ settings })
+    expect((await GET(makeRequest())).status).toBe(403)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalledWith('admin_list_org_roles_v1', expect.anything(), expect.anything())
+
+    vi.mocked(readMiddlewareRpcRows).mockResolvedValue(currentDefinition.map(({ code }) => ({
+      permission_code: code, effect: 'ALLOW', scope: { type: 'org' },
+    })))
+    database({ assignments: [], settings })
+    expect((await GET(makeRequest())).status).toBe(200)
+    expect((await GET(makeRequest('https://example.test/api/roles?view=assignable'))).status).toBe(403)
+    expect(readMiddlewareRpcRows).toHaveBeenCalledWith('employee_permission_overrides_v1', { p_org_id: 'org-1', p_user_id: 'user-1' })
   })
 
   it.each([['config:read'], ['role:view'], ['user:view']])(

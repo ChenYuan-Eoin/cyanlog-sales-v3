@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import {
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
-import { canPerformMemberAction } from '@/lib/admin/member-actions'
+import { loadOrganizationPermissionAccess } from '@/lib/admin/member-actions'
 import { ORG_MEMBER_MANAGE_EMPLOYMENT } from '@/lib/admin/member-action-keys'
 
 export async function POST(
@@ -15,11 +11,11 @@ export async function POST(
   try {
     const { id } = await params
     const currentUser = await requireAuth(req)
-    const orgId = await getFreshDefaultOrgId(currentUser.id)
-    const assignments = await getFreshUserScopedRoleAssignments(currentUser.id)
-    if (!canPerformMemberAction(assignments, orgId, ORG_MEMBER_MANAGE_EMPLOYMENT)) {
+    const access = await loadOrganizationPermissionAccess(currentUser.id)
+    if (!access?.decision[ORG_MEMBER_MANAGE_EMPLOYMENT]) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
+    const { orgId } = access
     if (id === currentUser.id) {
       return NextResponse.json({
         error: '不能通过管理接口恢复自己的成员关系',

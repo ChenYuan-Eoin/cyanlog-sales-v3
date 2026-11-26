@@ -5,13 +5,6 @@ vi.mock('@/lib/auth', () => ({
   requireAuth: vi.fn(),
 }))
 
-vi.mock('@/lib/scoped-access', () => ({
-  canMutateOrgDepartments: vi.fn(),
-  canMutateOrgUsers: vi.fn(),
-  getFreshDefaultOrgId: vi.fn(),
-  getFreshUserScopedRoleAssignments: vi.fn(),
-}))
-
 vi.mock('@/lib/admin/org-membership', async importOriginal => ({
   ...await importOriginal<typeof import('@/lib/admin/org-membership')>(),
   assertDepartmentInOrg: vi.fn(),
@@ -26,7 +19,9 @@ vi.mock('@/lib/fxiaoke/identity', () => ({
 vi.mock('@/lib/org-role-permissions', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/lib/org-role-permissions')>(),
   loadCurrentOrganizationRoleAssignments: vi.fn(),
+  queryOrgRoles: vi.fn(),
 }))
+vi.mock('@/lib/middleware-rest-client', () => ({ readMiddlewareRpcRows: vi.fn() }))
 
 vi.mock('@/lib/admin/org-role-authority', () => ({
   validateOrgRoleAssignment: vi.fn(),
@@ -40,32 +35,29 @@ vi.mock('@/lib/supabase', () => ({
 
 import { requireAuth } from '@/lib/auth'
 import {
-  canMutateOrgDepartments,
-  canMutateOrgUsers,
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
-import {
   assertDepartmentInOrg,
   ensureDefaultOrganizationMembership,
   initializePrimaryDepartmentMembership,
   syncUserSalesSpaces,
 } from '@/lib/admin/org-membership'
 import { validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
-import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
+import { loadCurrentOrganizationRoleAssignments, queryOrgRoles } from '@/lib/org-role-permissions'
+import { readMiddlewareRpcRows } from '@/lib/middleware-rest-client'
 import type { ScopedRoleAssignment } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
-import { POST } from './route'
+import { GET, POST } from './route'
 
 const orgId = 'org-1'
 const userId = '11111111-1111-4111-8111-111111111111'
 const primaryDepartmentId = '22222222-2222-4222-8222-222222222222'
-const freshAssignments = [{ scopeType: 'org', scopeId: orgId, roleCode: 'ADMIN' }]
 const systemGrant: ScopedRoleAssignment = {
   roleId: userId, roleCode: 'SUPER_ADMIN', roleName: 'System administrator', grantedAt: null,
-  scopeType: 'org', scopeId: orgId, permissions: ['role:manage'],
+  scopeType: 'org', scopeId: orgId, permissions: ['*'],
 }
 const activeAuthority = { orgId, settings: {}, assignments: [systemGrant] }
+function roleContext(permissions: string[]) {
+  return { orgId, settings: {}, assignments: [{ ...systemGrant, roleCode: 'ADMIN', permissions }] }
+}
 
 function makeRequest(overrides: Record<string, unknown> = {}): any {
   return new Request('https://example.test/api/admin/users', {
@@ -90,7 +82,7 @@ function malformedJsonRequest(): any {
 
 function makeQuery(result: { data?: unknown; error?: unknown }) {
   const query: any = {}
-  ;['select', 'insert', 'update', 'delete', 'eq'].forEach((method) => {
+  ;['select', 'insert', 'update', 'delete', 'eq', 'neq', 'order'].forEach((method) => {
     query[method] = vi.fn().mockReturnValue(query)
   })
   query.maybeSingle = vi.fn().mockResolvedValue(result)
@@ -100,6 +92,34 @@ function makeQuery(result: { data?: unknown; error?: unknown }) {
   )
   return query
 }
+
+it('direct member list preserves allowed member data without department details or filtering after explicit denial', async () => {
+  vi.clearAllMocks()
+  vi.mocked(requireAuth).mockResolvedValue({ id: 'staff' } as never)
+  vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({
+    ...roleContext(['org:write']), settings: { employee_organization_permission_overrides_enabled: true },
+  })
+  vi.mocked(readMiddlewareRpcRows).mockResolvedValue([
+    { permission_code: 'dept:directory_view', effect: 'DENY', scope: null },
+  ])
+  const url = 'https://example.test/api/admin/users'
+  const filtered = await GET(new Request(`${url}?dept_id=${primaryDepartmentId}`) as any)
+  expect(filtered.status).toBe(403)
+  expect(supabaseAdmin.from).not.toHaveBeenCalled()
+
+  const users = makeQuery({ data: [{ id: userId, display_name: '成员', primary_dept_id: primaryDepartmentId,
+    departments: { name: '受限部门' }, user_roles: [] }], error: null })
+  vi.mocked(supabaseAdmin.from).mockReturnValue(users)
+  vi.mocked(queryOrgRoles).mockReturnValue(makeQuery({ data: [], error: null }))
+  const response = await GET(new Request(url) as any)
+  expect(response.status).toBe(200)
+  const body = await response.json()
+  expect(body.data[0]).toMatchObject({ id: userId, display_name: '成员' })
+  expect(body.data[0]).not.toHaveProperty('departments')
+  expect(body.data[0]).not.toHaveProperty('primary_dept_id')
+  expect(users.eq).toHaveBeenCalledWith('user_roles.scope_type', 'org')
+  expect(users.eq).toHaveBeenCalledWith('user_roles.scope_id', orgId)
+})
 
 function mockSuccessfulUserInsert() {
   const duplicateLookup = makeQuery({ data: null, error: null })
@@ -131,11 +151,11 @@ describe('POST /api/admin/users', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: 'admin-user' })
-    ;(getFreshDefaultOrgId as any).mockResolvedValue(orgId)
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue(freshAssignments)
-    ;(canMutateOrgUsers as any).mockReturnValue(true)
-    ;(canMutateOrgDepartments as any).mockReturnValue(true)
-    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(null)
+
+
+
+
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(roleContext(['org:write']))
     ;(validateOrgRoleAssignment as any).mockResolvedValue({ ok: true, roleIds: [] })
     ;(assertDepartmentInOrg as any).mockResolvedValue({ id: primaryDepartmentId })
     ;(ensureDefaultOrganizationMembership as any).mockResolvedValue(undefined)
@@ -149,33 +169,34 @@ describe('POST /api/admin/users', () => {
 
     expect(res.status).toBe(400)
     expect(body.code).toBe('VALIDATION_ERROR')
-    expect(getFreshDefaultOrgId).toHaveBeenCalledWith('admin-user')
-    expect(getFreshUserScopedRoleAssignments).toHaveBeenCalledWith('admin-user')
+    expect(loadCurrentOrganizationRoleAssignments).toHaveBeenCalledWith('admin-user')
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
   it('没有当前组织用户写权限时在解析 body 前拒绝', async () => {
-    ;(canMutateOrgUsers as any).mockReturnValue(false)
+
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(roleContext(['user:view']))
     const json = vi.fn().mockResolvedValue({})
 
     const res = await POST({ json } as any)
 
     expect(res.status).toBe(403)
-    expect(canMutateOrgUsers).toHaveBeenCalledWith(freshAssignments, orgId)
+
     expect(json).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
   it('主部门权限不属于当前组织时在部门查询和插入前拒绝', async () => {
-    ;(canMutateOrgDepartments as any).mockReturnValue(false)
 
+
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(roleContext(['user:write']))
     const res = await POST(makeRequest({ primary_dept_id: primaryDepartmentId }))
     const body = await res.json()
 
     expect(res.status).toBe(403)
     expect(body.code).toBe('NO_DEPARTMENT_PERMISSION')
-    expect(canMutateOrgUsers).toHaveBeenCalledWith(freshAssignments, orgId)
-    expect(canMutateOrgDepartments).toHaveBeenCalledWith(freshAssignments, orgId)
+
+
     expect(validateOrgRoleAssignment).not.toHaveBeenCalled()
     expect(assertDepartmentInOrg).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
@@ -187,7 +208,7 @@ describe('POST /api/admin/users', () => {
     const res = await POST(makeRequest())
 
     expect(res.status).toBe(201)
-    expect(canMutateOrgDepartments).not.toHaveBeenCalled()
+
     expect(assertDepartmentInOrg).not.toHaveBeenCalled()
     expect(initializePrimaryDepartmentMembership).not.toHaveBeenCalled()
     expect(syncUserSalesSpaces).not.toHaveBeenCalled()
@@ -207,10 +228,8 @@ describe('POST /api/admin/users', () => {
   })
 
   it('新增成员授权可以创建待激活邀请，但不能借邀请预分配角色', async () => {
-    ;(canMutateOrgUsers as any).mockReturnValue(false)
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue([
-      { scopeType: 'org', scopeId: orgId, permissions: ['user:invite'] },
-    ])
+
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(roleContext(['user:view', 'user:invite']))
     const forbidden = await POST(makeRequest({ role_ids: [userId] }))
     expect(forbidden.status).toBe(403)
     expect((await forbidden.json()).code).toBe('NO_ROLE_ASSIGN_PERMISSION')
@@ -220,12 +239,12 @@ describe('POST /api/admin/users', () => {
     vi.mocked(loadCurrentOrganizationRoleAssignments).mockClear()
     mockSuccessfulUserInsert()
     expect((await POST(makeRequest())).status).toBe(201)
-    expect(loadCurrentOrganizationRoleAssignments).not.toHaveBeenCalled()
+    expect(loadCurrentOrganizationRoleAssignments).toHaveBeenCalledOnce()
   })
 
   it.each(['ADMIN', 'CUSTOM', 'ORG_SUPER_ADMIN'])('rejects invitation role assignments by %s', async (roleCode) => {
     vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({
-      ...activeAuthority, assignments: [{ ...systemGrant, roleCode, permissions: ['user:assign_roles', 'role:manage'] }],
+      ...activeAuthority, assignments: [{ ...systemGrant, roleCode, permissions: ['user:view', 'user:invite', 'user:assign_roles', 'role:manage'] }],
     })
     const response = await POST(makeRequest({ role_ids: [userId] }))
     expect(response.status).toBe(403)
@@ -238,7 +257,7 @@ describe('POST /api/admin/users', () => {
     vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({ ...activeAuthority, orgId: 'other-org' })
     const response = await POST(makeRequest({ role_ids: [userId] }))
     expect(response.status).toBe(403)
-    expect(await response.json()).toMatchObject({ code: 'NO_ROLE_ASSIGN_PERMISSION' })
+    expect(await response.json()).toMatchObject({ code: 'NO_PERMISSION' })
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 

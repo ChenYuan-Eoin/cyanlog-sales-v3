@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import {
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
-import { canPerformMemberAction } from '@/lib/admin/member-actions'
+import { loadOrganizationPermissionAccess } from '@/lib/admin/member-actions'
 import { ORG_MEMBER_REMOVE_MEMBERSHIP } from '@/lib/admin/member-action-keys'
 
 export async function DELETE(
@@ -14,11 +10,11 @@ export async function DELETE(
 ) {
   try {
     const actor = await requireAuth(req)
-    const orgId = await getFreshDefaultOrgId(actor.id)
-    const assignments = await getFreshUserScopedRoleAssignments(actor.id)
-    if (!canPerformMemberAction(assignments, orgId, ORG_MEMBER_REMOVE_MEMBERSHIP)) {
+    const access = await loadOrganizationPermissionAccess(actor.id)
+    if (!access?.decision[ORG_MEMBER_REMOVE_MEMBERSHIP]) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
+    const { orgId } = access
 
     const { id } = await params
     if (id === actor.id) {

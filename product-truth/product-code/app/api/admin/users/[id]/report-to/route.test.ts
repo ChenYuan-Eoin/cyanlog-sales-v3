@@ -3,10 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/auth', () => ({ requireAuth: vi.fn() }))
 
-vi.mock('@/lib/scoped-access', () => ({
-  canMutateOrgUsers: vi.fn(),
-  getDefaultOrgId: vi.fn(),
-  getFreshUserScopedRoleAssignments: vi.fn(),
+vi.mock('@/lib/org-role-permissions', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/org-role-permissions')>(),
+  loadCurrentOrganizationRoleAssignments: vi.fn(),
 }))
 
 vi.mock('@/lib/admin/org-role-authority', () => ({
@@ -21,11 +20,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { requireAuth } from '@/lib/auth'
-import {
-  canMutateOrgUsers,
-  getDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
+import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
 import { supabaseAdmin } from '@/lib/supabase'
 import { PATCH } from './route'
@@ -63,11 +58,11 @@ describe('/api/admin/users/[id]/report-to', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: actorId })
-    ;(getDefaultOrgId as any).mockResolvedValue(orgId)
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue([
+
+    ;(loadCurrentOrganizationRoleAssignments as any).mockResolvedValue({ orgId: orgId, settings: {}, assignments: [
       { scopeType: 'org', scopeId: orgId, roleCode: 'ADMIN', permissions: ['user:write'] },
-    ])
-    ;(canMutateOrgUsers as any).mockReturnValue(true)
+    ] })
+
     ;(userHasOrgRoleCode as any).mockResolvedValue(false)
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
   })
@@ -86,14 +81,13 @@ describe('/api/admin/users/[id]/report-to', () => {
     const assignments = [
       { scopeType: 'org', scopeId: orgId, roleCode: 'SALES_OPS', permissions: [] },
     ]
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue(assignments)
-    ;(canMutateOrgUsers as any).mockReturnValue(false)
+    ;(loadCurrentOrganizationRoleAssignments as any).mockResolvedValue({ orgId: orgId, settings: {}, assignments: assignments })
 
     const response = await PATCH(makeRequest(managerId), routeContext)
 
     expect(response.status).toBe(403)
-    expect(getFreshUserScopedRoleAssignments).toHaveBeenCalledWith(actorId)
-    expect(canMutateOrgUsers).toHaveBeenCalledWith(assignments, orgId)
+    expect(loadCurrentOrganizationRoleAssignments).toHaveBeenCalledWith(actorId)
+
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 

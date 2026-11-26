@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ORGANIZATION_ACTIONS_HEADER, resolveOrganizationPermissionDecision } from '@/lib/admin/organization-permission-decision'
 import { getConfigsTabAccess, hasConfigsTabAccess, readConfigsTabAccess } from './tab-access'
 
 describe('configuration center tab admission', () => {
@@ -19,6 +20,21 @@ describe('configuration center tab admission', () => {
     expect(hasConfigsTabAccess(getConfigsTabAccess({ permissions: ['shipping:settings_view'] }))).toBe(false)
     expect(getConfigsTabAccess({ permissions: [], shippingSettingsView: true })).toEqual({
       general: false, organization: false, integrations: false, roles: false, shipping: true,
+    })
+  })
+
+  it('uses the exact employee organization result for only the organization and roles tabs', () => {
+    const headers = new Headers({
+      'x-user-permissions': 'org:write,dept:write,role:view,config:read',
+      [ORGANIZATION_ACTIONS_HEADER]: JSON.stringify(resolveOrganizationPermissionDecision([])),
+    })
+    expect(readConfigsTabAccess(headers, true)).toEqual({
+      general: true, organization: false, roles: false, integrations: false, shipping: true,
+    })
+    headers.set('x-user-permissions', '')
+    headers.set(ORGANIZATION_ACTIONS_HEADER, JSON.stringify(resolveOrganizationPermissionDecision(['user:view', 'role:view'])))
+    expect(readConfigsTabAccess(headers)).toEqual({
+      general: false, organization: true, roles: true, integrations: false, shipping: false,
     })
   })
 })

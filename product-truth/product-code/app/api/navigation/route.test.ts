@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { AuthError, requireAuth } from '@/lib/auth'
+import { ORGANIZATION_ACTIONS_HEADER, resolveOrganizationPermissionDecision } from '@/lib/admin/organization-permission-decision'
 import { resolveShippingEntry } from '@/lib/shipping/entry-access'
 import { GET } from './route'
 
@@ -77,6 +78,28 @@ it('shows configuration for an available organization tab independently from shi
   })
   const response = await GET(request({ 'x-user-permissions': 'dept:directory_view' }))
   expect(await response.json()).toEqual({ paths: ['/configs'] })
+})
+
+it('projects an organization-only employee authorization and removes only that entry when denied', async () => {
+  vi.mocked(resolveShippingEntry).mockResolvedValue({
+    orgId: 'org1', canOperate: false, canViewOwn: false, canSubmitOwn: false, canManageConnections: false,
+    canReadLegacyReceipt: false, permissions: [], ownerPermissions: [],
+  })
+  const granted = await GET(request({
+    'x-user-navigation-scope': 'scoped',
+    [ORGANIZATION_ACTIONS_HEADER]: JSON.stringify(resolveOrganizationPermissionDecision(['user:view'])),
+  }))
+  expect(await granted.json()).toEqual({ paths: ['/configs'], onlyProjectedPaths: true })
+  vi.mocked(resolveShippingEntry).mockResolvedValue({
+    orgId: 'org1', canOperate: true, canViewOwn: false, canSubmitOwn: false, canManageConnections: false,
+    canReadLegacyReceipt: false, permissions: ['shipping:ledger_view'], ownerPermissions: [],
+  })
+  const denied = await GET(request({
+    'x-user-navigation-scope': 'scoped',
+    'x-user-permissions': 'org:write,dept:write,user:*,role:view,shipping:ledger_view',
+    [ORGANIZATION_ACTIONS_HEADER]: JSON.stringify(resolveOrganizationPermissionDecision([])),
+  }))
+  expect(await denied.json()).toEqual({ paths: ['/shipping'], onlyProjectedPaths: true })
 })
 
 it.each([

@@ -29,6 +29,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { canAccessOrgAdmin } from '@/lib/permissions'
+import { ORGANIZATION_ACTIONS_HEADER, resolveOrganizationPermissionDecision } from '@/lib/admin/employee-organization-permissions'
 import { loadOrgRolePermissionContext, queryOrgRoles } from '@/lib/org-role-permissions'
 import { getFreshDefaultOrgId } from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -330,6 +331,35 @@ describe('GET /api/admin/org', () => {
       member_actions: { edit: false, invite: false, assignRoles: false },
     })
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it('保留成员查看时，个人关闭部门目录也不会从组织聚合返回部门信息', async () => {
+    const actor = { id: 'u-1', display_name: '在职成员', primary_dept_id: 'd-1', primary_dept_name: '受限部门',
+      department_ids: ['d-1'], secondary_dept_names: ['受限部门'], role_names: '管理员, 配置人员(受限部门)',
+      scoped_roles: [
+        { scopeType: 'org', scopeId: 'org-1', roleName: '管理员' },
+        { scopeType: 'department', scopeId: 'd-1', scopeName: '受限部门', roleName: '配置人员' },
+      ] }
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: { organization: { id: 'org-1' }, users: [actor], roles: [], departments: [{ id: 'd-1', name: '受限部门' }],
+        spaces: [{ id: 'hidden-space', department_id: 'd-1' }] }, error: null,
+    } as never)
+    const request = makeRequest()
+    request.headers.set(ORGANIZATION_ACTIONS_HEADER, JSON.stringify(resolveOrganizationPermissionDecision(['org:write'],
+      new Map([['dept:directory_view', { effect: 'DENY', scope: null }]]))))
+
+    const response = await GET(request)
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body).toMatchObject({
+      member_access: true, member_actions: { edit: true, manageDepartments: false },
+      department_access: { canRead: false, canEdit: false, canDelete: false },
+      departments: [], spaces: [], department_spaces: [],
+      users: [{ id: 'u-1', display_name: '在职成员', primary_dept_id: null, department_ids: [], role_names: '管理员',
+        scoped_roles: [{ scopeType: 'org', scopeId: 'org-1', roleName: '管理员' }] }],
+    })
+    expect(JSON.stringify(body)).not.toContain('受限部门')
+    expect(JSON.stringify(body)).not.toContain('hidden-space')
   })
 
   it('显式空授权角色不能回退到原 SUPER_ADMIN 身份重新获得访问', async () => {

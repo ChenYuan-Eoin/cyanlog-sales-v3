@@ -1,5 +1,10 @@
 import type { AuthUser } from '@/lib/auth'
 import {
+  loadEmployeeOrganizationPermissionOverrides, organizationEmployeePermissionKeys,
+  resolveOrganizationPermissionDecision, selectActiveOrganizationOverrides,
+} from '@/lib/admin/employee-organization-permissions'
+import { hasConfigurationReadPermission, hasPermission } from '@/lib/permissions'
+import {
   getEffectiveOwnerShippingPermissions, getEffectiveShippingPermissions, hasShippingPermission,
   SHIPPING_RECORD_RETURN, type ShippingPermissionKey,
 } from '@/lib/module-access'
@@ -8,7 +13,7 @@ import { loadRoleModulePermissionProjection, loadShippingModulePermissionState }
 import { supabaseAdmin } from '@/lib/supabase'
 import { createMiddlewareRestClient } from '@/lib/middleware-rest-client'
 import { DEPARTMENT_LEDGER_VIEW, loadAuthorizedLedgerDepartments, loadDepartmentLedgerScope, type LedgerDepartment } from './department-ledger-access'
-import { isEmployeeTeamPermission } from './employee-permission-scope'
+import { isEmployeeTeamPermission, type EmployeePermissionScope } from './employee-permission-scope'
 import { isShippingOwnerPermission } from './owner-permission-keys'
 import {
   displayEmployeeTeamPermissionScope, effectiveEmployeeOwnerShippingPermissions, effectiveOrganizationShippingPermissions,
@@ -26,6 +31,10 @@ type PublishedShippingAccess = {
 }
 
 type DepartmentOptions = 'none' | 'scoped' | 'all'
+type EmployeePermissionTableRow = Omit<EmployeeShippingPermissionRow, 'key'> & {
+  key: string
+  scope_types?: EmployeePermissionScope['type'][]
+}
 
 async function loadShippingAuthorization(userId: string) {
   const [context, publication] = await Promise.all([
@@ -85,17 +94,31 @@ export async function loadShippingLedgerAccess(userId: string, filterByDepartmen
   return organizationWide || departments.length ? { ...access, departments } : null
 }
 
-export async function loadEmployeeShippingPermissionTable(userId: string, orgId: string) {
-  const [context, { publication, catalog }] = await Promise.all([
+function readOnlyOrganizationCapabilities(permissions: string[], systemAdministrator: boolean) {
+  const sourceWrites = ['org:source_connect', 'org:source_preview', 'org:source_apply'] as const
+  const viewSource = systemAdministrator || permissions.includes('org:source_view')
+    || sourceWrites.some(key => permissions.includes(key))
+  return {
+    'config:read': hasConfigurationReadPermission(permissions),
+    'config:write': hasPermission(permissions, 'config:write'),
+    'config:publish': hasPermission(permissions, 'config:publish'),
+    'org:source_view': viewSource,
+    ...Object.fromEntries(sourceWrites.map(key => [key, systemAdministrator || permissions.includes(key)])),
+  } as Record<string, boolean>
+}
+
+export async function loadEmployeePermissionTable(userId: string, orgId: string) {
+  const [context, { publication, catalog, organizationEmployeePublication }] = await Promise.all([
     loadCurrentOrganizationRoleAssignments(userId), loadRoleModulePermissionProjection(),
   ])
   if (!context || context.orgId !== orgId) return null
 
   const protectedAccount = context.assignments.some(assignment => assignment.roleCode === 'SUPER_ADMIN')
-  const [employee, availableDepartments, account] = await Promise.all([
+  const [employee, availableDepartments, account, organizationOverrides] = await Promise.all([
     loadEmployeeShippingState(orgId, userId),
     loadAuthorizedLedgerDepartments(createMiddlewareRestClient(), orgId),
     supabaseAdmin.from('users').select('id,status,login_enabled').eq('id', userId).maybeSingle(),
+    loadEmployeeOrganizationPermissionOverrides(orgId, userId),
   ])
   if (account.error) throw account.error
   if (!account.data || account.data.id !== userId || account.data.status !== 'active' || account.data.login_enabled !== true) return null
@@ -130,11 +153,46 @@ export async function loadEmployeeShippingPermissionTable(userId: string, orgId:
     return { key, base: base_scope !== null, effective: effective_scope !== null, base_scope, effective_scope, override, can_edit,
       sources: scope.base_sources ?? [] }
   })
+  const publishedOrganizationSet = new Set(organizationEmployeePublication)
+  const effectiveOrganizationOverrides = selectActiveOrganizationOverrides(organizationOverrides, publishedOrganizationSet)
+  const baseOrganizationActions = resolveOrganizationPermissionDecision(organizationGrants)
+  const organizationActions = protectedAccount ? baseOrganizationActions
+    : resolveOrganizationPermissionDecision(organizationGrants, effectiveOrganizationOverrides)
+  const readOnlyOrganizationActions = readOnlyOrganizationCapabilities(organizationGrants, protectedAccount)
+  const readOnlySources = context.assignments.map(assignment => ({
+    name: assignment.roleName,
+    decision: readOnlyOrganizationCapabilities(assignment.permissions, assignment.roleCode === 'SUPER_ADMIN'),
+  }))
+  const orgScope = { type: 'org' } as const
+  const scopeTypes: EmployeePermissionScope['type'][] = ['org']
+  const organizationRows = organizationEmployeePermissionKeys.map<EmployeePermissionTableRow>(key => ({
+    key,
+    base: baseOrganizationActions[key],
+    effective: organizationActions[key],
+    base_scope: baseOrganizationActions[key] ? orgScope : null,
+    effective_scope: organizationActions[key] ? orgScope : null,
+    override: protectedAccount ? null : organizationOverrides.get(key) ?? null,
+    can_edit: !protectedAccount && (publishedOrganizationSet.has(key) || organizationOverrides.has(key)),
+    scope_types: scopeTypes,
+    sources: context.assignments.filter(assignment => baseOrganizationActions[key]
+      && resolveOrganizationPermissionDecision([
+        ...assignment.permissions,
+        ...(key === 'role:view' && baseOrganizationActions['user:view'] ? ['user:view'] : []),
+        ...((key === 'dept:edit_structure' || key === 'dept:delete_structure')
+          && baseOrganizationActions['dept:directory_view'] ? ['dept:directory_view'] : []),
+      ])[key])
+      .map(assignment => ({ kind: 'role' as const, name: assignment.roleName })),
+  }))
   return {
-    permissions,
+    permissions: [...permissions, ...organizationRows, ...Object.entries(readOnlyOrganizationActions).map<EmployeePermissionTableRow>(([key, enabled]) => ({
+      key, base: enabled, effective: enabled, base_scope: enabled ? orgScope : null, effective_scope: enabled ? orgScope : null,
+      override: null, can_edit: false,
+      sources: readOnlySources.filter(source => source.decision[key]).map(source => ({ kind: 'role', name: source.name })),
+    }))],
     departments: availableDepartments.map(({ id, name, parentId }) => ({ id, name, parent_id: parentId })),
     permission_catalog: catalog,
     shipping_permission_publication: { registered: [...publication.registered], published: [...publication.published] },
+    organization_permission_publication: organizationEmployeePublication,
   }
 }
 

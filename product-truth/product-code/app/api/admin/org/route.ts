@@ -8,17 +8,11 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { buildDepartmentSpaces } from '@/lib/department-spaces'
 import { readDirectoryRosterSource, verifyDirectoryRoster } from '@/lib/organization-directory-roster'
-import { canAccessOrgAdmin } from '@/lib/permissions'
+import { readOrganizationPermissionDecision, resolveOrganizationPermissionDecision } from '@/lib/admin/employee-organization-permissions'
 import { loadOrgRolePermissionContext, queryOrgRoles } from '@/lib/org-role-permissions'
-import { getMemberActionAvailability, getScopedMemberActionAvailability, type MemberActionAvailability } from '@/lib/admin/member-actions'
-import { evaluateDepartmentStructureAccess, getDepartmentStructureAccess } from '@/lib/admin/department-actions'
-import {
-  canManageOrg,
-  getFreshDefaultOrgId,
-  getOrgRoleCodes,
-  getFreshUserScopedRoleAssignments,
-  type ScopeType,
-} from '@/lib/scoped-access'
+import { getMemberActionAvailability, loadOrganizationPermissionAccess, type MemberActionAvailability } from '@/lib/admin/member-actions'
+import { evaluateDepartmentStructureAccess } from '@/lib/admin/department-actions'
+import type { ScopeType } from '@/lib/scoped-access'
 
 type RoleLookup = {
   id: string
@@ -51,9 +45,7 @@ type OrgUserIdRow = {
 }
 
 type OrgContext = {
-  user: { id: string }
   orgId: string
-  roleCodes: string[]
   memberAccess: boolean
   memberActions: MemberActionAvailability
   departmentAccess: ReturnType<typeof evaluateDepartmentStructureAccess>
@@ -65,6 +57,25 @@ type OrgAdminPayload = {
   departments: Parameters<typeof buildDepartmentSpaces>[0]
   roles: unknown[]
   spaces: Parameters<typeof buildDepartmentSpaces>[1]
+}
+
+function hideDepartmentMembership(user: unknown) {
+  if (!user || typeof user !== 'object') return user
+  const member = user as Record<string, unknown>
+  const scopedRoles = Array.isArray(member.scoped_roles)
+    ? member.scoped_roles.filter(role => role?.scopeType === 'org')
+    : []
+  return {
+    ...member,
+    primary_dept_id: null,
+    primary_dept_name: '',
+    department_ids: [],
+    secondary_dept_names: [],
+    scoped_roles: scopedRoles,
+    role_ids: scopedRoles.map(role => role.roleId).filter(id => typeof id === 'string'),
+    role_codes: scopedRoles.map(role => role.roleCode).filter(code => typeof code === 'string'),
+    role_names: scopedRoles.map(role => role.roleName).filter(name => typeof name === 'string').join(', '),
+  }
 }
 
 type TimingEntry = {
@@ -293,17 +304,16 @@ async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
       .filter(Boolean)
 
     const assignRoles = await canAssignOrganizationRoles(headerUserId, headerOrgId, roleCodes)
-    const memberActions = getMemberActionAvailability(permissions, assignRoles)
-    const memberAccess = canAccessOrgAdmin(permissions)
-    const departmentAccess = evaluateDepartmentStructureAccess(permissions)
+    const decision = readOrganizationPermissionDecision(req.headers) ?? resolveOrganizationPermissionDecision(permissions)
+    const memberActions = getMemberActionAvailability(decision, assignRoles)
+    const memberAccess = decision['user:view']
+    const departmentAccess = evaluateDepartmentStructureAccess(decision)
     if (!memberAccess && !departmentAccess.canRead) return null
 
     return {
-      user: { id: headerUserId },
       // Middleware resolves permissions and org from the same exact-org DB
       // snapshot. Do not mix those permissions with a separately cached org.
       orgId: headerOrgId,
-      roleCodes,
       memberAccess,
       memberActions,
       departmentAccess,
@@ -311,26 +321,15 @@ async function requireOrgAdmin(req: NextRequest): Promise<OrgContext | null> {
   }
 
   const user = await requireAuth(req)
-  const [assignments, orgId] = await Promise.all([
-    getFreshUserScopedRoleAssignments(user.id),
-    getFreshDefaultOrgId(user.id),
-  ])
-  if (!orgId) return null
-  const roleCodes = getOrgRoleCodes(assignments, orgId)
-  const assignRoles = await canAssignOrganizationRoles(user.id, orgId, roleCodes)
-  const memberActions = getScopedMemberActionAvailability(assignments, orgId, assignRoles)
-  const memberAccess = canManageOrg(assignments, orgId)
-  const departmentAccess = getDepartmentStructureAccess(assignments, orgId)
+  const access = await loadOrganizationPermissionAccess(user.id)
+  if (!access) return null
+  const { orgId, decision, systemAdministrator } = access
+  const memberActions = getMemberActionAvailability(decision, systemAdministrator)
+  const memberAccess = decision['user:view']
+  const departmentAccess = evaluateDepartmentStructureAccess(decision)
   if (!memberAccess && !departmentAccess.canRead) return null
 
-  return {
-    user,
-    orgId,
-    roleCodes,
-    memberAccess,
-    memberActions,
-    departmentAccess,
-  }
+  return { orgId, memberAccess, memberActions, departmentAccess }
 }
 
 // 优化后的列表查询 - 使用缓存和简化查询
@@ -545,13 +544,21 @@ export async function GET(req: NextRequest) {
       verifyDirectoryRoster(auth.orgId, directorySource, data),
       readRoleMembershipBasis(auth.orgId, payloadSource, data.organization),
     ])
+    const canReadDepartments = auth.departmentAccess.canRead
+    const org = data.organization as Record<string, unknown> | null
     return NextResponse.json({
       ...data,
-      department_spaces: buildDepartmentSpaces(data.departments, data.spaces),
+      organization: org ? { id: org.id, name: org.name, slug: org.slug } : undefined,
+      users: canReadDepartments ? data.users : data.users.map(hideDepartmentMembership),
+      departments: canReadDepartments ? data.departments : [],
+      spaces: canReadDepartments ? data.spaces : [],
+      department_spaces: canReadDepartments ? buildDepartmentSpaces(data.departments, data.spaces) : [],
       directory_roster: directoryRoster.status === 'ready'
-        ? { ...directoryRoster, members: directoryRoster.members.map(({ id, departmentIds }) => ({ id, departmentIds })) }
+        ? { ...directoryRoster, members: directoryRoster.members.map(({ id, departmentIds }) => ({
+          id, departmentIds: canReadDepartments ? departmentIds : [],
+        })) }
         : directoryRoster,
-      role_membership_stats: roleMembershipBasis,
+      role_membership_stats: canReadDepartments ? roleMembershipBasis : { ...roleMembershipBasis, activeSpaceIds: [] },
       member_access: true,
       member_actions: auth.memberActions,
       department_access: auth.departmentAccess,

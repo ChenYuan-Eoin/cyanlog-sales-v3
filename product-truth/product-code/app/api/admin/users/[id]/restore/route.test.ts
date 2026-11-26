@@ -2,21 +2,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/auth', () => ({ requireAuth: vi.fn() }))
-vi.mock('@/lib/scoped-access', () => ({
-  canMutateOrgUsers: vi.fn(),
-  getFreshDefaultOrgId: vi.fn(),
-  getFreshUserScopedRoleAssignments: vi.fn(),
+vi.mock('@/lib/org-role-permissions', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/org-role-permissions')>(),
+  loadCurrentOrganizationRoleAssignments: vi.fn(),
 }))
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: { rpc: vi.fn() },
 }))
 
 import { requireAuth } from '@/lib/auth'
-import {
-  canMutateOrgUsers,
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
+import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import { supabaseAdmin } from '@/lib/supabase'
 import { POST } from './route'
 
@@ -39,16 +34,17 @@ describe('POST /api/admin/users/[id]/restore', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: actorId })
-    ;(getFreshDefaultOrgId as any).mockResolvedValue(orgId)
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue([
+
+    ;(loadCurrentOrganizationRoleAssignments as any).mockResolvedValue({ orgId: orgId, settings: {}, assignments: [
       { scopeType: 'org', scopeId: orgId, roleCode: 'ADMIN', permissions: ['user:write'] },
-    ])
-    ;(canMutateOrgUsers as any).mockReturnValue(true)
+    ] })
+
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
   })
 
   it('requires current organization user-write authority', async () => {
-    ;(canMutateOrgUsers as any).mockReturnValue(false)
+
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(null)
     const response = await POST(request(), { params: Promise.resolve({ id: targetId }) } as any)
     expect(response.status).toBe(403)
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
@@ -71,16 +67,16 @@ describe('POST /api/admin/users/[id]/restore', () => {
 
   it('allows explicit employment authority to restore an account, separate from login authority', async () => {
     const context = { params: Promise.resolve({ id: targetId }) }
-    ;(canMutateOrgUsers as any).mockReturnValue(false)
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValueOnce([
-      { scopeType: 'org', scopeId: orgId, permissions: ['user:manage_login'] },
-    ])
+
+    ;(loadCurrentOrganizationRoleAssignments as any).mockResolvedValueOnce({ orgId, settings: {}, assignments: [
+      { scopeType: 'org', scopeId: orgId, permissions: ['user:view', 'user:manage_login'] },
+    ] })
     expect((await POST(request(), context)).status).toBe(403)
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
 
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValueOnce([
-      { scopeType: 'org', scopeId: orgId, permissions: ['user:manage_employment'] },
-    ])
+    ;(loadCurrentOrganizationRoleAssignments as any).mockResolvedValueOnce({ orgId, settings: {}, assignments: [
+      { scopeType: 'org', scopeId: orgId, permissions: ['user:view', 'user:manage_employment'] },
+    ] })
     const response = await POST(request(), context)
     expect(response.status).toBe(200)
     expect((await response.json()).data.login_enabled).toBe(false)

@@ -6,12 +6,8 @@ import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { assertDepartmentInOrg, DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN } from '@/lib/admin/org-membership'
-import {
-  getDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
-import { canPerformMemberAction } from '@/lib/admin/member-actions'
-import { ORG_MEMBER_EDIT } from '@/lib/permissions'
+import { loadOrganizationPermissionAccess } from '@/lib/admin/member-actions'
+import { ORG_DEPARTMENT_DIRECTORY_VIEW, ORG_MEMBER_EDIT } from '@/lib/permissions'
 
 const uuidSchema = z.string().regex(/^[0-9a-f-]{36}$/i, '部门 ID 格式不正确')
 
@@ -35,12 +31,11 @@ export async function POST(
   try {
     const { id: userId } = await params
     const currentUser = await requireAuth(req)
-    const orgId = await getDefaultOrgId(currentUser.id)
-    const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
-
-    if (!canPerformMemberAction(actorAssignments, orgId, ORG_MEMBER_EDIT)) {
+    const access = await loadOrganizationPermissionAccess(currentUser.id)
+    if (!access?.decision[ORG_MEMBER_EDIT] || !access.decision[ORG_DEPARTMENT_DIRECTORY_VIEW]) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
+    const { orgId } = access
 
     const parseResult = addDepartmentsSchema.safeParse(await req.json().catch(() => null))
     if (!parseResult.success) {
@@ -115,12 +110,11 @@ export async function DELETE(
   try {
     const { id: userId } = await params
     const currentUser = await requireAuth(req)
-    const orgId = await getDefaultOrgId(currentUser.id)
-    const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
-
-    if (!canPerformMemberAction(actorAssignments, orgId, ORG_MEMBER_EDIT)) {
+    const access = await loadOrganizationPermissionAccess(currentUser.id)
+    if (!access?.decision[ORG_MEMBER_EDIT] || !access.decision[ORG_DEPARTMENT_DIRECTORY_VIEW]) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
+    const { orgId } = access
 
     const url = new URL(req.url)
     const deptIdFromQuery = url.searchParams.get('department_id')

@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase'
+import { isPublishedOrganizationEmployeePermission } from '@/lib/admin/employee-organization-permissions'
 import { getShippingPermissionPublication, REGISTERED_MODULE_PERMISSION_KEYS } from '@/lib/module-access'
 import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
 import {
@@ -337,6 +338,7 @@ export async function loadRoleModulePermissionProjection() {
   return {
     publication,
     catalog: buildPermissionCatalog(definitions, { includeUnavailable: true }),
+    organizationEmployeePublication: definitions.filter(isPublishedOrganizationEmployeePermission).map(point => point.key),
   }
 }
 

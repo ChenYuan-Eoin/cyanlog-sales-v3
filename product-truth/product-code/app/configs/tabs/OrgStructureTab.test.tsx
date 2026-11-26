@@ -290,6 +290,21 @@ const directAssociationPayload: OrgSummaryPayload = {
   ],
 }
 
+it('keeps the member list visible when a previously selected department is withdrawn', () => {
+  const view = render(<OrgStructureTab orgSummary={statusPayload} currentUserId="actor" />)
+  fireEvent.click(screen.getByRole('button', { name: /^销售父部门/ }))
+  expect(screen.getByLabelText('部门成员范围')).toBeInTheDocument()
+
+  view.rerender(<OrgStructureTab orgSummary={{
+    ...statusPayload,
+    department_access: { canRead: false, canEdit: false, canDelete: false },
+  }} currentUserId="actor" />)
+  expect(screen.getByText('在职待登录甲')).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: '部门结构' })).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('部门成员范围')).not.toBeInTheDocument()
+  expect(screen.queryByText('销售子部门')).not.toBeInTheDocument()
+})
+
 it('shows direct member associations separately from zero synchronized employees and clears search only on the shortcut', () => {
   render(<OrgStructureTab orgSummary={directAssociationPayload} currentUserId="actor" />)
   const search = screen.getByPlaceholderText('搜索姓名、邮箱、职位...')

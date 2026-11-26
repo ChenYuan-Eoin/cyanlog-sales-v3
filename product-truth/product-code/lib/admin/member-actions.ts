@@ -1,46 +1,37 @@
-import { hasLegacyDepartmentStructureWrite, hasLegacyOrgMemberWrite, hasPermission, ORG_MEMBER_EDIT } from '@/lib/permissions'
-import { canMutateOrgUsers, type ScopedRoleAssignment } from '@/lib/scoped-access'
+import { canManageSystemAuthorizations, loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
+import { ORG_DEPARTMENT_STRUCTURE_EDIT, ORG_MEMBER_EDIT } from '@/lib/permissions'
 import {
-  ORG_MEMBER_INVITE, ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN,
-  ORG_MEMBER_REMOVE_MEMBERSHIP, type ORG_MEMBER_LIFECYCLE_ACTIONS,
+  loadEmployeeOrganizationPermissionDecision, resolveOrganizationPermissionDecision, type OrganizationPermissionDecision,
+} from './employee-organization-permissions'
+import {
+  ORG_MEMBER_INVITE, ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_REMOVE_MEMBERSHIP,
 } from './member-action-keys'
 
-type MemberAction =
-  | typeof ORG_MEMBER_EDIT
-  | typeof ORG_MEMBER_LIFECYCLE_ACTIONS[number]
-
-export function getMemberActionAvailability(permissions: string[], assignRoles = false) {
-  const legacyWrite = hasLegacyOrgMemberWrite(permissions)
+export function getMemberActionAvailability(decision: OrganizationPermissionDecision, assignRoles = false) {
   return {
-    edit: legacyWrite || hasPermission(permissions, ORG_MEMBER_EDIT),
+    edit: decision[ORG_MEMBER_EDIT],
     assignRoles,
-    invite: legacyWrite || hasPermission(permissions, ORG_MEMBER_INVITE),
-    manageLogin: legacyWrite || hasPermission(permissions, ORG_MEMBER_MANAGE_LOGIN),
-    manageEmployment: legacyWrite || hasPermission(permissions, ORG_MEMBER_MANAGE_EMPLOYMENT),
-    removeMembership: legacyWrite || hasPermission(permissions, ORG_MEMBER_REMOVE_MEMBERSHIP),
-    manageDepartments: hasLegacyDepartmentStructureWrite(permissions),
+    invite: decision[ORG_MEMBER_INVITE],
+    manageLogin: decision[ORG_MEMBER_MANAGE_LOGIN],
+    manageEmployment: decision[ORG_MEMBER_MANAGE_EMPLOYMENT],
+    removeMembership: decision[ORG_MEMBER_REMOVE_MEMBERSHIP],
+    manageDepartments: decision[ORG_DEPARTMENT_STRUCTURE_EDIT],
     bindExternalIdentity: assignRoles,
   }
 }
 
 export type MemberActionAvailability = ReturnType<typeof getMemberActionAvailability>
 
-export function getScopedMemberActionAvailability(assignments: ScopedRoleAssignment[], orgId: string, assignRoles = false): MemberActionAvailability {
-  const organizationRoles = assignments.filter(assignment => assignment.scopeType === 'org' && assignment.scopeId === orgId)
-  return getMemberActionAvailability(
-    organizationRoles.flatMap(assignment => assignment.permissions ?? []),
-    assignRoles,
-  )
-}
-
-/** Explicit legacy write keys remain supported alongside individual member actions. */
-export function canPerformMemberAction(
-  assignments: ScopedRoleAssignment[],
-  orgId: string,
-  action: MemberAction,
-): boolean {
-  return canMutateOrgUsers(assignments, orgId) || assignments.some(assignment =>
-    assignment.scopeType === 'org' && assignment.scopeId === orgId
-    && hasPermission(assignment.permissions ?? [], action)
-  )
+/** Read the actor's exact current organization again before a privileged API action. */
+export async function loadOrganizationPermissionAccess(userId: string) {
+  const context = await loadCurrentOrganizationRoleAssignments(userId)
+  if (!context) return null
+  const { orgId, settings, assignments } = context
+  const permissions = assignments
+    .filter(assignment => assignment.scopeType === 'org' && assignment.scopeId === orgId)
+    .flatMap(assignment => assignment.permissions)
+  const systemAdministrator = canManageSystemAuthorizations(assignments, orgId)
+  const decision = await loadEmployeeOrganizationPermissionDecision(permissions, { orgId, userId, settings, systemAdministrator })
+    ?? resolveOrganizationPermissionDecision(permissions)
+  return { orgId, assignments, systemAdministrator, decision }
 }

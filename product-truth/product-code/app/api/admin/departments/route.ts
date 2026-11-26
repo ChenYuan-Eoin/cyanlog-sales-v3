@@ -7,6 +7,8 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { loadDepartmentStructureContext } from '@/lib/admin/department-actions'
 
+const DEPARTMENT_STRUCTURE_FIELDS = 'id, name, code, depth, parent_id, sort_order'
+const DEPARTMENT_FULL_FIELDS = 'id, name, code, depth, parent_id, sort_order, member_count, leader_id'
 const uuidSchema = z.string().regex(/^[0-9a-f-]{36}$/i, 'ID 格式不正确')
 const createDepartmentSchema = z.object({
   name: z.string().trim().min(1, '部门名称不能为空').max(80, '部门名称不能超过 80 字'),
@@ -46,14 +48,17 @@ async function assertUserInOrg(orgId: string, userId: string | null | undefined)
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const { orgId, canRead } = await loadDepartmentStructureContext(user.id)
-    if (!canRead) {
+    const access = await loadDepartmentStructureContext(user.id)
+    if (!access?.canRead) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
+    const { orgId, memberAccess } = access
+    const fields = memberAccess ? DEPARTMENT_FULL_FIELDS : DEPARTMENT_STRUCTURE_FIELDS
+
     const { data: departments, error } = await supabaseAdmin
       .from('departments')
-      .select('id, name, code, depth, member_count, parent_id, leader_id, sort_order, status')
+      .select(fields + ', status')
       .eq('org_id', orgId)
       .eq('status', 'active')
       .order('depth', { ascending: true })
@@ -81,8 +86,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth(req)
-    const { orgId, canEdit } = await loadDepartmentStructureContext(user.id)
-    if (!canEdit) {
+    const access = await loadDepartmentStructureContext(user.id)
+    if (!access?.canEdit) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
 
@@ -91,6 +96,11 @@ export async function POST(req: NextRequest) {
       return validationError(parseResult.error)
     }
     const { name, code, parent_id, leader_id } = parseResult.data
+    const { orgId, memberAccess } = access
+    if (leader_id && !memberAccess) {
+      return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
+    }
+    const fields = memberAccess ? DEPARTMENT_FULL_FIELDS : DEPARTMENT_STRUCTURE_FIELDS
 
     // 检查 code 唯一性
     const { data: existing } = await supabaseAdmin
@@ -141,7 +151,7 @@ export async function POST(req: NextRequest) {
         status: 'active',
         source: 'manual',
       })
-      .select('id, name, code, depth, member_count, parent_id, leader_id, sort_order')
+      .select(fields)
       .single()
 
     if (error) {

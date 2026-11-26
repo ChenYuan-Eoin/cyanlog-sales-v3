@@ -495,7 +495,7 @@ function DepartmentTree({
 
 interface MemberTableProps {
   users: OrgSummaryUser[]
-  departments: OrgSummaryDepartment[]
+  canReadDepartments: boolean
   currentUserId: string | null
   actions: MemberActionAvailability
   batchOrgId?: string
@@ -512,7 +512,7 @@ interface MemberTableProps {
 const memberPageSize = 10
 
 function MemberTable({
-  users, currentUserId, actions, batchOrgId, batchScope, batchRoles,
+  users, canReadDepartments, currentUserId, actions, batchOrgId, batchScope, batchRoles,
   onEditUser, onAssignRole, systemAdminOrgIdForUser, onOpenEmployeePermissions, onBindIdentity, onRefresh,
 }: MemberTableProps) {
   const [globalFilter, setGlobalFilter] = useState('')
@@ -525,10 +525,11 @@ function MemberTable({
   // 使用 Fuse.js 进行模糊搜索
   const fuse = useMemo(() => {
     return new Fuse(users, {
-      keys: ['display_name', 'email', 'title', 'primary_dept_name', 'secondary_dept_names', 'directory_external_id', 'role_names'],
+      keys: ['display_name', 'email', 'title', 'directory_external_id', 'role_names',
+        ...(canReadDepartments ? ['primary_dept_name', 'secondary_dept_names'] : [])],
       threshold: 0.4,
     })
-  }, [users])
+  }, [canReadDepartments, users])
 
   // 根据搜索关键词过滤
   const filteredUsers = useMemo(() => {
@@ -912,7 +913,10 @@ function MemberTable({
   ], [currentUserId, actions, onEditUser, onAssignRole, systemAdminOrgIdForUser, onOpenEmployeePermissions, onBindIdentity, onRefresh])
 
   const columns = useMemo<ColumnDef<OrgSummaryUser>[]>(() => {
-    if (!allowSelection) return dataColumns
+    const visibleColumns = canReadDepartments
+      ? dataColumns
+      : dataColumns.filter(column => !('accessorKey' in column && column.accessorKey === 'primary_dept_name'))
+    if (!allowSelection) return visibleColumns
     const fullSelection = selectedMembers.length > 0 && selectedMembers.length === membersInScope.size
     return [{
       id: 'member_selection',
@@ -938,8 +942,8 @@ function MemberTable({
           onCheckedChange={checked => toggleMember(row.original.id, checked === true)}
         />
       ),
-    }, ...dataColumns]
-  }, [allowSelection, clearSelection, dataColumns, membersInScope, selectedMembers.length, selection, selectionScope, toggleMember])
+    }, ...visibleColumns]
+  }, [allowSelection, canReadDepartments, clearSelection, dataColumns, membersInScope, selectedMembers.length, selection, selectionScope, toggleMember])
 
   const table = useReactTable({
     data: filteredUsers,
@@ -1067,14 +1071,18 @@ export default function OrgStructureTab({
   onRefresh,
   onOpenIntegrations,
 }: OrgStructureTabProps) {
-  const departments = useMemo(() => orgSummary?.departments ?? [], [orgSummary?.departments])
+  const departmentAccess = orgSummary?.department_access
+  const canReadDepartments = departmentAccess?.canRead !== false
+  const departments = useMemo(() => canReadDepartments ? orgSummary?.departments ?? [] : [],
+    [canReadDepartments, orgSummary?.departments])
   const users = useMemo(() => orgSummary?.users ?? [], [orgSummary?.users])
   const departmentTree = useMemo(() => buildDepartmentOptions(departments), [departments])
   const shippingDepartments = useMemo(() => departmentTree.map(department => ({
     id: department.department_id, name: department.name, parentId: department.parent_department_id,
   })), [departmentTree])
   const orgDepartmentIds = useMemo(() => departmentTree.map(department => department.department_id), [departmentTree])
-  const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null)
+  const [storedSelectedDeptId, setSelectedDeptId] = useState<string | null>(null)
+  const selectedDeptId = canReadDepartments ? storedSelectedDeptId : null
   const [includeSubdepartments, setIncludeSubdepartments] = useState(true)
   const [employmentFilter, setEmploymentFilter] = useState<MemberFilter>('synced')
   const [memberTableVersion, setMemberTableVersion] = useState(0)
@@ -1156,7 +1164,6 @@ export default function OrgStructureTab({
   const [bindingUser, setBindingUser] = useState<OrgSummaryUser | null>(null)
 
   const actions = orgSummary?.member_actions ?? unavailableMemberActions
-  const departmentAccess = orgSummary?.department_access
   const canEditDepartments = departmentAccess?.canEdit ?? actions.manageDepartments
   const canDeleteDepartments = departmentAccess?.canDelete ?? actions.manageDepartments
   const isEmptyState = departments.length === 0 && users.length === 0
@@ -1173,6 +1180,10 @@ export default function OrgStructureTab({
   const latestAssignmentUser = assignment ? users.find(user => user.id === assignment.user.id) : undefined
   const departmentAssignmentRestricted = assignment?.systemAdmin === true
     || Boolean(orgId && latestAssignmentUser && userHasSystemAdminAssignment(latestAssignmentUser, orgId))
+
+  useEffect(() => {
+    if (!canReadDepartments) setSelectedDeptId(null)
+  }, [canReadDepartments])
 
   useEffect(() => {
     setAssignmentDraft(draft => draft && (draft.orgId !== orgId || draft.actorId !== currentUserId || !actions.assignRoles)
@@ -1207,7 +1218,7 @@ export default function OrgStructureTab({
       {/* 顶部统计和操作 */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-wrap gap-2">
-          <StatCard icon={<BuildingIcon size={18} />} label="部门" value={stats.deptCount} />
+          {canReadDepartments && <StatCard icon={<BuildingIcon size={18} />} label="部门" value={stats.deptCount} />}
           <StatCard icon={<UsersIcon size={18} />} label={`${MEMBER_FILTER_LABELS[employmentFilter]}成员`} value={countsUnavailable ? '—' : stats.userCount} />
         </div>
         <div className="text-sm text-slate-500">
@@ -1241,9 +1252,10 @@ export default function OrgStructureTab({
       )}
 
       {/* 三栏布局 */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)_300px]">
+      <div className={`grid grid-cols-1 gap-4 ${canReadDepartments
+        ? 'xl:grid-cols-[280px_minmax(0,1fr)_300px]' : 'xl:grid-cols-[minmax(0,1fr)_300px]'}`}>
         {/* 左侧部门树 */}
-        <div className="min-w-0">
+        {canReadDepartments && <div className="min-w-0">
           <div className="rounded-lg border bg-white">
             <div className="border-b px-4 py-3">
               <h3 className="font-medium text-slate-900">部门结构</h3>
@@ -1281,7 +1293,7 @@ export default function OrgStructureTab({
               />
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* 中间成员列表 */}
         <div className="min-w-0 space-y-4">
@@ -1336,7 +1348,7 @@ export default function OrgStructureTab({
               ) : <MemberTable
                 key={memberTableVersion}
                 users={filteredUsers}
-                departments={departments}
+                canReadDepartments={canReadDepartments}
                 currentUserId={currentUserId}
                 actions={actions}
                 batchOrgId={orgId}
@@ -1387,7 +1399,7 @@ export default function OrgStructureTab({
               />
             </div>
           )}
-          {currentUserId && orgSummary?.organization?.id && (
+          {canReadDepartments && currentUserId && orgSummary?.organization?.id && (
             <ShippingDepartmentAuthorization
               key={JSON.stringify([orgSummary.organization.id, currentUserId])}
               orgId={orgSummary.organization.id}
@@ -1445,7 +1457,8 @@ export default function OrgStructureTab({
             }
           />}
           {actions.invite && <UserFormDialog
-            departments={actions.manageDepartments ? departments : []}
+            departments={departments}
+            canSelectDepartment={canEditDepartments}
             roles={actions.assignRoles ? orgSummary?.roles ?? [] : []}
             onSubmit={async (values) => {
               const res = await fetch('/api/admin/users', {
@@ -1485,10 +1498,10 @@ export default function OrgStructureTab({
           <div className="rounded-lg border bg-white p-4">
             <h3 className="font-medium text-slate-900">当前上下文</h3>
             <div className="mt-4 space-y-3 text-sm">
-              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+              {canReadDepartments && <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                 <span className="text-slate-500">部门</span>
                 <span className="font-medium text-slate-900">{selectedDept?.name || allMembersLabel}</span>
-              </div>
+              </div>}
               <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                 <span className="text-slate-500">筛选成员</span>
                 <span className="font-semibold text-slate-900">{countsUnavailable ? '—' : stats.filteredCount}</span>
@@ -1505,6 +1518,7 @@ export default function OrgStructureTab({
       {editingUser && actions.edit && (
         <UserFormDialog
           departments={departments}
+          canSelectDepartment={canReadDepartments}
           editingUser={editingUser}
           employeePermissionOrgId={currentUserId && actions.assignRoles && isEmployeePermissionTarget(editingUser) ? orgId : undefined}
           open={true}

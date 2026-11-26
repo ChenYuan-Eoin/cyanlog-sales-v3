@@ -10,10 +10,9 @@ vi.mock('@/lib/admin/org-membership', async importOriginal => ({
   assertDepartmentInOrg: vi.fn(),
 }))
 
-vi.mock('@/lib/scoped-access', () => ({
-  canMutateOrgUsers: vi.fn(),
-  getDefaultOrgId: vi.fn(),
-  getFreshUserScopedRoleAssignments: vi.fn(),
+vi.mock('@/lib/org-role-permissions', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/org-role-permissions')>(),
+  loadCurrentOrganizationRoleAssignments: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -25,11 +24,7 @@ vi.mock('@/lib/supabase', () => ({
 
 import { requireAuth } from '@/lib/auth'
 import { assertDepartmentInOrg } from '@/lib/admin/org-membership'
-import {
-  canMutateOrgUsers,
-  getDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
+import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import { supabaseAdmin } from '@/lib/supabase'
 import { DELETE, POST } from './route'
 
@@ -49,21 +44,22 @@ describe('/api/admin/users/[id]/departments validation', () => {
     vi.clearAllMocks()
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
     ;(requireAuth as any).mockResolvedValue({ id: 'admin-user' })
-    ;(getDefaultOrgId as any).mockResolvedValue('org-1')
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue(['fresh-assignment'])
-    ;(canMutateOrgUsers as any).mockReturnValue(true)
+
+    ;(loadCurrentOrganizationRoleAssignments as any).mockResolvedValue({ orgId: 'org-1', settings: {}, assignments: [{ scopeType: 'org', scopeId: 'org-1', permissions: ['org:write'] }] })
+
     ;(assertDepartmentInOrg as any).mockResolvedValue({ id: 'dept-a' })
   })
 
   it('没有当前组织用户写权限时，在解析 body 和访问业务表前拒绝 POST', async () => {
-    ;(canMutateOrgUsers as any).mockReturnValue(false)
+
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(null)
     const json = vi.fn().mockResolvedValue({ department_ids: ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'] })
 
     const res = await POST({ json } as any, routeContext)
 
     expect(res.status).toBe(403)
-    expect(getFreshUserScopedRoleAssignments).toHaveBeenCalledWith('admin-user')
-    expect(canMutateOrgUsers).toHaveBeenCalledWith(['fresh-assignment'], 'org-1')
+    expect(loadCurrentOrganizationRoleAssignments).toHaveBeenCalledWith('admin-user')
+
     expect(json).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
@@ -150,7 +146,8 @@ describe('/api/admin/users/[id]/departments validation', () => {
   })
 
   it('没有当前组织用户写权限时，不访问业务表并拒绝 DELETE', async () => {
-    ;(canMutateOrgUsers as any).mockReturnValue(false)
+
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(null)
 
     const res = await DELETE({ method: 'DELETE' } as any, routeContext)
 

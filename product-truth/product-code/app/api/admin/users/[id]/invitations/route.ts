@@ -1,20 +1,15 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import {
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
 import { supabaseAdmin } from '@/lib/supabase'
-import { canPerformMemberAction } from '@/lib/admin/member-actions'
+import { loadOrganizationPermissionAccess } from '@/lib/admin/member-actions'
 import { ORG_MEMBER_INVITE } from '@/lib/admin/member-action-keys'
 
 async function authorize(req: NextRequest) {
   const user = await requireAuth(req)
-  const orgId = await getFreshDefaultOrgId(user.id)
-  const assignments = await getFreshUserScopedRoleAssignments(user.id)
-  if (!canPerformMemberAction(assignments, orgId, ORG_MEMBER_INVITE)) return null
-  return { user, orgId }
+  const access = await loadOrganizationPermissionAccess(user.id)
+  if (!access?.decision[ORG_MEMBER_INVITE]) return null
+  return { user, orgId: access.orgId }
 }
 
 export async function POST(

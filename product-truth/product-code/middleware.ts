@@ -40,6 +40,10 @@ import {
 import {
   ORG_MEMBER_INVITE, ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_REMOVE_MEMBERSHIP,
 } from '@/lib/admin/member-action-keys'
+import {
+  loadEmployeeOrganizationPermissionDecision, ORGANIZATION_ACTIONS_HEADER, type OrganizationPermissionDecision,
+  type OrganizationEmployeePermissionKey,
+} from '@/lib/admin/employee-organization-permissions'
 import { isRetiredRoleCode, isRoleAssignableInScope, resolveOwnerShippingPermissions, resolveRolePermissions, SHIPPING_OPERATOR_ROLE_CODE } from '@/lib/role-permission-resolution'
 import {
   getEffectiveOwnerShippingPermissions,
@@ -123,6 +127,8 @@ type MiddlewareAuthContext = {
   departmentLedgerAccess: boolean
   employeeShipping: EmployeeShippingState | null
   personalShippingAccess: boolean
+  organizationActions: OrganizationPermissionDecision | null
+  personalOrganizationAccess: boolean
   canManageSystemAuthorizations: boolean
 }
 
@@ -179,7 +185,7 @@ const BASELINE_READ_PATHS = new Set([
 const departmentDetailPath = /^\/api\/admin\/departments\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const memberDetailPath = /^\/api\/admin\/users\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/([a-z-]+))?$/i
 const memberAuthorizationPaths = new Set(['roles', 'role-scopes', 'system-super-admin', 'org-super-admin', 'identity-binding', 'permission-overrides'])
-const memberPathPermissions: Partial<Record<string, readonly string[]>> = {
+const memberPathPermissions: Partial<Record<string, readonly OrganizationEmployeePermissionKey[]>> = {
   'PATCH ': [ORG_MEMBER_EDIT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_MANAGE_EMPLOYMENT],
   'DELETE ': [ORG_MEMBER_MANAGE_EMPLOYMENT],
   'PATCH report-to': [ORG_MEMBER_EDIT],
@@ -218,6 +224,32 @@ function hasMemberRoutePermission(pathname: string, method: string, permissions:
   const detail = memberDetailPath.exec(pathname)
   const actions = detail && memberPathPermissions[method + ' ' + (detail[1] ?? '')]
   return !!actions && (legacyWrite || actions.some(permission => hasPermission(permissions, permission)))
+}
+
+function getOrganizationRouteAccess(pathname: string, method: string, decision: OrganizationPermissionDecision): boolean | null {
+  const read = method === 'GET' || method === 'HEAD'
+  if (read && (pathname === '/api/admin/org' || pathname === '/admin/org')) {
+    return decision['user:view'] || decision['dept:directory_view']
+  }
+  if (pathname === '/api/admin/users') {
+    if (read) return decision['user:view']
+    if (method === 'POST') return decision['user:invite']
+  }
+  if (pathname === '/api/admin/departments') {
+    if (read) return decision['dept:directory_view']
+    if (method === 'POST') return decision['dept:edit_structure']
+  }
+  if (departmentDetailPath.test(pathname)) {
+    if (method === 'PATCH') return decision['dept:edit_structure']
+    if (method === 'DELETE') return decision['dept:delete_structure']
+  }
+  if (pathname === '/api/admin/users/batch' && method === 'POST') {
+    return decision['user:manage_login'] || decision['user:manage_employment']
+  }
+  if (pathname === '/api/roles' && read) return decision['role:view']
+  const detail = memberDetailPath.exec(pathname)
+  const actions = detail && memberPathPermissions[method + ' ' + (detail[1] ?? '')]
+  return actions ? actions.some(permission => decision[permission]) : null
 }
 
 function hasGeneralConfigurationRoutePermission(request: NextRequest, required: string | null, permissions: string[]): boolean {
@@ -417,15 +449,20 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
     }
   }
 
-  const employeeShipping = activeMembership && !canManageSystemAuthorizations && hasEmployeeShippingOverrides(organization.settings)
-    ? await loadEmployeeShippingState(orgId, userId) : null
+  const [employeeShipping, organizationActions] = await Promise.all([
+    activeMembership && !canManageSystemAuthorizations && hasEmployeeShippingOverrides(organization.settings)
+      ? loadEmployeeShippingState(orgId, userId) : null,
+    activeMembership && !canManageSystemAuthorizations
+      ? loadEmployeeOrganizationPermissionDecision(allPermissions, { orgId, userId, settings: organization.settings }) : null,
+  ])
   const effectiveOwnerGrants = usesFxiaoke ? employeeOwnerShippingGrants(ownerShippingPermissions, employeeShipping) : []
   const personalShippingAccess = employeeShipping?.team[DEPARTMENT_LEDGER_VIEW].organization_wide === true
     || (employeeShipping?.overrides.get('shipping:owner_view')?.effect === 'ALLOW'
       && await allowsShippingOwnerPermission(effectiveOwnerGrants, 'shipping:owner_view'))
     || (hasPersonalOrganizationShippingGrant(employeeShipping, 'shipping:settings_view')
       && (await readShippingPermissionPublication(new Set(['shipping:settings_view']))).published.has('shipping:settings_view'))
-  const scopedModulesOnly = (roleCodes.length > 0 || personalShippingAccess) && !hasOtherModuleGrants
+  const personalOrganizationAccess = organizationActions !== null && Object.values(organizationActions).some(Boolean)
+  const scopedModulesOnly = (roleCodes.length > 0 || personalShippingAccess || personalOrganizationAccess) && !hasOtherModuleGrants
   const departmentWorkspaceAccess = checkDepartmentWorkspace && activeMembership
     && (roleCodes.length === 0 || scopedModulesOnly)
     && await canEnterDepartmentWorkspace(rest, userId, orgId, organization.settings)
@@ -449,6 +486,8 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
     departmentLedgerAccess,
     employeeShipping,
     personalShippingAccess,
+    organizationActions,
+    personalOrganizationAccess,
     canManageSystemAuthorizations,
   }
 }
@@ -500,6 +539,12 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const host = request.headers.get('host')?.toLowerCase()
   const redirectRule = host ? HOST_REDIRECTS[host] : undefined
+  const nextWithoutOrganizationActions = () => {
+    if (!request.headers.has(ORGANIZATION_ACTIONS_HEADER)) return NextResponse.next()
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.delete(ORGANIZATION_ACTIONS_HEADER)
+    return NextResponse.next({ request: { headers: requestHeaders } })
+  }
 
   if (redirectRule) {
     const url = request.nextUrl.clone()
@@ -516,7 +561,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isPublicPath(pathname)) {
-    return NextResponse.next()
+    return nextWithoutOrganizationActions()
   }
 
   const token = getRequestAuthToken(request)
@@ -548,17 +593,19 @@ export async function middleware(request: NextRequest) {
     }
 
     // Session management is authenticated but does not require a business role.
-    if (pathname === '/api/auth/activity' && ['GET', 'POST'].includes(request.method)) return NextResponse.next()
+    if (pathname === '/api/auth/activity' && ['GET', 'POST'].includes(request.method)) return nextWithoutOrganizationActions()
 
     // A role-free member can wait for authorization and read their own profile.
     if (pathname === '/' && authContext.roleCodes.length === 0
+      && !authContext.personalOrganizationAccess
       && authContext.departmentLedgerAccess && !authContext.departmentWorkspaceAccess) {
       return NextResponse.redirect(buildRedirectUrl(request, '/shipping'))
     }
     if (authContext.roleCodes.length === 0 && !authContext.personalShippingAccess
+      && !authContext.personalOrganizationAccess
       && !authContext.departmentWorkspaceAccess && !authContext.departmentLedgerAccess) {
-      if (pathname === '/pending-access' || pathname === '/api/auth/logout') return NextResponse.next()
-      if (pathname === '/api/profile' && ['GET', 'HEAD'].includes(request.method)) return NextResponse.next()
+      if (pathname === '/pending-access' || pathname === '/api/auth/logout') return nextWithoutOrganizationActions()
+      if (pathname === '/api/profile' && ['GET', 'HEAD'].includes(request.method)) return nextWithoutOrganizationActions()
       if (pathname.startsWith('/api/')) {
         return NextResponse.json({ error: '尚未分配业务权限', code: 'ROLE_REQUIRED' }, { status: 403 })
       }
@@ -569,6 +616,7 @@ export async function middleware(request: NextRequest) {
     const restrictedMember = (authContext.authMethod === 'fxiaoke' || authContext.roleCodes.includes(SHIPPING_OPERATOR_ROLE_CODE))
       && hasRestrictedShippingRoleSet(authContext.roleCodes)
     const shippingOnly = (authContext.roleCodes.length > 0 || authContext.personalShippingAccess)
+      && !authContext.personalOrganizationAccess
       && authContext.allPermissions.every(permission => permission.startsWith('shipping:'))
     const { scopedModulesOnly } = authContext
     const ownerPermission = shippingOwnerPermissionRequirement(pathname, request.method)
@@ -597,6 +645,7 @@ export async function middleware(request: NextRequest) {
     const configurationTabs = pathname === '/configs' || pathname === '/api/auth/me' ? getConfigsTabAccess({
       permissions: authContext.allPermissions,
       systemAdministrator: authContext.canManageSystemAuthorizations,
+      organizationActions: authContext.organizationActions,
     }) : null
     const shippingSettingsView = configurationTabs !== null
       && await allowsShippingPermission(authContext, ['shipping:settings_view']).catch(error => {
@@ -612,15 +661,22 @@ export async function middleware(request: NextRequest) {
     if (systemAuthorizationPath && !authContext.canManageSystemAuthorizations) {
       return NextResponse.json({ error: '仅系统超级管理员可管理授权', code: 'NO_PERMISSION' }, { status: 403 })
     }
+    const organizationRouteAccess = authContext.organizationActions
+      ? getOrganizationRouteAccess(pathname, request.method, authContext.organizationActions) : null
+    if (organizationRouteAccess === false) {
+      return pathname.startsWith('/api/')
+        ? NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
+        : NextResponse.redirect(buildRedirectUrl(request, '/'))
+    }
     const rolesIndexAccess = read && pathname === '/api/roles'
-      && (systemAuthorizationPath || canReadRoleDirectory(authContext.allPermissions))
+      && (systemAuthorizationPath || (organizationRouteAccess ?? canReadRoleDirectory(authContext.allPermissions)))
     // Department write handlers independently enforce the exact edit/delete action.
     const departmentDirectoryPath = (read && pathname === '/api/admin/org')
       || (pathname === '/api/admin/departments' && (read || request.method === 'POST'))
       || (departmentDetailPath.test(pathname) && (request.method === 'PATCH' || request.method === 'DELETE'))
     const departmentDirectoryAccess = departmentDirectoryPath && canReadOrgDepartmentDirectory(authContext.allPermissions)
     const memberAccess = hasMemberRoutePermission(pathname, request.method, authContext.allPermissions)
-    const specificConfigurationAccess = configurationShell || organizationSourceAccess || rolesIndexAccess
+    const specificConfigurationAccess = configurationShell || organizationSourceAccess || rolesIndexAccess || organizationRouteAccess === true
       || departmentDirectoryAccess || memberAccess || systemAuthorizationPath
       || (scopedModulesOnly && hasGeneralConfigurationRoutePermission(request, required, authContext.allPermissions))
     if (scopedModulesOnly && !specificConfigurationAccess && !authContext.departmentWorkspaceAccess
@@ -641,6 +697,7 @@ export async function middleware(request: NextRequest) {
       const configAccess = hasConfigsTabAccess(getConfigsTabAccess({
         permissions: authContext.allPermissions,
         systemAdministrator: authContext.canManageSystemAuthorizations,
+        organizationActions: authContext.organizationActions,
       }))
       const landingPage = ledger || owner || authContext.departmentLedgerAccess ? '/shipping'
         : configAccess ? '/configs' : settings ? '/shipping/settings' : '/pending-access'
@@ -680,6 +737,8 @@ export async function middleware(request: NextRequest) {
 
     // 透传 user context 到下游 route handler / page
     const requestHeaders = new Headers(request.headers)
+    requestHeaders.delete(ORGANIZATION_ACTIONS_HEADER)
+    if (authContext.organizationActions) requestHeaders.set(ORGANIZATION_ACTIONS_HEADER, JSON.stringify(authContext.organizationActions))
     requestHeaders.delete('x-user-shipping-settings-view')
     if (shippingSettingsView) requestHeaders.set('x-user-shipping-settings-view', '1')
     requestHeaders.delete('x-user-navigation-scope')
@@ -689,6 +748,7 @@ export async function middleware(request: NextRequest) {
         requestHeaders.set('x-user-navigation-scope', scope)
       }
       if (authContext.roleCodes.length === 0 && !authContext.personalShippingAccess
+        && !authContext.personalOrganizationAccess
         && (authContext.departmentWorkspaceAccess || authContext.departmentLedgerAccess)) {
         const scope = authContext.departmentLedgerAccess
           ? (authContext.departmentWorkspaceAccess ? 'workbench-and-ledger' : 'department-ledger')

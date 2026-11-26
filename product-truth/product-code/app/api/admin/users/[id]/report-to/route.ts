@@ -5,11 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import {
-  getDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
-import { canPerformMemberAction } from '@/lib/admin/member-actions'
+import { loadOrganizationPermissionAccess } from '@/lib/admin/member-actions'
 import { ORG_MEMBER_EDIT } from '@/lib/permissions'
 import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
 
@@ -28,12 +24,11 @@ export async function PATCH(
   try {
     const { id } = await params
     const currentUser = await requireAuth(req)
-    const orgId = await getDefaultOrgId(currentUser.id)
-
-    const assignments = await getFreshUserScopedRoleAssignments(currentUser.id)
-    if (!canPerformMemberAction(assignments, orgId, ORG_MEMBER_EDIT)) {
+    const access = await loadOrganizationPermissionAccess(currentUser.id)
+    if (!access?.decision[ORG_MEMBER_EDIT]) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
+    const { orgId } = access
 
     const parseResult = reportToSchema.safeParse(await req.json().catch(() => null))
     if (!parseResult.success) {

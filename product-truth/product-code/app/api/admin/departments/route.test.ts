@@ -5,10 +5,9 @@ vi.mock('@/lib/auth', () => ({
   requireAuth: vi.fn(),
 }))
 
-vi.mock('@/lib/scoped-access', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@/lib/scoped-access')>(),
-  getFreshDefaultOrgId: vi.fn(),
-  getFreshUserScopedRoleAssignments: vi.fn(),
+vi.mock('@/lib/org-role-permissions', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/org-role-permissions')>(),
+  loadCurrentOrganizationRoleAssignments: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -18,18 +17,15 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { requireAuth } from '@/lib/auth'
-import {
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-  type ScopedRoleAssignment,
-} from '@/lib/scoped-access'
+import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import { supabaseAdmin } from '@/lib/supabase'
+import type { ScopedRoleAssignment } from '@/lib/scoped-access'
 import { GET, POST } from './route'
 
 function grant(permissions: string[], scopeType: ScopedRoleAssignment['scopeType'] = 'org', scopeId = 'org-1') {
-  vi.mocked(getFreshUserScopedRoleAssignments).mockResolvedValue([{
+  vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({ orgId: 'org-1', settings: {}, assignments: [{
     scopeType, scopeId, permissions, roleCode: 'DEPARTMENTS', roleId: 'role-1', roleName: '部门', grantedAt: null,
-  }])
+  }] })
 }
 
 function malformedJsonRequest(): any {
@@ -43,7 +39,7 @@ describe('POST /api/admin/departments validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: 'admin-user' })
-    ;(getFreshDefaultOrgId as any).mockResolvedValue('org-1')
+
     grant(['dept:write'])
   })
 
@@ -54,7 +50,7 @@ describe('POST /api/admin/departments validation', () => {
     const res = await POST({ json } as any)
 
     expect(res.status).toBe(403)
-    expect(getFreshUserScopedRoleAssignments).toHaveBeenCalledWith('admin-user')
+    expect(loadCurrentOrganizationRoleAssignments).toHaveBeenCalledWith('admin-user')
     expect(json).not.toHaveBeenCalled()
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })

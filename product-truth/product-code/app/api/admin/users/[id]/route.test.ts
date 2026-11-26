@@ -2,11 +2,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/auth', () => ({ requireAuth: vi.fn() }))
+vi.mock('@/lib/middleware-rest-client', () => ({ readMiddlewareRpcRows: vi.fn() }))
 
-vi.mock('@/lib/scoped-access', () => ({
-  canMutateOrgUsers: vi.fn(),
-  getFreshDefaultOrgId: vi.fn(),
-  getFreshUserScopedRoleAssignments: vi.fn(),
+
+vi.mock('@/lib/org-role-permissions', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/org-role-permissions')>(),
+  loadCurrentOrganizationRoleAssignments: vi.fn(),
 }))
 
 vi.mock('@/lib/admin/org-membership', async importOriginal => ({
@@ -27,11 +28,8 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { requireAuth } from '@/lib/auth'
-import {
-  canMutateOrgUsers,
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
+import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
+import { readMiddlewareRpcRows } from '@/lib/middleware-rest-client'
 import { assertDepartmentInOrg } from '@/lib/admin/org-membership'
 import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -102,11 +100,11 @@ describe('/api/admin/users/[id] account lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: actorId })
-    ;(getFreshDefaultOrgId as any).mockResolvedValue(orgId)
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue([
+
+    ;(loadCurrentOrganizationRoleAssignments as any).mockResolvedValue({ orgId: orgId, settings: {}, assignments: [
       { scopeType: 'org', scopeId: orgId, roleCode: 'ADMIN', permissions: ['user:write'] },
-    ])
-    ;(canMutateOrgUsers as any).mockReturnValue(true)
+    ] })
+
     ;(userHasOrgRoleCode as any).mockResolvedValue(false)
     ;(assertDepartmentInOrg as any).mockResolvedValue({ id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' })
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
@@ -136,14 +134,31 @@ describe('/api/admin/users/[id] account lifecycle', () => {
       [{ scopeType: 'org', scopeId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', roleCode: 'ADMIN', permissions: ['user:write'] }],
     ],
   ])('%s 不能更新用户，且不查询或写入目标', async (_label, assignments) => {
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue(assignments)
-    ;(canMutateOrgUsers as any).mockReturnValue(false)
+    ;(loadCurrentOrganizationRoleAssignments as any).mockResolvedValue({ orgId: orgId, settings: {}, assignments: assignments })
 
     const response = await PATCH(patchRequest({ display_name: '新姓名' }), routeContext)
 
     expect(response.status).toBe(403)
-    expect(getFreshUserScopedRoleAssignments).toHaveBeenCalledWith(actorId)
-    expect(canMutateOrgUsers).toHaveBeenCalledWith(assignments, orgId)
+    expect(loadCurrentOrganizationRoleAssignments).toHaveBeenCalledWith(actorId)
+
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+
+  it('honors an individual member-view DENY over a stored organization-write grant before reading or writing a target', async () => {
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({
+      orgId, settings: { employee_organization_permission_overrides_enabled: true }, assignments: [{
+        scopeType: 'org', scopeId: orgId, roleId: 'org-admin', roleName: '组织维护',
+        roleCode: 'ADMIN', grantedAt: null, permissions: ['org:write'],
+      }],
+    })
+    vi.mocked(readMiddlewareRpcRows).mockResolvedValue([
+      { permission_code: 'user:view', effect: 'DENY', scope: null },
+    ])
+
+    expect((await PATCH(patchRequest({ display_name: '新姓名' }), routeContext)).status).toBe(403)
+    expect((await DELETE(deleteRequest(), routeContext)).status).toBe(403)
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
@@ -162,10 +177,9 @@ describe('/api/admin/users/[id] account lifecycle', () => {
   })
 
   it('登录状态权限不能修改在职状态、人员资料或办理离职', async () => {
-    ;(canMutateOrgUsers as any).mockReturnValue(false)
-    ;(getFreshUserScopedRoleAssignments as any).mockResolvedValue([
-      { scopeType: 'org', scopeId: orgId, permissions: ['user:manage_login'] },
-    ])
+    ;(loadCurrentOrganizationRoleAssignments as any).mockResolvedValue({ orgId: orgId, settings: {}, assignments: [
+      { scopeType: 'org', scopeId: orgId, permissions: ['user:view', 'user:manage_login'] },
+    ] })
     for (const payload of [
       { display_name: '新姓名' },
       { status: 'suspended' },
@@ -311,7 +325,8 @@ describe('/api/admin/users/[id] account lifecycle', () => {
   })
 
   it('无用户写权限时不能办理离职', async () => {
-    ;(canMutateOrgUsers as any).mockReturnValue(false)
+
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(null)
 
     const response = await DELETE(deleteRequest(), routeContext)
 

@@ -273,7 +273,7 @@ describe('personal shipping review when adjusting a role member', () => {
     expect(send).not.toHaveBeenCalled()
     const dialog = within(screen.getByRole('dialog'))
     fireEvent.click(dialog.getByRole('checkbox'))
-    expect(await dialog.findByRole('status')).toHaveTextContent('此员工有 1 项寄件个人设置')
+    expect(await dialog.findByRole('status')).toHaveTextContent('此员工有 1 项个人权限设置')
     expect(send).toHaveBeenCalledExactlyOnceWith(endpoint, expect.objectContaining({ cache: 'no-store' }))
 
     fireEvent.click(dialog.getByRole('button', { name: '添加成员到角色' }))
@@ -284,8 +284,8 @@ describe('personal shipping review when adjusting a role member', () => {
   })
 
   it.each([
-    { fail: false, message: '此员工有 1 项寄件个人设置' },
-    { fail: true, message: '暂时无法核对该员工的寄件个人设置' },
+    { fail: false, message: '此员工有 1 项个人权限设置' },
+    { fail: true, message: '暂时无法核对该员工的个人权限设置' },
   ])('includes only verified information in the removal confirmation and allows the same role write', async ({ fail, message }) => {
     const assigned = { ...member, role_names: shippingRole.name, role_ids: [shippingRole.id, 'other'] }
     const send = vi.fn().mockImplementation(async (url: string) => {

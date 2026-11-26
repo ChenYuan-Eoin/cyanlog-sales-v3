@@ -315,6 +315,27 @@ it('keeps the organization roster and member draft mounted through focus and exp
   expect(window.location.search).toBe('?tab=org-structure')
 })
 
+it.each([
+  [true, '同步在职', '部门总数'],
+  [false, '部门总数', '同步在职'],
+] as const)('shows only accessible organization totals when memberAccess=%s', async (memberAccess, visible, withheld) => {
+  window.history.replaceState({}, '', '/configs?tab=org-structure')
+  fetcher.mockImplementation(async input => {
+    if (input === '/api/admin/org') return Response.json({
+      organization: { id: organization }, users: [], roles: [], spaces: [], departments: [],
+      department_access: { canRead: !memberAccess, canEdit: false, canDelete: false },
+      member_access: memberAccess,
+      ...(memberAccess ? { directory_roster: { status: 'ready', asOf: '2026-11-09T07:54:14Z', members: [] } } : {}),
+    })
+    throw new Error('Unexpected fetch')
+  })
+  render(<ConfigsClient tabAccess={{ ...roleDirectoryOnly, organization: true }} />)
+
+  await screen.findByLabelText('组织成员')
+  expect(screen.getByText(visible)).toBeInTheDocument()
+  expect(screen.queryByText(withheld)).not.toBeInTheDocument()
+})
+
 it.each(['token', 'organization', 'forbidden'] as const)('clears the organization roster after a %s change during readback', async unsafeChange => {
   window.history.replaceState({}, '', '/configs?tab=org-structure')
   const pending = deferredResponse()

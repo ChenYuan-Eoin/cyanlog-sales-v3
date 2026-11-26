@@ -39,7 +39,7 @@ const userSchema = z.object({
   phone: z.string().min(1, '手机号不能为空'),
   display_name: z.string().min(1, '姓名不能为空'),
   title: z.string().optional(),
-  primary_dept_id: z.string().nullable(),
+  primary_dept_id: z.string().nullable().optional(),
   role_ids: z.array(z.string()).optional(),
 })
 
@@ -47,6 +47,7 @@ type UserFormValues = z.infer<typeof userSchema>
 
 interface UserFormDialogProps {
   departments: OrgSummaryDepartment[]
+  canSelectDepartment?: boolean
   roles?: Array<{ id: string; name: string; code: string }>
   editingUser?: OrgSummaryUser | null
   employeePermissionOrgId?: string
@@ -58,6 +59,7 @@ interface UserFormDialogProps {
 
 export function UserFormDialog({
   departments,
+  canSelectDepartment = true,
   roles = [],
   editingUser,
   employeePermissionOrgId,
@@ -79,7 +81,7 @@ export function UserFormDialog({
       phone: editingUser?.phone ?? '',
       display_name: editingUser?.display_name ?? '',
       title: editingUser?.title ?? '',
-      primary_dept_id: editingUser?.primary_dept_id ?? null,
+      primary_dept_id: canSelectDepartment ? editingUser?.primary_dept_id ?? null : undefined,
       role_ids: editingUser
         ? editableOrgRoleIds(editingUser).filter(id => assignableRoles.some(role => role.id === id))
         : [],
@@ -90,14 +92,14 @@ export function UserFormDialog({
     async (values: UserFormValues) => {
       setLoading(true)
       try {
-        await onSubmit(values)
+        await onSubmit({ ...values, primary_dept_id: canSelectDepartment ? values.primary_dept_id : undefined })
         onOpenChange(false)
         form.reset()
       } finally {
         setLoading(false)
       }
     },
-    [onSubmit, form, onOpenChange]
+    [canSelectDepartment, onSubmit, form, onOpenChange]
   )
 
   return (
@@ -188,7 +190,7 @@ export function UserFormDialog({
                 </FormItem>
               )}
             />
-            <FormField
+            {canSelectDepartment && <FormField
               control={form.control}
               name="primary_dept_id"
               render={({ field }) => (
@@ -218,7 +220,7 @@ export function UserFormDialog({
                   <FormMessage />
                 </FormItem>
               )}
-            />
+            />}
             {assignableRoles.length > 0 && (
               <FormField
                 control={form.control}

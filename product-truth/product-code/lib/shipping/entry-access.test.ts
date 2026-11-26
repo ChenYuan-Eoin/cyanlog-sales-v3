@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadPublishedShippingAccess, loadShippingLedgerAccess, resolveShippingEntry } from './entry-access'
+import { loadEmployeePermissionTable, loadPublishedShippingAccess, loadShippingLedgerAccess, resolveShippingEntry } from './entry-access'
 import { resolveOwnerShippingPermissions } from '@/lib/role-permission-resolution'
 import { SHIPPING_OPERATE, SHIPPING_OWNER_ACTION_KEYS, SHIPPING_RECORD_RETURN, SHIPPING_WORKBENCH_ACTION_KEYS } from '@/lib/module-access'
 
@@ -19,6 +19,11 @@ vi.mock('@/lib/permission-registry', () => ({
     const keys: string[] = await db.published()
     return { registered: new Set(keys), published: new Set(keys), departmentLedgerPublished: keys.includes('shipping:ledger_view') }
   },
+  loadRoleModulePermissionProjection: async () => ({
+    publication: { registered: new Set<string>(), published: new Set<string>() },
+    catalog: [],
+    organizationEmployeePublication: ['user:view', 'user:manage_login', 'role:view'],
+  }),
 }))
 
 const user = { id: 'staff', email: null, phone: null, display_name: null, org_id: 'org-a' }
@@ -64,6 +69,32 @@ beforeEach(() => {
   db.context.mockResolvedValue(activeOrg)
   db.published.mockResolvedValue(['shipping:operate', 'shipping:manage_connections', ...SHIPPING_OWNER_ACTION_KEYS])
   db.maybeSingle.mockResolvedValue({ data: { user_id: user.id, auth_method: 'fxiaoke' }, error: null })
+})
+
+it('reads back the combined employee table with exact organization points and derived prerequisites', async () => {
+  db.context.mockResolvedValue({
+    ...activeOrg, assignments: [
+      { ...assignment('OPS', ['user:*']), roleName: '人员维护' },
+      { ...assignment('ROLE_VIEWER', ['role:view']), roleName: '角色审阅' },
+    ],
+  })
+  db.maybeSingle.mockResolvedValue({ data: { id: user.id, status: 'active', login_enabled: true }, error: null })
+  db.restRows.mockResolvedValue([])
+  mockEmployeeWorkbenchState([{ permission_code: 'user:manage_login', effect: 'DENY', scope: null }], false, false)
+
+  const result = await loadEmployeePermissionTable(user.id, 'org-a')
+  expect(result?.organization_permission_publication).toEqual(['user:view', 'user:manage_login', 'role:view'])
+  expect(result?.permissions).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      key: 'user:manage_login', base: true, effective: false, scope_types: ['org'],
+      override: { effect: 'DENY', scope: null }, sources: [{ kind: 'role', name: '人员维护' }],
+    }),
+    expect.objectContaining({
+      key: 'role:view', base: true, effective: true, sources: [{ kind: 'role', name: '角色审阅' }],
+    }),
+    expect.objectContaining({ key: 'shipping:ledger_view', base: false, effective: true,
+      effective_scope: { type: 'department', departments: [{ department_id: 'south', include_subdepartments: false }] } }),
+  ]))
 })
 
 describe('shipping entry authorization', () => {

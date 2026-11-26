@@ -5,15 +5,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import {
-  getFreshDefaultOrgId,
-  getFreshUserScopedRoleAssignments,
-} from '@/lib/scoped-access'
 import { assertDepartmentInOrg, DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN } from '@/lib/admin/org-membership'
 import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
-import { canPerformMemberAction } from '@/lib/admin/member-actions'
+import { loadOrganizationPermissionAccess } from '@/lib/admin/member-actions'
 import { ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN } from '@/lib/admin/member-action-keys'
-import { ORG_MEMBER_EDIT } from '@/lib/permissions'
+import { ORG_DEPARTMENT_DIRECTORY_VIEW, ORG_MEMBER_EDIT } from '@/lib/permissions'
 import { normalizeIdentityPhone } from '@/lib/fxiaoke/identity'
 
 const updateUserSchema = z.object({
@@ -34,15 +30,17 @@ export async function PATCH(
   try {
     const { id } = await params
     const currentUser = await requireAuth(req)
-    const orgId = await getFreshDefaultOrgId(currentUser.id)
-
-    const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
-    const canEditProfile = canPerformMemberAction(actorAssignments, orgId, ORG_MEMBER_EDIT)
-    const canManageEmployment = canPerformMemberAction(actorAssignments, orgId, ORG_MEMBER_MANAGE_EMPLOYMENT)
-    const canManageLogin = canPerformMemberAction(actorAssignments, orgId, ORG_MEMBER_MANAGE_LOGIN)
-    if (!canEditProfile && !canManageEmployment && !canManageLogin) {
+    const access = await loadOrganizationPermissionAccess(currentUser.id)
+    const canEditProfile = access?.decision[ORG_MEMBER_EDIT]
+    const canManageEmployment = access?.decision[ORG_MEMBER_MANAGE_EMPLOYMENT]
+    const canManageLogin = access?.decision[ORG_MEMBER_MANAGE_LOGIN]
+    if (!access || (!canEditProfile && !canManageEmployment && !canManageLogin)) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
+    const { orgId } = access
+    const canReadDepartments = access.decision[ORG_DEPARTMENT_DIRECTORY_VIEW]
+    const fields = 'id, email, phone, display_name, title, status, login_enabled, report_to_user_id'
+    const fieldsWithDepartment = 'id, email, phone, display_name, title, status, login_enabled, report_to_user_id, primary_dept_id'
 
     const parseResult = updateUserSchema.safeParse(await req.json().catch(() => null))
     if (!parseResult.success) {
@@ -71,6 +69,7 @@ export async function PATCH(
       (status !== undefined && !canManageEmployment)
       || (login_enabled !== undefined && !canManageLogin)
       || (hasProfileMutation && !canEditProfile)
+      || (primary_dept_id !== undefined && !canReadDepartments)
     ) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
@@ -97,9 +96,9 @@ export async function PATCH(
       )
     }
 
-    const { data: existing, error: checkError } = await supabaseAdmin
-      .from('users')
-      .select('id, email, phone, display_name, title, primary_dept_id, status, login_enabled, report_to_user_id')
+    const memberTable = supabaseAdmin.from('users')
+    const memberQuery = canReadDepartments ? memberTable.select(fieldsWithDepartment) : memberTable.select(fields)
+    const { data: existing, error: checkError } = await memberQuery
       .eq('id', id)
       .eq('org_id', orgId)
       .maybeSingle()
@@ -221,13 +220,9 @@ export async function PATCH(
       }
       data = updatedMember ?? { ...data, primary_dept_id }
     } else if (hasProfileChanges) {
-      const { data: updated, error } = await supabaseAdmin
-        .from('users')
-        .update(updateData)
-        .eq('id', id)
-        .eq('org_id', orgId)
-        .select('id, email, phone, display_name, title, primary_dept_id, status, login_enabled, report_to_user_id')
-        .single()
+      const mutation = supabaseAdmin.from('users').update(updateData).eq('id', id).eq('org_id', orgId)
+      const selection = canReadDepartments ? mutation.select(fieldsWithDepartment) : mutation.select(fields)
+      const { data: updated, error } = await selection.single()
 
       if (error) {
         console.error('Update user error:', error)
@@ -258,12 +253,11 @@ export async function DELETE(
   try {
     const { id } = await params
     const currentUser = await requireAuth(req)
-    const orgId = await getFreshDefaultOrgId(currentUser.id)
-
-    const actorAssignments = await getFreshUserScopedRoleAssignments(currentUser.id)
-    if (!canPerformMemberAction(actorAssignments, orgId, ORG_MEMBER_MANAGE_EMPLOYMENT)) {
+    const access = await loadOrganizationPermissionAccess(currentUser.id)
+    if (!access?.decision[ORG_MEMBER_MANAGE_EMPLOYMENT]) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
+    const { orgId } = access
 
     // 不能删除自己
     if (id === currentUser.id) {
