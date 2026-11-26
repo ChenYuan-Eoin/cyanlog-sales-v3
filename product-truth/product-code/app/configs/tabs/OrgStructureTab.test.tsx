@@ -277,6 +277,59 @@ it('defaults to employed members, preserves active directory newcomers and count
   expect(screen.getByText('共 1 人（含子部门）')).toBeInTheDocument()
 })
 
+const directAssociationPayload: OrgSummaryPayload = {
+  ...statusPayload,
+  directory_roster: { status: 'ready', asOf: appliedAt, members: [] },
+  users: [
+    ...statusPayload.users.filter(user => user.id === 'manual-active' || user.id === 'manual-disabled'),
+    { ...statusPayload.users[0], id: 'child-only-association', display_name: '下级关联成员', department_ids: ['child'] },
+  ],
+}
+
+it('shows direct member associations separately from zero synchronized employees and clears search only on the shortcut', () => {
+  render(<OrgStructureTab orgSummary={directAssociationPayload} currentUserId="actor" />)
+  const search = screen.getByPlaceholderText('搜索姓名、邮箱、职位...')
+  fireEvent.change(search, { target: { value: '原来搜索词' } })
+  fireEvent.click(screen.getByRole('button', { name: /^销售父部门/ }))
+
+  expect(screen.getByLabelText('成员状态')).toHaveValue('synced')
+  expect(screen.getByText('共 0 人（含子部门）')).toBeInTheDocument()
+  expect(screen.getByText('当前筛选未显示本部门 2 名直接关联成员')).toBeInTheDocument()
+  expect(search).toHaveValue('原来搜索词')
+  expect(screen.queryByText('本地在职戊')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '查看本部门关联成员' }))
+
+  expect(screen.getByRole('heading', { name: '销售父部门 的成员' })).toBeInTheDocument()
+  expect(screen.getByLabelText('成员状态')).toHaveValue('all')
+  expect(screen.getByLabelText('部门成员范围')).toHaveValue('direct')
+  expect(screen.getByPlaceholderText('搜索姓名、邮箱、职位...')).toHaveValue('')
+  expect(screen.getByText('本地在职戊')).toBeInTheDocument()
+  expect(screen.getByText('本地停用丙')).toBeInTheDocument()
+  expect(screen.queryByText('下级关联成员')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '查看本部门关联成员' })).not.toBeInTheDocument()
+})
+
+it('opens the blocked department direct members after a structured deletion refusal without reloading', async () => {
+  const fetcher = vi.mocked(fetch)
+  const onRefresh = vi.fn()
+  fetcher.mockImplementation(async (input, init) => input === '/api/admin/departments/sales' && init?.method === 'DELETE'
+    ? Response.json({ code: 'DEPARTMENT_HAS_MEMBER_BINDINGS', error: '此部门仍有关联成员' }, { status: 400 })
+    : new Response(null, { status: 403 }))
+  render(<OrgStructureTab orgSummary={directAssociationPayload} currentUserId="actor" onRefresh={onRefresh} />)
+
+  fireEvent.pointerDown(screen.getByRole('button', { name: '管理部门 销售父部门' }), { button: 0, ctrlKey: false })
+  fireEvent.click(await screen.findByRole('menuitem', { name: '删除' }))
+  fireEvent.click(await screen.findByRole('button', { name: '删除' }))
+
+  expect(await screen.findByText('本地在职戊')).toBeInTheDocument()
+  expect(screen.getByText('本地停用丙')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '销售父部门 的成员' })).toBeInTheDocument()
+  expect(screen.getByLabelText('成员状态')).toHaveValue('all')
+  expect(screen.getByLabelText('部门成员范围')).toHaveValue('direct')
+  expect(screen.queryByText('下级关联成员')).not.toBeInTheDocument()
+  expect(onRefresh).not.toHaveBeenCalled()
+})
+
 it('keeps department-only readers out of member, employee counts, and mutation controls', () => {
   render(<OrgStructureTab orgSummary={{
     ...statusPayload,
@@ -292,6 +345,8 @@ it('keeps department-only readers out of member, employee counts, and mutation c
   expect(screen.queryByRole('button', { name: '管理部门 销售父部门' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '添加部门' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '提交新增成员' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /^销售父部门/ }))
+  expect(screen.queryByRole('button', { name: '查看本部门关联成员' })).not.toBeInTheDocument()
 })
 
 it('shows only granted lifecycle actions for an organization member', async () => {

@@ -211,6 +211,22 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
+  it('部门仍有成员关联时返回可定位的阻断原因，不更新部门', async () => {
+    grant(['dept:directory_view', 'dept:delete_structure'])
+    const lookup = makeQuery({ data: { id: departmentId, member_count: 2, name: '测试部门' }, error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup)
+
+    const response = await DELETE({ method: 'DELETE' } as any, routeContext)
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: '部门「测试部门」还有 2 条成员关联，请先调整成员的部门归属',
+      code: 'DEPARTMENT_HAS_MEMBER_BINDINGS',
+    })
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+    expect(lookup.update).not.toHaveBeenCalled()
+  })
+
   it('软删除部门的最终 mutation 保留当前组织边界', async () => {
     grant(['dept:directory_view', 'dept:delete_structure'])
     const lookup = makeQuery({

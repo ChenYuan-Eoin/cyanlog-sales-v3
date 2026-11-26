@@ -221,10 +221,13 @@ export async function DELETE(
       return NextResponse.json({ error: '部门不存在' }, { status: 404 })
     }
 
-    // 检查是否有成员
+    // 成员关联也包含未进入同步在职名单的账号。
     if (existing.member_count > 0) {
       return NextResponse.json(
-        { error: `部门 "${existing.name}" 下还有 ${existing.member_count} 名成员，请先转移或删除成员` },
+        {
+          error: `部门「${existing.name}」还有 ${existing.member_count} 条成员关联，请先调整成员的部门归属`,
+          code: 'DEPARTMENT_HAS_MEMBER_BINDINGS',
+        },
         { status: 400 }
       )
     }

@@ -222,13 +222,14 @@ interface DepartmentTreeProps {
   showRootAdd?: boolean
   selectedDeptId: string | null
   onSelectDept: (id: string | null) => void
+  onMemberBindingsBlocked?: (departmentId: string) => void
   onRefresh?: () => void | Promise<void>
   className?: string
 }
 
 function DepartmentTree({
   departments, users, memberCounts, memberAccess, canEdit, canDelete, showRootAdd,
-  selectedDeptId, onSelectDept, onRefresh, className,
+  selectedDeptId, onSelectDept, onMemberBindingsBlocked, onRefresh, className,
 }: DepartmentTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [editDept, setEditDept] = useState<OrgSummaryDepartment | null>(null)
@@ -273,6 +274,7 @@ function DepartmentTree({
       if (!res.ok) {
         const result = await res.json().catch(() => ({}))
         error(result.error || '删除失败')
+        if (memberAccess && result.code === 'DEPARTMENT_HAS_MEMBER_BINDINGS') onMemberBindingsBlocked?.(dept.id)
         return
       }
       success('部门已删除')
@@ -280,7 +282,7 @@ function DepartmentTree({
     } finally {
       setDeletingDept(null)
     }
-  }, [onRefresh])
+  }, [memberAccess, onMemberBindingsBlocked, onRefresh])
 
   function DeptNode({ dept, depth }: { dept: OrgSummaryDepartment; depth: number }) {
     const children = useMemo(() => departments.filter(d => d.parent_id === dept.id),
@@ -985,6 +987,13 @@ export default function OrgStructureTab({
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null)
   const [includeSubdepartments, setIncludeSubdepartments] = useState(true)
   const [employmentFilter, setEmploymentFilter] = useState<MemberFilter>('synced')
+  const [memberTableVersion, setMemberTableVersion] = useState(0)
+  const showDirectDepartmentMembers = useCallback((departmentId: string) => {
+    setSelectedDeptId(departmentId)
+    setEmploymentFilter('all')
+    setIncludeSubdepartments(false)
+    setMemberTableVersion(version => version + 1)
+  }, [])
   const directoryRoster = orgSummary?.directory_roster
   const synchronizedView = employmentFilter === 'synced'
   const allMembersLabel = synchronizedView ? '全部同步在职成员' : '全部成员'
@@ -1027,6 +1036,14 @@ export default function OrgStructureTab({
     })
     return statusUsers.filter(user => [...memberDepartmentIds(user)].some(id => allowedDeptIds.has(id)))
   }, [statusUsers, departmentTree, orgDepartmentIds, selectedDeptId, includeSubdepartments])
+
+  const directMembersOutsideFilter = useMemo(() => {
+    if (!selectedDeptId || !orgDepartmentIds.includes(selectedDeptId)) return 0
+    const visibleIds = new Set(filteredUsers.map(user => user.id))
+    return new Set(users
+      .filter(user => !visibleIds.has(user.id) && memberDepartmentIds(user).has(selectedDeptId))
+      .map(user => user.id)).size
+  }, [filteredUsers, orgDepartmentIds, selectedDeptId, users])
 
   // 统计信息
   const stats = useMemo(() => ({
@@ -1169,6 +1186,7 @@ export default function OrgStructureTab({
                 canDelete={canDeleteDepartments}
                 selectedDeptId={selectedDeptId}
                 onSelectDept={setSelectedDeptId}
+                onMemberBindingsBlocked={showDirectDepartmentMembers}
                 onRefresh={onRefresh}
               />
             </div>
@@ -1205,16 +1223,28 @@ export default function OrgStructureTab({
                       </select>
                     </label>
                     <Button variant="ghost" size="sm" onClick={() => setSelectedDeptId(null)}>
-                      查看全部
+                      取消部门筛选
                     </Button>
                   </div>
                 )}
               </div>
+              {selectedDept && directMembersOutsideFilter > 0 && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => showDirectDepartmentMembers(selectedDept.id)}>
+                    查看本部门关联成员
+                  </Button>
+                  <p className="text-xs text-slate-600">
+                    {countsUnavailable ? `已读取本部门 ${directMembersOutsideFilter} 名直接关联成员`
+                      : `当前筛选未显示本部门 ${directMembersOutsideFilter} 名直接关联成员`}
+                  </p>
+                </div>
+              )}
             </div>
             <div className="p-6">
               {countsUnavailable ? (
                 <p role="status" className="text-sm text-slate-600">暂时无法核对同步名单。可以切换到「全部」查看成员记录。</p>
               ) : <MemberTable
+                key={memberTableVersion}
                 users={filteredUsers}
                 departments={departments}
                 currentUserId={currentUserId}
