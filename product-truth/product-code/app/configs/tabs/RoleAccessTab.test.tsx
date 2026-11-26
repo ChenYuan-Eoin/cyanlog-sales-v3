@@ -7,11 +7,37 @@ import type { OrgSummaryPayload, OrgSummaryUser, ScopedRoleAssignment } from '..
 import type { RoleMetadataChange } from './role-metadata'
 
 vi.mock('@/lib/toast', () => ({ success: vi.fn(), error: vi.fn(), confirmAction: vi.fn() }))
-vi.mock('./PermissionRegistryPanel', () => ({ PermissionRegistryPanel: () => null }))
 afterEach(cleanup)
 
 const roles = [{ id: 'root', code: 'SUPER_ADMIN', name: '超级管理员', description: null, permissions: ['*'], sort_order: 1 }]
 const defaults = { roles, currentUserId: 'actor', savingRoleId: null, orgSummary: null, onSaveRole: vi.fn(), onRefresh: vi.fn() }
+
+it('opens the functional permission matrix on demand and leaves placeholders out of role settings', () => {
+  render(<RoleAccessTab {...defaults} modulePermissionCatalog={[{
+    id: 'shipping', label: '寄件', description: '', items: [{
+      key: 'shipping:owner_view',
+      label: '查看本人寄件记录',
+      description: '查看本人寄件。',
+      dependencies: [],
+      moduleKey: 'shipping',
+      capabilityLevel: 'L2',
+      grantSubjectTypes: ['role'],
+      scopeTypes: ['self'],
+    }],
+  }]} />)
+  expect(screen.queryByText('平台权限定义')).not.toBeInTheDocument()
+  expect(screen.queryByRole('dialog', { name: '权限矩阵' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('tab', { name: '权限设置' }))
+  expect(screen.queryByText('沿用现有规则')).not.toBeInTheDocument()
+  expect(screen.queryByText('查看报价、创建报价、编辑本人报价')).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: '权限矩阵' }))
+  const matrix = within(screen.getByRole('dialog', { name: '权限矩阵' }))
+  expect(matrix.getByRole('columnheader', { name: 'L2 个人操作' })).toBeVisible()
+  expect(matrix.getByRole('row', { name: /自助收寄/ })).toHaveTextContent('查看本人寄件记录')
+  expect(matrix.queryByText('提交本人寄件')).not.toBeInTheDocument()
+  expect(matrix.queryByRole('checkbox')).not.toBeInTheDocument()
+})
 
 describe('RoleAccessTab capability propagation', () => {
   it('forwards server editing capability and revokes editing when it changes', () => {
@@ -95,13 +121,20 @@ it('only lets verified system super administrators appoint the canonical role', 
     id: 'org-super', code: 'ORG_SUPER_ADMIN', name: '组织超级管理员',
     description: null, permissions: ['role:manage'], sort_order: 2,
   }
+  const baselineRole = { ...legacyRole, id: 'baseline', code: 'FXIAOKE_BASELINE', name: '纷享基础查看' }
+  const allRoles = [...roles, legacyRole, baselineRole]
+  const member: OrgSummaryUser = {
+    id: 'historical-member', display_name: '已有绑定员工', email: '', title: '', primary_dept_name: '',
+    role_names: '组织超级管理员,纷享基础查看', role_ids: [legacyRole.id, baselineRole.id],
+    status: 'active', membership_status: 'active', employment_status: 'active', login_enabled: true,
+  }
   const orgSummary: OrgSummaryPayload = {
-    organization: { id: 'org-1', name: '当前组织' }, roles: [...roles, legacyRole], users: [], departments: [], spaces: [],
+    organization: { id: 'org-1', name: '当前组织' }, roles: allRoles, users: [member], departments: [], spaces: [],
     role_membership_stats: {
       effectiveAvailable: true, pendingAvailable: true, activeSpaceIds: [], systemSuperAdminAssignableMemberIds: [],
     },
   }
-  const props = { ...defaults, roles: [...roles, legacyRole], orgSummary, permissionsEditable: true }
+  const props = { ...defaults, roles: allRoles, orgSummary, permissionsEditable: true }
   const { rerender } = render(<RoleAccessTab {...props} />)
   expect(screen.queryByRole('button', { name: '添加成员' })).not.toBeInTheDocument()
 
@@ -110,12 +143,14 @@ it('only lets verified system super administrators appoint the canonical role', 
 
   rerender(<RoleAccessTab {...props} systemSuperAdminAuthority={{ orgId: 'org-1' }} />)
   expect(screen.getByRole('button', { name: '添加成员' })).toBeEnabled()
-  fireEvent.click(screen.getByRole('button', { name: /组织超级管理员 ORG_SUPER_ADMIN/ }))
-  expect(screen.getByText('历史角色')).toBeInTheDocument()
-  expect(screen.getByText('ORG_SUPER_ADMIN · 历史角色已停用')).toBeInTheDocument()
-  expect(screen.getByText('旧授权仅可撤销')).toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: '添加成员' })).not.toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: /^超级管理员 SUPER_ADMIN/ }))
+  expect(screen.getByRole('button', { name: /^超级管理员 SUPER_ADMIN/ })).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.queryByRole('button', { name: /ORG_SUPER_ADMIN|FXIAOKE_BASELINE/ })).not.toBeInTheDocument()
+  expect(screen.queryByText('历史角色')).not.toBeInTheDocument()
+  for (const code of [legacyRole.code, baselineRole.code]) {
+    fireEvent.change(screen.getByPlaceholderText('搜索角色...'), { target: { value: code } })
+    expect(screen.getByText('未找到匹配的角色')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: new RegExp(code) })).not.toBeInTheDocument()
+  }
 
   rerender(<RoleAccessTab {...props} systemSuperAdminAuthority={{ orgId: 'org-1' }}
     orgSummary={{ ...orgSummary, role_membership_stats: undefined }} />)
@@ -137,7 +172,7 @@ it('only offers metadata controls to an exact-organization system administrator 
   view.rerender(<RoleAccessTab {...props} systemSuperAdminAuthority={metadataAuthority} />)
   expect(screen.getByRole('button', { name: '新建角色' })).toBeEnabled()
   expect(screen.queryByRole('button', { name: '改名' })).not.toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: /历史角色 FXIAOKE_BASELINE/ }))
+  expect(screen.queryByRole('button', { name: /FXIAOKE_BASELINE/ })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '归档' })).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: /销售 SALES/ }))
   expect(screen.getByRole('button', { name: '改名' })).toBeEnabled()

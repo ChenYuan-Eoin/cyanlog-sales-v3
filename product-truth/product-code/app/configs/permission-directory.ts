@@ -39,7 +39,7 @@ type PermissionDirectoryAction = PermissionDirectoryPlacement & {
 type PermissionDirectoryNote = {
   label: string
   description?: string
-  status: '沿用现有规则' | '待接入' | '系统控制'
+  status: '系统控制'
 }
 
 export interface PermissionDirectoryGroup {
@@ -103,10 +103,6 @@ function availableAction(key: string, label: string, description: string, depend
   return { key, label, description, dependencies, available: true }
 }
 
-function existing(label: string, description?: string): PermissionDirectoryNote {
-  return { label, description, status: '沿用现有规则' }
-}
-
 export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermissionCatalog = []): PermissionDirectoryGroup[] {
   const registered = new Map(moduleCatalog.flatMap(group => group.items)
     .filter(item => !('selectable' in item) || item.selectable !== false)
@@ -123,20 +119,11 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
 
   const groups: PermissionDirectoryGroup[] = [
     {
-      id: 'workbench', label: '工作台',
-      notes: [existing('查看工作台'), existing('查看部门经营数据', '按当前部门数据规则查询。')],
-    },
-    {
-      id: 'quotes', label: '报价中心',
-      notes: [existing('查看报价、创建报价、编辑本人报价', '按现有报价规则执行。')],
-    },
-    {
       id: 'shipping', label: '自助收寄', entry: 'shipping',
       children: [
         {
           id: 'shipping-personal', label: '本人寄件',
           actions: shippingActions(SHIPPING_OWNER_ACTION_KEYS),
-          notes: [existing('本人数据范围', '只处理本人提报，并校验纷享登录资格和单据状态。')],
         },
         { id: 'shipping-workbench', label: '收寄工作台', actions: shippingActions(SHIPPING_WORKBENCH_ACTION_KEYS) },
       ],
@@ -144,23 +131,6 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
     {
       id: 'shipping-settings', label: '寄件设置', entry: 'shipping-settings',
       actions: shippingActions(SHIPPING_SETTINGS_ACTION_KEYS),
-      notes: [existing('与配置中心中的「寄件配置」共用权限。')],
-    },
-    {
-      id: 'contracts', label: '合同审核',
-      notes: [existing('查看合同、新建或上传合同、执行审核')],
-    },
-    {
-      id: 'tenders', label: '标书中心',
-      notes: [existing('查看标书、上传识别、推进流程')],
-    },
-    {
-      id: 'knowledge', label: '知识库',
-      notes: [existing('查看、编辑和管理知识页', '由具体知识页的授权控制。')],
-    },
-    {
-      id: 'schedule', label: '日程',
-      notes: [existing('查看、新建和更新日程')],
     },
     {
       id: 'config', label: '配置中心', entry: 'config',
@@ -170,10 +140,6 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
         availableAction('config:publish', '配置发布', '发布通用配置。编辑或回滚已生效的通用配置时，还须具有修改权限。'),
       ],
       children: [
-        { id: 'trading', label: '定价与审批', notes: [existing('使用本页支持的通用配置权限')] },
-        { id: 'quote-output', label: '报价输出', notes: [existing('使用本页支持的通用配置权限')] },
-        { id: 'contract-rules', label: '合同规则', notes: [existing('按已有合同规则入口执行')] },
-        { id: 'shipping-config', label: '寄件配置', notes: [existing('所用权限见「寄件设置」')] },
         {
           id: 'config-org', label: '组织与权限',
           children: [
@@ -227,8 +193,6 @@ export function buildRolePermissionDirectory(moduleCatalog: RoleModulePermission
             },
           ],
         },
-        { id: 'experience', label: '品牌与主题', notes: [existing('按已有主题入口执行')] },
-        { id: 'ai-platform', label: 'AI 平台', notes: [existing('按已有 AI 平台入口执行')] },
       ],
     },
   ]

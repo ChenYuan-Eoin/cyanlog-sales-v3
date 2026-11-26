@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ConfigRoleRecord } from '@/lib/org-role-permission-readback'
 import type { ConfigTabId, OrgSummaryPayload } from './types'
@@ -259,8 +259,7 @@ it('opens the organization directory when member-only access requests the role t
   await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/api/admin/org', expect.anything()))
   expect(fetcher.mock.calls.some(([url]) => url === roleList)).toBe(false)
   expect(screen.queryByRole('button', { name: /外部系统接入|角色权限|定价与审批/ })).not.toBeInTheDocument()
-  expect(screen.getByRole('combobox', { name: '组织与权限视图' })).toHaveValue('org-structure')
-  expect(screen.queryByRole('option', { name: '角色' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /^组织架构/ })).toHaveAttribute('aria-current', 'page')
   expect(window.location.search).toBe('?tab=org-structure')
 })
 
@@ -272,8 +271,8 @@ it('opens only the standalone role directory without requesting the organization
   render(<ConfigsClient tabAccess={roleDirectoryOnly} />)
 
   expect(await screen.findByRole('tab', { name: '权限设置' })).toBeVisible()
-  expect(screen.getByRole('combobox', { name: '组织与权限视图' })).toHaveValue('role-access')
-  expect(screen.queryByRole('option', { name: '组织架构' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /^角色权限/ })).toHaveAttribute('aria-current', 'page')
+  expect(screen.queryByRole('button', { name: /^组织架构|^外部系统接入/ })).not.toBeInTheDocument()
   expect(screen.getByLabelText('成员角色标签')).toBeEmptyDOMElement()
   expect(screen.queryByRole('button', { name: '提交角色维护' })).not.toBeInTheDocument()
   expect(screen.queryByText('组织架构加载失败')).not.toBeInTheDocument()
@@ -281,6 +280,24 @@ it('opens only the standalone role directory without requesting the organization
   fireEvent(window, new Event('focus'))
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
   expect(fetcher.mock.calls.map(([url]) => url)).toEqual([roleList, roleList])
+})
+
+it('excludes retired roles from the navigation and header counts', async () => {
+  const roles = [
+    role(existingPermissions),
+    { ...role(['*']), id: 'system-root', code: 'SUPER_ADMIN', name: '超级管理员' },
+    { ...role([]), id: 'legacy-root', code: 'ORG_SUPER_ADMIN', name: '旧组织超管' },
+    { ...role([]), id: 'legacy-baseline', code: 'FXIAOKE_BASELINE', name: '纷享基础查看' },
+  ]
+  fetcher.mockResolvedValue(Response.json({ success: true, data: {
+    org_id: organization, roles, permissions_editable: false, permission_catalog: [],
+  } }))
+  render(<ConfigsClient tabAccess={roleDirectoryOnly} />)
+
+  const roleTab = await screen.findByRole('button', { name: /^角色权限/ })
+  expect(roleTab).toHaveAttribute('aria-current', 'page')
+  expect(await within(roleTab).findByText('2 项')).toBeInTheDocument()
+  expect(within(screen.getByText('角色总数').parentElement!).getByText('2')).toBeInTheDocument()
 })
 
 it('clears the roster when organization access is removed and ignores its in-flight response', async () => {
@@ -311,7 +328,7 @@ it('clears the roster when organization access is removed and ignores its in-fli
   expect(readDirectory).toHaveBeenCalledTimes(2)
 })
 
-it('switches organization and roles through a single selector and keeps integrations separate', async () => {
+it('opens organization, integrations and roles from three separate buttons in section order', async () => {
   window.history.replaceState({}, '', '/configs?tab=org-structure')
   const pendingRoleList = deferredResponse()
   fetcher.mockImplementation(async input => {
@@ -321,27 +338,31 @@ it('switches organization and roles through a single selector and keeps integrat
   })
   render(<ConfigsClient tabAccess={{ general: false, organization: true, integrations: true, roles: true, shipping: false }} />)
 
-  const selector = await screen.findByRole('combobox', { name: '组织与权限视图' })
-  expect(selector).toHaveValue('org-structure')
-  expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual(['组织架构', '角色'])
+  const organizationTab = await screen.findByRole('button', { name: /^组织架构/ })
+  const integrationsTab = screen.getByRole('button', { name: /^外部系统接入/ })
+  const roleTab = screen.getByRole('button', { name: /^角色权限/ })
+  expect(within(organizationTab.parentElement!).getAllByRole('button')).toEqual([organizationTab, integrationsTab, roleTab])
+  expect(organizationTab).toHaveAttribute('aria-current', 'page')
+  expect(screen.queryByRole('combobox', { name: '组织与权限视图' })).not.toBeInTheDocument()
   await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/api/admin/org', expect.anything()))
   expect(fetcher.mock.calls.some(([url]) => url === roleList)).toBe(false)
-  expect(screen.queryByRole('button', { name: /^组织架构|^角色权限/ })).not.toBeInTheDocument()
-
-  fireEvent.change(selector, { target: { value: 'role-access' } })
+  fireEvent.click(roleTab)
+  expect(roleTab).toHaveAttribute('aria-current', 'page')
+  expect(organizationTab).not.toHaveAttribute('aria-current')
   expect(screen.getByRole('heading', { name: '角色权限' })).toBeVisible()
   expect(window.location.search).toBe('?tab=role-access')
   expect(screen.queryByRole('tab', { name: '权限设置' })).not.toBeInTheDocument()
   await act(async () => pendingRoleList.resolve(rolesResponse()))
   expect(await screen.findByRole('tab', { name: '权限设置' })).toBeInTheDocument()
 
-  fireEvent.click(screen.getByRole('button', { name: /^外部系统接入/ }))
+  fireEvent.click(integrationsTab)
+  expect(integrationsTab).toHaveAttribute('aria-current', 'page')
+  expect(roleTab).not.toHaveAttribute('aria-current')
   expect(screen.getByRole('heading', { name: '外部系统接入' })).toBeVisible()
   expect(window.location.search).toBe('?tab=integrations')
-  expect(selector).toHaveValue('')
   expect(screen.queryByRole('tab', { name: '权限设置' })).not.toBeInTheDocument()
 
-  fireEvent.change(selector, { target: { value: 'org-structure' } })
+  fireEvent.click(organizationTab)
   expect(screen.getByRole('heading', { name: '组织架构' })).toBeVisible()
   expect(window.location.search).toBe('?tab=org-structure')
 })
@@ -359,6 +380,6 @@ it('opens the external connections tab with only integration access', async () =
 
   expect(await screen.findByRole('heading', { name: '外部系统接入' })).toBeVisible()
   expect(screen.queryByRole('button', { name: /组织架构|角色权限|定价与审批/ })).not.toBeInTheDocument()
-  expect(screen.queryByRole('combobox', { name: '组织与权限视图' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /^外部系统接入/ })).toHaveAttribute('aria-current', 'page')
   expect(window.location.search).toBe('?tab=integrations')
 })

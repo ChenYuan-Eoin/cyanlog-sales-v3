@@ -9,10 +9,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { SearchIcon, UsersIcon, ShieldIcon, ChevronRightIcon } from 'lucide-react'
 import { getRoleMembershipStats, type RoleMembershipStats } from './role-membership-stats'
 import { RoleDetailPanel } from './RoleDetailPanel'
-import { PermissionRegistryPanel } from './PermissionRegistryPanel'
+import { PermissionMatrixDialog } from './PermissionMatrixDialog'
 import type { OrgSummaryPayload } from '../types'
 import type { ConfigRoleRecord, RoleModulePermissionCatalog, ShippingPermissionPublication } from '@/lib/org-role-permission-readback'
-import { isRetiredRoleCode, ORG_SUPER_ADMIN_ROLE_CODE } from '@/lib/role-permission-resolution'
+import { isRetiredRoleCode } from '@/lib/role-permission-resolution'
 import { isRoleMetadataEditable, type RoleMetadataChange } from './role-metadata'
 
 interface RoleAccessTabProps {
@@ -33,8 +33,6 @@ interface RoleAccessTabProps {
 interface RoleWithStats extends ConfigRoleRecord {
   membershipStats: RoleMembershipStats
   isSuperAdmin: boolean
-  isOrgSuperAdmin: boolean
-  isRetired: boolean
 }
 
 export default function RoleAccessTab({
@@ -76,17 +74,14 @@ export default function RoleAccessTab({
 
   const rolesWithStats: RoleWithStats[] = useMemo(() => {
     const users = orgSummary?.users ?? []
-    return roles.map(role => {
+    return roles.filter(role => !isRetiredRoleCode(role.code)).map(role => {
       return {
         ...role,
         membershipStats: getRoleMembershipStats(users, role.id, orgSummary),
         isSuperAdmin: role.code === 'SUPER_ADMIN',
-        isOrgSuperAdmin: role.code === ORG_SUPER_ADMIN_ROLE_CODE,
-        isRetired: isRetiredRoleCode(role.code),
       }
     }).sort((a, b) => {
       if (a.isSuperAdmin !== b.isSuperAdmin) return a.isSuperAdmin ? -1 : 1
-      if (a.isOrgSuperAdmin !== b.isOrgSuperAdmin) return a.isOrgSuperAdmin ? -1 : 1
       return (a.sort_order ?? 999) - (b.sort_order ?? 999)
     })
   }, [roles, orgSummary])
@@ -151,10 +146,6 @@ export default function RoleAccessTab({
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_300px]">
-      <div className="col-span-full">
-        <PermissionRegistryPanel />
-      </div>
-
       {/* 左侧角色列表 */}
       <div className="min-w-0">
         <div className="rounded-lg border bg-white">
@@ -192,8 +183,7 @@ export default function RoleAccessTab({
                 key={role.id}
                 type="button"
                 aria-pressed={selectedRole?.id === role.id}
-                aria-label={role.isRetired ? `${role.name} ${role.code}，已停用`
-                  : `${role.name} ${role.code}，已生效 ${role.membershipStats.effectiveMemberCount ?? '待核对'}，待生效 ${role.membershipStats.pendingMemberCount ?? '待核对'}，生效作用域绑定 ${role.membershipStats.effectiveBindingCount ?? '待核对'}`}
+                aria-label={`${role.name} ${role.code}，已生效 ${role.membershipStats.effectiveMemberCount ?? '待核对'}，待生效 ${role.membershipStats.pendingMemberCount ?? '待核对'}，生效作用域绑定 ${role.membershipStats.effectiveBindingCount ?? '待核对'}`}
                 onClick={() => setSelectedRoleId(role.id)}
                 className={`w-full flex items-center gap-3 rounded-lg px-3 py-3 text-left transition ${
                   selectedRoleId === role.id
@@ -203,27 +193,25 @@ export default function RoleAccessTab({
               >
                 <div
                   className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                    role.isSuperAdmin || role.isOrgSuperAdmin ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                    role.isSuperAdmin ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
                   }`}
                 >
-                  {role.isSuperAdmin || role.isOrgSuperAdmin ? <ShieldIcon size={20} /> : <UsersIcon size={20} />}
+                  {role.isSuperAdmin ? <ShieldIcon size={20} /> : <UsersIcon size={20} />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-slate-900 truncate">{role.name}</span>
-                    {(role.isSuperAdmin || role.isRetired) && (
+                    {role.isSuperAdmin && (
                       <Badge variant="outline" className="text-xs shrink-0 text-amber-600 border-amber-200">
-                        {role.isSuperAdmin ? '系统角色' : '历史角色'}
+                        系统角色
                       </Badge>
                     )}
                   </div>
                   <div className="text-xs text-slate-500 mt-0.5">{role.code}</div>
                   <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-slate-600">
-                    {role.isRetired ? <span>已停用 · 仅可撤销</span> : <>
-                      <span>已生效 {role.membershipStats.effectiveMemberCount ?? '待核对'}</span>
-                      <span>待生效 {role.membershipStats.pendingMemberCount ?? '待核对'}</span>
-                      <span>生效绑定 {role.membershipStats.effectiveBindingCount ?? '待核对'}</span>
-                    </>}
+                    <span>已生效 {role.membershipStats.effectiveMemberCount ?? '待核对'}</span>
+                    <span>待生效 {role.membershipStats.pendingMemberCount ?? '待核对'}</span>
+                    <span>生效绑定 {role.membershipStats.effectiveBindingCount ?? '待核对'}</span>
                   </div>
                 </div>
                 <ChevronRightIcon size={16} className="shrink-0 text-slate-400" aria-hidden="true" />
@@ -279,32 +267,28 @@ export default function RoleAccessTab({
 
       <div className="min-w-0 space-y-4">
         <div className="rounded-lg border bg-white p-4">
-          <h3 className="font-medium text-slate-900">权限摘要</h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-medium text-slate-900">权限摘要</h3>
+            <PermissionMatrixDialog catalog={modulePermissionCatalog} />
+          </div>
           {selectedRole ? (
             <div className="mt-4 space-y-3 text-sm">
               <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                 <span className="text-slate-500">角色编码</span>
                 <span className="font-mono text-xs text-slate-700">{selectedRole.code}</span>
               </div>
-              {selectedRole.isRetired ? (
-                <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                  <span className="text-slate-500">角色状态</span>
-                  <span className="font-semibold text-slate-900">已停用</span>
-                </div>
-              ) : <>
-                <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                  <span className="text-slate-500">已生效成员</span>
-                  <span className="font-semibold text-slate-900">{selectedRole.membershipStats.effectiveMemberCount ?? '待核对'}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                  <span className="text-slate-500">待生效成员</span>
-                  <span className="font-semibold text-slate-900">{selectedRole.membershipStats.pendingMemberCount ?? '待核对'}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                  <span className="text-slate-500">生效作用域绑定</span>
-                  <span className="font-semibold text-slate-900">{selectedRole.membershipStats.effectiveBindingCount ?? '待核对'}</span>
-                </div>
-              </>}
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-slate-500">已生效成员</span>
+                <span className="font-semibold text-slate-900">{selectedRole.membershipStats.effectiveMemberCount ?? '待核对'}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-slate-500">待生效成员</span>
+                <span className="font-semibold text-slate-900">{selectedRole.membershipStats.pendingMemberCount ?? '待核对'}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-slate-500">生效作用域绑定</span>
+                <span className="font-semibold text-slate-900">{selectedRole.membershipStats.effectiveBindingCount ?? '待核对'}</span>
+              </div>
               <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                 <span className="text-slate-500">权限点</span>
                 <span className="font-semibold text-slate-900">

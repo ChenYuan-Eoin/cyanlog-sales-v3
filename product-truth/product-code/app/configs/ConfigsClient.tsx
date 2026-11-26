@@ -29,6 +29,7 @@ import { isGenericallyAssignableRole } from './tabs/role-assignment-policy'
 import { isRoleMetadataEditable, saveAndReadRoleMetadata, type RoleMetadataChange } from './tabs/role-metadata'
 import { confirmAction } from '@/lib/toast'
 import { loadConfigProductsForCache } from '@/lib/core-page-warmup'
+import { isRetiredRoleCode } from '@/lib/role-permission-resolution'
 import {
   loadOrgRolePermissionSnapshot,
   RolePermissionRequestError,
@@ -930,9 +931,8 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
   const activeSection = CONFIG_TABS[activeTab].section
   const sectionMeta = visibleSections.find((section) => section.id === activeSection) || CONFIG_SECTIONS[0]
   const sectionTabs = sectionMeta.tabs
-  const organizationViewTabs = sectionTabs.filter(tab => tab === 'org-structure' || tab === 'role-access')
-  const activeOrganizationView = organizationViewTabs.find(tab => tab === activeTab)
   const activeTabLoading = loading && !loadedTabs.has(activeTab)
+  const activeRoleCount = useMemo(() => roles.filter(role => !isRetiredRoleCode(role.code)).length, [roles])
 
   const moduleCounts = useMemo<Record<ConfigTabId, number>>(() => ({
     'price-list': products.length,
@@ -943,7 +943,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
     theme: getConfigsByType('UI_THEME').length,
     'org-structure': orgSummary?.departments.length ?? 0,
     integrations: 0,
-    'role-access': roles.length,
+    'role-access': activeRoleCount,
     'business-params': 0,
     'product-versions': 0,
     'price-matrix': 0,
@@ -955,7 +955,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
     'clause-mappings': 0,
     'numbering-rules': 0,
     shipping: 0,
-  }), [getConfigsByType, orgSummary?.departments.length, products, rules, roles])
+  }), [activeRoleCount, getConfigsByType, orgSummary?.departments.length, products, rules])
 
   const formatModuleCount = useCallback((tabId: ConfigTabId) => {
     if (error && tabId === activeTab && !loadedTabs.has(tabId) && !activeTabLoading) {
@@ -1027,14 +1027,14 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
         ]
       case 'role-access':
         return [
-          { label: '角色总数', value: countValue(roles.length) },
+          { label: '角色总数', value: countValue(activeRoleCount) },
           { label: '能力分组', value: String(buildRolePermissionDirectory(roleAuthority?.modulePermissionCatalog).length) },
           { label: '作用域层级', value: String(DATA_SCOPE_LEVELS.length) },
         ]
       default:
         return []
     }
-  }, [activeTab, activeTabLoading, error, getConfigsByType, loadedTabs, orgSummary?.departments.length, orgSummary?.directory_roster, products, roleAuthority?.modulePermissionCatalog, roles.length, rules])
+  }, [activeRoleCount, activeTab, activeTabLoading, error, getConfigsByType, loadedTabs, orgSummary?.departments.length, orgSummary?.directory_roster, products, roleAuthority?.modulePermissionCatalog, rules])
 
   function switchSection(sectionId: ConfigSectionId) {
     const nextSection = visibleSections.find((section) => section.id === sectionId)
@@ -1860,27 +1860,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-4 xl:mt-6 xl:pt-6">
-                {organizationViewTabs.length > 0 && (
-                  <select
-                    aria-label="组织与权限视图"
-                    value={activeOrganizationView ?? ''}
-                    onChange={event => {
-                      const selectedView = organizationViewTabs.find(tab => tab === event.target.value)
-                      if (selectedView) setActiveTab(selectedView)
-                    }}
-                    className={`min-h-10 rounded-full border py-2 pl-4 pr-8 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 focus-visible:ring-offset-2 ${
-                      activeOrganizationView
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
-                    }`}
-                  >
-                    {!activeOrganizationView && <option value="" disabled hidden>选择视图</option>}
-                    {organizationViewTabs.map(tab => (
-                      <option key={tab} value={tab} className="bg-white text-slate-900">{tab === 'role-access' ? '角色' : '组织架构'}</option>
-                    ))}
-                  </select>
-                )}
-                {sectionTabs.filter(tab => tab !== 'org-structure' && tab !== 'role-access').map((tabId) => {
+                {sectionTabs.map((tabId) => {
                   const meta = CONFIG_TABS[tabId]
                   const TabIcon = meta.icon
                   const isActive = tabId === activeTab
@@ -1889,6 +1869,7 @@ export default function ConfigsClient({ initialData, routeState, tabAccess }: Co
                     <button
                       key={tabId}
                       type="button"
+                      aria-current={isActive ? 'page' : undefined}
                       onClick={() => setActiveTab(tabId)}
                       onMouseEnter={() => { void loadTabData(tabId, { background: true }) }}
                       onFocus={() => { void loadTabData(tabId, { background: true }) }}
