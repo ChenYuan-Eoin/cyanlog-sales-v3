@@ -573,23 +573,30 @@ describe('role-free federated session boundary', () => {
     req.cookies.get = vi.fn().mockReturnValue({ value: 'admin-token' })
     expect((await middleware(req)).status).toBe(200)
   })
-  it('allows only the waiting page and sign-out while blocking business pages and APIs', async () => {
+  it('allows the waiting page, self profile and sign-out while blocking business access until an explicit grant', async () => {
     mockExactOrgAuth({ token: 'role-free-token', orgId: 'org-a', roles: [], authMethod: 'fxiaoke' })
     const headers = { host: 'sales.cyanlog.icu' }
-    const makeAuthed = (path: string) => {
-      const req = makeRequest(`https://sales.cyanlog.icu${path}`, headers)
+    const makeAuthed = (path: string, method = 'GET') => {
+      const req = makeRequest(`https://sales.cyanlog.icu${path}`, headers, method)
       req.cookies.get = vi.fn().mockReturnValue({ value: 'role-free-token' })
       return req
     }
 
     expect((await middleware(makeAuthed('/pending-access'))).status).toBe(200)
     expect((await middleware(makeAuthed('/api/auth/logout'))).status).toBe(200)
+    expect((await middleware(makeAuthed('/api/auth/activity', 'POST'))).status).toBe(200)
+    expect((await middleware(makeAuthed('/api/profile'))).status).toBe(200)
+    expect((await middleware(makeAuthed('/api/profile', 'PATCH'))).status).toBe(403)
     const page = await middleware(makeAuthed('/quotes'))
     expect(page.status).toBe(307)
     expect(page.headers.get('location')).toBe('https://sales.cyanlog.icu/pending-access')
     const api = await middleware(makeAuthed('/api/quotes'))
     expect(api.status).toBe(403)
     expect((await api.json()).code).toBe('ROLE_REQUIRED')
+    mockExactOrgAuth({ token: 'role-free-token', orgId: 'org-a', authMethod: 'fxiaoke', roles: [
+      { roles: { id: 'sales-viewer', code: 'SALES_VIEWER', permissions: ['quote:view'] } },
+    ] })
+    expect((await middleware(makeAuthed('/quotes'))).status).toBe(200)
   })
 
   it('rejects an SSO token immediately when identity authority is disabled', async () => {

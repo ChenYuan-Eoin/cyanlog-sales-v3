@@ -12,7 +12,7 @@ const revision = '44444444-4444-4444-8444-444444444444'
 const adminRole = '55555555-5555-4555-8555-555555555555'
 
 describe('Fxiaoke baseline viewing role', () => {
-  it('grants only the checked read-only role once to an eligible member and denies stopped identities', async () => {
+  it('stops issuing new baseline grants while retaining prior grants and validating legacy callers', async () => {
     const db = await productionSchemaDatabase()
     try {
       await db.exec(migration('20261021000006_personnel_lifecycle_commands.sql'))
@@ -88,6 +88,23 @@ describe('Fxiaoke baseline viewing role', () => {
         select r.code, ur.scope_type from public.user_roles ur join public.roles r on r.id = ur.role_id
         where ur.user_id = '${scopedMember}'`)
       expect(scopedRoles.rows).toEqual([{ code: 'DEPARTMENT_VIEWER', scope_type: 'department' }])
+
+      await db.exec(migration('20261126050407_stop_fxiaoke_automatic_baseline_grants.sql'))
+      await db.query('delete from public.user_roles where user_id = $1', [scopedMember])
+      const oldLogin = await db.query<{ accepted: boolean }>(
+        'select public.ensure_fxiaoke_baseline_view_v1($1, $2, $3) as accepted',
+        [org, 'employee-scoped', scopedMember],
+      )
+      expect(oldLogin.rows).toEqual([{ accepted: true }])
+      const remainingGrants = await db.query<{ user_id: string; code: string }>(`
+        select ur.user_id, r.code from public.user_roles ur join public.roles r on r.id = ur.role_id
+        where ur.user_id in ($1, $2)`, [member, scopedMember])
+      expect(remainingGrants.rows).toEqual([{ user_id: member, code: 'FXIAOKE_BASELINE' }])
+      const newAudit = await db.query<{ count: number }>(`
+        select count(*)::int as count from public.personnel_lifecycle_events
+        where target_user_id = $1 and command = 'fxiaoke_baseline_view_granted'`, [scopedMember])
+      expect(newAudit.rows).toEqual([{ count: 0 }])
+
       await db.exec(`update public.external_identities set profile_snapshot = jsonb_set(profile_snapshot, '{status}', '"inactive"'::jsonb) where source_id = '${source}'`)
       const stopped = await db.query<{ accepted: boolean }>(`select public.ensure_fxiaoke_baseline_view_v1('${org}', 'employee-1', '${member}') as accepted`)
       expect(stopped.rows[0].accepted).toBe(false)

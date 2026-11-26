@@ -470,11 +470,10 @@ export async function middleware(request: NextRequest) {
     // Session management is authenticated but does not require a business role.
     if (pathname === '/api/auth/activity' && ['GET', 'POST'].includes(request.method)) return NextResponse.next()
 
-    // Some legacy business APIs check only authentication. A role-free SSO
-    // member may view only the waiting page and sign out; no business route
-    // can be reached through a guessed URL or direct API request.
+    // A role-free member can wait for authorization and read their own profile.
     if (authContext.roleCodes.length === 0 && !authContext.departmentWorkspaceAccess) {
       if (pathname === '/pending-access' || pathname === '/api/auth/logout') return NextResponse.next()
+      if (pathname === '/api/profile' && ['GET', 'HEAD'].includes(request.method)) return NextResponse.next()
       if (pathname.startsWith('/api/')) {
         return NextResponse.json({ error: '尚未分配业务权限', code: 'ROLE_REQUIRED' }, { status: 403 })
       }

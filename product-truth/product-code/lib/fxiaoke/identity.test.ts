@@ -7,7 +7,6 @@ const db = vi.hoisted(() => ({
   users: [] as Array<Record<string, unknown>>,
   memberships: [] as Array<Record<string, unknown>>,
   activationAllowed: true,
-  baselineAllowed: true,
 }))
 
 function matches(row: Record<string, unknown>, filters: Array<[string, unknown]>) {
@@ -17,7 +16,7 @@ function matches(row: Record<string, unknown>, filters: Array<[string, unknown]>
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     rpc: vi.fn(async (name: string, args: { p_expected_user_id: string }) => {
-      if (name === 'ensure_fxiaoke_baseline_view_v1') return { data: db.baselineAllowed, error: null }
+      if (name !== 'activate_fxiaoke_sso_member_v1') throw new Error(`unexpected identity command ${name}`)
       if (!db.activationAllowed) return { data: null, error: null }
       const user = db.users.find(row => row.id === args.p_expected_user_id)
       const membership = db.memberships.find(row => row.user_id === args.p_expected_user_id)
@@ -63,6 +62,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { normalizeIdentityPhone, resolveFxiaokeIdentity } from './identity'
+import { supabaseAdmin } from '@/lib/supabase'
 
 const orgId = '00000001-0000-0000-0000-000000000000'
 const otherOrgId = '99999999-9999-4999-8999-999999999999'
@@ -122,7 +122,7 @@ describe('Fxiaoke stable identity resolution', () => {
     db.users.length = 0
     db.memberships.length = 0
     db.activationAllowed = true
-    db.baselineAllowed = true
+    vi.clearAllMocks()
   })
 
   it('normalizes supported provider phones without claiming independent verification', () => {
@@ -149,6 +149,9 @@ describe('Fxiaoke stable identity resolution', () => {
     await expect(resolveFxiaokeIdentity(input)).resolves.toEqual({ userId, orgId })
     expect(db.users[0]).toMatchObject({ status: 'active', login_enabled: true })
     expect(db.memberships[0].status).toBe('active')
+    expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith('activate_fxiaoke_sso_member_v1', {
+      p_org_id: orgId, p_external_user_id: input.externalSubject, p_expected_user_id: userId,
+    })
   })
 
   it('denies login when the atomic directory eligibility check refuses promotion', async () => {
@@ -159,14 +162,6 @@ describe('Fxiaoke stable identity resolution', () => {
     db.activationAllowed = false
 
     await expect(resolveFxiaokeIdentity(input)).rejects.toMatchObject({ code: 'IDENTITY_DISABLED' })
-  })
-
-  it('fails closed when baseline viewing cannot be granted', async () => {
-    seedSource()
-    seedMapping()
-    seedUser()
-    db.baselineAllowed = false
-    await expect(resolveFxiaokeIdentity(input)).rejects.toMatchObject({ code: 'BASELINE_ROLE_UNAVAILABLE', status: 503 })
   })
 
   it('resolves the database seed organization UUID', async () => {

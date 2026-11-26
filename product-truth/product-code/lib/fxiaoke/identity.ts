@@ -157,7 +157,8 @@ export async function resolveFxiaokeIdentity(input: {
 
   // The service-role RPC rechecks the verified source, stable mapping,
   // directory status and current membership under one organization lock.
-  // It may establish a pending directory account, but grants no role.
+  // It may activate a pending directory account and apply roles already
+  // assigned to this employee by an administrator.
   const { data: activatedId, error: activationError } = await supabaseAdmin.rpc(
     'activate_fxiaoke_sso_member_v1', {
       p_org_id: input.orgId,
@@ -168,18 +169,6 @@ export async function resolveFxiaokeIdentity(input: {
   if (activationError) throw storageUnavailable()
   if (activatedId !== mapping.canonical_user_id) {
     throw new FxiaokeError('IDENTITY_DISABLED', '当前纷享员工不具备登录资格。', 403)
-  }
-
-  const { data: baselineReady, error: baselineError } = await supabaseAdmin.rpc(
-    'ensure_fxiaoke_baseline_view_v1', {
-      p_org_id: input.orgId,
-      p_external_user_id: input.externalSubject,
-      p_expected_user_id: mapping.canonical_user_id,
-    },
-  )
-  if (baselineError) throw storageUnavailable()
-  if (baselineReady !== true) {
-    throw new FxiaokeError('BASELINE_ROLE_UNAVAILABLE', '基础查看权限暂不可用，请联系管理员核对角色设置。', 503)
   }
 
   const resolved = await loadActiveUser(mapping.canonical_user_id, input.orgId)

@@ -14,11 +14,12 @@ function usesPublicLayout(pathname: string) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  const showSidebar = !usesPublicLayout(pathname)
+  const publicLayout = usesPublicLayout(pathname)
+  const showSidebar = !publicLayout && pathname !== '/pending-access'
 
   return (
     <div data-slot="app-root" className="isolate min-h-screen">
-      {showSidebar && pathname !== '/accept-invitation' && !pathname.startsWith('/accept-invitation/') ? <SessionActivity /> : null}
+      {!publicLayout && pathname !== '/accept-invitation' && !pathname.startsWith('/accept-invitation/') ? <SessionActivity /> : null}
       {showSidebar ? <Sidebar /> : null}
       <main className={cn(
         'min-h-screen bg-background',
