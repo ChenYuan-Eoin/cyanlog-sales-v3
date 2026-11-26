@@ -6,6 +6,7 @@ import { checkShippingPolicy, submitShipping, shippingRequestId } from './servic
 import { shippingStoreForOrg } from './store'
 import { getCarrierAdapter } from './carrier-adapter'
 import { recordShippingCapability } from './connections'
+import { requireShippingOperator } from './operator-access'
 import { contactSchema } from './validation'
 import type { ShippingInput, ShippingPayment } from './types'
 
@@ -65,9 +66,13 @@ export async function returnShipmentOrder(id: string, userId: string, orgId: str
 
 export async function confirmAndSubmitShipment(id: string, userId: string, orgId: string, selection?: ConfirmationSelection) {
   const row = await loadForAction(id, orgId)
+  if (row.status === 'order_unknown') {
+    const reconcileOrgId = await requireShippingOperator(userId, 'shipping:order_reconcile')
+    if (reconcileOrgId !== orgId) throw new ShippingError(403, '当前账号没有本组织的下单结果查回权限。')
+    return reconcileShipmentOrder(id, orgId)
+  }
   getCarrierAdapter(row.provider_key)
-  if (!['accepted', 'awaiting_confirmation', 'confirmed', 'order_unknown'].includes(row.status)) throw new ShippingError(409, '当前寄件单不能确认下单。')
-  if (row.status === 'order_unknown') return reconcileShipmentOrder(id, orgId)
+  if (!['accepted', 'awaiting_confirmation', 'confirmed'].includes(row.status)) throw new ShippingError(409, '当前寄件单不能确认下单。')
   const { connection, carrier, input, snapshot } = await orderRuntime(row, orgId, selection)
   const recovery = snapshot.dispatchRecovery as { requestKey?: string } | undefined
   const requestKey = recovery?.requestKey || id

@@ -7,7 +7,7 @@ type Context = { params: Promise<{ orderNo: string }> }
 export async function GET(req: NextRequest, { params }: Context) {
   // Preparing an action can query carrier readiness, so passive record access is insufficient.
   return shippingHandler(req, async (user, orgId) => {
-    return getCarrierChange({ orgId, userId: user.id, orderNo: (await params).orderNo })
+    return getCarrierChange({ orgId, userId: user.id, orderNo: (await params).orderNo }, { checkAvailability: true })
   }, 'owner')
 }
 export async function POST(req: NextRequest, { params }: Context) {

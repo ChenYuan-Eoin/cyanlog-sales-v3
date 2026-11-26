@@ -65,12 +65,12 @@ function connectOriginal(orgId: string, original: z.infer<typeof context>) {
     billingAccountId: original.accountId, payment: 'sender_monthly', requireOrderCapability: false,
     expectedEnvironment: original.environment })
 }
-export async function getCarrierChange(scope: Scope): Promise<CarrierChangeDetail> {
+export async function getCarrierChange(scope: Scope, { checkAvailability }: { checkAvailability: boolean }): Promise<CarrierChangeDetail> {
   const state = await readOrClaim(scope)
   if (state.result !== 'detail') throw new ShippingError(503, '工单状态暂时无法读取。')
   const currentRecipient = validContact(state.currentRecipient)
   const returnDestination = validContact(state.returnDestination)
-  let allowed = Boolean(state.context && currentRecipient && returnDestination)
+  let allowed = checkAvailability && Boolean(state.context && currentRecipient && returnDestination)
   if (allowed && state.context?.environment === 'sandbox') {
     const original = state.context
     const carrier = await connectOriginal(scope.orgId, original)

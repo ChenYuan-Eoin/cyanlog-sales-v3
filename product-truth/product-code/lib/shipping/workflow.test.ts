@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { NextRequest } from 'next/server'
 import type { CarrierAdapter } from './carrier-adapter'
 
 const adapterOverride = vi.hoisted(() => ({ value: undefined as CarrierAdapter | undefined }))
@@ -8,14 +9,17 @@ vi.mock('./carrier-adapter', async importOriginal => {
   return { ...real, getCarrierAdapter: (key: string) => adapterOverride.value?.key === key ? adapterOverride.value : real.getCarrierAdapter(key) }
 })
 
-const mocks = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), runtimeConfig: vi.fn(), service: vi.fn(), cancel: vi.fn(), lookup: vi.fn(), submit: vi.fn(), capability: vi.fn(), defaultOrg: vi.fn() }))
+const mocks = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), runtimeConfig: vi.fn(), service: vi.fn(), cancel: vi.fn(), lookup: vi.fn(), submit: vi.fn(), capability: vi.fn(), defaultOrg: vi.fn(), operator: vi.fn(), auth: vi.fn() }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from, rpc: mocks.rpc } }))
+vi.mock('@/lib/auth', () => ({ requireAuth: mocks.auth, AuthError: class extends Error {} }))
 vi.mock('@/lib/scoped-access', () => ({ getDefaultOrgId: mocks.defaultOrg }))
 vi.mock('./runtime-config', () => ({ getShippingRuntimeConfig: mocks.runtimeConfig, selectAuthorizedShippingService: mocks.service }))
 vi.mock('./sf-client', () => ({ cancelSfOrder: mocks.cancel, lookupSfOrder: mocks.lookup, createSfOrder: vi.fn() }))
 vi.mock('./service', async importOriginal => ({ ...await importOriginal<typeof import('./service')>(), submitShipping: mocks.submit, checkShippingPolicy: vi.fn() }))
 vi.mock('./connections', () => ({ recordShippingCapability: mocks.capability }))
 vi.mock('./store', () => ({ shippingStoreForOrg: vi.fn(() => ({})) }))
+vi.mock('./operator-access', () => ({ requireShippingOperator: mocks.operator }))
+import { POST as confirmShipment } from '@/app/api/shipping/ledger/[id]/confirm/route'
 import { cancelShipmentOrder, confirmAndSubmitShipment, reconcileShipmentOrder, returnShipmentOrder, reopenFailedShipmentOrder } from './workflow'
 import { ShippingError } from './config'
 
@@ -82,6 +86,8 @@ beforeEach(() => {
   mocks.submit.mockReset().mockResolvedValue({ id: 'provider-order-1', status: 'accepted', waybill: 'SF1234567890123' })
   mocks.capability.mockReset().mockResolvedValue(undefined)
   mocks.defaultOrg.mockReset().mockResolvedValue('org-A')
+  mocks.operator.mockReset().mockResolvedValue('org-A')
+  mocks.auth.mockReset().mockResolvedValue({ id: 'operator-1' })
 })
 
 const actions = [
@@ -223,9 +229,33 @@ describe('historical carrier snapshot operations', () => {
   it('reconciles an unknown order using its stored connection without submitting a second shipment', async () => {
     loadedOrder = { ...order, status: 'order_unknown' }
     await expect(confirmAndSubmitShipment('order-1', 'operator-1', 'org-A')).resolves.toEqual({ id: 'order-1', status: 'waybill_created', waybill: 'SF1234567890123' })
+    expect(mocks.operator).toHaveBeenCalledWith('operator-1', 'shipping:order_reconcile')
     expect(mocks.lookup).toHaveBeenCalledWith('provider-order-1', runtime)
     expect(mocks.submit).not.toHaveBeenCalled()
     expect(queries.filter(query => query.table === 'shipping_orders').every(query => query.filters.some(([key, value]) => key === 'org_id' && value === 'org-A'))).toBe(true)
+  })
+
+  it.each(['denied', 'other organization'])('does not look up an unknown shipment when the separate reconcile grant is %s', async decision => {
+    loadedOrder = { ...order, status: 'order_unknown' }
+    mocks.operator.mockImplementation(async (_actor, permission) => {
+      if (permission === 'shipping:order_confirm') return 'org-A'
+      if (decision === 'other organization') return 'org-B'
+      throw new ShippingError(403, '当前账号没有下单结果查回权限。')
+    })
+    const request = new NextRequest('https://example.test/api/shipping/ledger/order-1/confirm', {
+      method: 'POST', body: '{}',
+    })
+    const response = await confirmShipment(request, { params: Promise.resolve({ id: 'order-1' }) })
+    expect(response.status).toBe(403)
+    expect(mocks.operator.mock.calls).toEqual([
+      ['operator-1', 'shipping:order_confirm'], ['operator-1', 'shipping:order_reconcile'],
+    ])
+    expect(mocks.runtimeConfig).not.toHaveBeenCalled()
+    expect(mocks.lookup).not.toHaveBeenCalled()
+    expect(mocks.submit).not.toHaveBeenCalled()
+    expect(mocks.capability).not.toHaveBeenCalled()
+    expect(queries.every(query => query.action === 'select')).toBe(true)
+    expect(loadedOrder.status).toBe('order_unknown')
   })
 
   it('keeps an inconclusive lookup unknown without writing or resubmitting', async () => {
