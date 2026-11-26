@@ -400,6 +400,7 @@ describe('role-free federated session boundary', () => {
       [`/api/admin/users/${id}/roles`, 'POST'], [`/api/admin/users/${id}/role-scopes`, 'DELETE'],
       [`/api/admin/users/${id}/system-super-admin`, 'PATCH'],
       [`/api/admin/users/${id}/org-super-admin`, 'PATCH'],
+      [`/api/admin/users/${id}/identity-binding`, 'POST'],
       ['/api/admin/departments/leader-access', 'PUT'], ['/api/admin/departments/shipping-intake', 'PATCH'],
     ]
     mockExactOrgAuth({ token, orgId: 'org-a', authMethod: 'fxiaoke', roles: [{ roles: role }] })
@@ -417,6 +418,23 @@ describe('role-free federated session boundary', () => {
     mockExactOrgAuth({ token, orgId: 'org-a', roles: [{ roles: root }, { roles: { ...role, permissions: ['role:manage'] } }],
       settings: { role_permission_overrides: { 'root-role': ['admin:access'] } } })
     for (const [path, method] of authorizationPaths) expect((await request(path, method)).status, path).toBe(200)
+  })
+
+  it.each(['org:write', 'user:write', 'user:manage_login'])('preserves the configured member actions for %s', async (permission) => {
+    const token = 'member-action-boundary'
+    const role = { id: 'member-maintainer', code: 'ORG_MEMBER_MAINTAINER', permissions: [permission] }
+    const member = '/api/admin/users/4cf0681d-dcb2-45f2-bfa2-71c1bc253213'
+    const request = (path: string, method: string) => middleware(makeRequest(
+      `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
+    ))
+    mockExactOrgAuth({ token, orgId: 'org-a', authMethod: 'fxiaoke', roles: [{ roles: role }] })
+
+    expect((await request(`${member}/login-enabled`, 'PATCH')).status).toBe(200)
+    const expectedStatus = permission === 'user:manage_login' ? 403 : 200
+    expect((await request('/api/admin/users', 'POST')).status).toBe(expectedStatus)
+    expect((await request(`${member}/membership`, 'DELETE')).status).toBe(expectedStatus)
+    expect((await request(`${member}/roles`, 'POST')).status).toBe(403)
+    expect((await request(`${member}/identity-binding`, 'POST')).status).toBe(403)
   })
 
   it('applies an organization-owned grant only in its home organization and keeps role creation system-only', async () => {
@@ -850,6 +868,18 @@ describe('department-scoped workspace admission', () => {
     expect((await request('/api/products', 'POST')).status).toBe(200)
     expect((await request('/api/products/a', 'PUT')).status).toBe(200)
     expect((await request('/api/product-price-tiers', 'POST')).status).toBe(403)
+  })
+
+  it('does not treat a role name compatibility action as a configured module grant', async () => {
+    const role = { id: 'ordinary-admin', code: 'ADMIN', permissions: ['config:read'] }
+    bind({ roles: [{ roles: role }] })
+    expect((await request('/api/navigation')).headers.get('x-middleware-request-x-user-navigation-scope')).toBe('scoped')
+    expect((await request('/configs')).status).toBe(200)
+    expect((await request('/api/agenda', 'POST')).status).toBe(403)
+
+    bind({ roles: [{ roles: { ...role, permissions: ['config:read', 'quote:view'] } }] })
+    expect((await request('/api/navigation')).headers.get('x-middleware-request-x-user-navigation-scope')).toBeNull()
+    expect((await request('/api/quotes')).status).toBe(200)
   })
 
   it.each([

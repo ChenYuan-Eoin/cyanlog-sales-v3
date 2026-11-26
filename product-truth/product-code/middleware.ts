@@ -35,7 +35,7 @@ import { getConfigsTabAccess, hasConfigsTabAccess } from '@/lib/configs/tab-acce
 import { createMiddlewareRestClient, type MiddlewareRestClient } from '@/lib/middleware-rest-client'
 import {
   canAccessOrgAdmin, canReadOrgDepartmentDirectory, canReadRoleDirectory, hasConfigurationReadPermission, hasOrganizationSourcePermission,
-  hasPermission, isOrgDelegationSensitivePermission, isSystemAuthorizationGrant, ORG_MEMBER_EDIT,
+  hasLegacyOrgMemberWrite, hasPermission, isOrgDelegationSensitivePermission, isSystemAuthorizationGrant, ORG_MEMBER_EDIT,
 } from '@/lib/permissions'
 import {
   ORG_MEMBER_INVITE, ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_REMOVE_MEMBERSHIP,
@@ -173,7 +173,7 @@ const BASELINE_READ_PATHS = new Set([
 
 const departmentDetailPath = /^\/api\/admin\/departments\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const memberDetailPath = /^\/api\/admin\/users\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/([a-z-]+))?$/i
-const memberAuthorizationPaths = new Set(['roles', 'role-scopes', 'system-super-admin', 'org-super-admin'])
+const memberAuthorizationPaths = new Set(['roles', 'role-scopes', 'system-super-admin', 'org-super-admin', 'identity-binding'])
 const memberPathPermissions: Partial<Record<string, readonly string[]>> = {
   'PATCH ': [ORG_MEMBER_EDIT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_MANAGE_EMPLOYMENT],
   'DELETE ': [ORG_MEMBER_MANAGE_EMPLOYMENT],
@@ -201,13 +201,15 @@ function isSystemAuthorizationPath(pathname: string, request: NextRequest): bool
 }
 
 function hasMemberRoutePermission(pathname: string, method: string, permissions: string[]): boolean {
-  if (!hasPermission(permissions, 'user:view')) return false
+  const legacyWrite = hasLegacyOrgMemberWrite(permissions)
   const read = method === 'GET' || method === 'HEAD'
-  if (read && (pathname === '/api/admin/org' || pathname === '/api/admin/users')) return true
-  if (pathname === '/api/admin/users' && method === 'POST') return hasPermission(permissions, ORG_MEMBER_INVITE)
+  if (read && (pathname === '/api/admin/org' || pathname === '/api/admin/users')) {
+    return legacyWrite || hasPermission(permissions, 'user:view')
+  }
+  if (pathname === '/api/admin/users' && method === 'POST') return legacyWrite || hasPermission(permissions, ORG_MEMBER_INVITE)
   const detail = memberDetailPath.exec(pathname)
-  return !!detail && (memberPathPermissions[method + ' ' + (detail[1] ?? '')]
-    ?.some(permission => hasPermission(permissions, permission)) ?? false)
+  const actions = detail && memberPathPermissions[method + ' ' + (detail[1] ?? '')]
+  return !!actions && (legacyWrite || actions.some(permission => hasPermission(permissions, permission)))
 }
 
 function hasGeneralConfigurationRoutePermission(request: NextRequest, required: string | null, permissions: string[]): boolean {
@@ -379,6 +381,7 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
   const activeMembership = organization.status === 'active'
     && membership.employment_status === 'active' && membership.left_at === null
   let canManageSystemAuthorizations = false
+  let hasOtherModuleGrants = false
 
   for (const ur of userRolesData ?? []) {
     if (ur.org_id !== orgId || ur.user_id !== userId || ur.scope_type !== 'org' || ur.scope_id !== orgId) continue
@@ -394,14 +397,19 @@ async function loadMiddlewareAuthContext(token: string, checkDepartmentWorkspace
       roleCodes.push(r.code)
       canManageSystemAuthorizations ||= activeMembership && isSystemAuthorizationGrant(r.code, effective.permissions)
       allPermissions.push(...effective.permissions)
+      // A compatibility permission synthesized from a role name must not
+      // switch off the route boundary for the role's configured grants.
+      const configuredPermissions = effective.overridden || r.code === 'SUPER_ADMIN' ? effective.permissions : r.permissions
+      hasOtherModuleGrants ||= effective.permissions.some(permission =>
+        Array.isArray(configuredPermissions) && configuredPermissions.includes(permission)
+        && (permission === '*' || (!permission.startsWith('shipping:') && !isOrgDelegationSensitivePermission(permission))),
+      )
       ownerShippingPermissions.push(...ownerPermissions)
       if (!effective.overridden) authorizationRoleCodes.push(r.code)
     }
   }
 
-  const scopedModulesOnly = roleCodes.length > 0 && allPermissions.every(permission =>
-    permission !== '*' && (permission.startsWith('shipping:') || isOrgDelegationSensitivePermission(permission)),
-  )
+  const scopedModulesOnly = roleCodes.length > 0 && !hasOtherModuleGrants
   const departmentWorkspaceAccess = checkDepartmentWorkspace && activeMembership
     && (roleCodes.length === 0 || scopedModulesOnly)
     && await canEnterDepartmentWorkspace(rest, userId, orgId, organization.settings)
