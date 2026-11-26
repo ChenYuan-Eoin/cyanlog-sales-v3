@@ -123,13 +123,17 @@ export function getShippingPermissionPublication(rows: readonly unknown[]) {
 export function getEffectiveShippingPermissions(
   grants: readonly string[], { registered, published }: { registered: ReadonlySet<string>; published: ReadonlySet<string> },
 ): ShippingPermissionKey[] {
-  return REGISTERED_MODULE_PERMISSION_KEYS.filter(key => {
+  const available = REGISTERED_MODULE_PERMISSION_KEYS.filter(key => {
     if (isShippingOwnerPermission(key)) return false
-    const available = published.has(key)
-    if (available && explicitlyAllows(grants, key)) return true
-    if (!available && registered.has(key)) return false
+    const isPublished = published.has(key)
+    if (isPublished && explicitlyAllows(grants, key)) return true
+    if (!isPublished && registered.has(key)) return false
     const legacy = legacyShippingPermission(key)
     return !!legacy && published.has(legacy) && explicitlyAllows(grants, legacy)
+  })
+  return available.filter(key => {
+    const dependency = shippingActionViewDependency(key)
+    return dependency === null || available.includes(dependency)
   })
 }
 

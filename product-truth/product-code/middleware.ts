@@ -49,6 +49,7 @@ import {
   legacyShippingPermission,
   SHIPPING_MANAGE_CONNECTIONS,
   SHIPPING_SETTINGS_ACTION_KEYS,
+  shippingActionViewDependency,
   shippingOwnerPermissionRequirement,
   shippingPermissionRequirement,
   type ShippingPermissionKey,
@@ -387,11 +388,17 @@ async function readShippingPermissionPublication(codes: ReadonlySet<string>) {
 }
 
 async function allowsShippingPermission(grants: string[], required: readonly ShippingPermissionKey[]): Promise<boolean> {
-  const relevant = new Set<string>(required.flatMap(key => {
+  const relevant = new Set<string>()
+  for (const key of required) {
     const legacy = legacyShippingPermission(key)
-    if (legacy && hasPermission(grants, legacy)) return [key, legacy]
-    return hasPermission(grants, key) ? [key] : []
-  }))
+    const hasLegacy = legacy !== null && hasPermission(grants, legacy)
+    if (!hasLegacy && !hasPermission(grants, key)) continue
+
+    relevant.add(key)
+    if (hasLegacy) relevant.add(legacy)
+    const dependency = shippingActionViewDependency(key)
+    if (dependency) relevant.add(dependency)
+  }
   if (!relevant.size) return false
   const allowed = getEffectiveShippingPermissions(grants, await readShippingPermissionPublication(relevant))
   return required.some(key => allowed.includes(key))

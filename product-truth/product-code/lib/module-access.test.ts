@@ -13,6 +13,13 @@ const connections = {
   enforcement_consumer: 'lib/shipping/connection-authorization.ts',
 }
 
+function granularPermission(action: string, dependency?: string) {
+  return {
+    ...operator, code: `shipping:${action}`, action, dependencies: dependency ? [`shipping:${dependency}`] : [],
+    enforcement_consumer: 'lib/shipping/http.ts',
+  }
+}
+
 describe('shipping-only registered actions', () => {
   it('keeps unrelated modules at their existing access paths', () => {
     expect(getPublishedModulePermissionKeys([operator, connections, { ...operator, code: 'tender:view' }]))
@@ -32,15 +39,17 @@ describe('shipping-only registered actions', () => {
   })
 
   it('makes saved granular grants independent and bridges legacy permissions only while registered', () => {
-    const detail = { ...operator, code: 'shipping:order_confirm', action: 'order_confirm', dependencies: ['shipping:ledger_view'], enforcement_consumer: 'lib/shipping/http.ts' }
-    const publication = getShippingPermissionPublication([operator, connections, detail])
-    expect(getEffectiveShippingPermissions(['shipping:order_confirm'], publication))
-      .toEqual(['shipping:order_confirm'])
+    const ledger = granularPermission('ledger_view')
+    const confirm = granularPermission('order_confirm', 'ledger_view')
+    const publication = getShippingPermissionPublication([operator, connections, ledger, confirm])
+    expect(getEffectiveShippingPermissions(['shipping:ledger_view', 'shipping:order_confirm'], publication))
+      .toEqual(['shipping:ledger_view', 'shipping:order_confirm'])
+    expect(getEffectiveShippingPermissions(['shipping:order_confirm'], publication)).toEqual([])
     expect(getEffectiveShippingPermissions(['shipping:operate'], publication))
       .toContain('shipping:order_confirm')
     expect(getEffectiveShippingPermissions(['shipping:manage_connections'], publication))
       .not.toContain('shipping:order_confirm')
-    const disabled = getShippingPermissionPublication([operator, connections, { ...detail, status: 'disabled' }])
+    const disabled = getShippingPermissionPublication([operator, connections, ledger, { ...confirm, status: 'disabled' }])
     expect(getEffectiveShippingPermissions(['shipping:operate'], disabled))
       .not.toContain('shipping:order_confirm')
     const absent = getShippingPermissionPublication([operator, connections])
@@ -48,6 +57,24 @@ describe('shipping-only registered actions', () => {
       .toContain('shipping:order_confirm')
     expect(getEffectiveShippingPermissions(['shipping:order_confirm'], absent))
       .toEqual([])
+  })
+
+  it.each([
+    { view: 'ledger_view', action: 'order_confirm', legacy: operator },
+    { view: 'settings_view', action: 'connection_write', legacy: connections },
+  ])('requires the effective $view grant for $action', ({ view, action, legacy }) => {
+    const viewPermission = granularPermission(view)
+    const actionPermission = granularPermission(action, view)
+    const grants = [viewPermission.code, actionPermission.code]
+    const published = getShippingPermissionPublication([legacy, viewPermission, actionPermission])
+    const disabledView = getShippingPermissionPublication([legacy, { ...viewPermission, status: 'disabled' }, actionPermission])
+    const absentView = getShippingPermissionPublication([legacy, actionPermission])
+
+    expect(getEffectiveShippingPermissions(grants, published)).toEqual(grants)
+    expect(getEffectiveShippingPermissions([actionPermission.code], published)).toEqual([])
+    expect(getEffectiveShippingPermissions(grants, disabledView)).toEqual([])
+    expect(getEffectiveShippingPermissions([legacy.code], disabledView)).not.toContain(actionPermission.code)
+    expect(getEffectiveShippingPermissions([legacy.code], absentView)).toContain(actionPermission.code)
   })
 
   it('separates workspace settings from connection management and shipment execution', () => {

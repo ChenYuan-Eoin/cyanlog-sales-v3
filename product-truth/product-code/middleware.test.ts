@@ -418,6 +418,48 @@ describe('role-free federated session boundary', () => {
     expect((await middleware(makeRequest('https://sales.cyanlog.icu/api/roles/role-id', auth, 'PATCH'))).status).toBe(403)
   })
 
+  it.each([
+    {
+      description: 'confirming a workbench order',
+      view: 'shipping:ledger_view',
+      action: 'shipping:order_confirm',
+      readPath: '/api/shipping/ledger',
+      writePaths: ['/api/shipping/ledger/example/confirm'],
+    },
+    {
+      description: 'changing intake settings',
+      view: 'shipping:settings_view',
+      action: 'shipping:intake_write',
+      readPath: '/api/shipping/settings',
+      writePaths: ['/api/shipping/intake-settings', '/api/shipping/settings'],
+    },
+  ])('requires the published view permission for $description', async ({ view, action, readPath, writePaths }) => {
+    const token = 'shipping-granular-action'
+    const bind = (viewStatus: 'published' | 'disabled') => mockExactOrgAuth({
+      token, orgId: 'org-a', authMethod: 'fxiaoke',
+      roles: [{ roles: { id: 'shipping-role', code: 'SHIPPING_OPERATOR', permissions: [view, action] } }],
+      shippingActions: {
+        [view]: { status: viewStatus, dependencies: [] },
+        [action]: { status: 'published', dependencies: [view] },
+      },
+    })
+    const request = (path: string, method = 'GET') => middleware(makeRequest(
+      `https://sales.cyanlog.icu${path}`, { authorization: `Bearer ${token}` }, method,
+    ))
+
+    bind('published')
+    expect((await request(readPath)).status).toBe(200)
+    for (const path of writePaths) {
+      expect((await request(path, 'POST')).status).toBe(200)
+    }
+
+    bind('disabled')
+    expect((await request(readPath)).status).toBe(403)
+    for (const path of writePaths) {
+      expect((await request(path, 'POST')).status).toBe(403)
+    }
+  })
+
   it('does not use the legacy grant to bypass a disabled granular action', async () => {
     const token = 'legacy-operator-disabled-confirm'
     mockExactOrgAuth({
