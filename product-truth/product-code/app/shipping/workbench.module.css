@@ -77,7 +77,7 @@
 }
 
 @media(max-width:899px){
-  .shell{height:auto;min-height:100dvh;overflow:auto}
+  .shell{height:auto;min-height:100dvh;overflow:visible}
   .columns{grid-template-columns:minmax(0,1fr);min-width:0;min-height:0;overflow:visible}
   .topbar{min-width:0;height:auto;min-height:76px;flex:0 0 auto;padding:10px 14px;gap:10px;align-items:flex-start;flex-wrap:wrap}
   .topbarActions{width:100%;flex-wrap:wrap}
@@ -87,6 +87,9 @@
   .orderColumn,.detailColumn,.column{grid-column:1;min-width:0;min-height:auto}
   .scrollBody,.orderList{flex:none;min-height:auto;overflow:visible}
   .stickyFooter{position:static}
+  /* Use the app scroll container and clear the fixed navigation button. */
+  .orderColumn > .stickyFooter{position:sticky;top:3.5rem;z-index:2}
+  .orderColumn > .orderList{order:1}
   .detailStack{grid-template-rows:auto auto}
   .detailPane,.trackingPane{max-height:none;overflow:visible}
   .columnHeader{height:auto;min-height:62px}
