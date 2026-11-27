@@ -1,7 +1,7 @@
 {
   "status": "approved",
-  "reviewer": "Codex / current WP92 implementation review",
-  "reviewedAt": "2026-11-05T05:02:30.531Z",
+  "reviewer": "Codex / approved WP92 dependency and WP82 release review",
+  "reviewedAt": "2026-11-27T01:53:11.535Z",
   "migrations": {
     "supabase/migrations/20261103090000_unified_organization_connections.sql": "ab99b807a91baf8587cd2908a1d75c895f3541e3d48eae045c5b47541745b2af",
     "supabase/migrations/20261103120000_organization_directory_cutover.sql": "64309804840cbb30c3b83c0ab737d6415c38a27fed85df747afb7108e9407179"
@@ -15,7 +15,10 @@
     "Directory apply creates inactive people with login_enabled=false and invited organization membership, without passwords or roles. Full native organization readback uses the captured production RPC rather than a stub.",
     "Rollback updates original memberships in place, preserves membership IDs, removes only data created by this plan and rejects later state changes or business references. Application rollback is tested under production foreign keys. Successful additive DDL is retained for website rollback; destructive down-migration is not authorized.",
     "Real unique identity mapping is enforced, and duplicate inserts are expected to fail. No production constraint, RLS policy or table grant is weakened to make tests pass.",
-    "Post-migration Production DDL was captured again after both approved migrations succeeded. The current baseline differs only by the reviewed migrated columns, constraints, indexes and trigger definitions; no migration SQL bytes changed. Upgrade and rollback tests retain the captured predecessor; current-catalog round-trip and membership constraints use the current capture."
+    "Current Production PostgreSQL 17.6 metadata includes the already-deployed directory wrappers, role ownership, permission registry and trigger dependencies. Snapshot contains schema metadata only.",
+    "Capture adds seven tables and seventeen functions compared to the prior narrow scope. It retains foreign-key closure and enumerates textual function calls explicitly.",
+    "The role/department authorization-subject check is restored with its original IN expression to preserve PostgreSQL 17.6 catalog equality. The renderer uses that syntax only for the exact known constraint definition and does not weaken the comparison.",
+    "The current expanded snapshot was restored on PostgreSQL 17.6 and its catalog matched a new read-only capture. A populated service-role fixture exercised the actual directory v1 and v2, role insertion and department-lead cleanup. Browser role access stayed denied. The November 5 historical snapshots and both original migration files retain their exact bytes."
   ],
-  "catalogSha256": "46f342b4c1f5254560699830c3a9be275c9458e67be09127a8b28a0bf888ea1a"
+  "catalogSha256": "1eab9b64fbf60f1e98cbefcce9b80250f64dfb995ce18b58787672f7afd823b9"
 }

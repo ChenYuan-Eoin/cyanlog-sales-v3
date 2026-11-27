@@ -5,14 +5,26 @@ with recursive selected(oid) as (
   where n.nspname = 'public' and c.relname in (
     'organizations', 'users', 'departments', 'user_departments', 'user_organizations',
     'organization_sources', 'external_identities', 'organization_fxiaoke_connections',
-    'roles', 'user_roles', 'sales_spaces', 'sales_space_members'
-  )
+    'roles', 'user_roles', 'sales_spaces', 'sales_space_members',
+    'fxiaoke_pending_org_roles', 'personnel_invitations', 'personnel_lifecycle_events', 'department_lead_access'
+  ) or (n.nspname = 'private' and c.relname in ('org_role_metadata', 'employee_permission_overrides'))
   union
   select c.confrelid from pg_constraint c join selected s on s.oid = c.conrelid where c.contype = 'f'
 ), functions as (
   select p.* from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where (n.nspname = 'public' and p.proname = 'get_org_admin_payload_v1')
      or (n.nspname = 'private' and p.proname = 'current_user_org_id')
+     or (n.nspname = 'public' and p.proname in (
+       'admin_list_org_roles_v1', 'get_org_admin_directory_payload_v1',
+       'get_org_admin_directory_payload_v2', 'fxiaoke_prelogin_role_targets_v1'
+     ))
+     or (n.nspname = 'private' and p.proname in (
+       'get_org_admin_before_owned_roles_v1', 'org_role_catalog_v1',
+       'org_role_is_referenced_v1', 'assert_org_role_references_v1',
+       'personnel_lock_org_v1', 'assert_system_role_assignment_actor_v1', 'personnel_is_org_control_admin_v1',
+       'org_super_admin_active_member_v1', 'has_exact_org_role_v1', 'system_super_admin_role_enabled_v1',
+       'fxiaoke_prelogin_directory_members_v1'
+     ))
      or (n.nspname = 'auth' and p.proname = 'uid')
      or p.oid in (select t.tgfoid from pg_trigger t join selected s on s.oid = t.tgrelid where not t.tgisinternal)
 )

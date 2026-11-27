@@ -40,6 +40,73 @@ describe('production DDL database gates', () => {
     } finally { await db.close() }
   }, 15_000)
 
+  it('reads synced members, renamed roles and first-login assignments through the rebuilt directory', async () => {
+    const db = await productionSchemaDatabase()
+    const pendingPerson = 'aaaaaaaa-0000-4000-8000-000000000006'
+    const pendingMembership = 'aaaaaaaa-0000-4000-8000-000000000007'
+    const roleId = 'aaaaaaaa-0000-4000-8000-000000000008'
+    const source = 'aaaaaaaa-0000-4000-8000-000000000009'
+    const personIdentity = 'aaaaaaaa-0000-4000-8000-000000000010'
+    const pendingIdentity = 'aaaaaaaa-0000-4000-8000-000000000011'
+    try {
+      await seed(db)
+      await db.exec(`
+        insert into public.users (id, org_id, display_name, status, login_enabled)
+          values ('${pendingPerson}', '${org}', 'Pending member', 'inactive', false);
+        insert into public.user_organizations (user_id, org_id, membership_id, status, is_default)
+          values ('${person}', '${org}', '${membership}', 'active', true),
+                 ('${pendingPerson}', '${org}', '${pendingMembership}', 'invited', true);
+        insert into public.user_departments (user_id, department_id, org_id, is_primary)
+          values ('${person}', '${department}', '${org}', true);
+        insert into public.roles (id, code, name, owner_org_id)
+          values ('${roleId}', 'DIRECTORY_FIXTURE', 'Original role name', '${org}');
+        insert into private.org_role_metadata (org_id, role_id, name, role_revision)
+          values ('${org}', '${roleId}', 'Renamed role', 1);
+        insert into public.user_roles (user_id, org_id, role_id, scope_type, scope_id)
+          values ('${person}', '${org}', '${roleId}', 'org', '${org}');
+        insert into public.organization_sources (
+          id, system_org_id, provider, external_tenant_id, priority, status, authority_scope, connection_state, effective_revision
+        ) values ('${source}', '${org}', 'fxiaoke', 'directory-fixture', 1, 'active',
+          '{"identity":"authoritative","directory":"authoritative"}', 'verified', gen_random_uuid());
+        insert into public.external_identities (
+          id, source_id, system_org_id, external_user_id, canonical_user_id, match_status, profile_snapshot
+        ) values
+          ('${personIdentity}', '${source}', '${org}', 'linked-member', '${person}', 'matched', '{"status":"active"}'),
+          ('${pendingIdentity}', '${source}', '${org}', 'pending-member', '${pendingPerson}', 'matched',
+            jsonb_build_object('status', 'active', 'provisionedMemberId', '${pendingPerson}'::text));
+        insert into public.fxiaoke_pending_org_roles (org_id, user_id, role_id, source_id, external_identity_id, external_user_id)
+          values ('${org}', '${pendingPerson}', '${roleId}', '${source}', '${pendingIdentity}', 'pending-member');
+        set role service_role;
+        set search_path = '';
+      `)
+
+      const readDirectory = () => db.query<{ payload: unknown }>(
+        'select public.get_org_admin_directory_payload_v2($1) as payload', [org],
+      )
+      const { rows: [{ payload }] } = await readDirectory()
+      expect(payload).toMatchObject({
+        roles: [{ id: roleId, name: 'Renamed role' }],
+        users: expect.arrayContaining([
+          expect.objectContaining({
+            id: person, directory_external_id: 'linked-member', department_ids: [department],
+            role_ids: [roleId], role_names: 'Renamed role',
+          }),
+          expect.objectContaining({
+            id: pendingPerson, can_preassign_org_roles: true,
+            pending_org_roles: [expect.objectContaining({ id: roleId, name: 'Renamed role' })],
+          }),
+        ]),
+      })
+      await expect(db.query('select private.get_org_admin_before_owned_roles_v1($1)', [org]))
+        .rejects.toMatchObject({ code: '42501' })
+
+      for (const role of ['anon', 'authenticated']) {
+        await db.exec(`set role ${role};`)
+        await expect(readDirectory()).rejects.toMatchObject({ code: '42501' })
+      }
+    } finally { await db.close() }
+  }, 15_000)
+
   it('rejects an omitted membership ID and accepts an explicit ID under the production constraint and service role', async () => {
     const db = await productionSchemaDatabase()
     try {

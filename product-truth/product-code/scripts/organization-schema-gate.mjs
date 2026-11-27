@@ -32,6 +32,27 @@ export function canonical(value, key = '') {
 }
 export const catalogHash = catalog => sha256(JSON.stringify(canonical(catalog)))
 
+const grantSubjectsConstraint = 'permission_points_dictionary_subjects_check'
+const capturedGrantSubjectsCheck = 'CHECK ((((((grant_subject_types = ARRAY[]::text[])'
+  + " OR (grant_subject_types = ARRAY['role'::text]))"
+  + " OR (grant_subject_types = ARRAY['department'::text]))"
+  + " OR (grant_subject_types = ARRAY['role'::text, 'department'::text]))"
+  + " OR (grant_subject_types = ARRAY['department'::text, 'role'::text])))"
+
+function renderConstraintDefinition(table, constraint) {
+  if (table.schema !== 'public' || table.name !== 'permission_points' || constraint.name !== grantSubjectsConstraint) {
+    return constraint.definition
+  }
+  if (constraint.type !== 'c' || constraint.definition !== capturedGrantSubjectsCheck) {
+    throw new Error(`Unexpected captured definition for public.permission_points.${grantSubjectsConstraint}`)
+  }
+  // Replaying the deparsed IN predicate flattens its OR tree in PostgreSQL.
+  // Use the reviewed migration syntax to reproduce the captured expression.
+  return `check (grant_subject_types in (
+    array[]::text[], array['role'], array['department'], array['role', 'department'], array['department', 'role']
+  ))`
+}
+
 export function renderBaseline(snapshot, { bootstrapRole = 'postgres' } = {}) {
   const c = snapshot.catalog
   const sql = ['set search_path = public;', 'set check_function_bodies = false;']
@@ -53,7 +74,9 @@ export function renderBaseline(snapshot, { bootstrapRole = 'postgres' } = {}) {
     sql.push(`create table ${qualified(t)} (${columns.join(',\n')});`)
   }
   for (const t of c.tables) {
-    for (const con of t.constraints.filter(con => con.type !== 'f')) sql.push(`alter table ${qualified(t)} add constraint ${quote(con.name)} ${con.definition};`)
+    for (const con of t.constraints.filter(con => con.type !== 'f')) {
+      sql.push(`alter table ${qualified(t)} add constraint ${quote(con.name)} ${renderConstraintDefinition(t, con)};`)
+    }
     sql.push(...t.indexes.map(index => `${index};`))
   }
   for (const t of c.tables) for (const con of t.constraints.filter(con => con.type === 'f')) sql.push(`alter table ${qualified(t)} add constraint ${quote(con.name)} ${con.definition};`)
