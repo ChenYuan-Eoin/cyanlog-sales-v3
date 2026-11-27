@@ -1,0 +1,53 @@
+{
+  "kind": "scoped_release_evidence",
+  "work_package": "WP35",
+  "commit": "345478150c051fae58cf722a4dc722ded6f63225",
+  "base_commit": "1b23ae2b19c920d84b4675b70ccc4157b02004e0",
+  "approval": "IN-20261127-018",
+  "ci": {
+    "conclusion": "success",
+    "run": "https://github.com/ChenYuan-Eoin/cyanlog-sales-v3/actions/runs/46012599571/attempts/2",
+    "lint_typecheck_log_sha256": "fa325bb4db120958a2735affd11b9e3c9a9bb1aea4da36fbc5a6ba76e1049c26"
+  },
+  "preview": {
+    "deployment_id": "dpl_DF94CH8AaAEQeZkWMDtE3qDKZLCg",
+    "provider_source_commit": "345478150c051fae58cf722a4dc722ded6f63225",
+    "target": "preview",
+    "health_http_status": 200,
+    "mobile_viewport": [
+      402,
+      773
+    ],
+    "desktop_viewport": [
+      1280,
+      900
+    ],
+    "actual_page_transitions": [
+      1,
+      2,
+      1
+    ],
+    "actual_ledger_response_codes": [
+      200,
+      200,
+      200
+    ],
+    "fixture_row_counts": [
+      50,
+      2,
+      50
+    ],
+    "first_page_identical": true,
+    "blocked_defect": "IN-20261127-017",
+    "artifact_sha256": "4a2ca0b8440069d234937f4137e9778209dabdf0db404da82f08a8ca62bf648e",
+    "database_readback_sha256": "2c98da76728c23c95e30dc35622f918ff928d3f22a35780932610163f199cf3a",
+    "fixture": "isolated synthetic orders and pre-authenticated synthetic operator",
+    "intake_settings_used_fallback": true
+  },
+  "production": {
+    "status": "unpublished",
+    "data_changes": []
+  },
+  "scheduler_commit": "1b23ae2b19c920d84b4675b70ccc4157b02004e0",
+  "harness_status": "delivery-seal reported no active Harness gate; exact-scope runtime evidence is recorded independently"
+}
