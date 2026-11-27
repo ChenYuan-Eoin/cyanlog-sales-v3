@@ -102,6 +102,20 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
     expect(update.update).toHaveBeenCalledWith(expect.objectContaining({ name: '新部门名' }))
     expect(update.eq).toHaveBeenCalledWith('id', '00000000-0000-0000-0000-000000000001')
     expect(update.eq).toHaveBeenCalledWith('org_id', 'org-1')
+    expect(lookup.eq).toHaveBeenCalledWith('status', 'active')
+    expect(update.eq).toHaveBeenCalledWith('status', 'active')
+  })
+
+  it('归档先于普通更新写入时拒绝旧编辑表单', async () => {
+    grant(['dept:directory_view', 'dept:edit_structure'])
+    const lookup = makeQuery({ data: { id: departmentId, parent_id: oldParentId }, error: null })
+    const update = makeQuery({ data: null, error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup).mockReturnValueOnce(update)
+
+    const response = await patchDepartment({ name: '旧表单中的名称' })
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'DEPARTMENT_CHANGED' })
+    expect(update.eq).toHaveBeenCalledWith('status', 'active')
   })
 
   it('保持上级不变时让部门编辑者修改资料，不重写上级或深度', async () => {
@@ -223,39 +237,33 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
 
   it('部门仍有成员关联时返回可定位的阻断原因，不更新部门', async () => {
     grant(['dept:directory_view', 'dept:delete_structure', 'user:view'])
-    const lookup = makeQuery({ data: { id: departmentId, member_count: 2, name: '测试部门' }, error: null })
-    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: {
+      departmentId, status: 'blocked', code: 'DEPARTMENT_HAS_MEMBER_BINDINGS', details: { memberCount: 2 },
+    }, error: null } as never)
 
     const response = await DELETE({ method: 'DELETE' } as any, routeContext)
 
     expect(response.status).toBe(400)
     expect(await response.json()).toEqual({
-      error: '部门「测试部门」还有 2 条成员关联，请先调整成员的部门归属',
+      error: '部门仍有 2 条成员关联，请先调整部门归属。',
       code: 'DEPARTMENT_HAS_MEMBER_BINDINGS',
     })
-    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
-    expect(lookup.update).not.toHaveBeenCalled()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
-  it('软删除部门的最终 mutation 保留当前组织边界', async () => {
+  it('单部门归档沿用委派删除权限和组织边界，交由归档事务完成', async () => {
     grant(['dept:directory_view', 'dept:delete_structure'])
-    const lookup = makeQuery({
-      data: { id: 'dept-1', member_count: 0, name: '销售部' },
-      error: null,
-    })
-    const children = makeQuery({ data: [], error: null })
-    const update = makeQuery({ data: null, error: null })
-    ;(supabaseAdmin.from as any)
-      .mockReturnValueOnce(lookup)
-      .mockReturnValueOnce(children)
-      .mockReturnValueOnce(update)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({
+      data: { departmentId, status: 'applied' }, error: null,
+    } as never)
 
     const res = await DELETE({ method: 'DELETE' } as any, routeContext)
 
     expect(res.status).toBe(200)
-    expect(update.update).toHaveBeenCalledWith({ status: 'inactive' })
-    expect(update.eq).toHaveBeenCalledWith('id', '00000000-0000-0000-0000-000000000001')
-    expect(update.eq).toHaveBeenCalledWith('org_id', 'org-1')
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('archive_manual_department_v1', {
+      p_department_id: departmentId, p_org_id: 'org-1', p_actor_id: 'admin-user',
+    })
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 })
 

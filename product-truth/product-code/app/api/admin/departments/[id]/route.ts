@@ -104,9 +104,14 @@ export async function PATCH(
     const { data: existing, error: checkError } = await departmentQuery
       .eq('id', id)
       .eq('org_id', orgId)
-      .single()
+      .eq('status', 'active')
+      .maybeSingle()
 
-    if (checkError || !existing) {
+    if (checkError) {
+      console.error('Read department to update error:', checkError)
+      return NextResponse.json({ error: '无法核对部门，请稍后重试。' }, { status: 500 })
+    }
+    if (!existing) {
       return NextResponse.json({ error: '部门不存在' }, { status: 404 })
     }
 
@@ -166,13 +171,17 @@ export async function PATCH(
       .update(updateData)
       .eq('id', id)
       .eq('org_id', orgId)
+      .eq('status', 'active')
     const selection = memberAccess
       ? mutation.select(DEPARTMENT_FULL_FIELDS) : mutation.select(DEPARTMENT_STRUCTURE_FIELDS)
-    const { data, error } = await selection.single()
+    const { data, error } = await selection.maybeSingle()
 
     if (error) {
       console.error('Update department error:', error)
       return NextResponse.json({ error: '更新部门失败' }, { status: 500 })
+    }
+    if (!data) {
+      return NextResponse.json({ error: '部门状态已变化，请刷新组织架构。', code: 'DEPARTMENT_CHANGED' }, { status: 409 })
     }
     return NextResponse.json({
       success: true,
@@ -188,82 +197,49 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/admin/departments/:id - 删除部门
+// DELETE /api/admin/departments/:id - 经同一归档事务处置单个部门
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
     const user = await requireAuth(req)
     const access = await loadDepartmentStructureContext(user.id)
     if (!access?.canDelete) {
       return NextResponse.json({ error: 'Forbidden', code: 'NO_PERMISSION' }, { status: 403 })
     }
-
-    const { orgId, memberAccess } = access
-
-    // 检查部门是否存在
-    const { data: existing, error: checkError } = await supabaseAdmin
-      .from('departments')
-      .select('id, member_count, name')
-      .eq('id', id)
-      .eq('org_id', orgId)
-      .single()
-
-    if (checkError || !existing) {
-      return NextResponse.json({ error: '部门不存在' }, { status: 404 })
-    }
-
-    // 成员关联也包含未进入同步在职名单的账号。
-    if (existing.member_count > 0) {
-      return NextResponse.json(
-        {
-          error: memberAccess
-            ? `部门「${existing.name}」还有 ${existing.member_count} 条成员关联，请先调整成员的部门归属`
-            : `部门「${existing.name}」仍有成员关联，无法删除`,
-          code: 'DEPARTMENT_HAS_MEMBER_BINDINGS',
-        },
-        { status: 400 }
-      )
-    }
-
-    // 检查是否有子部门
-    const { data: children } = await supabaseAdmin
-      .from('departments')
-      .select('id')
-      .eq('parent_id', id)
-      .eq('org_id', orgId)
-      .limit(1)
-
-    if (children && children.length > 0) {
-      return NextResponse.json(
-        { error: `部门 "${existing.name}" 下还有子部门，请先删除子部门` },
-        { status: 400 }
-      )
-    }
-
-    // 软删除：将状态改为 inactive
-    const { error } = await supabaseAdmin
-      .from('departments')
-      .update({ status: 'inactive' })
-      .eq('id', id)
-      .eq('org_id', orgId)
-
-    if (error) {
-      console.error('Delete department error:', error)
-      return NextResponse.json({ error: '删除部门失败' }, { status: 500 })
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: `部门 "${existing.name}" 已删除`,
+    const id = uuidSchema.safeParse((await params).id)
+    if (!id.success) return validationError(id.error)
+    const { data, error } = await supabaseAdmin.rpc('archive_manual_department_v1', {
+      p_org_id: access.orgId, p_actor_id: user.id, p_department_id: id.data,
     })
+    if (error?.code === '42501') return NextResponse.json({ error: '无权归档该部门。', code: 'NO_PERMISSION' }, { status: 403 })
+    if (error?.code === 'P0002') return NextResponse.json({ error: '部门不存在', code: 'DEPARTMENT_NOT_FOUND' }, { status: 404 })
+    const result = z.object({
+      departmentId: uuidSchema,
+      status: z.enum(['applied', 'unchanged', 'blocked']),
+      code: z.string().optional(),
+      details: z.object({ memberCount: z.number().int().nonnegative().optional(), name: z.string().optional() }).optional(),
+    }).safeParse(data)
+    if (error || !result.success || result.data.departmentId !== id.data) {
+      console.error('Department archive transaction failed', { code: error?.code })
+      return NextResponse.json({ error: '暂时无法确认归档结果，请重新读取部门。', code: 'DEPARTMENT_ARCHIVE_UNAVAILABLE' }, { status: 503 })
+    }
+    if (result.data.status === 'blocked') {
+      const { code, details } = result.data
+      const message = code === 'DEPARTMENT_HAS_MEMBER_BINDINGS'
+        ? access.memberAccess && details?.memberCount !== undefined
+          ? `部门仍有 ${details.memberCount} 条成员关联，请先调整部门归属。`
+          : '部门仍有成员关联，请先调整部门归属。'
+        : '部门仍有受保护的来源、子部门或业务关系，请在处置预览中核对。'
+      return NextResponse.json({ error: message, code: code ?? 'DEPARTMENT_ARCHIVE_BLOCKED' }, { status: 400 })
+    }
+    return NextResponse.json({ success: true, message: '部门已归档。' }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (err) {
-    console.error('DELETE department error:', err)
-    if (err instanceof Error && err.message === 'Unauthorized') {
+    if (err instanceof Error && (err.name === 'AuthError' || err.message === 'Unauthorized')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    console.error('Department archive failed')
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
