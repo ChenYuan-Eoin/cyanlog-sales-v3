@@ -34,8 +34,16 @@ it('keeps the authenticated waiting page and personal information available with
   expect(fetchProfile).toHaveBeenCalledExactlyOnceWith('/api/profile', expect.objectContaining({ cache: 'no-store' }))
 })
 
-it('shows business navigation for a normal authenticated page', () => {
+it('lets narrow shipping pages scroll while keeping the viewport-height layout', () => {
   vi.mocked(usePathname).mockReturnValue('/shipping')
   render(<AppShell><div>工作台</div></AppShell>)
   expect(screen.getByRole('navigation', { name: '业务菜单' })).toBeInTheDocument()
+  expect(screen.getByRole('main')).toHaveClass('h-dvh', 'overflow-hidden', 'max-[899px]:overflow-y-auto')
+})
+
+it('keeps the sales portal viewport scroll behavior', () => {
+  vi.mocked(usePathname).mockReturnValue('/sales-portal')
+  render(<AppShell><div>寄件记录</div></AppShell>)
+  expect(screen.getByRole('main')).toHaveClass('h-dvh', 'overflow-hidden')
+  expect(screen.getByRole('main')).not.toHaveClass('max-[899px]:overflow-y-auto')
 })
