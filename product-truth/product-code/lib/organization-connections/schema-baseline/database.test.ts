@@ -40,7 +40,7 @@ describe('production DDL database gates', () => {
     } finally { await db.close() }
   }, 15_000)
 
-  it('reads synced members, renamed roles and first-login assignments through the rebuilt directory', async () => {
+  it('reads synced members, renamed roles and prelogin authorization from the rebuilt directory', async () => {
     const db = await productionSchemaDatabase()
     const pendingPerson = 'aaaaaaaa-0000-4000-8000-000000000006'
     const pendingMembership = 'aaaaaaaa-0000-4000-8000-000000000007'
@@ -76,6 +76,8 @@ describe('production DDL database gates', () => {
             jsonb_build_object('status', 'active', 'provisionedMemberId', '${pendingPerson}'::text));
         insert into public.fxiaoke_pending_org_roles (org_id, user_id, role_id, source_id, external_identity_id, external_user_id)
           values ('${org}', '${pendingPerson}', '${roleId}', '${source}', '${pendingIdentity}', 'pending-member');
+        insert into public.personnel_invitations (org_id, user_id, token_hash, expires_at, created_by)
+          values ('${org}', '${pendingPerson}', 'fixture-unusable-invitation-token', now()+interval '1 day', '${person}');
         set role service_role;
         set search_path = '';
       `)
@@ -97,13 +99,67 @@ describe('production DDL database gates', () => {
           }),
         ]),
       })
+      await db.exec(`
+        set role postgres;
+        insert into public.personnel_lifecycle_events (org_id,target_user_id,actor_id,command,after_state)
+          values ('${org}','${pendingPerson}','${person}','set_account_state','{"login_enabled":false}');
+        set role service_role;
+      `)
+      expect((await readDirectory()).rows[0].payload).toMatchObject({
+        users: expect.arrayContaining([expect.objectContaining({
+          id: pendingPerson, can_preassign_org_roles: false, can_revoke_pending_org_roles: true,
+          pending_org_roles: [expect.objectContaining({ id: roleId, name: 'Renamed role' })],
+        })]),
+      })
       await expect(db.query('select private.get_org_admin_before_owned_roles_v1($1)', [org]))
         .rejects.toMatchObject({ code: '42501' })
+
+      await db.exec(`
+        set role postgres;
+        update public.user_organizations set status='ended', employment_status='ended', left_at=now()
+          where org_id='${org}' and user_id='${pendingPerson}';
+      `)
+      expect((await db.query('select user_id from public.fxiaoke_pending_org_roles where user_id=$1', [pendingPerson])).rows)
+        .toEqual([])
+      expect((await db.query('select status from public.personnel_invitations where user_id=$1', [pendingPerson])).rows)
+        .toEqual([{ status: 'revoked' }])
 
       for (const role of ['anon', 'authenticated']) {
         await db.exec(`set role ${role};`)
         await expect(readDirectory()).rejects.toMatchObject({ code: '42501' })
       }
+    } finally { await db.close() }
+  }, 15_000)
+
+  it('retains automatic department role references in the service role catalog', async () => {
+    const db = await productionSchemaDatabase()
+    const roleId = 'aaaaaaaa-0000-4000-8000-000000000012'
+    try {
+      await seed(db)
+      await db.query("insert into public.roles(id, code, name) values ($1, 'FXIAOKE_BASELINE', 'Historical role')", [roleId])
+      await db.exec("set role service_role; set search_path = '';")
+      const catalog = () => db.query('select id from public.admin_list_org_roles_v1($1)', [org])
+      expect((await catalog()).rows).toEqual([])
+
+      await db.exec('set role postgres;')
+      await db.query(`insert into private.department_automatic_role_rules (org_id, department_id, role_id, include_subdepartments)
+        values ($1,$2,$3,false)`, [org, department, roleId])
+      await db.exec('set role service_role;')
+      expect((await catalog()).rows).toEqual([{ id: roleId }])
+      await expect(db.query('select * from private.department_automatic_role_rules')).rejects.toMatchObject({ code: '42501' })
+    } finally { await db.close() }
+  }, 15_000)
+
+  it('blocks direct parent mutations by the service role before changing the effective hierarchy', async () => {
+    const db = await productionSchemaDatabase()
+    try {
+      await seed(db)
+      await db.query("insert into public.departments (id,org_id,name) values ($1,$2,'Separate test department')", [child, org])
+      await db.exec("set role service_role; set search_path = '';")
+      await expect(db.query('update public.departments set parent_id=$1 where id=$2', [department, child]))
+        .rejects.toMatchObject({ code: '42501', detail: 'DEPARTMENT_PARENT_CHANGE_COMMAND_REQUIRED' })
+      expect((await db.query('select parent_id from public.departments where id=$1', [child])).rows)
+        .toEqual([{ parent_id: null }])
     } finally { await db.close() }
   }, 15_000)
 

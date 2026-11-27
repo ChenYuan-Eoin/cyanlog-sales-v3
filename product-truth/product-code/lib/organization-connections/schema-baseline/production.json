@@ -1,7 +1,7 @@
 {
   "format": 1,
   "projectId": "wfawwhphfqqwfwrrkogy",
-  "capturedAt": "2026-11-27T01:53:11.535Z",
+  "capturedAt": "2026-11-27T11:35:48.937Z",
   "catalog": {
     "roles": [
       {
@@ -70,6 +70,143 @@
       }
     ],
     "tables": [
+      {
+        "rls": true,
+        "name": "department_automatic_role_rules",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "DELETE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "INSERT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "MAINTAIN"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "REFERENCES"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "SELECT"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRIGGER"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "TRUNCATE"
+          },
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "UPDATE"
+          }
+        ],
+        "schema": "private",
+        "columns": [
+          {
+            "name": "org_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "department_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "role_id",
+            "type": "uuid",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "include_subdepartments",
+            "type": "boolean",
+            "default": null,
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "updated_by",
+            "type": "uuid",
+            "default": null,
+            "notNull": false,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "default": "now()",
+            "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          }
+        ],
+        "indexes": [
+          "CREATE INDEX department_automatic_role_rules_by_role ON private.department_automatic_role_rules USING btree (org_id, role_id)"
+        ],
+        "forceRls": false,
+        "policies": [],
+        "triggers": [],
+        "constraints": [
+          {
+            "name": "department_automatic_role_rules_department_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE"
+          },
+          {
+            "name": "department_automatic_role_rules_org_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE"
+          },
+          {
+            "name": "department_automatic_role_rules_pkey",
+            "type": "p",
+            "definition": "PRIMARY KEY (org_id, department_id, role_id)"
+          },
+          {
+            "name": "department_automatic_role_rules_role_id_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE"
+          },
+          {
+            "name": "department_automatic_role_rules_updated_by_fkey",
+            "type": "f",
+            "definition": "FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL"
+          }
+        ]
+      },
       {
         "rls": true,
         "name": "employee_permission_overrides",
@@ -177,6 +314,15 @@
             "type": "timestamp with time zone",
             "default": "now()",
             "notNull": true,
+            "identity": "",
+            "collation": null,
+            "generated": ""
+          },
+          {
+            "name": "pending_target_revision",
+            "type": "text",
+            "default": null,
+            "notNull": false,
             "identity": "",
             "collation": null,
             "generated": ""
@@ -733,6 +879,11 @@
             "name": "clear_department_lead_access_on_department_change",
             "enabled": "O",
             "definition": "CREATE TRIGGER clear_department_lead_access_on_department_change AFTER UPDATE OF leader_id, org_id, status ON public.departments FOR EACH ROW WHEN (((old.leader_id IS DISTINCT FROM new.leader_id) OR (old.org_id IS DISTINCT FROM new.org_id) OR ((old.status IS DISTINCT FROM new.status) AND (new.status IS DISTINCT FROM 'active'::text)))) EXECUTE FUNCTION private.clear_department_lead_access_on_department_change_v1()"
+          },
+          {
+            "name": "guard_direct_department_parent_update",
+            "enabled": "O",
+            "definition": "CREATE TRIGGER guard_direct_department_parent_update BEFORE UPDATE OF parent_id ON public.departments FOR EACH ROW WHEN ((old.parent_id IS DISTINCT FROM new.parent_id)) EXECUTE FUNCTION private.guard_direct_department_parent_update_v1()"
           },
           {
             "name": "trg_departments_path",
@@ -4472,6 +4623,11 @@
             "definition": "CREATE TRIGGER clear_departed_employee_permission_overrides AFTER UPDATE OF status, employment_status, left_at ON public.user_organizations FOR EACH ROW WHEN ((((new.status = 'ended'::text) OR (new.employment_status = 'ended'::text) OR (new.left_at IS NOT NULL)) AND ((old.status IS DISTINCT FROM new.status) OR (old.employment_status IS DISTINCT FROM new.employment_status) OR (old.left_at IS DISTINCT FROM new.left_at)))) EXECUTE FUNCTION private.clear_departed_employee_permission_overrides_v1()"
           },
           {
+            "name": "clear_departed_pending_authorization",
+            "enabled": "O",
+            "definition": "CREATE TRIGGER clear_departed_pending_authorization AFTER UPDATE OF status ON public.user_organizations FOR EACH ROW WHEN (((new.status = 'ended'::text) AND (old.status IS DISTINCT FROM new.status))) EXECUTE FUNCTION private.clear_departed_pending_authorization_v1()"
+          },
+          {
             "name": "clear_department_lead_access_on_membership_end",
             "enabled": "O",
             "definition": "CREATE TRIGGER clear_department_lead_access_on_membership_end AFTER UPDATE OF status, employment_status, left_at ON public.user_organizations FOR EACH ROW WHEN ((((old.status IS DISTINCT FROM new.status) OR (old.employment_status IS DISTINCT FROM new.employment_status) OR (old.left_at IS DISTINCT FROM new.left_at)) AND ((new.status IS DISTINCT FROM 'active'::text) OR (new.employment_status IS DISTINCT FROM 'active'::text) OR (new.left_at IS NOT NULL)))) EXECUTE FUNCTION private.clear_department_lead_access_on_membership_end_v1()"
@@ -5225,6 +5381,20 @@
         "definition": "CREATE OR REPLACE FUNCTION private.clear_departed_employee_permission_overrides_v1()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n  delete from private.employee_permission_overrides\n    where org_id = new.org_id and user_id = new.user_id;\n  return new;\nend;\n$function$\n"
       },
       {
+        "name": "clear_departed_pending_authorization_v1",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          }
+        ],
+        "schema": "private",
+        "arguments": "",
+        "definition": "CREATE OR REPLACE FUNCTION private.clear_departed_pending_authorization_v1()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n  delete from public.fxiaoke_pending_org_roles\n  where org_id = new.org_id and user_id = new.user_id;\n  update public.personnel_invitations set status = 'revoked', revoked_at = now()\n  where org_id = new.org_id and user_id = new.user_id and status = 'pending';\n  return new;\nend;\n$function$\n"
+      },
+      {
         "name": "clear_department_lead_access_on_department_change_v1",
         "owner": "postgres",
         "grants": [
@@ -5272,6 +5442,20 @@
         "definition": "CREATE OR REPLACE FUNCTION private.current_user_org_id()\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select profile.org_id\n    from public.users as profile\n   where profile.id = (select auth.uid())\n     and profile.status = 'active'\n     and profile.login_enabled is true\n   limit 1\n$function$\n"
       },
       {
+        "name": "fxiaoke_prelogin_directory_members_v1",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          }
+        ],
+        "schema": "private",
+        "arguments": "p_org_id uuid, p_user_id uuid",
+        "definition": "CREATE OR REPLACE FUNCTION private.fxiaoke_prelogin_directory_members_v1(p_org_id uuid, p_user_id uuid)\n RETURNS TABLE(user_id uuid, source_id uuid, identity_id uuid, external_user_id text, login_stopped boolean)\n LANGUAGE sql\n STABLE\n SET search_path TO ''\nAS $function$\n  select person.id, source.id, identity.id, identity.external_user_id, coalesce((\n    select event.after_state->>'login_enabled' = 'false' or event.after_state->>'status' in ('inactive','suspended')\n    from public.personnel_lifecycle_events event\n    where event.org_id = p_org_id and event.target_user_id = person.id and event.command = 'set_account_state'\n    order by event.occurred_at desc, event.id desc limit 1\n  ), false)\n  from public.users person\n  join public.user_organizations membership on membership.user_id = person.id and membership.org_id = person.org_id\n  join public.organization_sources source on source.system_org_id = person.org_id and source.provider = 'fxiaoke'\n  join public.external_identities identity on identity.system_org_id = person.org_id and identity.source_id = source.id\n    and identity.canonical_user_id = person.id\n  where person.org_id = p_org_id and (p_user_id is null or person.id = p_user_id)\n    and person.status = 'inactive' and person.login_enabled = false\n    and person.password_hash is null and person.last_login_at is null\n    and membership.status = 'invited' and membership.employment_status = 'active' and membership.is_default\n    and source.status = 'active' and source.connection_state = 'verified' and source.effective_revision is not null\n    and source.authority_scope->>'identity' = 'authoritative' and source.authority_scope->>'directory' = 'authoritative'\n    and identity.match_status = 'matched' and identity.external_user_id <> ''\n    and identity.profile_snapshot->>'provisionedMemberId' = person.id::text\n    and identity.profile_snapshot->>'status' = 'active'\n    and identity.profile_snapshot->>'loginDisabled' is distinct from 'true'\n    and identity.profile_snapshot->>'deleted' is distinct from 'true'\n    and not exists (\n      select 1 from public.organization_sources other\n      where other.system_org_id = p_org_id and other.provider = 'fxiaoke' and other.id <> source.id\n    )\n    and not exists (\n      select 1 from public.external_identities other\n      where other.source_id = source.id and other.canonical_user_id = person.id and other.id <> identity.id\n        and other.match_status in ('matched', 'conflict')\n    );\n$function$\n"
+      },
+      {
         "name": "get_org_admin_before_owned_roles_v1",
         "owner": "postgres",
         "grants": [
@@ -5284,6 +5468,20 @@
         "schema": "private",
         "arguments": "p_org_id uuid",
         "definition": "CREATE OR REPLACE FUNCTION private.get_org_admin_before_owned_roles_v1(p_org_id uuid)\n RETURNS jsonb\n LANGUAGE sql\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nwith department_rows as (\n  select\n    d.id,\n    d.name,\n    d.code,\n    coalesce(d.depth, 0) as depth,\n    coalesce(d.member_count, 0) as member_count,\n    d.parent_id,\n    parent.name as parent_name,\n    d.leader_id,\n    leader.display_name as leader_name,\n    coalesce(d.sort_order, 0) as sort_order\n  from departments d\n  left join departments parent\n    on parent.id = d.parent_id\n   and coalesce(parent.status, 'active') = 'active'\n  left join users leader\n    on leader.id = d.leader_id\n   and coalesce(leader.status, 'active') <> 'inactive'\n  where d.org_id = p_org_id\n    and coalesce(d.status, 'active') = 'active'\n),\nspace_rows as (\n  select\n    s.id,\n    s.name,\n    s.description,\n    s.department_id,\n    d.name as department_name,\n    s.owner_id\n  from sales_spaces s\n  left join departments d\n    on d.id = s.department_id\n   and coalesce(d.status, 'active') = 'active'\n  where s.org_id = p_org_id\n),\norg_memberships as (\n  select\n    uo.user_id,\n    uo.org_id,\n    uo.status,\n    uo.primary_department_id,\n    uo.employment_status\n  from user_organizations uo\n  where uo.org_id = p_org_id\n    and uo.status in ('invited', 'active', 'suspended')\n),\nuser_rows as (\n  select\n    u.id,\n    u.email,\n    u.display_name,\n    u.title,\n    u.status,\n    u.must_change_password,\n    coalesce(m.primary_department_id, u.primary_dept_id) as primary_dept_id,\n    u.login_enabled,\n    u.report_to_user_id,\n    u.created_at,\n    m.status as membership_status,\n    m.employment_status,\n    pd.name as primary_dept_name,\n    manager.display_name as report_to_user_name\n  from users u\n  join org_memberships m on m.user_id = u.id\n  left join departments pd\n    on pd.id = coalesce(m.primary_department_id, u.primary_dept_id)\n   and coalesce(pd.status, 'active') = 'active'\n  left join users manager on manager.id = u.report_to_user_id\n),\ncurrent_role_rows as (\n  select\n    ur.user_id,\n    ur.scope_type,\n    ur.scope_id,\n    ur.granted_at,\n    r.id as role_id,\n    r.name as role_name,\n    r.code as role_code,\n    coalesce(r.sort_order, 0) as sort_order,\n    case\n      when ur.scope_type = 'department' then coalesce(d.name, '部门')\n      when ur.scope_type = 'space' then coalesce(s.name, '销售空间')\n      else '组织'\n    end as scope_name\n  from user_roles ur\n  join roles r on r.id = ur.role_id\n  left join departments d\n    on ur.scope_type = 'department'\n   and d.id = ur.scope_id\n   and d.org_id = p_org_id\n   and coalesce(d.status, 'active') = 'active'\n  left join sales_spaces s\n    on ur.scope_type = 'space'\n   and s.id = ur.scope_id\n   and s.org_id = p_org_id\n  where ur.org_id = p_org_id\n    and ur.user_id in (select id from user_rows)\n    and (\n      (ur.scope_type = 'org' and (ur.scope_id is null or ur.scope_id = p_org_id))\n      or (ur.scope_type = 'department' and d.id is not null)\n      or (ur.scope_type = 'space' and s.id is not null)\n    )\n),\nrole_payload as (\n  select\n    crr.user_id,\n    coalesce(\n      string_agg(\n        case\n          when crr.scope_type = 'org' then crr.role_name\n          else crr.role_name || '(' || crr.scope_name || ')'\n        end,\n        ', '\n        order by crr.sort_order, crr.role_name, crr.scope_name\n      ),\n      ''\n    ) as role_names,\n    coalesce(\n      jsonb_agg(crr.role_id order by crr.sort_order, crr.role_name)\n        filter (where crr.scope_type = 'org'),\n      '[]'::jsonb\n    ) as role_ids,\n    coalesce(\n      jsonb_agg(crr.role_code order by crr.sort_order, crr.role_name)\n        filter (where crr.scope_type = 'org'),\n      '[]'::jsonb\n    ) as role_codes,\n    coalesce(\n      jsonb_agg(\n        jsonb_build_object(\n          'roleId', crr.role_id,\n          'roleName', crr.role_name,\n          'roleCode', crr.role_code,\n          'scopeType', crr.scope_type,\n          'scopeId', crr.scope_id,\n          'scopeName', crr.scope_name,\n          'grantedAt', crr.granted_at\n        )\n        order by crr.sort_order, crr.role_name, crr.scope_name\n      ),\n      '[]'::jsonb\n    ) as scoped_roles\n  from current_role_rows crr\n  group by crr.user_id\n)\nselect jsonb_build_object(\n  'organization',\n  (\n    select jsonb_build_object(\n      'id', o.id,\n      'name', o.name,\n      'slug', o.slug\n    )\n    from organizations o\n    where o.id = p_org_id\n    limit 1\n  ),\n  'users',\n  coalesce(\n    (\n      select jsonb_agg(\n        jsonb_build_object(\n          'id', u.id,\n          'email', coalesce(u.email, ''),\n          'display_name', u.display_name,\n          'title', coalesce(u.title, ''),\n          'primary_dept_id', u.primary_dept_id,\n          'primary_dept_name', coalesce(u.primary_dept_name, '-'),\n          'role_names', coalesce(rp.role_names, ''),\n          'role_ids', coalesce(rp.role_ids, '[]'::jsonb),\n          'role_codes', coalesce(rp.role_codes, '[]'::jsonb),\n          'scoped_roles', coalesce(rp.scoped_roles, '[]'::jsonb),\n          'status', u.status,\n          'membership_status', u.membership_status,\n          'employment_status', u.employment_status,\n          'must_change_password', coalesce(u.must_change_password, false),\n          'login_enabled', coalesce(u.login_enabled, true),\n          'report_to_user_id', u.report_to_user_id,\n          'report_to_user_name', u.report_to_user_name\n        )\n        order by u.created_at desc nulls last\n      )\n      from user_rows u\n      left join role_payload rp on rp.user_id = u.id\n    ),\n    '[]'::jsonb\n  ),\n  'departments',\n  coalesce(\n    (\n      select jsonb_agg(\n        jsonb_build_object(\n          'id', d.id,\n          'name', d.name,\n          'code', d.code,\n          'depth', d.depth,\n          'member_count', d.member_count,\n          'parent_id', d.parent_id,\n          'parent_name', d.parent_name,\n          'leader_id', d.leader_id,\n          'leader_name', d.leader_name\n        )\n        order by d.depth, d.sort_order, d.name\n      )\n      from department_rows d\n    ),\n    '[]'::jsonb\n  ),\n  'roles',\n  coalesce(\n    (\n      select jsonb_agg(\n        jsonb_build_object(\n          'id', r.id,\n          'code', r.code,\n          'name', r.name\n        )\n        order by coalesce(r.sort_order, 0), r.name\n      )\n      from roles r\n    ),\n    '[]'::jsonb\n  ),\n  'spaces',\n  coalesce(\n    (\n      select jsonb_agg(\n        jsonb_build_object(\n          'id', s.id,\n          'name', s.name,\n          'description', s.description,\n          'department_id', s.department_id,\n          'department_name', coalesce(s.department_name, ''),\n          'owner_id', s.owner_id\n        )\n        order by s.name\n      )\n      from space_rows s\n    ),\n    '[]'::jsonb\n  )\n);\n$function$\n"
+      },
+      {
+        "name": "guard_direct_department_parent_update_v1",
+        "owner": "postgres",
+        "grants": [
+          {
+            "role": "postgres",
+            "grantable": false,
+            "privilege": "EXECUTE"
+          }
+        ],
+        "schema": "private",
+        "arguments": "",
+        "definition": "CREATE OR REPLACE FUNCTION private.guard_direct_department_parent_update_v1()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nbegin\n  if current_user in ('anon', 'authenticated', 'service_role') then\n    raise exception 'department parent changes require the controlled command'\n      using errcode = '42501', detail = 'DEPARTMENT_PARENT_CHANGE_COMMAND_REQUIRED';\n  end if;\n  return new;\nend;\n$function$\n"
       },
       {
         "name": "has_exact_org_role_v1",
@@ -5325,7 +5523,7 @@
         ],
         "schema": "private",
         "arguments": "p_org_id uuid, p_role_id uuid",
-        "definition": "CREATE OR REPLACE FUNCTION private.org_role_is_referenced_v1(p_org_id uuid, p_role_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE\n SET search_path TO ''\nAS $function$\n  select exists (select 1 from public.user_roles as binding where binding.org_id = p_org_id and binding.role_id = p_role_id)\n    or exists (select 1 from public.fxiaoke_pending_org_roles as pending\n      where pending.org_id = p_org_id and pending.role_id = p_role_id)\n    or exists (select 1 from public.personnel_invitations as invitation\n      where invitation.org_id = p_org_id and invitation.status = 'pending' and p_role_id = any(invitation.role_ids));\n$function$\n"
+        "definition": "CREATE OR REPLACE FUNCTION private.org_role_is_referenced_v1(p_org_id uuid, p_role_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE\n SET search_path TO ''\nAS $function$\n  select exists (select 1 from public.user_roles as binding where binding.org_id = p_org_id and binding.role_id = p_role_id)\n    or exists (select 1 from public.fxiaoke_pending_org_roles as pending\n      where pending.org_id = p_org_id and pending.role_id = p_role_id)\n    or exists (select 1 from public.personnel_invitations as invitation\n      where invitation.org_id = p_org_id and invitation.status = 'pending' and p_role_id = any(invitation.role_ids))\n    or exists (select 1 from private.department_automatic_role_rules as rule\n      where rule.org_id = p_org_id and rule.role_id = p_role_id);\n$function$\n"
       },
       {
         "name": "org_super_admin_active_member_v1",
@@ -5504,7 +5702,7 @@
         ],
         "schema": "public",
         "arguments": "p_org_id uuid, p_user_id uuid",
-        "definition": "CREATE OR REPLACE FUNCTION public.fxiaoke_prelogin_role_targets_v1(p_org_id uuid, p_user_id uuid DEFAULT NULL::uuid)\n RETURNS TABLE(user_id uuid, source_id uuid, identity_id uuid, external_user_id text)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select person.id, source.id, identity.id, identity.external_user_id\n  from public.users person\n  join public.user_organizations membership on membership.user_id = person.id and membership.org_id = person.org_id\n  join public.organization_sources source on source.system_org_id = person.org_id and source.provider = 'fxiaoke'\n  join public.external_identities identity on identity.system_org_id = person.org_id and identity.source_id = source.id\n    and identity.canonical_user_id = person.id\n  where person.org_id = p_org_id and (p_user_id is null or person.id = p_user_id)\n    and person.status = 'inactive' and person.login_enabled = false\n    and person.password_hash is null and person.last_login_at is null\n    and membership.status = 'invited' and membership.employment_status = 'active' and membership.is_default\n    and source.status = 'active' and source.connection_state = 'verified' and source.effective_revision is not null\n    and source.authority_scope->>'identity' = 'authoritative' and source.authority_scope->>'directory' = 'authoritative'\n    and identity.match_status = 'matched' and identity.external_user_id <> ''\n    and identity.profile_snapshot->>'provisionedMemberId' = person.id::text\n    and identity.profile_snapshot->>'status' = 'active'\n    and identity.profile_snapshot->>'loginDisabled' is distinct from 'true'\n    and identity.profile_snapshot->>'deleted' is distinct from 'true'\n    -- An admin may explicitly disable an already inactive, never-logged-in account.\n    -- Its current flags alone are identical to an untouched directory reservation.\n    and not coalesce((\n      select event.after_state->>'login_enabled' = 'false' or event.after_state->>'status' in ('inactive','suspended')\n      from public.personnel_lifecycle_events event\n      where event.org_id = p_org_id and event.target_user_id = person.id and event.command = 'set_account_state'\n      order by event.occurred_at desc, event.id desc limit 1\n    ), false)\n    and not exists (\n      select 1 from public.organization_sources other\n      where other.system_org_id = p_org_id and other.provider = 'fxiaoke' and other.id <> source.id\n    )\n    and not exists (\n      select 1 from public.external_identities other\n      where other.source_id = source.id and other.canonical_user_id = person.id and other.id <> identity.id\n        and other.match_status in ('matched', 'conflict')\n    );\n$function$\n"
+        "definition": "CREATE OR REPLACE FUNCTION public.fxiaoke_prelogin_role_targets_v1(p_org_id uuid, p_user_id uuid DEFAULT NULL::uuid)\n RETURNS TABLE(user_id uuid, source_id uuid, identity_id uuid, external_user_id text)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select target.user_id, target.source_id, target.identity_id, target.external_user_id\n  from private.fxiaoke_prelogin_directory_members_v1(p_org_id, p_user_id) target\n  where not target.login_stopped;\n$function$\n"
       },
       {
         "name": "get_org_admin_directory_payload_v1",
@@ -5542,7 +5740,7 @@
         ],
         "schema": "public",
         "arguments": "p_org_id uuid",
-        "definition": "CREATE OR REPLACE FUNCTION public.get_org_admin_directory_payload_v2(p_org_id uuid)\n RETURNS jsonb\n LANGUAGE sql\n STABLE\n SET search_path TO ''\nAS $function$\n  with base as (select public.get_org_admin_directory_payload_v1(p_org_id) as payload),\n  targets as (select * from public.fxiaoke_prelogin_role_targets_v1(p_org_id)),\n  pending as (\n    select grant_row.user_id, jsonb_agg(jsonb_build_object('id', role.id, 'code', role.code, 'name', role.name)\n      order by role.name, role.id) as roles\n    from public.fxiaoke_pending_org_roles as grant_row\n    join public.admin_list_org_roles_v1(p_org_id) as role on role.id = grant_row.role_id\n    join targets on targets.user_id = grant_row.user_id and targets.source_id = grant_row.source_id\n      and targets.identity_id = grant_row.external_identity_id and targets.external_user_id = grant_row.external_user_id\n    where grant_row.org_id = p_org_id group by grant_row.user_id\n  )\n  select base.payload || jsonb_build_object('users', coalesce((\n    select jsonb_agg(member.value || jsonb_build_object(\n      'can_preassign_org_roles', targets.user_id is not null,\n      'pending_org_roles', coalesce(pending.roles, '[]'::jsonb)\n    ) order by member.ordinality)\n    from jsonb_array_elements(base.payload->'users') with ordinality as member(value, ordinality)\n    left join targets on targets.user_id = (member.value->>'id')::uuid\n    left join pending on pending.user_id = targets.user_id\n  ), '[]'::jsonb)) from base;\n$function$\n"
+        "definition": "CREATE OR REPLACE FUNCTION public.get_org_admin_directory_payload_v2(p_org_id uuid)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  with base as (select public.get_org_admin_directory_payload_v1(p_org_id) as payload),\n  targets as (\n    select * from private.fxiaoke_prelogin_directory_members_v1(p_org_id, null) target\n    where not target.login_stopped or not private.has_exact_org_role_v1(target.user_id, p_org_id, 'SUPER_ADMIN')\n  ),\n  pending as (\n    select grant_row.user_id, jsonb_agg(jsonb_build_object('id', role.id, 'code', role.code, 'name', role.name)\n      order by role.name, role.id) as roles\n    from public.fxiaoke_pending_org_roles as grant_row\n    join public.admin_list_org_roles_v1(p_org_id) as role on role.id = grant_row.role_id\n    join targets on targets.user_id = grant_row.user_id and targets.source_id = grant_row.source_id\n      and targets.identity_id = grant_row.external_identity_id and targets.external_user_id = grant_row.external_user_id\n    where grant_row.org_id = p_org_id\n      and (not targets.login_stopped or role.code not in ('SUPER_ADMIN', 'ORG_SUPER_ADMIN', 'FXIAOKE_BASELINE'))\n    group by grant_row.user_id\n  )\n  select base.payload || jsonb_build_object('users', coalesce((\n    select jsonb_agg(member.value || jsonb_build_object(\n      'can_preassign_org_roles', coalesce(not targets.login_stopped, false),\n      'can_revoke_pending_org_roles', coalesce(targets.login_stopped, false) and pending.roles is not null,\n      'pending_org_roles', coalesce(pending.roles, '[]'::jsonb)\n    ) order by member.ordinality)\n    from jsonb_array_elements(base.payload->'users') with ordinality as member(value, ordinality)\n    left join targets on targets.user_id = (member.value->>'id')::uuid\n    left join pending on pending.user_id = targets.user_id\n  ), '[]'::jsonb)) from base;\n$function$\n"
       },
       {
         "name": "get_org_admin_payload_v1",

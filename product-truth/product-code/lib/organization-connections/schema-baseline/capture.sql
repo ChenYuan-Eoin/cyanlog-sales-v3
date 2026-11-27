@@ -7,7 +7,9 @@ with recursive selected(oid) as (
     'organization_sources', 'external_identities', 'organization_fxiaoke_connections',
     'roles', 'user_roles', 'sales_spaces', 'sales_space_members',
     'fxiaoke_pending_org_roles', 'personnel_invitations', 'personnel_lifecycle_events', 'department_lead_access'
-  ) or (n.nspname = 'private' and c.relname in ('org_role_metadata', 'employee_permission_overrides'))
+  ) or (n.nspname = 'private' and c.relname in (
+    'org_role_metadata', 'employee_permission_overrides', 'department_automatic_role_rules'
+  ))
   union
   select c.confrelid from pg_constraint c join selected s on s.oid = c.conrelid where c.contype = 'f'
 ), functions as (

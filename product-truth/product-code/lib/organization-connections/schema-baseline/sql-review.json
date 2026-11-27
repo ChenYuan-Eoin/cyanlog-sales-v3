@@ -1,7 +1,7 @@
 {
   "status": "approved",
   "reviewer": "Codex / approved WP92 dependency and WP82 release review",
-  "reviewedAt": "2026-11-27T01:53:11.535Z",
+  "reviewedAt": "2026-11-27T11:36:24.320Z",
   "migrations": {
     "supabase/migrations/20261103090000_unified_organization_connections.sql": "ab99b807a91baf8587cd2908a1d75c895f3541e3d48eae045c5b47541745b2af",
     "supabase/migrations/20261103120000_organization_directory_cutover.sql": "64309804840cbb30c3b83c0ab737d6415c38a27fed85df747afb7108e9407179"
@@ -18,7 +18,12 @@
     "Current Production PostgreSQL 17.6 metadata includes the already-deployed directory wrappers, role ownership, permission registry and trigger dependencies. Snapshot contains schema metadata only.",
     "Capture adds seven tables and seventeen functions compared to the prior narrow scope. It retains foreign-key closure and enumerates textual function calls explicitly.",
     "The role/department authorization-subject check is restored with its original IN expression to preserve PostgreSQL 17.6 catalog equality. The renderer uses that syntax only for the exact known constraint definition and does not weaken the comparison.",
-    "The current expanded snapshot was restored on PostgreSQL 17.6 and its catalog matched a new read-only capture. A populated service-role fixture exercised the actual directory v1 and v2, role insertion and department-lead cleanup. Browser role access stayed denied. The November 5 historical snapshots and both original migration files retain their exact bytes."
+    "The current expanded snapshot was restored on PostgreSQL 17.6 and its catalog matched a new read-only capture. A populated service-role fixture exercised the actual directory v1 and v2, role insertion and department-lead cleanup. Browser role access stayed denied. The November 5 historical snapshots and both original migration files retain their exact bytes.",
+    "Production now blocks direct department reparenting by browser and service database roles through the controlled parent-change trigger. The membership-end trigger clears pending Fxiaoke role assignments and revokes pending personnel invitations. The nullable pending_target_revision column scopes pending personal permission differences.",
+    "The Production Fxiaoke prelogin helper separates stopped login from eligibility for pending-role revocation. The directory RPC runs as SECURITY DEFINER with existing execute grants and publishes the distinct preassignment and revocation capability flags.",
+    "Refreshed from the authenticated read-only Supabase Production catalog captured at 2026-11-27T11:35:48.937Z on PostgreSQL 17.6. It contains 20 tables and 30 functions and only schema metadata. The historic pre-cutover baseline and original migration hashes are preserved.",
+    "The role usage check now references private.department_automatic_role_rules. Capture explicitly selects that table and follows its foreign keys; the existing pending Fxiaoke roles and invitations already cover departure-trigger targets. The verifier still requires exact catalog equality.",
+    "A disposable native PostgreSQL 17.6 instance exactly reproduced the refreshed catalog. Service-role fixtures verified stopped-login revoke-only visibility, departure cleanup, blocked direct parent edits, and a retired role visible through a real automatic department role reference."
   ],
-  "catalogSha256": "1eab9b64fbf60f1e98cbefcce9b80250f64dfb995ce18b58787672f7afd823b9"
+  "catalogSha256": "7be4e8861689438ffcae2495940cf4b0d8ada3be6a465fcbb5d40f521c34c764"
 }
