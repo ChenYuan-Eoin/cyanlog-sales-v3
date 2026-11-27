@@ -14,6 +14,18 @@ describe('shipping workbench responsive layout', () => {
     expect(css).toContain('.intakeColumn[data-mobile-open=true]{display:flex}')
   })
 
+  it('keeps the confirmation footer ahead of the ledger cards and visible while scrolling on mobile only', () => {
+    const mobileBlock = css.match(/@media\(max-width:899px\)\{([\s\S]*?)\n\}/)?.[1]
+    const ledgerOrder = '.orderColumn > .orderList{order:1}'
+    const stickyConfirmation = '.orderColumn > .stickyFooter{position:sticky;top:3.5rem;z-index:2}'
+
+    expect(mobileBlock).toContain('.shell{height:auto;min-height:100dvh;overflow:visible}')
+    expect(mobileBlock).toContain(stickyConfirmation)
+    expect(mobileBlock).toContain(ledgerOrder)
+    expect(css.replace(mobileBlock ?? '', '')).not.toContain(stickyConfirmation)
+    expect(css.replace(mobileBlock ?? '', '')).not.toContain(ledgerOrder)
+  })
+
   it('keeps expanded operator forms inside the order column', () => {
     const style = document.createElement('style')
     style.textContent = css
