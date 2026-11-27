@@ -24,6 +24,7 @@ export const migrationPaths = [
   'supabase/migrations/20261127165500_fxiaoke_directory_permission_reviews.sql',
   'supabase/migrations/20261127170000_fxiaoke_directory_scope_proof.sql',
   'supabase/migrations/20261127170500_fxiaoke_existing_member_login.sql',
+  'supabase/migrations/20261127171000_fxiaoke_observed_phone_history.sql',
 ]
 export const migrationHashes = () => Object.fromEntries(migrationPaths.map(path => [path, sha256(readFileSync(resolve(root, path)))]))
 

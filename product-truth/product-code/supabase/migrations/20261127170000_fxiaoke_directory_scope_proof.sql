@@ -98,6 +98,37 @@ create function public.read_fxiaoke_directory_scope_proof_v1(
     and proof.roster_digest = p_roster_digest and proof.expires_at > statement_timestamp();
 $$;
 
+-- Use the same exact organization scope and effective stored grant as the
+-- application. Checking under the organization lock keeps the confirmation
+-- consistent with concurrent role and membership changes.
+create function private.directory_apply_actor_allowed_v1(p_org_id uuid, p_actor_id uuid)
+returns boolean language sql stable set search_path = '' as $$
+  select exists (
+    select 1
+    from public.organizations as organization
+    join public.user_organizations as member
+      on member.org_id = organization.id and member.user_id = p_actor_id
+    join public.users as person on person.id = member.user_id
+    join public.user_roles as assignment
+      on assignment.org_id = organization.id and assignment.user_id = p_actor_id
+      and assignment.scope_type = 'org' and assignment.scope_id = organization.id
+    join private.org_role_catalog_v1(p_org_id, false) as role on role.id = assignment.role_id
+    where organization.id = p_org_id and organization.status = 'active'
+      and person.status = 'active' and person.login_enabled is true
+      and member.status = 'active' and member.employment_status = 'active' and member.left_at is null
+      and (
+        (role.code = 'SUPER_ADMIN' and role.owner_org_id is null and member.is_default)
+        or (role.code not in ('SUPER_ADMIN', 'ORG_SUPER_ADMIN', 'FXIAOKE_BASELINE')
+          and private.shipping_role_effective_scope_permissions_v1(
+            role.code, role.id, organization.settings, role.permissions
+          ) ? 'org:source_apply')
+      )
+  );
+$$;
+
+revoke all on function private.directory_apply_actor_allowed_v1(uuid, uuid)
+  from public, anon, authenticated, service_role;
+
 alter function public.apply_organization_directory_cutover_v1(uuid, uuid, text, uuid, jsonb, uuid)
   rename to apply_organization_directory_before_scope_proof_v1;
 alter function public.apply_organization_directory_before_scope_proof_v1(uuid, uuid, text, uuid, jsonb, uuid)
@@ -114,6 +145,10 @@ declare
 begin
   perform private.personnel_lock_org_v1(p_system_org_id);
   perform 1 from public.organizations where id = p_system_org_id for no key update;
+  if not private.directory_apply_actor_allowed_v1(p_system_org_id, p_actor_id) then
+    raise exception 'organization directory confirmation is forbidden' using errcode = '42501';
+  end if;
+
   select * into v_plan from public.organization_directory_cutover_plans
     where id = p_plan_id and system_org_id = p_system_org_id for update;
   if not found then raise exception 'directory cutover plan not found' using errcode = 'P0002'; end if;
