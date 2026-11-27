@@ -26,6 +26,23 @@ describe('Fxiaoke direct directory preview', () => {
     await expect(discoverEnterprise(credentials, vi.fn().mockRejectedValue(networkError))).rejects.not.toThrow('sensitive upstream data')
     await expect(discoverEnterprise(credentials, vi.fn().mockRejectedValue(Object.assign(new Error('secret'), { name: 'TimeoutError' })))).rejects.toMatchObject({ code: 'PROVIDER_TIMEOUT' })
   })
+  it.each([
+    [[], 'FXIAOKE_APP_AUTH_FAILED', '应用授权'],
+    [[token], 'FXIAOKE_DEPARTMENT_READ_FAILED', '部门读取'],
+    [[token, page([department])], 'FXIAOKE_EMPLOYEE_READ_FAILED', '员工读取'],
+  ])('distinguishes the stage of the same provider rejection after %j', async (previous, code, stage) => {
+    const rejected = { errorCode: 10203, errorMessage: 'upstream confidential text' }
+    const run = previewDirectory(credentials, fixture(...previous, rejected))
+    await expect(run).rejects.toMatchObject({ code, message: expect.stringContaining(`${stage}被拒绝（错误码 10203）`) })
+    await expect(run).rejects.not.toThrow('upstream confidential text')
+  })
+
+  it('reports the application authorization stage in standalone credential verification', async () => {
+    await expect(discoverEnterprise(credentials, fixture({ errorCode: 10203 }))).rejects.toMatchObject({
+      code: 'FXIAOKE_APP_AUTH_FAILED', message: expect.stringContaining('应用授权被拒绝（错误码 10203）'),
+    })
+  })
+
   it('uses self-built app token and scoped OpenAPI headers, without MCP or writes', async () => {
     const request = fixture(token, page([department]), page([employee]))
     const result = await previewDirectory(credentials, request)

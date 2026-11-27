@@ -53,6 +53,16 @@ function checkFailureMessage(code: string | null) {
     case 'CONFIG_CHANGED': return '连接已改变，请重新检查。'
     case 'DIRECTORY_READ_INCOMPLETE': return '检查失败，目录读取不完整。'
     case 'DIRECTORY_READ_FAILED': return '通讯录读取失败，请核对读取人员和目录授权。'
+    case 'FXIAOKE_APP_AUTH_FAILED':
+    case 'INVALID_TOKEN_RESPONSE': return '纷享应用授权失败。请核对应用凭据、出口白名单和 OpenAPI 权益。'
+    case 'FXIAOKE_DEPARTMENT_READ_FAILED': return '纷享部门读取失败。请核对应用和读取员工的部门通讯录权限。'
+    case 'FXIAOKE_EMPLOYEE_READ_FAILED': return '纷享员工读取失败。请核对应用和读取员工的人员通讯录权限。'
+    case 'DIRECTORY_SOURCE_UNAVAILABLE':
+    case 'PROVIDER_DNS':
+    case 'PROVIDER_TIMEOUT':
+    case 'PROVIDER_TLS':
+    case 'PROVIDER_CONNECTION':
+    case 'PROVIDER_UNREACHABLE': return '暂时无法连接纷享。请检查服务连通性后重试，已同步目录保留。'
     case 'DIRECTORY_CHECK_INTERRUPTED': return '检查未返回结果，请重新检查。'
     default: return '本次检查失败，请检查生效连接后重试。'
   }

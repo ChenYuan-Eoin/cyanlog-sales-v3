@@ -249,29 +249,59 @@ function connectionFailure(error: unknown): FxiaokeError {
   return new FxiaokeError('PROVIDER_UNREACHABLE', '系统未能连接纷享，请联系系统管理员检查网络连接。', 502)
 }
 
+const directoryRequests = {
+  token: {
+    path: '/oauth2.0/token', code: 'FXIAOKE_APP_AUTH_FAILED', label: '应用授权',
+    help: '请核对 AppID、APPSecret、永久授权码、出口 IP 白名单及 OpenAPI 权益。',
+  },
+  departments: {
+    path: '/cgi/crm/v2/data/query', code: 'FXIAOKE_DEPARTMENT_READ_FAILED', label: '部门读取',
+    help: '请核对应用和读取员工的部门通讯录权限及出口 IP 白名单。',
+  },
+  employees: {
+    path: '/cgi/crm/v2/data/query', code: 'FXIAOKE_EMPLOYEE_READ_FAILED', label: '员工读取',
+    help: '请核对应用和读取员工的人员通讯录权限及出口 IP 白名单。',
+  },
+}
+
+async function postDirectoryRequest(
+  request: typeof fetch,
+  signal: AbortSignal,
+  step: keyof typeof directoryRequests,
+  body: unknown,
+  headers: Record<string, string> = {},
+) {
+  const { path, code, label, help } = directoryRequests[step]
+  let response: Response
+  try {
+    response = await request(`${ORIGIN}${path}?thirdTraceId=${randomUUID()}`, {
+      method: 'POST', redirect: 'error', cache: 'no-store', signal,
+      headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body),
+    })
+  } catch (error) {
+    const failure = connectionFailure(error)
+    throw new FxiaokeError(failure.code, `纷享${label}未完成。${failure.message}`, failure.status)
+  }
+  if (!response.ok) {
+    throw new FxiaokeError(code, `纷享${label}返回 HTTP ${response.status}。${help}`, 502)
+  }
+  let data: Row
+  try {
+    data = object(await response.json())
+  } catch {
+    throw new FxiaokeError(code, `纷享${label}没有返回有效数据。${help}`, 502)
+  }
+  if (data.errorCode !== 0) {
+    // Upstream error text can contain credentials or personal information.
+    const providerCode = Number.isSafeInteger(data.errorCode) ? String(data.errorCode) : '未知'
+    throw new FxiaokeError(code, `纷享${label}被拒绝（错误码 ${providerCode}）。${help}`, 502)
+  }
+  return data
+}
+
 export async function previewDirectory(credentials: Credentials, request: typeof fetch = fetch): Promise<DirectoryPreview> {
   const signal = AbortSignal.timeout(45_000)
-  async function post(path: string, body: unknown, headers: Record<string, string> = {}) {
-    let response: Response
-    try {
-      response = await request(`${ORIGIN}${path}?thirdTraceId=${randomUUID()}`, {
-        method: 'POST', redirect: 'error', cache: 'no-store', signal,
-        headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body),
-      })
-    } catch (error) {
-      throw connectionFailure(error)
-    }
-    if (!response.ok) throw new FxiaokeError('PROVIDER_HTTP_ERROR', `纷享接口返回 HTTP ${response.status}，本次预览未完成。`, 502)
-    let data: Row
-    try { data = object(await response.json()) } catch { throw new FxiaokeError('INVALID_RESPONSE', '纷享接口没有返回有效数据。', 502) }
-    if (data.errorCode !== 0) {
-      // Never echo provider messages: they may contain credentials or PII.
-      const code = Number.isSafeInteger(data.errorCode) ? String(data.errorCode) : '未知'
-      throw new FxiaokeError('PROVIDER_REJECTED', `纷享拒绝请求（错误码 ${code}）。请核对应用凭据、员工读取权限、IP 白名单和 OpenAPI 权益。`, 502)
-    }
-    return data
-  }
-  const token = await post('/oauth2.0/token', {
+  const token = await postDirectoryRequest(request, signal, 'token', {
     appId: credentials.appId, appSecret: credentials.appSecret,
     permanentCode: credentials.permanentCode, grantType: 'app_secret',
   })
@@ -282,14 +312,15 @@ export async function previewDirectory(credentials: Credentials, request: typeof
     throw new FxiaokeError('INVALID_TOKEN_RESPONSE', '纷享未返回有效的企业授权信息。', 502)
   }
   const headers = { authorization: `Bearer ${token.accessToken}`, 'x-fs-ea': credentials.expectedEa, 'x-fs-userid': credentials.apiUserId }
-  async function readAll(apiName: string, fields: string[]): Promise<Row[]> {
+  async function readAll(apiName: 'DepartmentObj' | 'PersonnelObj', fields: string[]): Promise<Row[]> {
     const result: Row[] = []; const seen = new Set<string>(); let total: number | null = null
     let cursor: string | null = null
     for (let pageNumber = 0; pageNumber <= Math.ceil(MAX_RECORDS / LIMIT); pageNumber += 1) {
       const filters = cursor === null
         ? []
         : [{ field_name: '_id', field_values: [cursor], operator: 'GT' }]
-      const response = await post('/cgi/crm/v2/data/query', {
+      const step = apiName === 'DepartmentObj' ? 'departments' : 'employees'
+      const response = await postDirectoryRequest(request, signal, step, {
         convertUserId: false,
         returnTotalNum: 1,
         data: { dataObjectApiName: apiName, search_query_info: {
@@ -306,7 +337,7 @@ export async function previewDirectory(credentials: Credentials, request: typeof
       // Keep the first total frozen and reject additions/deletions that make
       // the remaining count disagree with the records already collected.
       if (!Array.isArray(page.dataList) || !Number.isSafeInteger(page.total) || Number(page.total) < 0 || Number(page.total) > MAX_RECORDS || (total !== null && result.length + Number(page.total) !== total)) {
-        throw new FxiaokeError('INCOMPLETE_DIRECTORY', '通讯录数量变化、超出预览上限或分页信息不完整，请缩小读取范围后重试。', 409)
+        throw new FxiaokeError('INCOMPLETE_DIRECTORY', '通讯录数量变化、超出预览上限或分页信息不完整，请检查目录范围及分页后重试。', 409)
       }
       total ??= Number(page.total)
       for (const raw of page.dataList) {
@@ -527,23 +558,10 @@ export async function readEmployeeIdentity(
 
 // Only returns the provider's enterprise account; tokens and corp identifiers remain server-side.
 export async function discoverEnterprise(credentials: Pick<Credentials, 'appId' | 'appSecret' | 'permanentCode'>, request: typeof fetch = fetch): Promise<{ ea: string; corpId: string }> {
-  let response: Response
-  try {
-    response = await request(`${ORIGIN}/oauth2.0/token?thirdTraceId=${randomUUID()}`, {
-      method: 'POST', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(15_000),
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ appId: credentials.appId, appSecret: credentials.appSecret, permanentCode: credentials.permanentCode, grantType: 'app_secret' }),
-    })
-  } catch (error) {
-    throw connectionFailure(error)
-  }
-  if (!response.ok) throw new FxiaokeError('PROVIDER_HTTP_ERROR', `纷享接口返回 HTTP ${response.status}，应用连接验证未完成。`, 502)
-  let data: Row
-  try { data = object(await response.json()) } catch { throw new FxiaokeError('INVALID_RESPONSE', '纷享接口没有返回有效数据。', 502) }
-  if (data.errorCode !== 0) {
-    const code = Number.isSafeInteger(data.errorCode) ? String(data.errorCode) : '未知'
-    throw new FxiaokeError('PROVIDER_REJECTED', `纷享拒绝请求（错误码 ${code}）。请核对应用凭据、IP 白名单和 OpenAPI 权益。`, 502)
-  }
+  const data = await postDirectoryRequest(request, AbortSignal.timeout(15_000), 'token', {
+    appId: credentials.appId, appSecret: credentials.appSecret,
+    permanentCode: credentials.permanentCode, grantType: 'app_secret',
+  })
   if (data.appId !== credentials.appId || typeof data.ea !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(data.ea) || typeof data.accessToken !== 'string' || !data.accessToken || typeof data.openUserId !== 'string' || !data.openUserId.startsWith('FSCID_')) {
     throw new FxiaokeError('INVALID_TOKEN_RESPONSE', '纷享未返回有效的企业授权信息，请检查应用配置。', 502)
   }

@@ -47,6 +47,22 @@ describe('directory inspection operator flow', () => {
     expect(screen.queryByRole('button', { name: /切源|启用|应用变更/ })).not.toBeInTheDocument()
   })
 
+  it.each([
+    ['FXIAOKE_APP_AUTH_FAILED', '纷享应用授权失败'],
+    ['FXIAOKE_DEPARTMENT_READ_FAILED', '纷享部门读取失败'],
+    ['FXIAOKE_EMPLOYEE_READ_FAILED', '纷享员工读取失败'],
+    ['DIRECTORY_SOURCE_UNAVAILABLE', '暂时无法连接纷享'],
+  ])('shows the failed directory stage while retaining the preceding successful report', async (errorCode, message) => {
+    const latestReport = { checkedAt: '2026-11-04T10:00:00Z', scopeVerified: true, membersMoved: 2 }
+    const schedule = { enabled: true, intervalDays: 1, status: 'failed', errorCode, latestReport }
+    fetchMock.mockImplementation(async (url: string) => url.includes('/inspection?sourceId=')
+      ? response({ data: { schedule } })
+      : response({ data: { connection } }))
+    render(<DirectoryInspectionPanel provider={provider} showSchedule />)
+    expect(await screen.findByRole('alert')).toHaveTextContent(message)
+    expect(screen.getByText(/已有报告.*调岗 2/)).toBeInTheDocument()
+  })
+
   it('clears a previous observation immediately and does not retain it after a failed reread', async () => {
     render(<DirectoryInspectionPanel provider={provider} />)
     await waitFor(() => expect(screen.getByRole('button', { name: '同步核验' })).toBeEnabled())
