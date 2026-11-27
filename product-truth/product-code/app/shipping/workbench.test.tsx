@@ -652,7 +652,7 @@ describe('self-service shipping workbench', () => {
   it('links managers to standalone settings without embedding configuration controls', async () => {
     render(<ShippingWorkbench settings={{ ...settings, canManageConnections: true }}/>)
     expect(await screen.findByText('暂无收寄记录')).toBeTruthy()
-    expect(screen.getByRole('link', { name: '寄件设置' }).getAttribute('href')).toBe('/shipping/settings')
+    expect(screen.getByRole('link', { name: '寄件设置' }).getAttribute('href')).toBe('/configs?tab=shipping')
     expect(screen.queryByRole('button', { name: '寄件配置' })).toBeNull()
     expect(screen.queryByRole('dialog', { name: '寄件配置' })).toBeNull()
     expect(screen.getByRole('region', { name: '批量寄件操作台' })).toBeTruthy()
@@ -666,7 +666,7 @@ describe('self-service shipping workbench', () => {
     await screen.findByText('暂无收寄记录')
     expect(screen.queryByRole('link', { name: '寄件设置' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '刷新寄件配置' }))
-    expect((await screen.findByRole('link', { name: '寄件设置' })).getAttribute('href')).toBe('/shipping/settings')
+    expect((await screen.findByRole('link', { name: '寄件设置' })).getAttribute('href')).toBe('/configs?tab=shipping')
   })
 
   it('hides only the settings entry when the operator retains workbench access', async () => {

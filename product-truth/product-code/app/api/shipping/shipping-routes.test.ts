@@ -32,7 +32,16 @@ beforeEach(() => { externalRate.mockReset().mockResolvedValue(undefined); import
 describe('shipping access is server enforced', () => {
   it('denies logged-out requests', async () => { auth.mockRejectedValue(new AuthError()); expect((await GET(new NextRequest('http://localhost/api/shipping/settings'))).status).toBe(401) })
   it('denies a member without operator or manager permission', async () => { auth.mockResolvedValue({ id: 'other' }); requireOperator.mockRejectedValue(new ShippingError(403, '当前账号没有自助收寄操作权限。')); expect((await GET(new NextRequest('http://localhost/api/shipping/settings'))).status).toBe(403) })
-  it('never discloses provider keys and exposes scoped operator controls to managers', async () => { auth.mockResolvedValue({ id: 'allowed' }); const r = await GET(new NextRequest('http://localhost/api/shipping/settings')); expect(r.status).toBe(200); const body = await r.text(); expect(body).not.toContain('check-word-private'); expect(body).not.toContain('operatorAccess'); expect(loadConfiguration).toHaveBeenCalledWith('org-1') })
+  it('ties the configuration to the current organization without disclosing provider keys or operator grants', async () => {
+    auth.mockResolvedValue({ id: 'allowed' })
+    const response = await GET(new NextRequest('http://localhost/api/shipping/settings'))
+    expect(response.status).toBe(200)
+    const body = await response.text()
+    expect(JSON.parse(body).orgId).toBe('org-1')
+    expect(body).not.toContain('check-word-private')
+    expect(body).not.toContain('operatorAccess')
+    expect(loadConfiguration).toHaveBeenCalledWith('org-1')
+  })
   it('denies connection settings for an operator without connection authority', async () => {
     auth.mockResolvedValue({ id: 'operator' })
     const response = await GET(new NextRequest('http://localhost/api/shipping/settings'))

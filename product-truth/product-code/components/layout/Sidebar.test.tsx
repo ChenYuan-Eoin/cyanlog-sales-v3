@@ -106,30 +106,29 @@ describe('Sidebar navigation projection', () => {
     }
   })
 
-  it('shows settings and configuration for the settings-only projection', async () => {
+  it('shows configuration as the only business entry for settings-only access', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({
       paths: ['/shipping/settings', '/configs'], onlyProjectedPaths: true,
     })))
     render(<Sidebar />)
-    expect(await screen.findByRole('link', { name: '寄件设置' })).toHaveAttribute('href', '/shipping/settings')
-    expect(screen.getByRole('link', { name: '配置中心' })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: '配置中心' })).toHaveAttribute('href', '/configs')
+    expect(screen.queryByRole('link', { name: '寄件设置' })).toBeNull()
     expect(screen.queryByRole('link', { name: '自助收寄' })).toBeNull()
     expect(screen.queryByRole('link', { name: '合同审核' })).toBeNull()
   })
 
   it('refreshes shipping and configuration grants on focus while keeping other navigation', async () => {
-    let paths = ['/shipping', '/shipping/settings', '/configs']
+    let paths = ['/shipping', '/configs']
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => Response.json({ paths }))
     vi.stubGlobal('fetch', fetchMock)
     const token = localStorage.getItem('token')
     render(<Sidebar />)
-    await screen.findByRole('link', { name: '寄件设置' })
-    expect(screen.getByRole('link', { name: '配置中心' })).toBeInTheDocument()
+    await screen.findByRole('link', { name: '配置中心' })
+    expect(screen.getByRole('link', { name: '自助收寄' })).toBeInTheDocument()
 
     paths = ['/shipping']
     fireEvent(window, new Event('focus'))
-    await waitFor(() => expect(screen.queryByRole('link', { name: '寄件设置' })).toBeNull())
-    expect(screen.queryByRole('link', { name: '配置中心' })).toBeNull()
+    await waitFor(() => expect(screen.queryByRole('link', { name: '配置中心' })).toBeNull())
     expect(screen.getByRole('link', { name: '自助收寄' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '合同审核' })).toBeInTheDocument()
     expect(fetchMock).toHaveBeenLastCalledWith('/api/navigation', expect.objectContaining({

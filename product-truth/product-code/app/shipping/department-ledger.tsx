@@ -219,7 +219,7 @@ export default function DepartmentLedger({ departments, canViewOwn, canManageCon
       <div><h1>收寄台账</h1><p>查看获授权部门的寄件记录和已保存物流。</p></div>
       {(canViewOwn || canManageConnections) && <nav aria-label="寄件入口" className="flex flex-wrap gap-2">
         {canViewOwn && <Link className={styles.secondary} href="/sales-portal">本人寄件</Link>}
-        {canManageConnections && <Link className={styles.secondary} href="/shipping/settings">寄件设置</Link>}
+        {canManageConnections && <Link className={styles.secondary} href="/configs?tab=shipping">寄件设置</Link>}
       </nav>}
     </header>
     <section className={`${styles.panel} ${styles.ledgerPanel} mx-auto`} aria-label="部门寄件记录">

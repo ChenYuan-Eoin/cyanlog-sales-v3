@@ -24,30 +24,22 @@ import OrgStructureTab from './OrgStructureTab'
 beforeEach(() => { vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 403 }))) })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
-it('shows department shipping grants only after the current organization endpoint confirms authority', async () => {
+it('keeps organization filters in the member list without embedding shipping settings', () => {
   const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   const orgId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-  const fetchMock = vi.mocked(fetch)
   const payload: OrgSummaryPayload = {
     organization: { id: orgId, name: '组织' },
     users: [], roles: [], spaces: [],
-    departments: [
-      { id, name: '销售部', status: 'active', parent_name: null },
-      { id: 'inactive-department', name: '已停用部门', status: 'inactive', parent_name: null },
-    ],
+    departments: [{ id, name: '销售部', status: 'active', parent_name: null }],
   }
-  fetchMock.mockResolvedValueOnce(Response.json({ allowedDepartmentIds: [id] }))
-  const view = render(<OrgStructureTab orgSummary={payload} currentUserId="super-admin" />)
-  fireEvent.click(await screen.findByText('寄件部门授权'))
-  expect(screen.getByRole('checkbox', { name: '销售部' })).toBeChecked()
-  expect(screen.queryByRole('checkbox', { name: '已停用部门' })).not.toBeInTheDocument()
-  expect(screen.getByRole('button', { name: '保存寄件部门授权' })).toBeDisabled()
-  expect(fetchMock).toHaveBeenCalledWith(`/api/admin/departments/shipping-intake?orgId=${orgId}`, expect.objectContaining({ cache: 'no-store' }))
 
-  view.rerender(<OrgStructureTab orgSummary={payload} currentUserId="department-editor" />)
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+  render(<OrgStructureTab orgSummary={payload} currentUserId="super-admin" />)
+  fireEvent.click(screen.getByRole('button', { name: /^销售部/ }))
+
+  expect(screen.getByRole('heading', { name: '销售部 的成员' })).toBeInTheDocument()
   expect(screen.queryByText('寄件部门授权')).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: '保存寄件部门授权' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: '当前上下文' })).not.toBeInTheDocument()
+  expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/api/admin/departments/shipping-intake'))).toBe(false)
 })
 
 const appliedAt = '2026-11-09T07:54:14Z'

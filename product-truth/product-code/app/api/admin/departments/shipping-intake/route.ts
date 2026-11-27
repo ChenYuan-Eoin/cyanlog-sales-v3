@@ -3,6 +3,7 @@ import { ZodError } from 'zod'
 import { AuthError, requireAuth } from '@/lib/auth'
 import { loadOrgRolePermissionContext } from '@/lib/org-role-permissions'
 import { ShippingError } from '@/lib/shipping/config'
+import { loadShippingDepartments } from '@/lib/shipping/department-access'
 import { shippingJson } from '@/lib/shipping/http'
 import { loadIntakeSettings, saveIntakeDepartmentScope } from '@/lib/shipping/intake-settings'
 
@@ -32,8 +33,11 @@ async function requireDepartmentScopeAuthority(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const { orgId } = await requireDepartmentScopeAuthority(req)
-    const { allowedDepartmentIds } = await loadIntakeSettings(orgId)
-    return NextResponse.json({ allowedDepartmentIds: allowedDepartmentIds ?? null }, { headers })
+    const [{ allowedDepartmentIds }, departments] = await Promise.all([
+      loadIntakeSettings(orgId),
+      loadShippingDepartments(orgId),
+    ])
+    return NextResponse.json({ allowedDepartmentIds: allowedDepartmentIds ?? null, departments }, { headers })
   } catch (error) {
     return fail(error)
   }

@@ -5,14 +5,16 @@ import { AuthError } from '@/lib/auth'
 import { ShippingError } from '@/lib/shipping/config'
 import { GET, PATCH } from './route'
 
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), context: vi.fn(), load: vi.fn(), save: vi.fn() }))
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), context: vi.fn(), load: vi.fn(), save: vi.fn(), departments: vi.fn() }))
 vi.mock('@/lib/auth', () => ({ AuthError: class extends Error {}, requireAuth: mocks.auth }))
 vi.mock('@/lib/org-role-permissions', () => ({ loadOrgRolePermissionContext: mocks.context }))
 vi.mock('@/lib/shipping/intake-settings', () => ({ loadIntakeSettings: mocks.load, saveIntakeDepartmentScope: mocks.save }))
+vi.mock('@/lib/shipping/department-access', () => ({ loadShippingDepartments: mocks.departments }))
 
 const path = 'https://example.test/api/admin/departments/shipping-intake'
 const url = `${path}?orgId=active-org`
 const rootDepartment = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const departments = [{ id: rootDepartment, name: '总部', parentId: null, path: '总部' }]
 const patch = (body: unknown, headers?: HeadersInit) => new NextRequest(url, { method: 'PATCH', body: JSON.stringify(body), headers })
 
 beforeEach(() => {
@@ -20,16 +22,18 @@ beforeEach(() => {
   mocks.auth.mockResolvedValue({ id: 'system-root', org_id: 'untrusted-home' })
   mocks.context.mockResolvedValue({ orgId: 'active-org', canEditPlatformRoot: true })
   mocks.load.mockResolvedValue({ allowedDepartmentIds: null })
+  mocks.departments.mockResolvedValue(departments)
   mocks.save.mockImplementation(async (_org: string, _actor: string, settings: { allowedDepartmentIds: string[] }) => settings)
 })
 
 it('returns legacy unrestricted state without granting a new wildcard', async () => {
   const response = await GET(new NextRequest(url))
   expect(response.status).toBe(200)
-  expect(await response.json()).toEqual({ allowedDepartmentIds: null })
+  expect(await response.json()).toEqual({ allowedDepartmentIds: null, departments })
   expect(response.headers.get('cache-control')).toBe('private, no-store')
   expect(mocks.context).toHaveBeenCalledExactlyOnceWith('system-root')
   expect(mocks.load).toHaveBeenCalledExactlyOnceWith('active-org')
+  expect(mocks.departments).toHaveBeenCalledExactlyOnceWith('active-org')
 })
 
 it('uses the actor’s exact current organization for updates', async () => {
@@ -46,6 +50,7 @@ it.each([path, `${path}?orgId=previous-org`])('requires the current organization
     method: 'PATCH', body: JSON.stringify({ allowedDepartmentIds: [] }),
   }))).status).toBe(409)
   expect(mocks.load).not.toHaveBeenCalled()
+  expect(mocks.departments).not.toHaveBeenCalled()
   expect(mocks.save).not.toHaveBeenCalled()
 })
 
@@ -55,6 +60,7 @@ it.each([null, { orgId: 'active-org', canRead: true, canEdit: true, canEditPlatf
     expect((await GET(new NextRequest(url))).status).toBe(403)
     expect((await PATCH(patch({ allowedDepartmentIds: [] }))).status).toBe(403)
     expect(mocks.load).not.toHaveBeenCalled()
+    expect(mocks.departments).not.toHaveBeenCalled()
     expect(mocks.save).not.toHaveBeenCalled()
   },
 )

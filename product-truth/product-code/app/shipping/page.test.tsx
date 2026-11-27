@@ -87,13 +87,13 @@ describe('self-service shipping entry', () => {
     mocks.access.mockResolvedValue({ ...access, canViewOwn: true, canSubmitOwn: true, ownerPermissions: ['shipping:owner_view', 'shipping:owner_submit'], canManageConnections: true })
     const page = await ShippingPage()
     const [navigation, proposal] = page.props.children
-    expect(navigation.props.children.props.href).toBe('/shipping/settings')
+    expect(navigation.props.children.props.href).toBe('/configs?tab=shipping')
     expect(proposal.type.name).toBe('FxiaokeShippingProposal')
   })
 
   it('sends a manager-only member to settings without loading intake or order settings', async () => {
     mocks.access.mockResolvedValue({ ...access, canManageConnections: true })
-    await expect(ShippingPage()).rejects.toThrow('redirect:/shipping/settings')
+    await expect(ShippingPage()).rejects.toThrow('redirect:/configs?tab=shipping')
     expect(mocks.options).not.toHaveBeenCalled()
     expect(mocks.settings).not.toHaveBeenCalled()
   })

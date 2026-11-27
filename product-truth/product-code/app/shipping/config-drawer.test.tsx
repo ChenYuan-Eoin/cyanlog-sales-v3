@@ -19,30 +19,44 @@ async function waitForConfiguration() {
 
 describe('shipping configuration drawer', () => {
   it('shows a settings viewer the saved sections without any save controls', async () => {
-    fetcher.mockImplementation(async (url: string) => url.includes('intake-settings')
-      ? Response.json({ rules: DEFAULT_INTAKE_RULES, departments: [] })
-      : Response.json({ permissions: ['shipping:settings_view'], configuration: { connections: [], billingAccounts: [], sender: null } }))
+    const orgId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+    const departmentUrl = `/api/admin/departments/shipping-intake?orgId=${orgId}`
+    fetcher.mockImplementation(async (url: string) => {
+      if (url === departmentUrl) return Response.json({ error: '仅系统超级管理员可以管理寄件提报部门。' }, { status: 403 })
+      if (url === '/api/shipping/intake-settings') return Response.json({ rules: DEFAULT_INTAKE_RULES })
+      return Response.json({ orgId, permissions: ['shipping:settings_view'], configuration: { connections: [], billingAccounts: [], sender: null } })
+    })
     render(<ShippingConfigDrawer embedded />)
     await waitForConfiguration()
+    await waitFor(() => expect(fetcher).toHaveBeenCalledWith(departmentUrl, expect.anything()))
     expect(screen.getByRole('heading', { name: '公司默认寄件人' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /保存连接|保存月结账号|保存可提报服务|保存寄件人信息/ })).toBeNull()
+    expect(screen.queryByText('提报部门范围')).toBeNull()
+    expect(screen.queryByRole('link', { name: /收寄工作台/ })).toBeNull()
     expect(fetcher.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true)
   })
 
 
-  it.each([undefined, '/' as const])('shows business rules without grant controls for settings entry %s', async (standaloneReturn) => {
-    fetcher.mockImplementation(async (url: string) => url === '/api/shipping/intake-settings'
-      ? Response.json({ rules: DEFAULT_INTAKE_RULES })
-      : Response.json({ permissions: ['shipping:settings_view', 'shipping:intake_write'], configuration: { connections: [], billingAccounts: [], sender: null } }))
-    render(<ShippingConfigDrawer embedded standaloneReturn={standaloneReturn} />)
+  it('keeps department scope next to business rules for a system administrator', async () => {
+    const orgId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+    const departmentId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    fetcher.mockImplementation(async (url: string) => {
+      if (url === '/api/shipping/intake-settings') return Response.json({ rules: DEFAULT_INTAKE_RULES })
+      if (url === `/api/admin/departments/shipping-intake?orgId=${orgId}`) {
+        return Response.json({ allowedDepartmentIds: [departmentId], departments: [{ id: departmentId, name: '总部', parentId: null }] })
+      }
+      return Response.json({ orgId, permissions: ['shipping:settings_view', 'shipping:intake_write'], configuration: { connections: [], billingAccounts: [], sender: null } })
+    })
+    render(<ShippingConfigDrawer embedded />)
     await waitForConfiguration()
     fireEvent.click(screen.getByText('寄件提报规则'))
     expect(await screen.findByRole('button', { name: '保存寄件提报规则' })).toBeTruthy()
     expect(screen.getByLabelText('公司名称最少字数')).toBeTruthy()
-    expect(screen.queryByText('审核与下单权限')).toBeNull()
-    expect(screen.queryByText('寄件部门授权')).toBeNull()
+    const businessSettings = screen.getByRole('region', { name: '寄件业务设置' })
+    fireEvent.click(await within(businessSettings).findByText('提报部门范围'))
+    expect(within(businessSettings).getByRole('checkbox', { name: '总部' })).toHaveProperty('checked', true)
     expect(screen.queryByRole('group', { name: '操作员名单' })).toBeNull()
-    expect(fetcher.mock.calls.some(([url]) => String(url).includes('/api/admin/departments/shipping-intake'))).toBe(false)
+    expect(fetcher).toHaveBeenCalledWith(`/api/admin/departments/shipping-intake?orgId=${orgId}`, expect.objectContaining({ cache: 'no-store' }))
   })
   it('distinguishes the preview site from the carrier production selector', async () => {
     fetcher.mockImplementation(async () => Response.json({ deploymentEnvironment: 'preview', configuration: { connections: [], billingAccounts: [], sender: null } }))
@@ -54,25 +68,18 @@ describe('shipping configuration drawer', () => {
     expect(screen.getByRole('link', { name: /前往正式站/ }).getAttribute('href')).toBe('https://sales.cyanlog.icu/configs?tab=shipping')
   })
 
-  it('uses dedicated settings and a reachable home for a standalone manager', async () => {
-    render(<ShippingConfigDrawer embedded standaloneReturn="/" />)
-    await waitForConfiguration()
-    expect(screen.getByRole('link', { name: /前往正式站/ }).getAttribute('href')).toBe('https://sales.cyanlog.icu/shipping/settings')
-    expect(screen.getByRole('link', { name: /返回工作台/ }).getAttribute('href')).toBe('/')
-  })
-
   it('discards visible configuration and form drafts when the live write gate denies access', async () => {
     fetcher.mockImplementation(async (_url, init) => init?.method === 'POST'
       ? Response.json({ error: '需要寄件连接管理权限。' }, { status: 403 })
       : Response.json({ configuration: { connections: [], sender: null, billingAccounts: [{ id: 'p', environment: 'production', displayName: '原有月结', tail: '5616', status: 'active', isDefault: true }] } }))
-    render(<ShippingConfigDrawer embedded standaloneReturn="/" />)
+    render(<ShippingConfigDrawer embedded />)
     await waitForConfiguration()
     fireEvent.change(screen.getByLabelText('月结卡号'), { target: { value: '123456789' } })
     fireEvent.click(screen.getByRole('button', { name: '保存月结账号' }))
     await screen.findByText('需要寄件连接管理权限。')
     expect(screen.queryByText('原有月结')).toBeNull()
     expect(screen.queryByLabelText('月结卡号')).toBeNull()
-    expect(screen.getByRole('link', { name: '返回工作台' }).getAttribute('href')).toBe('/')
+    expect(screen.queryByRole('link', { name: /收寄工作台/ })).toBeNull()
   })
 
   it('keeps the existing account and draft after a missing-key save failure', async () => {
@@ -296,7 +303,7 @@ describe('shipping configuration drawer', () => {
     render(<ShippingConfigDrawer embedded />)
     expect(await screen.findByText('需要寄件连接管理权限。')).toBeTruthy()
     expect(screen.queryByLabelText('PartnerID')).toBeNull()
-    expect(screen.getByRole('link', { name: '返回自助收寄工作台' }).getAttribute('href')).toBe('/shipping')
+    expect(screen.queryByRole('link', { name: /收寄工作台/ })).toBeNull()
   })
 
   it('renders inline in Config Center without opening a modal or adding a screen overlay', async () => {

@@ -700,8 +700,9 @@ export async function middleware(request: NextRequest) {
         organizationActions: authContext.organizationActions,
       }))
       const landingPage = ledger || owner || authContext.departmentLedgerAccess ? '/shipping'
-        : configAccess ? '/configs' : settings ? '/shipping/settings' : '/pending-access'
-      return NextResponse.redirect(buildRedirectUrl(request, landingPage))
+        : configAccess || settings ? '/configs' : '/pending-access'
+      const search = landingPage === '/configs' && !configAccess ? '?tab=shipping' : ''
+      return NextResponse.redirect(buildRedirectUrl(request, landingPage, search))
     }
     if (restrictedMember && !specificConfigurationAccess && required && (required === 'config:read' || required === 'admin:access')) {
       return pathname.startsWith('/api/')

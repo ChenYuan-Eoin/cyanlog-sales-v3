@@ -8,11 +8,12 @@ import { SF_INTERCEPT_CONFIRMATION, emptyContact, type Contact } from '@/lib/shi
 import styles from './config-drawer.module.css'
 import { contactSchema } from '@/lib/shipping/validation'
 import { parseAddress } from '@/lib/shipping/address'
-import IntakeConfiguration from './intake-configuration'
+import IntakeConfiguration, { ShippingDepartmentAuthorization } from './intake-configuration'
 import { SF_SERVICE_CATALOG, DEFAULT_INTAKE_SERVICES } from '@/lib/shipping/sf-service-catalog'
 import { shippingWorkbenchRequest, ShippingWorkbenchRequestError } from '@/lib/shipping/workbench-client'
 
 type ConfigurationReply = {
+  orgId?: string
   permissions?: string[]
   credentialStorageReady?: boolean
   deploymentEnvironment?: 'production' | 'preview' | 'development' | 'unknown'
@@ -25,13 +26,13 @@ type ConfigurationReply = {
 type Environment = 'sandbox' | 'production'
 type Service = { id: number; name: string; preference: 'standard' | 'urgent' }
 
-export default function ShippingConfigDrawer({ open = true, onClose, embedded = false, standaloneReturn }: {
+export default function ShippingConfigDrawer({ open = true, onClose, embedded = false }: {
   open?: boolean
   onClose?: () => void
   embedded?: boolean
-  standaloneReturn?: '/' | '/shipping'
 }) {
   const [configuration, setConfiguration] = useState<ShippingConfiguration>({ connections: [], billingAccounts: [], sender: null })
+  const [orgId, setOrgId] = useState<string>()
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('production')
   const [deploymentEnvironment, setDeploymentEnvironment] = useState<NonNullable<ConfigurationReply['deploymentEnvironment']>>('unknown')
   const [saveFailed, setSaveFailed] = useState(false)
@@ -86,6 +87,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       return
     }
     setConfiguration(data.configuration)
+    setOrgId(data.orgId)
     setPermissions(data.permissions)
     setCredentialStorageReady(data.credentialStorageReady !== false)
     setDeploymentEnvironment(data.deploymentEnvironment || 'unknown')
@@ -200,7 +202,6 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       <div className={embedded ? styles.accessCard : styles.accessDialog}>
         <h2 id="shipping-config-access-title">{accessState === 'checking' ? '正在检查权限' : '寄件配置不可用'}</h2>
         <p role="status">{content}</p>
-        {accessState === 'unavailable' && <a href={standaloneReturn ?? '/shipping'}>{standaloneReturn === '/' ? '返回工作台' : '返回自助收寄工作台'}</a>}
       </div>
     </section>
   }
@@ -216,8 +217,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
       <div className={styles.content}>
         <div className={styles.siteBar} aria-label="站点部署环境">
           <span>{deploymentEnvironment === 'production' ? '当前站点：正式环境' : deploymentEnvironment === 'preview' ? '当前站点：预览环境' : deploymentEnvironment === 'development' ? '当前站点：开发环境' : '当前站点：部署环境未确认'}</span>
-          {deploymentEnvironment !== 'production' && <a href={standaloneReturn ? 'https://sales.cyanlog.icu/shipping/settings' : 'https://sales.cyanlog.icu/configs?tab=shipping'}>前往正式站 →</a>}
-          <a href={standaloneReturn ?? '/shipping'}>{standaloneReturn === '/' ? '返回工作台' : '返回收寄工作台'} →</a>
+          {deploymentEnvironment !== 'production' && <a href="https://sales.cyanlog.icu/configs?tab=shipping">前往正式站 →</a>}
         </div>
         <section aria-label="顺丰接入内容">
           <div className={styles.panelHeading}><h3>顺丰接入</h3></div>
@@ -324,6 +324,7 @@ export default function ShippingConfigDrawer({ open = true, onClose, embedded = 
             </fieldset>
           </section>
           <details><summary>寄件提报规则</summary><IntakeConfiguration readOnly={!canSetIntake}/></details>
+          {orgId && <ShippingDepartmentAuthorization key={orgId} orgId={orgId} />}
         </section>
       </div>
     </aside>

@@ -53,7 +53,7 @@ export async function renderShippingEntry(preferOwner = false) {
       <div className="h-full overflow-y-auto">
         {access.canManageConnections && (
           <nav className="mx-auto flex max-w-5xl justify-end px-5 pt-4" aria-label="寄件">
-            <Link className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-slate-50" href="/shipping/settings">寄件设置</Link>
+            <Link className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-slate-50" href="/configs?tab=shipping">寄件设置</Link>
           </nav>
         )}
         {content}
@@ -61,7 +61,7 @@ export async function renderShippingEntry(preferOwner = false) {
     )
   }
 
-  if (access?.canManageConnections) redirect('/shipping/settings')
+  if (access?.canManageConnections) redirect('/configs?tab=shipping')
   if (preferOwner && access?.canReadLegacyReceipt) {
     return <main className="p-6"><p>当前账号没有本人寄件权限。</p></main>
   }

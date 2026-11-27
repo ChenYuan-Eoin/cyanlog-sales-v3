@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
     const legacyAllowed = LEGACY_IMPORT_PERMISSIONS.every(permission => permissions.includes(permission))
       && (legacy.sandbox || legacy.production) && await canImportLegacyShippingConfiguration(orgId)
     return NextResponse.json({
+      orgId,
       permissions,
       deploymentEnvironment: ['production', 'preview', 'development'].includes(process.env.VERCEL_ENV || '') ? process.env.VERCEL_ENV : 'unknown',
       credentialStorageReady: /^[a-fA-F0-9]{64}$/.test(process.env.SHIPPING_CREDENTIALS_ENCRYPTION_KEY || ''),

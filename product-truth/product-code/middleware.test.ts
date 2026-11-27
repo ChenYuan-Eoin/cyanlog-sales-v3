@@ -87,7 +87,7 @@ describe('employee shipping permissions', () => {
     const denyWrite = { permission_code: 'shipping:intake_write', effect: 'DENY', scope: null }
     const fixture = { ...options, roles: [], shippingActions: settingsActions, employeeShippingScopes: scopes(false) }
     mockExactOrgAuth({ ...fixture, employeeOverrides: [allowView] })
-    expect((await request('/')).headers.get('location')).toBe('https://sales.cyanlog.icu/shipping/settings')
+    expect((await request('/')).headers.get('location')).toBe('https://sales.cyanlog.icu/configs?tab=shipping')
     expect((await request('/api/shipping/intake-settings')).status).toBe(200)
     expect((await request('/api/shipping/intake-settings', 'POST')).status).toBe(403)
     expect((await request('/api/quotes')).status).toBe(403)
@@ -599,7 +599,7 @@ describe('role-free federated session boundary', () => {
     expect((await request('/api/configs')).status).toBe(403)
   })
 
-  it('admits settings-only viewers to both settings entries while preserving the generic config boundary', async () => {
+  it('lands settings-only viewers on shipping configuration while preserving the generic config boundary', async () => {
     const token = 'shipping-settings-viewer'
     mockExactOrgAuth({
       token, orgId: 'org-a', roles: [{ roles: { id: 'settings-reader', code: 'SETTINGS_READER', permissions: ['shipping:settings_view'] } }],
@@ -611,7 +611,7 @@ describe('role-free federated session boundary', () => {
     const shell = await request('/configs?tab=shipping')
     expect(shell.status).toBe(200)
     expect(shell.headers.get('x-middleware-request-x-user-shipping-settings-view')).toBe('1')
-    expect((await request('/')).headers.get('location')).toBe('https://sales.cyanlog.icu/shipping/settings')
+    expect((await request('/')).headers.get('location')).toBe('https://sales.cyanlog.icu/configs?tab=shipping')
     expect((await request('/api/quotes')).status).toBe(403)
     expect((await request('/api/navigation')).headers.get('x-middleware-request-x-user-navigation-scope')).toBe('shipping-only')
     const direct = await request('/shipping/settings')

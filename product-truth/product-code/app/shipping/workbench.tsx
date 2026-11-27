@@ -786,7 +786,7 @@ function ShippingWorkbenchContent({ settings: initialSettings, simulation, reque
         {canCreate && <button type="button" className={`${styles.configButton} ${styles.intakeToggle}`} aria-expanded={intakeOpen} aria-controls="shipping-intake-column" onClick={() => setIntakeOpen(open => !open)}>{intakeOpen ? '收起寄件录入' : '寄件录入'}</button>}
         {simulation ? <><button className={styles.configButton} disabled={inputLocked || !!busy} onClick={simulation.onReset}>重置演示</button><a className={styles.configButton} href="/shipping">返回真实工作台</a></> : <button className={styles.configButton} disabled={!!busy || confirmationBusy || batchBusy} onClick={() => void refreshConfiguration()}>刷新寄件配置</button>}
         {!isSimulation && settings.canViewOwn && <a className={styles.configButton} href="/sales-portal">本人寄件</a>}
-        {canManageConnections && <a className={styles.configButton} href="/shipping/settings">寄件设置</a>}
+        {canManageConnections && <a className={styles.configButton} href="/configs?tab=shipping">寄件设置</a>}
         <div className={styles.connection}><span />{isSimulation ? '模拟体验' : selectedConnection ? `顺丰${selectedConnection.environment === 'sandbox' ? '沙盒' : '生产'}` : settings.configurationWarning ? '配置暂不可用' : '未配置快递连接'}<small>{payment === 'sender_cash' ? '寄方现结' : payment === 'recipient' ? '收方到付' : selectedAccount ? `${selectedAccount.displayName} · 尾号 ${selectedAccount.tail}` : '月结账号待选择'}</small></div>
       </div>
     </header>
@@ -987,7 +987,7 @@ function ShippingWorkbenchContent({ settings: initialSettings, simulation, reque
                     <div className={styles.inlineCheckoutStatus}><span>当前</span><b>{canSubmitCurrent ? '参数可用' : '需补全配置'}</b><small>{order.input.recipient.province}{order.input.recipient.city}{order.input.recipient.county}</small></div>
                   </div>
                 </div>}
-                {!senderReview.contact && <p className={styles.bad} role="alert">{senderReview.source === '公司寄件资料待补齐' ? <>此工单缺少寄件人、联系电话或揽收地址。{canManageConnections ? <>请在<a href="/shipping/settings">寄件设置</a>补齐后重新核对工单。</> : '请联系寄件设置管理员补齐后重新核对工单。'}</> : '工单寄件资料不完整。请退回工单，由提报人补齐实际寄件资料后重新提报。'}</p>}
+                {!senderReview.contact && <p className={styles.bad} role="alert">{senderReview.source === '公司寄件资料待补齐' ? <>此工单缺少寄件人、联系电话或揽收地址。{canManageConnections ? <>请在<a href="/configs?tab=shipping">寄件设置</a>补齐后重新核对工单。</> : '请联系寄件设置管理员补齐后重新核对工单。'}</> : '工单寄件资料不完整。请退回工单，由提报人补齐实际寄件资料后重新提报。'}</p>}
                 <details className={styles.reviewDetails}><summary>收寄地址与寄件人</summary>{senderReview.contact ? <p><b>实际寄件人（{senderReview.source}）</b><br/>{senderReview.contact.name} · {senderReview.contact.phone}<br/>{senderReview.contact.province}{senderReview.contact.city}{senderReview.contact.county}{senderReview.contact.address}</p> : null}<p><b>收件地址</b><br/>{order.input.recipient.province}{order.input.recipient.city}{order.input.recipient.county}{order.input.recipient.address}</p></details>
                 <details className={styles.reviewDetails}><summary>身份与备注</summary><p>提报身份：{order.intakeSource === 'anonymous_web' ? order.identityVerified ? '身份已验证' : '匿名自报，待核对' : order.intakeSource === 'owner_web' ? '登录用户提报' : order.intakeSource === 'crm' ? 'CRM 提报' : '企微机器人提报'}{order.input.remark && <><br/>备注：{order.input.remark}</>}</p>{order.input.submittedBy && <p>提报人：{order.input.submittedBy.name} · {order.input.submittedBy.phone} · {order.input.submittedBy.team || '未填写团队'}</p>}</details>
               </section>}

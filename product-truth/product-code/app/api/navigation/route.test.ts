@@ -22,11 +22,11 @@ it.each([
   [true, false, false, false, ['/shipping']],
   [false, true, false, false, ['/shipping']],
   [false, true, true, false, ['/shipping']],
-  [false, false, false, true, ['/shipping/settings', '/configs']],
-  [false, true, false, true, ['/shipping', '/shipping/settings', '/configs']],
-  [true, false, false, true, ['/shipping', '/shipping/settings', '/configs']],
+  [false, false, false, true, ['/configs']],
+  [false, true, false, true, ['/shipping', '/configs']],
+  [true, false, false, true, ['/shipping', '/configs']],
   [false, false, false, false, []],
-] as const)('projects workbench, owner, and settings entries for operate=%s, read own=%s, submit own=%s and settings=%s', async (canOperate, canViewOwn, canSubmitOwn, canManageConnections, paths) => {
+] as const)('projects shipping and configuration center for operate=%s, read own=%s, submit own=%s and settings=%s', async (canOperate, canViewOwn, canSubmitOwn, canManageConnections, paths) => {
   vi.mocked(resolveShippingEntry).mockResolvedValue({ orgId: 'org1', canOperate, canViewOwn, canSubmitOwn, canManageConnections, canReadLegacyReceipt: false, permissions: [], ownerPermissions: [] })
   const response = await GET(request())
   expect(response.status).toBe(200)
@@ -113,7 +113,7 @@ it.each([
   },
   {
     scope: 'scoped-with-workbench', permissions: '', canOperate: true, canManageConnections: true,
-    paths: ['/', '/shipping', '/shipping/settings', '/configs'],
+    paths: ['/', '/shipping', '/configs'],
   },
   {
     scope: 'scoped-with-workbench', permissions: 'role:manage', canViewOwn: true,
@@ -123,6 +123,10 @@ it.each([
   {
     scope: 'scoped', permissions: '',
     paths: [],
+  },
+  {
+    scope: 'shipping-only', permissions: 'shipping:settings_view', canManageConnections: true,
+    paths: ['/configs'],
   },
 ])('limits a $scope session with $permissions to authorized business paths', async ({
   scope, permissions, canViewOwn = false, canOperate = false, canManageConnections = false, departmentLedger, paths,

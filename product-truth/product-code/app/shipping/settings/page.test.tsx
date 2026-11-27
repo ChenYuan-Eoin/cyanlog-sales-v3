@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/server-auth', () => ({ getServerAuthToken: mocks.token }))
 vi.mock('@/lib/auth', () => ({ getAuthUserByToken: mocks.user }))
 vi.mock('@/lib/shipping/entry-access', () => ({ resolveShippingEntry: mocks.access }))
-vi.mock('../config-drawer', () => ({ default: function ShippingConfigDrawer() { return null } }))
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }))
 
 import ShippingSettingsPage from './page'
@@ -39,15 +38,13 @@ describe('shipping connection settings entry', () => {
   })
 
   it.each([
-    { ...access, canManageConnections: true, returnTo: '/' },
-    { ...access, canManageConnections: true, canViewOwn: true, returnTo: '/shipping' },
-    { ...access, canManageConnections: true, canViewOwn: true, canSubmitOwn: true, returnTo: '/shipping' },
-    { ...access, canManageConnections: true, canOperate: true, returnTo: '/shipping' },
-  ])('opens settings and links to the accessible return path', async (entry) => {
+    { ...access, canManageConnections: true },
+    { ...access, canManageConnections: true, canViewOwn: true },
+    { ...access, canManageConnections: true, canViewOwn: true, canSubmitOwn: true },
+    { ...access, canManageConnections: true, canOperate: true },
+  ])('redirects authorized members from the old address to configuration center', async (entry) => {
     mocks.access.mockResolvedValue(entry)
-    const page = await ShippingSettingsPage()
+    await expect(ShippingSettingsPage()).rejects.toThrow('redirect:/configs?tab=shipping')
     expect(mocks.access).toHaveBeenCalledWith(user, 'token')
-    expect(page.type.name).toBe('ShippingConfigDrawer')
-    expect(page.props).toEqual({ embedded: true, standaloneReturn: entry.returnTo })
   })
 })

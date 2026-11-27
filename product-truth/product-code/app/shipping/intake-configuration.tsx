@@ -1,16 +1,22 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import {
   effectiveShippingDepartmentIds, intakeRulesSchema, toggleShippingDepartmentSubtree, type IntakeRules,
 } from '@/lib/shipping/intake-rules'
 import type { ShippingDepartment } from '@/lib/shipping/department-access'
+import { shippingWorkbenchRequest, ShippingWorkbenchRequestError } from '@/lib/shipping/workbench-client'
 import styles from './config-drawer.module.css'
 
 const intakeSettingsUrl = '/api/shipping/intake-settings'
 const departmentAuthorizationUrl = '/api/admin/departments/shipping-intake'
 const departmentIdsSchema = intakeRulesSchema.shape.allowedDepartmentIds.unwrap()
+const departmentScopeSchema = z.object({
+  allowedDepartmentIds: departmentIdsSchema,
+  departments: z.array(z.object({ id: z.string().uuid(), name: z.string(), parentId: z.string().uuid().nullable() })),
+})
 
 export default function IntakeConfiguration({ readOnly = false }: { readOnly?: boolean }) {
   const [companyName, setCompanyName] = useState<IntakeRules['companyName'] | null>(null)
@@ -69,13 +75,10 @@ export default function IntakeConfiguration({ readOnly = false }: { readOnly?: b
 type DepartmentSelection = { saved: string[] | null; draft: string[] | null }
 type OrganizationDepartment = Pick<ShippingDepartment, 'id' | 'name' | 'parentId'>
 
-export function ShippingDepartmentAuthorization({ orgId, departments, authHeaders }: {
-  orgId: string
-  departments: OrganizationDepartment[]
-  authHeaders: (includeJson?: boolean) => HeadersInit
-}) {
+export function ShippingDepartmentAuthorization({ orgId }: { orgId: string }) {
   const authorizationUrl = `${departmentAuthorizationUrl}?orgId=${encodeURIComponent(orgId)}`
   const [selection, setSelection] = useState<DepartmentSelection | null>(null)
+  const [departments, setDepartments] = useState<OrganizationDepartment[]>([])
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [message, setMessage] = useState('')
@@ -83,43 +86,40 @@ export function ShippingDepartmentAuthorization({ orgId, departments, authHeader
 
   useEffect(() => {
     const controller = new AbortController()
-    void fetch(authorizationUrl, {
-      headers: authHeaders(), cache: 'no-store', signal: controller.signal,
-    }).then(async response => {
-      if (response.status === 401 || response.status === 403) return
-      if (!response.ok) throw new Error('寄件部门授权读取失败')
-      const body = await response.json()
-      const saved = departmentIdsSchema.parse(body.allowedDepartmentIds)
-      if (!controller.signal.aborted) setSelection({ saved, draft: saved })
-    }).catch(() => {
-      if (!controller.signal.aborted) setMessage('寄件部门授权暂不可用，请刷新后重试。')
+    void shippingWorkbenchRequest<unknown>(authorizationUrl, { signal: controller.signal }).then(body => {
+      const { allowedDepartmentIds: saved, departments } = departmentScopeSchema.parse(body)
+      if (controller.signal.aborted) return
+      setDepartments(departments)
+      setSelection({ saved, draft: saved })
+    }).catch(error => {
+      if (controller.signal.aborted) return
+      if (error instanceof ShippingWorkbenchRequestError && (error.status === 401 || error.status === 403)) return
+      setMessage('提报部门范围暂不可用，请刷新后重试。')
     })
     return () => controller.abort()
-  }, [authHeaders, authorizationUrl])
+  }, [authorizationUrl])
 
   async function save() {
     if (!selection?.draft || busy) return
     setBusy(true)
     setMessage('')
     try {
-      const response = await fetch(authorizationUrl, {
+      const body = await shippingWorkbenchRequest<{ allowedDepartmentIds: unknown }>(authorizationUrl, {
         method: 'PATCH',
-        headers: authHeaders(true),
         body: JSON.stringify({ allowedDepartmentIds: selection.draft }),
       })
-      if (response.status === 401 || response.status === 403) {
-        setSelection(null)
-        setMessage('当前账号无法更新寄件部门授权。')
-        return
-      }
-      const body = await response.json()
-      if (!response.ok) throw new Error(body.error || '保存失败')
       const saved = departmentIdsSchema.parse(body.allowedDepartmentIds)
-      if (saved === null) throw new Error('无法确认最新寄件部门授权，请刷新核对。')
+      if (saved === null) throw new Error('无法确认最新提报部门范围，请刷新核对。')
       setSelection({ saved, draft: saved })
-      setMessage('寄件部门授权已保存，新提报立即生效。')
+      setMessage('提报部门范围已保存，对新提报立即生效。')
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '保存失败')
+      if (error instanceof ShippingWorkbenchRequestError && (error.status === 401 || error.status === 403)) {
+        setSelection(null)
+        setDepartments([])
+        setMessage('当前账号无法更新提报部门范围。')
+      } else {
+        setMessage(error instanceof ShippingWorkbenchRequestError ? error.message : '保存失败，请刷新核对。')
+      }
     } finally {
       setBusy(false)
     }
@@ -196,7 +196,7 @@ export function ShippingDepartmentAuthorization({ orgId, departments, authHeader
   }
 
   return <details className="rounded-lg border bg-white p-4">
-    <summary className="cursor-pointer font-medium text-slate-900">寄件部门授权</summary>
+    <summary className="cursor-pointer font-medium text-slate-900">提报部门范围</summary>
     <div className="mt-3 space-y-3 text-sm">
       {selection && <p className="text-xs leading-5 text-slate-600">选中的部门及其下级允许提报。员工还需具有本人寄件权限。</p>}
       {selection && draft === null && <>
@@ -215,7 +215,7 @@ export function ShippingDepartmentAuthorization({ orgId, departments, authHeader
           <Button type="button" size="sm" variant="ghost" disabled={!draft.length} onClick={() => setSelection(current => current && ({ ...current, draft: [] }))}>清空选择</Button>
         </div>
         {!draft.length && <p className="text-xs text-slate-600">保存空名单后，员工将不能新提报。</p>}
-        <Button type="button" size="sm" disabled={!changed} onClick={() => void save()}>{busy ? '保存中…' : '保存寄件部门授权'}</Button>
+        <Button type="button" size="sm" disabled={!changed} onClick={() => void save()}>{busy ? '保存中…' : '保存提报部门范围'}</Button>
       </fieldset>}
       {message && <p role="status" className="text-xs text-slate-600">{message}</p>}
     </div>

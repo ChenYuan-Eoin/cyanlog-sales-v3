@@ -27,7 +27,6 @@ export async function GET(req: NextRequest) {
 
     const paths: string[] = scope === 'scoped-with-workbench' ? ['/'] : []
     if (shipping.canOperate || shipping.canViewOwn || shipping.departmentLedger?.length) paths.push('/shipping')
-    if (shipping.canManageConnections) paths.push('/shipping/settings')
     if (hasConfigsTabAccess(readConfigsTabAccess(req.headers, shipping.canManageConnections))) paths.push('/configs')
     const onlyProjectedPaths = scope === 'scoped' || scope === 'scoped-with-workbench' || scope === 'shipping-only'
     return NextResponse.json({ paths, ...(onlyProjectedPaths ? { onlyProjectedPaths } : {}) }, { headers })

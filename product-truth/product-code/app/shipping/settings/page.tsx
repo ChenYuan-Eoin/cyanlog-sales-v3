@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation'
 import { getAuthUserByToken } from '@/lib/auth'
 import { getServerAuthToken } from '@/lib/server-auth'
 import { resolveShippingEntry } from '@/lib/shipping/entry-access'
-import ShippingConfigDrawer from '../config-drawer'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,5 +13,5 @@ export default async function ShippingSettingsPage() {
   const access = await resolveShippingEntry(user, token ?? null)
   if (!access?.canManageConnections) redirect('/?denied=shipping:manage_connections')
 
-  return <ShippingConfigDrawer embedded standaloneReturn={access.canOperate || access.canViewOwn ? '/shipping' : '/'} />
+  redirect('/configs?tab=shipping')
 }

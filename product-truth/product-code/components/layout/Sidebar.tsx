@@ -26,7 +26,6 @@ const navItems = [
   { name: '工作台', href: '/', icon: HomeIcon },
   { name: '报价中心', href: '/quotes', icon: QuoteIcon },
   { name: '自助收寄', href: '/shipping', icon: Package },
-  { name: '寄件设置', href: '/shipping/settings', icon: SettingsIcon },
   { name: '合同审核', href: '/contracts', icon: ContractIcon },
   { name: '标书中心', href: '/tenders', icon: TenderIcon },
   { name: '知识库', href: '/knowledge', icon: KnowledgeIcon },
@@ -34,7 +33,7 @@ const navItems = [
   { name: '配置中心', href: '/configs', icon: SettingsIcon },
 ]
 
-const permissionNavigationPaths = ['/shipping/settings', '/shipping', '/configs']
+const permissionNavigationPaths = ['/shipping', '/configs']
 
 interface NavigationAccess {
   paths: string[]
@@ -101,7 +100,6 @@ export function Sidebar() {
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'
-    if (href === '/shipping' && pathname === '/shipping/settings') return false
     return pathname.startsWith(href)
   }
 

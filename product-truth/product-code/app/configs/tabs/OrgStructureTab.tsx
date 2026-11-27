@@ -28,7 +28,6 @@ import { isRetiredRoleCode } from '@/lib/role-permission-resolution'
 import Fuse from 'fuse.js'
 import { success, error, confirmAction } from '@/lib/toast'
 import { buildDepartmentOptions, resolveDepartmentSpaceIds } from '@/lib/department-spaces'
-import { ShippingDepartmentAuthorization } from '@/app/shipping/intake-configuration'
 import { DepartmentPermissions } from './DepartmentPermissions'
 import { EmployeePermissionOverrides, isEmployeePermissionTarget } from './EmployeePermissionOverrides'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
@@ -1075,9 +1074,6 @@ export default function OrgStructureTab({
     [canReadDepartments, orgSummary?.departments])
   const users = useMemo(() => orgSummary?.users ?? [], [orgSummary?.users])
   const departmentTree = useMemo(() => buildDepartmentOptions(departments), [departments])
-  const shippingDepartments = useMemo(() => departmentTree.map(department => ({
-    id: department.department_id, name: department.name, parentId: department.parent_department_id,
-  })), [departmentTree])
   const orgDepartmentIds = useMemo(() => departmentTree.map(department => department.department_id), [departmentTree])
   const [storedSelectedDeptId, setSelectedDeptId] = useState<string | null>(null)
   const selectedDeptId = canReadDepartments ? storedSelectedDeptId : null
@@ -1397,14 +1393,6 @@ export default function OrgStructureTab({
               />
             </div>
           )}
-          {canReadDepartments && currentUserId && orgSummary?.organization?.id && (
-            <ShippingDepartmentAuthorization
-              key={JSON.stringify([orgSummary.organization.id, currentUserId])}
-              orgId={orgSummary.organization.id}
-              departments={shippingDepartments}
-              authHeaders={buildAuthHeaders}
-            />
-          )}
           <div className="rounded-lg border bg-white p-4">
             <h3 className="font-medium text-slate-900">员工登录</h3>
             <p className="mt-2 text-xs leading-5 text-slate-600">在职员工使用自己的纷享销客账号登录 ICU；尚未登录纷享时，登录流程会引导完成认证。无需逐人发邀请码。已离职人员不可登录。</p>
@@ -1493,22 +1481,6 @@ export default function OrgStructureTab({
             </div>
           </div>}
 
-          <div className="rounded-lg border bg-white p-4">
-            <h3 className="font-medium text-slate-900">当前上下文</h3>
-            <div className="mt-4 space-y-3 text-sm">
-              {canReadDepartments && <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                <span className="text-slate-500">部门</span>
-                <span className="font-medium text-slate-900">{selectedDept?.name || allMembersLabel}</span>
-              </div>}
-              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                <span className="text-slate-500">筛选成员</span>
-                <span className="font-semibold text-slate-900">{countsUnavailable ? '—' : stats.filteredCount}</span>
-              </div>
-              <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-500">
-                外部目录同步先检查读取范围并生成差异；冲突、范围不明或快照不完整时整批阻断。
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
