@@ -16,6 +16,14 @@ export const sha256 = value => createHash('sha256').update(value).digest('hex')
 export const migrationPaths = [
   'supabase/migrations/20261103090000_unified_organization_connections.sql',
   'supabase/migrations/20261103120000_organization_directory_cutover.sql',
+  'supabase/migrations/20261127163000_fxiaoke_directory_scope_guard.sql',
+  'supabase/migrations/20261127163500_fxiaoke_directory_check_schedule.sql',
+  'supabase/migrations/20261127164000_fxiaoke_directory_primary_reviews.sql',
+  'supabase/migrations/20261127164500_fxiaoke_directory_identity_reviews.sql',
+  'supabase/migrations/20261127165000_fxiaoke_credential_rotation.sql',
+  'supabase/migrations/20261127165500_fxiaoke_directory_permission_reviews.sql',
+  'supabase/migrations/20261127170000_fxiaoke_directory_scope_proof.sql',
+  'supabase/migrations/20261127170500_fxiaoke_existing_member_login.sql',
 ]
 export const migrationHashes = () => Object.fromEntries(migrationPaths.map(path => [path, sha256(readFileSync(resolve(root, path)))]))
 

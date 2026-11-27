@@ -4,7 +4,15 @@
   "reviewedAt": "2026-11-27T11:36:24.320Z",
   "migrations": {
     "supabase/migrations/20261103090000_unified_organization_connections.sql": "ab99b807a91baf8587cd2908a1d75c895f3541e3d48eae045c5b47541745b2af",
-    "supabase/migrations/20261103120000_organization_directory_cutover.sql": "64309804840cbb30c3b83c0ab737d6415c38a27fed85df747afb7108e9407179"
+    "supabase/migrations/20261103120000_organization_directory_cutover.sql": "64309804840cbb30c3b83c0ab737d6415c38a27fed85df747afb7108e9407179",
+    "supabase/migrations/20261127163000_fxiaoke_directory_scope_guard.sql": "32a3576c608c06caae523c83654cb460b25253be0ca05106f17c14a20071643b",
+    "supabase/migrations/20261127163500_fxiaoke_directory_check_schedule.sql": "15f6070904087781448b4d590eb3042ba29cb94bebba14423c5b9a58dc617a0c",
+    "supabase/migrations/20261127164000_fxiaoke_directory_primary_reviews.sql": "d934b0d0f55c1a312d7317c707768de0f9b205102d2194569375caacb80a5f36",
+    "supabase/migrations/20261127164500_fxiaoke_directory_identity_reviews.sql": "7e0b85221c4bd05d9d0366d2ff909ec3a8319f91f908edeab16b95899a81f137",
+    "supabase/migrations/20261127165000_fxiaoke_credential_rotation.sql": "56c90d3a46a223598f9bdfe3fa69447bb1066ec3afc05d188ee23234b1c071c6",
+    "supabase/migrations/20261127165500_fxiaoke_directory_permission_reviews.sql": "8774f79fc95d9927e27c5e36f6a92628d2459e62133024ddf8513824fc4a8bb2",
+    "supabase/migrations/20261127170000_fxiaoke_directory_scope_proof.sql": "679077c6833be57a81f1f723ca6ded90ce8d7ca9907a1694ede1fdcc67a317ce",
+    "supabase/migrations/20261127170500_fxiaoke_existing_member_login.sql": "8028327bc56f474ed8b7b164bc0e018ff6bfb407e1bf0646e9b2fa3c1974e19b"
   },
   "findings": [
     "Membership inserts explicitly supply gen_random_uuid(); conflict updates preserve the existing membership_id. Native organization membership is inserted before department relationships to satisfy the production composite FK.",
@@ -23,7 +31,12 @@
     "The Production Fxiaoke prelogin helper separates stopped login from eligibility for pending-role revocation. The directory RPC runs as SECURITY DEFINER with existing execute grants and publishes the distinct preassignment and revocation capability flags.",
     "Refreshed from the authenticated read-only Supabase Production catalog captured at 2026-11-27T11:35:48.937Z on PostgreSQL 17.6. It contains 20 tables and 30 functions and only schema metadata. The historic pre-cutover baseline and original migration hashes are preserved.",
     "The role usage check now references private.department_automatic_role_rules. Capture explicitly selects that table and follows its foreign keys; the existing pending Fxiaoke roles and invitations already cover departure-trigger targets. The verifier still requires exact catalog equality.",
-    "A disposable native PostgreSQL 17.6 instance exactly reproduced the refreshed catalog. Service-role fixtures verified stopped-login revoke-only visibility, departure cleanup, blocked direct parent edits, and a retired role visible through a real automatic department role reference."
+    "A disposable native PostgreSQL 17.6 instance exactly reproduced the refreshed catalog. Service-role fixtures verified stopped-login revoke-only visibility, departure cleanup, blocked direct parent edits, and a retired role visible through a real automatic department role reference.",
+    "The WP82 migration review covers the exact eight additional files. Each migration opens and commits one transaction. The permission review is installed before the scope-proof wrapper and existing-member login eligibility updates credential rotation last.",
+    "Fxiaoke confirmation verifies the current organization, source, tenant and effective credential revision, the current matching roster proof, and the immutable plan. Unverified roster coverage keeps directory changes in preview. Applied receipts replay through the original validation chain.",
+    "Contact conflicts keep the affected employee in review. Independent scope verification requires known lifecycle and primary and secondary memberships, and confirms an exact roster match. Scope shrink leaves employment and membership unchanged.",
+    "The linked-member login transaction keeps the existing canonical ICU user and business record owner. Invited users retain the first-login rules. Rotation requires the linked employee trial to match the approved draft revision.",
+    "The native PostgreSQL 17.6 rehearsal includes the live schema-only capabilities for pending role revocation and controlled parent changes. Browser database roles remain excluded from privileged directory, credential and proof functions."
   ],
   "catalogSha256": "7be4e8861689438ffcae2495940cf4b0d8ada3be6a465fcbb5d40f521c34c764"
 }
