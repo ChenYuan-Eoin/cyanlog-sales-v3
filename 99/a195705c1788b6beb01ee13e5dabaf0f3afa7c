@@ -41,8 +41,27 @@
     "isolated_synthetic_data": true
   },
   "production": {
-    "status": "not_pushed",
-    "database_migrations": 0,
-    "safari_acceptance": "pending"
+    "commit": "99a195705c1788b6beb01ee13e5dabaf0f3afa7c",
+    "deployment_id": "dpl_GxbVmYLNTsbFEPqWcA4DtXgz7nWU",
+    "domain": "https://sales.cyanlog.icu",
+    "state": "READY",
+    "provider_verified": true,
+    "health_http": 200,
+    "main_contains_commit": true,
+    "production_ref_exact": true,
+    "css_asset": "/_next/static/css/5daec15d6b98abcf.css",
+    "css_sha256": "1270da315ec3542a0428937f3c6a8283630acc0a5e41e86ccd84408186fa8414",
+    "canon_artifact_sha256": "201d08802dbafec50389017026179c09f06754d4c64aebc6033ea4b256a26b0a",
+    "db_migrations": 0,
+    "original_safari": {
+      "state": "pending_self_same_window",
+      "reason": "Mac locked; unlock requested"
+    },
+    "preview_cleanup": {
+      "share_revoked": true,
+      "env_keys_removed": 5,
+      "gateway_stopped": true,
+      "temporary_db_removed": true
+    }
   }
 }
