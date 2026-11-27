@@ -1,6 +1,5 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
-import { PGlite } from '@electric-sql/pglite'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ verified: vi.fn(), directory: vi.fn(), rpc: vi.fn() }))
@@ -9,6 +8,7 @@ vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: mocks.rpc } }))
 
 import { readFreshFxiaokeScopeProof, recordFxiaokeScopeProof } from './fxiaoke-directory-scope'
 import type { readOrganizationDirectory } from './service'
+import { productionSchemaDatabase } from './schema-baseline/database'
 
 const org = '00000000-0000-4000-8000-000000000001'
 const source = '00000000-0000-4000-8000-000000000002'
@@ -16,6 +16,9 @@ const actor = '00000000-0000-4000-8000-000000000003'
 const revision = '00000000-0000-4000-8000-000000000004'
 const proofId = '00000000-0000-4000-8000-000000000005'
 const draft = '00000000-0000-4000-8000-000000000006'
+const delegate = '00000000-0000-4000-8000-000000000007'
+const delegateRole = '00000000-0000-4000-8000-000000000008'
+const rootRole = '00000000-0000-4000-8000-000000000009'
 const tenant = { ea: 'test-company', corpId: 'FSCID_test' }
 const principal = { appId: 'FSAID_test', apiUserId: '101' }
 
@@ -180,26 +183,19 @@ describe('independent Fxiaoke directory evidence', () => {
 
 describe('directory scope proof database boundary', () => {
   it('enforces current matching evidence around the existing apply and preserves historical retries', async () => {
-    const db = new PGlite()
+    const db = await productionSchemaDatabase()
     try {
+      const roleMigration = readFileSync(new URL(
+        '../../supabase/migrations/20261126114126_allow_shipping_operator_department_ledger_roles.sql', import.meta.url,
+      ), 'utf8')
+      const resolveRole = roleMigration.match(/create function private\.shipping_role_effective_scope_permissions_v1\([\s\S]*?\n\$\$;/)?.[0]
+      if (!resolveRole) throw new Error('Role permission resolver is missing from the deployed migration')
+      await db.exec(resolveRole)
       await db.exec(`
-        create schema private;
-        create role anon; create role authenticated; create role service_role;
-        create table public.organizations(id uuid primary key);
-        create table public.organization_sources(id uuid, system_org_id uuid, provider text,
-          status text, connection_state text, external_tenant_id text, configuration_revision uuid, effective_revision uuid,
-          updated_at timestamptz, primary key(id, system_org_id));
         create table public.organization_directory_cutover_plans(
           id uuid primary key, system_org_id uuid, target_source_id uuid, status text,
           connection_revision uuid, plan_payload jsonb);
         create table private.applied_plans(id uuid);
-        create function private.personnel_lock_org_v1(p_org uuid)
-          returns void language sql as $$ select pg_advisory_xact_lock(hashtextextended(p_org::text,0)) $$;
-        create function private.assert_system_role_assignment_actor_v1(p_actor uuid, p_org uuid)
-          returns void language plpgsql as $$ begin
-            perform private.personnel_lock_org_v1(p_org);
-            if p_actor <> '${actor}' then raise exception 'not an admin' using errcode='42501'; end if;
-          end $$;
         create function public.apply_organization_directory_cutover_v1(uuid, uuid, text, uuid, jsonb, uuid)
           returns jsonb language plpgsql security definer set search_path = '' as $$ begin
             if (select status from public.organization_directory_cutover_plans where id=$2) = 'applied' then
@@ -208,9 +204,22 @@ describe('directory scope proof database boundary', () => {
             insert into private.applied_plans values($2);
             return '{"status":"delegated"}'::jsonb;
           end $$;
-        insert into public.organizations values ('${org}');
-        insert into public.organization_sources values ('${source}','${org}','fxiaoke','active','verified',
-          '${tenant.ea}','${revision}','${revision}', now());
+        insert into public.organizations(id, name, status) values ('${org}', 'Scope fixture', 'active');
+        insert into public.users(id, org_id, display_name, status, login_enabled) values
+          ('${actor}', '${org}', 'Organization administrator', 'active', true),
+          ('${delegate}', '${org}', 'Directory confirmer', 'active', true);
+        insert into public.user_organizations(membership_id,user_id,org_id,status,employment_status,is_default) values
+          (gen_random_uuid(), '${actor}', '${org}', 'active', 'active', true),
+          (gen_random_uuid(), '${delegate}', '${org}', 'active', 'active', true);
+        insert into public.roles(id,code,name,owner_org_id,permissions) values
+          ('${rootRole}', 'SUPER_ADMIN', 'System administrator', null, '["*"]'),
+          ('${delegateRole}', 'SCOPE_FIXTURE', 'Directory confirmer', '${org}', '["org:source_apply"]');
+        insert into public.user_roles(org_id,user_id,role_id,scope_type,scope_id) values
+          ('${org}', '${actor}', '${rootRole}', 'org', '${org}'),
+          ('${org}', '${delegate}', '${delegateRole}', 'org', '${org}');
+        insert into public.organization_sources(
+          id, system_org_id, provider, priority, status, connection_state, external_tenant_id, configuration_revision, effective_revision, updated_at
+        ) values ('${source}', '${org}', 'fxiaoke', 1, 'active', 'verified', '${tenant.ea}', '${revision}', '${revision}', now());
       `)
       await db.exec(readFileSync(new URL('../../supabase/migrations/20261127170000_fxiaoke_directory_scope_proof.sql', import.meta.url), 'utf8'))
       expect((await db.query<{ n: boolean }>(`select has_function_privilege('authenticated',
@@ -230,12 +239,12 @@ describe('directory scope proof database boundary', () => {
         insert into public.organization_directory_cutover_plans values(gen_random_uuid(),$1,$2,$3,$4,
           jsonb_build_object('targetExternalTenantId',$5::text,'snapshot',jsonb_build_object('scopeVerified',true,'scopeEvidence',$6::text))) returning id
       `, [org, source, status, revision, tenant.ea, evidence])).rows[0].id
-      const apply = async (id: string) => {
+      const apply = async (id: string, confirmer = actor) => {
         await db.exec('set role service_role')
         try {
           return (await db.query<{ result: unknown }>('select public.apply_organization_directory_cutover_v1($1,$2,$3,$4,$5,$6) as result',
-            [org, id, roster, revision, '[]', actor])).rows[0].result
-        } finally { await db.exec('reset role') }
+            [org, id, roster, revision, '[]', confirmer])).rows[0].result
+        } finally { await db.exec('set role postgres') }
       }
       const denied = { code: '23514', detail: 'DIRECTORY_SCOPE_UNVERIFIED' }
       await expect(apply(await plan('unverified nonempty proof'))).rejects.toMatchObject(denied)
@@ -249,7 +258,13 @@ describe('directory scope proof database boundary', () => {
         [org, source, revision, tenant.ea, 'd'.repeat(64), 'root', digest],
       ).then(result => result.rows[0].result)
       expect(await read(roster)).toEqual({ id: recorded, rosterDigest: roster, expiresAt: expect.any(String) })
-      await expect(apply(await plan(receipt(recorded)))).resolves.toEqual({ status: 'delegated' })
+      const delegatedPlan = await plan(receipt(recorded))
+      await db.query('update public.organizations set settings=$2::jsonb where id=$1',
+        [org, JSON.stringify({ role_permission_overrides: { [delegateRole]: [] } })])
+      await expect(apply(delegatedPlan, delegate)).rejects.toMatchObject({ code: '42501' })
+      expect((await db.query<{ n: number }>('select count(*)::int as n from private.applied_plans')).rows[0].n).toBe(0)
+      await db.query("update public.organizations set settings='{}'::jsonb where id=$1", [org])
+      await expect(apply(delegatedPlan, delegate)).resolves.toEqual({ status: 'delegated' })
 
       const newer = 'e'.repeat(64)
       const latest = await save(newer, '10 seconds')
@@ -265,6 +280,48 @@ describe('directory scope proof database boundary', () => {
       await expect(apply(await plan(receipt(latest, newer)))).rejects.toMatchObject(denied)
       await expect(apply(await plan('historical proof shape', 'applied'))).resolves.toEqual({ status: 'historical-retry' })
       expect((await db.query<{ n: number }>('select count(*)::int as n from private.applied_plans')).rows[0].n).toBe(1)
+    } finally { await db.close() }
+  }, 20_000)
+})
+
+describe('observed phone history on the Production schema', () => {
+  it('preserves existing profiles and retains conflicting observations across changes', async () => {
+    const db = await productionSchemaDatabase()
+    try {
+      await db.exec(`
+        insert into public.organizations(id,name) values ('${org}', 'Phone history fixture');
+        insert into public.users(id,org_id,display_name,phone,phone_verified) values
+          ('${actor}','${org}','First holder','139-0000-0001',true),
+          ('${delegate}','${org}','Second holder','+8613900000001',false);
+      `)
+      const profiles = () => db.query('select id,phone,phone_verified,updated_at from public.users order by id')
+      const before = (await profiles()).rows
+      const migration = readFileSync(new URL(
+        '../../supabase/migrations/20261127171000_fxiaoke_observed_phone_history.sql', import.meta.url,
+      ), 'utf8')
+      await db.exec(migration)
+      expect((await profiles()).rows).toEqual(before)
+      const observations = () => db.query(`
+        select user_id,phone,valid_to is not null as closed
+        from public.phone_history where org_id=$1 order by user_id,valid_from
+      `, [org])
+      expect((await observations()).rows).toEqual([
+        { user_id: actor, phone: '+8613900000001', closed: false },
+        { user_id: delegate, phone: '+8613900000001', closed: false },
+      ])
+      await db.query('update public.users set phone=$2 where id=$1', [actor, '13900000002'])
+      await db.query('update public.users set phone=$2 where id=$1', [actor, '+8613900000002'])
+      expect((await observations()).rows).toEqual([
+        { user_id: actor, phone: '+8613900000001', closed: true },
+        { user_id: actor, phone: '+8613900000002', closed: false },
+        { user_id: delegate, phone: '+8613900000001', closed: false },
+      ])
+      const acl = await db.query(`select
+        has_table_privilege('authenticated','public.phone_history','SELECT') as browser_read,
+        has_table_privilege('service_role','public.phone_history','SELECT') as service_read,
+        has_table_privilege('service_role','public.phone_history','INSERT') as service_write
+      `)
+      expect(acl.rows).toEqual([{ browser_read: false, service_read: true, service_write: false }])
     } finally { await db.close() }
   }, 20_000)
 })
