@@ -45,9 +45,14 @@
     "intake_settings_used_fallback": true
   },
   "production": {
-    "status": "unpublished",
-    "data_changes": []
+    "deployment_state": "ready",
+    "domain": "https://sales.cyanlog.icu",
+    "deployment_id": "dpl_5S71ArW76C8kGDZSWv8bUyQG34jG",
+    "remote_main_contains_commit": true,
+    "remote_production_commit": "345478150c051fae58cf722a4dc722ded6f63225",
+    "domain_runtime_readback_sha256": "b462f024174c74c967ecf0b005608db237c3828d603955ecb41943af3a0bcd4c",
+    "operator_path_acceptance": "pending",
+    "database_migrations": 0
   },
-  "scheduler_commit": "1b23ae2b19c920d84b4675b70ccc4157b02004e0",
   "harness_status": "delivery-seal reported no active Harness gate; exact-scope runtime evidence is recorded independently"
 }
