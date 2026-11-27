@@ -119,8 +119,8 @@ describe('Fxiaoke direct directory preview', () => {
     const result = await previewDirectory(credentials, fixture(token, page(departments), page(observed)))
     expect(result.complete).toBe(true)
     expect(result.employees).toMatchObject([
-      { id: '123', sourceConflict: 'employee_profile', phone: null },
-      { id: '456', sourceConflict: 'phone_claim', phone: null },
+      { id: '123', sourceConflict: 'employee_profile', status: 'active', primaryDepartmentId: '100', departmentIds: ['100'], phone: null },
+      { id: '456', sourceConflict: 'phone_claim', status: 'active', primaryDepartmentId: '100', departmentIds: ['100'], phone: null },
       { id: '789', sourceConflict: 'primary_department', primaryDepartmentId: null, departmentIds: ['100', '200'] },
       { id: '999', phone: '+8613900000003' },
     ])
@@ -129,6 +129,15 @@ describe('Fxiaoke direct directory preview', () => {
     const missingDepartment = await previewDirectory(credentials, fixture(token, page([department]), page(observed)))
     expect(missingDepartment.complete).toBe(false)
   })
+  it('leaves contradictory employment unknown even when the primary department agrees', async () => {
+    const conflicting = await previewDirectory(credentials, fixture(token, page([department]), page([
+      employee, { ...employee, _id: 'record2', status: '1' },
+    ])))
+    expect(conflicting.employees[0]).toMatchObject({
+      sourceConflict: 'employee_profile', status: 'unknown', primaryDepartmentId: '100', departmentIds: ['100'],
+    })
+  })
+
   it('keeps a repeated raw cursor record a pagination error even when its personnel fields agree', async () => {
     const first = Array.from({ length: 100 }, (_, index) => ({ ...employee, _id: `record-${index}`, user_id: `staff-${index}` }))
     const request = fixture(token, page([department]), page(first, 101), page([first[0]], 1))

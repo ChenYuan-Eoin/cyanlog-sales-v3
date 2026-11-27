@@ -102,14 +102,17 @@ function rosterDigest(roster: Roster, expectedRoot?: string) {
 function readRosterDigest(directory: AdapterDirectoryRead, expectedRoot?: string) {
   if (!directory.complete || !directory.departments.length || !directory.employees.length) return null
   const departments = z.array(department).safeParse(directory.departments.map(({ id, parentId, status }) => ({ id, parentId, status })))
+  // The planner holds employees with disputed profile data. Their explicitly
+  // observed lifecycle and membership still count toward the scope comparison.
   const employees = z.array(employee).safeParse(directory.employees.map(row => ({
     id: row.id,
-    status: row.sourceConflict ? 'unconfirmed' : row.status,
+    status: row.status,
     primaryDepartmentId: row.primaryDepartmentId,
     secondaryDepartmentIds: row.departmentIds.filter(id => id !== row.primaryDepartmentId),
   })))
   if (!departments.success || !employees.success
-    || directory.employees.some(row => !row.primaryDepartmentId || !row.departmentIds.includes(row.primaryDepartmentId))) return null
+    || directory.employees.some(row => row.sourceConflict === 'primary_department'
+      || !row.primaryDepartmentId || !row.departmentIds.includes(row.primaryDepartmentId))) return null
   return rosterDigest({ departments: departments.data, employees: employees.data }, expectedRoot)
 }
 

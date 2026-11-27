@@ -102,7 +102,7 @@ function groupPersonnelRows(rows: Row[]): DirectoryEmployee[] {
     return {
       ...first, name: names[0], departmentIds,
       primaryDepartmentId: primaryConflict ? null : first.primaryDepartmentId,
-      status: 'unknown',
+      status: primaryConflict || statuses.size > 1 ? 'unknown' : first.status,
       loginDisabled: null, employeeNumber: null, email: null, phone: null, sourceConflict,
     }
   })
@@ -110,7 +110,7 @@ function groupPersonnelRows(rows: Row[]): DirectoryEmployee[] {
   return employees.map(employee => {
     const phone = normalizeIdentityPhone(employee.phone)
     if (!employee.sourceConflict && phone && disputedPhones.has(phone)) {
-      return { ...employee, status: 'unknown', loginDisabled: null, phone: null, sourceConflict: 'phone_claim' }
+      return { ...employee, loginDisabled: null, phone: null, sourceConflict: 'phone_claim' }
     }
     return employee
   })

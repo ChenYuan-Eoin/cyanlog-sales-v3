@@ -104,6 +104,38 @@ describe('independent Fxiaoke directory evidence', () => {
     })
   })
 
+  it('confirms the exact roster despite isolated profile and competing phone claims', async () => {
+    const data = fixture()
+    const saved = stubPersistence(data)
+    const observed = providerRead(data)
+    observed.directory.employees[0] = {
+      ...observed.directory.employees[0], sourceConflict: 'employee_profile', phone: null, loginDisabled: null,
+    }
+    observed.directory.employees[1] = {
+      ...observed.directory.employees[1], sourceConflict: 'phone_claim', phone: null, loginDisabled: null,
+    }
+    mocks.directory.mockResolvedValueOnce(observed)
+    await expect(recordFxiaokeScopeProof(org, actor, data)).resolves.toEqual(saved)
+    await expect(readFreshFxiaokeScopeProof(observed)).resolves.toMatchObject({ scopeVerified: true })
+  })
+
+  it.each<[description: string, changes: Partial<ReturnType<typeof providerRead>['directory']['employees'][number]>]>([
+    ['contradictory lifecycle', { sourceConflict: 'employee_profile', status: 'unknown' }],
+    ['ambiguous primary', { sourceConflict: 'primary_department' }],
+    ['a missing primary', { sourceConflict: 'employee_profile', primaryDepartmentId: null }],
+    ['an omitted secondary membership', { sourceConflict: 'phone_claim', departmentIds: ['sales', 'root'] }],
+  ])('withholds scope proof for %s despite the same headcount', async (_case, changes) => {
+    const data = fixture()
+    stubPersistence(data)
+    await recordFxiaokeScopeProof(org, actor, data)
+    const observed = providerRead(data)
+    observed.directory.employees[0] = { ...observed.directory.employees[0], ...changes }
+    mocks.directory.mockResolvedValueOnce(observed)
+    await expect(recordFxiaokeScopeProof(org, actor, data)).rejects.toMatchObject({ code: 'DIRECTORY_SCOPE_MISMATCH' })
+    await expect(readFreshFxiaokeScopeProof(observed)).resolves.toEqual(unverified)
+    expect(mocks.rpc.mock.calls.filter(([name]) => name === recordProofCall)).toHaveLength(1)
+  })
+
   it('refuses missing secondary coverage at equal headcount and ten absent staff in both issuance and readback', async () => {
     const data = fixture()
     stubPersistence(data)
