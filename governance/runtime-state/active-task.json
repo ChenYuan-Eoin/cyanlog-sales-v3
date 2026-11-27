@@ -283,6 +283,7 @@
       "product-truth/product-code/lib/fxiaoke/identity.ts",
       "product-truth/product-code/lib/fxiaoke/identity.test.ts",
       "product-truth/product-code/lib/organization-connections/fxiaoke-baseline-view-migration.test.ts",
+      "product-truth/product-code/lib/organization-connections/fxiaoke-prelogin-role.test.ts",
       "product-truth/product-code/lib/organization-connections/schema-baseline/capture.sql",
       "product-truth/product-code/lib/organization-connections/schema-baseline/production.json",
       "product-truth/product-code/lib/organization-connections/schema-baseline/sql-review.json",
