@@ -25,6 +25,8 @@ const firstLogin = '20261118095000_fxiaoke_prelogin_role_assignment.sql'
 const roleCatalog = '20261126061431_org_owned_ordinary_roles.sql'
 const pendingMigration = '20261126111603_fxiaoke_prelogin_employee_permission_overrides.sql'
 const shippingDepartmentMigration = '20261126114126_allow_shipping_operator_department_ledger_roles.sql'
+const automaticDepartmentRoleRules = '20261127154000_department_automatic_role_rules.sql'
+const automaticDepartmentRoleRuntime = '20261127154500_department_automatic_role_runtime.sql'
 const signature = 'public.admin_set_employee_org_permission_override_v1(uuid,uuid,uuid,text,jsonb,jsonb)'
 const allow = { effect: 'ALLOW', scope: { type: 'org' } }
 const deny = { effect: 'DENY', scope: null }
@@ -546,6 +548,61 @@ it('grants only published configured department ledger and optional return on a 
   expect(await shippingScopes()).toEqual([scope(ledger, [], true), scope(recordReturn, [])])
 })
 
+it('uses live department roles for shipping scopes before applying employee differences', async () => {
+  await installScopedRoleCommands()
+  await db.exec(migration(shippingDepartmentMigration))
+  await db.exec(`
+    alter table public.departments add primary key (id);
+    alter table public.user_organizations add column primary_department_id uuid;
+  `)
+  await db.exec(migration(automaticDepartmentRoleRules))
+  await db.exec(migration(automaticDepartmentRoleRuntime))
+  const ledger = 'shipping:ledger_view'
+  const recordReturn = 'shipping:record_return'
+  await configureShippingRole([ledger, recordReturn, 'shipping:operate', '*'])
+  await db.query(`
+    insert into private.department_automatic_role_rules
+      (org_id, department_id, role_id, include_subdepartments) values ($1,$2,$3,true)
+  `, [org, department, shippingRole])
+  await db.query('update public.user_organizations set primary_department_id = $1 where user_id = $2', [childDepartment, employee])
+  const scopes = async () => (await db.query(
+    'select * from public.shipping_employee_permission_scopes_v1($1,$2)', [org, employee],
+  )).rows
+  const expectedScope = (permissionCode: string, departmentIds = [childDepartment]) => ({
+    permission_code: permissionCode, organization_wide: false, department_ids: departmentIds,
+  })
+  const expectedReturn = async (departmentIds: string[]) => expect((await db.query(
+    'select * from private.shipping_return_scope_v1($1,$2)', [employee, org],
+  )).rows).toEqual([{ organization_wide: false, department_ids: departmentIds }])
+  const setLedgerOverride = async (expected: object | null, value: object | null) => (await db.query<{ value: unknown }>(
+    'select public.admin_set_employee_permission_override_v1($1,$2,$3,$4,$5::jsonb,$6::jsonb) as value',
+    [admin, org, employee, ledger, JSON.stringify(expected), JSON.stringify(value)],
+  )).rows[0].value
+
+  expect(await scopes()).toMatchObject([ledger, recordReturn].map(permission => ({
+    ...expectedScope(permission), base_department_ids: [childDepartment], base_organization_wide: false,
+    base_sources: [{ kind: 'department', name: '归属部门 · 顺丰寄件操作员' }],
+  })))
+  await expectedReturn([childDepartment])
+  expect(await setLedgerOverride(null, deny)).toEqual(deny)
+  expect(await shippingScopes()).toEqual([expectedScope(ledger, []), expectedScope(recordReturn)])
+  await expectedReturn([])
+  expect(await setLedgerOverride(deny, null)).toBeNull()
+
+  expect(await scopedShippingRole('assign', { scopeId: childDepartment })).toBe(true)
+  await db.query('update public.user_organizations set primary_department_id = $1 where user_id = $2', [unrelatedDepartment, employee])
+  expect(await scopes()).toMatchObject([ledger, recordReturn].map(permission => ({
+    ...expectedScope(permission), base_sources: [{ kind: 'role', name: '顺丰寄件操作员' }],
+  })))
+  expect(await scopedShippingRole('revoke', { scopeId: childDepartment })).toBe(true)
+  expect(await shippingScopes()).toEqual([expectedScope(ledger, []), expectedScope(recordReturn, [])])
+
+  await db.query('insert into public.user_departments values ($1,$2,$3)', [org, employee, childDepartment])
+  expect(await shippingScopes()).toEqual([expectedScope(ledger), expectedScope(recordReturn)])
+  await db.query("update public.permission_points set status = 'disabled' where code = $1", [ledger])
+  expect(await shippingScopes()).toEqual([expectedScope(ledger, []), expectedScope(recordReturn, [])])
+})
+
 it('retains active membership, target, department and legacy space restrictions for shipping operator assignment', async () => {
   await installScopedRoleCommands()
   await db.exec(migration(shippingDepartmentMigration))
@@ -568,6 +625,62 @@ it('retains active membership, target, department and legacy space restrictions 
   await db.query('update public.users set login_enabled = false where id = $1', [employee])
   expect(await scopedShippingRole('assign')).toBe(false)
   expect((await db.query('select role_id from public.user_roles where user_id = $1', [employee])).rows).toEqual([])
+})
+
+it('requires a fresh confirmed department rule and keeps independently assigned roles unchanged', async () => {
+  await installScopedRoleCommands()
+  await db.exec(migration(shippingDepartmentMigration))
+  await db.exec(functionDefinition('20261127150000_confirmed_department_transfer.sql', 'assert_member_department_transfer_actor_v1'))
+  await db.exec('alter table public.departments add primary key (id); alter table public.user_organizations add column primary_department_id uuid;')
+  await db.exec(migration(automaticDepartmentRoleRules))
+  await configureShippingRole(['shipping:ledger_view', 'shipping:operate', 'role:manage'])
+  await db.query('update public.user_organizations set primary_department_id=$1 where user_id=$2 and org_id=$3', [childDepartment, employee, org])
+
+  const draft = async (rules: object[], actor = admin, departmentId = department) => (await db.query<{ receipt: { preview_id: string } }>(
+    'select public.admin_preview_department_role_rules_v1($1,$2,$3,$4) as receipt',
+    [org, actor, departmentId, JSON.stringify(rules)],
+  )).rows[0].receipt
+  const confirm = (receipt: string, departmentId = department) => db.query(
+    'select public.admin_confirm_department_role_rules_v1($1,$2,$3,$4)',
+    [org, admin, departmentId, receipt],
+  )
+  const sources = async () => (await db.query<{ sources: unknown }>(
+    'select public.department_automatic_role_directory_sources_v1($1) as sources', [org],
+  )).rows[0].sources
+  const parentRule = { role_id: shippingRole, include_subdepartments: true }
+
+  await expect(draft([parentRule], employee)).rejects.toMatchObject({ code: '42501' })
+  await expect(draft([parentRule], admin, otherDepartment)).rejects.toMatchObject({ code: 'P0002' })
+  await expect(draft([{ ...parentRule, role_id: rootRole }])).rejects.toMatchObject({ code: '23514' })
+  const original = await draft([parentRule])
+  expect(original).toMatchObject({ added_sources: 1, removed_sources: 0, affected_members: 1 })
+  expect(await sources()).toEqual([])
+  expect(await scopedShippingRole('assign', { scopeId: childDepartment })).toBe(true)
+  await configureShippingRole(['shipping:ledger_view', 'shipping:record_return'])
+  await expect(confirm(original.preview_id)).rejects.toMatchObject({ code: '40001' })
+  const fresh = await draft([parentRule])
+  await expect(confirm(fresh.preview_id, childDepartment)).rejects.toMatchObject({ code: '40001' })
+  await confirm(fresh.preview_id)
+  await expect(confirm(fresh.preview_id)).rejects.toMatchObject({ code: '40001' })
+  const child = await draft([{ ...parentRule, include_subdepartments: false }], admin, childDepartment)
+  await confirm(child.preview_id, childDepartment)
+  expect(await sources()).toMatchObject([
+    { user_id: employee, role_id: shippingRole, rule_department_id: department, affiliation_department_id: childDepartment },
+    { user_id: employee, role_id: shippingRole, rule_department_id: childDepartment, affiliation_department_id: childDepartment },
+  ])
+  expect((await db.query('select private.org_role_is_referenced_v1($1,$2) as referenced', [org, shippingRole])).rows)
+    .toEqual([{ referenced: true }])
+  for (const scopeId of [department, childDepartment]) {
+    const removal = await draft([], admin, scopeId)
+    await confirm(removal.preview_id, scopeId)
+  }
+  expect(await sources()).toEqual([])
+  expect((await db.query('select role_id,scope_id from public.user_roles where user_id=$1', [employee])).rows)
+    .toEqual([{ role_id: shippingRole, scope_id: childDepartment }])
+  expect((await db.query('select count(*)::integer as count from private.department_automatic_role_rule_audit')).rows)
+    .toEqual([{ count: 4 }])
+  expect((await db.query(`select has_function_privilege('authenticated',
+    'public.department_automatic_role_directory_sources_v1(uuid)', 'execute') as allowed`)).rows).toEqual([{ allowed: false }])
 })
 
 it.each(['department', 'space'])('fails closed on an existing dormant %s shipping operator binding', async scopeType => {

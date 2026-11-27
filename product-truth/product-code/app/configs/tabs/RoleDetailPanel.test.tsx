@@ -2,12 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { RoleDetailPanel } from './RoleDetailPanel'
+import { getRoleMembershipStats } from './role-membership-stats'
 import { confirmAction, error } from '@/lib/toast'
 import { hasPermission } from '@/lib/permissions'
 import { SHIPPING_ACTION_DEFINITIONS, SHIPPING_WORKBENCH_ACTION_KEYS, shippingActionViewDependency, type ShippingActionKey } from '@/lib/module-access'
 
 vi.mock('@/lib/toast', () => ({ success: vi.fn(), error: vi.fn(), confirmAction: vi.fn() }))
-afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.resetAllMocks() })
 
 const role = { id: 'root', code: 'SUPER_ADMIN', name: '超级管理员', description: null, permissions: ['*'] }
 const defaults = { role, currentUserId: 'actor', saving: false, users: [], departments: [], canAssignBusinessRoles: true }
@@ -133,9 +134,8 @@ it.each([true, false])('lists a stored preassignment and revokes only this role 
     can_preassign_org_roles: eligible, can_revoke_pending_org_roles: !eligible,
     pending_org_roles: [shipping, { id: 'another', code: 'OTHER', name: '其他' }],
   }
-  const send = vi.fn().mockResolvedValue({ ok: true })
+  const send = vi.fn().mockResolvedValue(Response.json({ success: true }))
   vi.stubGlobal('fetch', send)
-  vi.mocked(confirmAction).mockResolvedValue(true)
   const onRefresh = vi.fn()
   render(<RoleDetailPanel {...defaults} role={shipping} users={[user]} onSave={vi.fn()} onRefresh={onRefresh}
     systemSuperAdminAuthority={{ orgId: 'org-a' }} />)
@@ -158,12 +158,18 @@ it.each([false, true])('opens the same tenant-scoped employee permission table f
     } : {}),
   }
   const path = '/api/admin/users/employee/permission-overrides?orgId=org-a'
+  const reviewPath = '/api/admin/users/employee/department-transfer-review?expected_org_id=org-a'
   const fetchEmployeePermissions = vi.fn().mockResolvedValue(Response.json({
     org_id: 'org-a', user_id: member.id, permissions: [], departments: [],
     ...(pending ? { target_revision: 'verified-directory-identity' } : {}),
     shipping_permission_publication: { registered: [], published: [] },
   }))
-  vi.stubGlobal('fetch', fetchEmployeePermissions)
+  const fetchReview = vi.fn().mockResolvedValue(Response.json({ items: [] }))
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+    if (url === path) return fetchEmployeePermissions(url, init)
+    if (url === reviewPath) return fetchReview(url, init)
+    throw new Error(`Unexpected request: ${url}`)
+  })
   const props = { ...defaults, role: shipping, users: [member], onSave: vi.fn() }
   const { rerender } = render(<RoleDetailPanel {...props} />)
   expect(screen.queryByRole('button', { name: '员工权限设置 收寄成员' })).not.toBeInTheDocument()
@@ -173,6 +179,7 @@ it.each([false, true])('opens the same tenant-scoped employee permission table f
   await waitFor(() => expect(fetchEmployeePermissions).toHaveBeenCalledExactlyOnceWith(path, expect.objectContaining({
     cache: 'no-store',
   })))
+  expect(fetchReview).toHaveBeenCalledExactlyOnceWith(reviewPath, expect.objectContaining({ cache: 'no-store' }))
 })
 
 it('removes an appointed administrator’s selected business role while retaining the administrator and other roles', async () => {
@@ -195,7 +202,6 @@ it('removes an appointed administrator’s selected business role while retainin
     }))
     .mockResolvedValueOnce(Response.json({ success: true }))
   vi.stubGlobal('fetch', send)
-  vi.mocked(confirmAction).mockResolvedValueOnce(true)
   const onRefresh = vi.fn()
   render(<RoleDetailPanel {...defaults} role={sales} users={[member]} systemSuperAdminAuthority={{ orgId }} onRefresh={onRefresh} onSave={vi.fn()} />)
 
@@ -236,7 +242,6 @@ it.each([false, true])('revokes only the selected department binding (appointed 
       shipping_permission_publication: { registered: [], published: [] },
     }))
   vi.stubGlobal('fetch', send)
-  vi.mocked(confirmAction).mockResolvedValueOnce(true)
   const onRefresh = vi.fn()
   render(<RoleDetailPanel {...defaults} role={sales} users={[member]} onRefresh={onRefresh} onSave={vi.fn()}
     systemSuperAdminAuthority={appointed ? { orgId } : undefined} />)
@@ -249,11 +254,67 @@ it.each([false, true])('revokes only the selected department binding (appointed 
   fireEvent.click(screen.getByRole('menuitem', { name: '撤销 华南' }))
 
   await waitFor(() => expect(onRefresh).toHaveBeenCalledOnce())
-  expect(confirmAction).toHaveBeenLastCalledWith(expect.stringContaining('「华南」'), { confirmText: '移除', danger: true })
+  expect(confirmAction).not.toHaveBeenCalled()
   expect(send.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1)
   expect(send).toHaveBeenLastCalledWith(`/api/admin/users/${member.id}/role-scopes`, expect.objectContaining({
     method: 'DELETE', body: JSON.stringify({ role_id: sales.id, scope_type: 'department', scope_id: 'south' }),
   }))
+})
+
+describe('department automatic role sources', () => {
+  const sales = { id: 'sales-role', code: 'SALES', name: '销售', description: null, permissions: [] }
+  const automaticMember = {
+    id: 'sales-member', display_name: '销售员工', email: '', title: '', primary_dept_name: '销售一组',
+    role_names: '', role_ids: [], status: 'active', login_enabled: true,
+    membership_status: 'active' as const, employment_status: 'active' as const,
+    automatic_role_sources: [{
+      roleId: sales.id, roleName: sales.name,
+      ruleDepartmentId: 'parent', ruleDepartmentName: '销售部',
+      affiliationDepartmentId: 'team', affiliationDepartmentName: '销售一组',
+    }],
+  }
+  const scopedRoles = [{
+    roleId: sales.id, roleCode: sales.code, roleName: sales.name, scopeType: 'department' as const,
+    scopeId: 'team', scopeName: '销售一组', grantedAt: null,
+  }]
+
+  it('only removes a matching manual grant and preserves the department-sourced member', async () => {
+    const onRefresh = vi.fn()
+    const send = vi.fn().mockResolvedValue(Response.json({ success: true }))
+    vi.stubGlobal('fetch', send)
+    const props = { ...defaults, role: sales, onSave: vi.fn(), onRefresh }
+    const { rerender } = render(<RoleDetailPanel {...props} users={[{ ...automaticMember, scoped_roles: scopedRoles }]} />)
+    const table = within(screen.getByRole('table'))
+    expect(screen.getByText('角色关联成员 (1)')).toBeInTheDocument()
+    expect(table.getByText('部门自动授予 · 销售部（归属 销售一组）')).toBeInTheDocument()
+    fireEvent.click(table.getByRole('button', { name: '从角色中移除 销售员工' }))
+
+    await waitFor(() => expect(onRefresh).toHaveBeenCalledOnce())
+    expect(confirmAction).not.toHaveBeenCalled()
+    expect(send).toHaveBeenCalledOnce()
+    expect(send).toHaveBeenCalledWith('/api/admin/users/sales-member/role-scopes', expect.objectContaining({
+      method: 'DELETE', body: JSON.stringify({ role_id: sales.id, scope_type: 'department', scope_id: 'team' }),
+    }))
+
+    rerender(<RoleDetailPanel {...props} users={[automaticMember]} />)
+    expect(screen.getByText('角色关联成员 (1)')).toBeInTheDocument()
+    expect(table.getByText('部门自动授予 · 销售部（归属 销售一组）')).toBeInTheDocument()
+    expect(table.queryByRole('button', { name: '从角色中移除 销售员工' })).not.toBeInTheDocument()
+  })
+
+  it('shows an unverified roster instead of a count of zero when automatic sources are unavailable', () => {
+    const stats = getRoleMembershipStats([], sales.id, {
+      organization: { id: 'org', name: '组织' }, departments: [],
+      role_membership_stats: {
+        effectiveAvailable: true, pendingAvailable: true, automaticSourcesAvailable: false, activeSpaceIds: [],
+      },
+    })
+    render(<RoleDetailPanel {...defaults} role={sales} membershipStats={stats} onSave={vi.fn()} />)
+
+    expect(screen.getByRole('tab', { name: '员工分配 (待核对)' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('部门自动授权暂时无法核对')
+    expect(screen.queryByText('暂无成员分配到此角色')).not.toBeInTheDocument()
+  })
 })
 
 describe('personal shipping review when adjusting a role member', () => {
@@ -264,23 +325,18 @@ describe('personal shipping review when adjusting a role member', () => {
     membership_status: 'active' as const, employment_status: 'active' as const,
   }
   const authority = { orgId: 'org-a' }
-  const endpoint = '/api/admin/users/eligible/permission-overrides?orgId=org-a'
   const roleEndpoint = '/api/admin/users/eligible/roles'
 
-  function permissionResponse() {
+  const reviewRevision = '11111111-1111-4111-8111-111111111111'
+  function reviewResponse() {
     return Response.json({
-      org_id: authority.orgId, user_id: member.id, departments: [],
-      shipping_permission_publication: { registered: ['shipping:ledger_view'], published: ['shipping:ledger_view'] },
-      permissions: [{
-        key: 'shipping:ledger_view', base: true, effective: false,
-        base_scope: { type: 'org' }, effective_scope: null,
-        override: { effect: 'DENY', scope: null }, sources: [], can_edit: true,
-      }],
-    })
+      code: 'ROLE_PERMISSION_REVIEW_REQUIRED', review_revision: reviewRevision,
+      affected_permissions: [{ permission_code: 'shipping:ledger_view', retainable: true }],
+    }, { status: 409 })
   }
 
-  it('checks personal shipping settings only after selecting the eligible employee', async () => {
-    const send = vi.fn().mockImplementation(async (url: string) => url === endpoint ? permissionResponse() : Response.json({}))
+  it('asks how to handle the affected personal settings in the existing add form', async () => {
+    const send = vi.fn().mockResolvedValueOnce(reviewResponse()).mockResolvedValueOnce(Response.json({}))
     vi.stubGlobal('fetch', send)
     const onRefresh = vi.fn()
     render(<RoleDetailPanel {...defaults} role={shippingRole} users={[member]} onSave={vi.fn()}
@@ -291,38 +347,38 @@ describe('personal shipping review when adjusting a role member', () => {
     expect(send).not.toHaveBeenCalled()
     const dialog = within(screen.getByRole('dialog'))
     fireEvent.click(dialog.getByRole('checkbox'))
-    expect(await dialog.findByRole('status')).toHaveTextContent('此员工有 1 项个人权限设置')
-    expect(send).toHaveBeenCalledExactlyOnceWith(endpoint, expect.objectContaining({ cache: 'no-store' }))
+    expect(send).not.toHaveBeenCalled()
 
     fireEvent.click(dialog.getByRole('button', { name: '添加成员到角色' }))
+    fireEvent.click(await dialog.findByRole('button', { name: '保留仍适用的个人覆盖' }))
     await waitFor(() => expect(onRefresh).toHaveBeenCalledOnce())
     expect(send).toHaveBeenLastCalledWith(roleEndpoint, expect.objectContaining({
-      method: 'POST', body: JSON.stringify({ role_ids: [shippingRole.id], expected_role_ids: [] }),
+      method: 'POST', body: JSON.stringify({
+        role_ids: [shippingRole.id], expected_role_ids: [],
+        personal_permissions: { review_revision: reviewRevision, choice: 'retain_eligible' },
+      }),
     }))
   })
 
-  it.each([
-    { fail: false, message: '此员工有 1 项个人权限设置' },
-    { fail: true, message: '暂时无法核对该员工的个人权限设置' },
-  ])('includes only verified information in the removal confirmation and allows the same role write', async ({ fail, message }) => {
+  it('asks about affected personal settings only before a removal that changes them', async () => {
     const assigned = { ...member, role_names: shippingRole.name, role_ids: [shippingRole.id, 'other'] }
-    const send = vi.fn().mockImplementation(async (url: string) => {
-      if (url === endpoint) return fail ? Response.json({ error: 'Unavailable' }, { status: 503 }) : permissionResponse()
-      return Response.json({})
-    })
+    const send = vi.fn().mockResolvedValueOnce(reviewResponse()).mockResolvedValueOnce(Response.json({}))
     vi.stubGlobal('fetch', send)
-    vi.mocked(confirmAction).mockResolvedValueOnce(true)
     const onRefresh = vi.fn()
     render(<RoleDetailPanel {...defaults} role={shippingRole} users={[assigned]} onSave={vi.fn()}
       onRefresh={onRefresh} systemSuperAdminAuthority={authority} />)
 
     expect(send).not.toHaveBeenCalled()
     fireEvent.click(within(screen.getByRole('table')).getByRole('button', { name: '从角色中移除 在职收寄员工' }))
+    fireEvent.click(await screen.findByRole('button', { name: '采用新权限' }))
     await waitFor(() => expect(onRefresh).toHaveBeenCalledOnce())
-    expect(confirmAction).toHaveBeenLastCalledWith(expect.stringContaining(message), { confirmText: '移除', danger: true })
-    expect(send.mock.calls.map(([url]) => url)).toEqual([endpoint, roleEndpoint])
+    expect(confirmAction).not.toHaveBeenCalled()
+    expect(send.mock.calls.map(([url]) => url)).toEqual([roleEndpoint, roleEndpoint])
     expect(send).toHaveBeenLastCalledWith(roleEndpoint, expect.objectContaining({
-      method: 'POST', body: JSON.stringify({ role_ids: ['other'], expected_role_ids: [shippingRole.id, 'other'] }),
+      method: 'POST', body: JSON.stringify({
+        role_ids: ['other'], expected_role_ids: [shippingRole.id, 'other'],
+        personal_permissions: { review_revision: reviewRevision, choice: 'new_baseline' },
+      }),
     }))
   })
 })

@@ -7,7 +7,7 @@ vi.mock('@/lib/org-role-permissions', async importOriginal => ({
   loadCurrentOrganizationRoleAssignments: vi.fn(),
 }))
 vi.mock('@/lib/supabase', () => ({
-  supabaseAdmin: { rpc: vi.fn() },
+  supabaseAdmin: { rpc: vi.fn(), from: vi.fn() },
 }))
 
 import { requireAuth } from '@/lib/auth'
@@ -31,6 +31,18 @@ function request(targetId = userId, body: unknown = { reason: 'membership ended'
   })
 }
 
+function mockEligibility(status = 'active', directoryManaged = false) {
+  const rows: Record<string, unknown[]> = {
+    user_organizations: [{ user_id: userId, status }],
+    organization_sources: directoryManaged ? [{ id: 'source' }] : [],
+    external_identities: [{ canonical_user_id: userId }],
+  }
+  vi.mocked(supabaseAdmin.from).mockImplementation(table => {
+    const query = Promise.resolve({ data: rows[table], error: null })
+    return Object.assign(query, { select: () => query, eq: () => query, in: () => query }) as unknown as ReturnType<typeof supabaseAdmin.from>
+  })
+}
+
 describe('/api/admin/users/[id]/membership', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -39,6 +51,7 @@ describe('/api/admin/users/[id]/membership', () => {
     ;(loadCurrentOrganizationRoleAssignments as any).mockResolvedValue({ orgId: orgId, settings: {}, assignments: [{ scopeType: 'org', scopeId: orgId, permissions: ['org:write'] }] })
 
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
+    mockEligibility()
   })
 
   it('removes exactly the active tenant membership through the audited command', async () => {
@@ -85,5 +98,16 @@ describe('/api/admin/users/[id]/membership', () => {
     const body = await response.json()
     expect(response.status).toBe(409)
     expect(body.code).toBe('LAST_ADMIN_PROTECTED')
+  })
+
+  it.each([
+    ['active', true, 'DIRECTORY_MEMBERSHIP_MANAGED'],
+    ['invited', false, 'INVITED_MEMBERSHIP_PROTECTED'],
+  ])('blocks active directory-managed members and pending local invitations in the direct route', async (status, directoryManaged, code) => {
+    mockEligibility(status, directoryManaged)
+    const response = await DELETE(request(), context)
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code })
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 })

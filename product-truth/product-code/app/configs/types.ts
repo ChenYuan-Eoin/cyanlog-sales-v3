@@ -570,6 +570,15 @@ export interface ScopedRoleAssignment {
   grantedAt: string | null
 }
 
+export interface DepartmentAutomaticRoleSource {
+  roleId: string
+  roleName: string
+  ruleDepartmentId: string
+  ruleDepartmentName: string
+  affiliationDepartmentId: string
+  affiliationDepartmentName: string
+}
+
 export interface OrgSummaryUser {
   directory_identity_id?: string
   directory_external_id?: string
@@ -592,6 +601,7 @@ export interface OrgSummaryUser {
   role_ids?: string[]
   role_codes?: string[]
   scoped_roles?: ScopedRoleAssignment[]
+  automatic_role_sources?: DepartmentAutomaticRoleSource[]
   status: string
   membership_status?: 'invited' | 'active' | 'suspended' | 'ended'
   employment_status?: 'active' | 'suspended' | 'ended'
@@ -652,6 +662,7 @@ export interface OrgSummaryPayload {
   role_membership_stats?: {
     effectiveAvailable: boolean
     pendingAvailable: boolean
+    automaticSourcesAvailable?: boolean
     activeSpaceIds: string[]
     activeMemberIds?: string[]
     systemSuperAdminAssignableMemberIds?: string[]

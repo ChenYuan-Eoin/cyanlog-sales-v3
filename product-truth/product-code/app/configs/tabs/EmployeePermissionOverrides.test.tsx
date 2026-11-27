@@ -9,6 +9,7 @@ const owner = 'shipping:owner_view'
 const scopeA = { type: 'department' as const, departments: [{ department_id: 'east', include_subdepartments: true }] }
 const scopeB = { type: 'department' as const, departments: [{ department_id: 'south', include_subdepartments: false }] }
 const endpoint = '/api/admin/users/employee/permission-overrides?orgId=org'
+const transferReviewEndpoint = '/api/admin/users/employee/department-transfer-review'
 const selectors = { effect: '查看收寄台账 个人设置', save: '保存查看收寄台账' }
 
 function payload(override: EmployeePermissionOverride, baseScope = scopeA) {
@@ -38,7 +39,10 @@ function payload(override: EmployeePermissionOverride, baseScope = scopeA) {
   }
 }
 
-function open() {
+function open(reviewFetch: typeof fetch = async () => new Response(null, { status: 404 })) {
+  const permissionsFetch = globalThis.fetch
+  vi.stubGlobal('fetch', (url: RequestInfo | URL, init?: RequestInit) => String(url).startsWith(transferReviewEndpoint)
+    ? reviewFetch(url, init) : permissionsFetch(url, init))
   render(<EmployeePermissionOverrides orgId="org" userId="employee" userName="张三" onClose={() => undefined} />)
 }
 
@@ -179,4 +183,54 @@ it('disables further writes on a stale permission and requires a fresh read', as
   fireEvent.click(screen.getByRole('button', { name: '重新读取员工权限' }))
   expect(await screen.findByRole('combobox', { name: selectors.effect })).toHaveValue('DENY')
   expect(screen.getByRole('button', { name: selectors.save })).toBeDisabled()
+})
+
+it('shows transfer reviews with the current editor, then acknowledges an item without restoring any prior entitlement', async () => {
+  const permissionsFetch = vi.fn().mockResolvedValueOnce(Response.json(payload({ effect: 'DENY', scope: null })))
+  const reviewFetch = vi.fn().mockResolvedValueOnce(Response.json({
+    items: [{
+      review_id: 'review-permission', kind: 'personal_override', permission_code: ledger, effect: 'ALLOW',
+      scope: scopeA, effective_at: '2026-11-27T06:30:00Z',
+    }, {
+      review_id: 'review-role', kind: 'retained_role', role_name: '销售管理', scope_type: 'org',
+      effective_at: '2026-11-27T06:30:00Z',
+    }],
+    has_more: false,
+  })).mockResolvedValueOnce(Response.json({ success: true, review_id: 'review-permission' }))
+  vi.stubGlobal('fetch', permissionsFetch)
+  open(reviewFetch)
+
+  expect(reviewFetch).not.toHaveBeenCalled()
+  const reviews = await screen.findByRole('region', { name: '调部门待复核' })
+  expect(reviewFetch).toHaveBeenCalledWith(transferReviewEndpoint + '?expected_org_id=org', expect.objectContaining({ cache: 'no-store' }))
+  expect(within(reviews).getByText('销售管理')).toBeInTheDocument()
+  expect(within(reviews).getByText(/^调岗时保留/)).toBeInTheDocument()
+  expect(within(reviews).getByText(/^调岗时暂停授权 · 当前关闭/)).toBeInTheDocument()
+  fireEvent.click(within(reviews).getByRole('link', { name: '打开当前权限表' }))
+  expect(screen.getByRole('region', { name: '当前权限表' })).toHaveFocus()
+  const markReviewed = () => fireEvent.click(within(reviews).getByRole('button', { name: '查看收寄台账 标为已复核' }))
+  markReviewed()
+  const confirmation = () => within(reviews).getByRole('group', { name: '确认复核 查看收寄台账' })
+  expect(reviewFetch).toHaveBeenCalledTimes(1)
+  fireEvent.click(within(confirmation()).getByRole('button', { name: '取消' }))
+  expect(reviewFetch).toHaveBeenCalledTimes(1)
+
+  markReviewed()
+  fireEvent.click(within(confirmation()).getByRole('button', { name: '确认已复核' }))
+  expect(await screen.findByText('已记录复核结果。')).toBeInTheDocument()
+  expect(within(reviews).queryByText('查看收寄台账')).not.toBeInTheDocument()
+  expect(within(reviews).getByText('销售管理')).toBeInTheDocument()
+  expect(screen.getByRole('combobox', { name: selectors.effect })).toHaveValue('DENY')
+  expect(permissionsFetch).toHaveBeenCalledTimes(1)
+  expect(reviewFetch).toHaveBeenLastCalledWith(transferReviewEndpoint, expect.objectContaining({
+    method: 'POST', body: JSON.stringify({ expected_org_id: 'org', review_id: 'review-permission' }),
+  }))
+})
+
+it('keeps the current permission editor available when the review list cannot be read', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(Response.json(payload(null))))
+  open(vi.fn().mockResolvedValueOnce(new Response(null, { status: 500 })))
+  expect(await screen.findByText('暂时无法读取调部门复核事项。')).toHaveAttribute('role', 'status')
+  expect(screen.queryByRole('region', { name: '调部门待复核' })).not.toBeInTheDocument()
+  expect(screen.getByRole('combobox', { name: selectors.effect })).not.toBeDisabled()
 })

@@ -37,6 +37,10 @@ function source() {
       queriedTables.push(table)
       return (rows[table] ?? []) as T[]
     },
+    async readRpcRows<T>(rpc: string, args: Record<string, string>): Promise<T[]> {
+      expect(args).toEqual({ p_org_id: orgId, p_user_id: userId })
+      return (rows[rpc] ?? []) as T[]
+    },
   }
 }
 
@@ -67,6 +71,27 @@ describe('explicit department shipping grants', () => {
     expect(await loadDepartmentLedgerScope(rest, orgId, userId, {
       role_permission_overrides: { [code]: ['shipping:*', '*'] },
     })).toEqual([])
+  })
+
+  it('anchors automatic ledger access to the affiliation, keeping identical manual assignments independent', async () => {
+    const rest = source()
+    const automatic = {
+      rule_department_id: 'east',
+      affiliation_department_id: 'east-child',
+      role_code: 'AUTOMATIC_LEDGER',
+      permissions: ['shipping:ledger_view'],
+    }
+    rest.rows.user_roles = [roleAt('east-child', automatic.role_code, ['shipping:ledger_view'])]
+    rest.rows.department_automatic_role_sources_v1 = [
+      automatic,
+      { ...automatic, affiliation_department_id: 'west', permissions: ['shipping:record_return'] },
+      { ...automatic, affiliation_department_id: 'north', role_code: 'SUPER_ADMIN' },
+    ]
+    expect(selectLedgerDepartments(await loadDepartmentLedgerScope(rest, orgId, userId, {}))).toEqual(['east-child'])
+    rest.rows.department_automatic_role_sources_v1 = []
+    expect(selectLedgerDepartments(await loadDepartmentLedgerScope(rest, orgId, userId, {}))).toEqual(['east-child'])
+    rest.rows.user_roles = []
+    expect(await loadDepartmentLedgerScope(rest, orgId, userId, {})).toEqual([])
   })
 
   it('keeps retired, system, foreign, inactive and legacy scope bindings out of the shipping ledger', async () => {

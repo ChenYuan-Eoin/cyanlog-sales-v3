@@ -42,6 +42,7 @@ function makeRequest(body: unknown, url = 'https://example.test/api/admin/users/
 describe('/api/admin/users/[id]/departments validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(supabaseAdmin.from).mockReset()
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
     ;(requireAuth as any).mockResolvedValue({ id: 'admin-user' })
 
@@ -224,6 +225,83 @@ describe('/api/admin/users/[id]/departments validation', () => {
     ), routeContext)
     expect(response.status).toBe(403)
     expect(await response.json()).toMatchObject({ code: 'DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN' })
+  })
+
+  it.each([['add', POST], ['remove', DELETE]] as const)('旧请求遇到真实变更必须先预览 %s', async (action, handler) => {
+    const department = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(makeQuery({
+      data: { id: '00000000-0000-0000-0000-000000000001', primary_dept_id: null, org_id: 'org-1' },
+    })).mockReturnValueOnce(makeQuery({ data: [{ id: department }] }))
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null, error: { code: '40001', details: 'SECONDARY_DEPARTMENT_PREVIEW_REQUIRED' },
+    } as any)
+    const response = await handler(makeRequest(action === 'add' ? { department_ids: [department] } : { department_id: department }), routeContext)
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'SECONDARY_DEPARTMENT_PREVIEW_REQUIRED' })
+  })
+
+  it.each(['add', 'remove'])('saves one exact secondary change as the system administrator: %s', async operation => {
+    const org = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    const department = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const requestId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({
+      orgId: org, settings: {}, assignments: [{ scopeType: 'org', scopeId: org, roleCode: 'SUPER_ADMIN', permissions: ['*'] }],
+    } as any)
+    const applied = {
+      status: 'applied', action: operation, affected_department_ids: [department], impact: {}, effective_at: '2026-11-27T15:00:00Z',
+    }
+    ;(supabaseAdmin.rpc as any).mockResolvedValueOnce({ data: applied, error: null })
+    const response = await POST(makeRequest({
+      action: 'save', expected_org_id: org, department_id: department, operation, request_id: requestId,
+    }), routeContext)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(applied)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith('save_member_secondary_department_change_v1', {
+      p_org_id: org, p_actor_id: 'admin-user', p_user_id: '00000000-0000-0000-0000-000000000001',
+      p_department_ids: [department], p_action: operation,
+      p_override_choice: null, p_choice_id: null, p_request_id: requestId,
+    })
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it('exposes the scoped personal override choice and preserves a stale conflict', async () => {
+    const org = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    const department = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const choiceId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({
+      orgId: org, settings: {}, assignments: [{ scopeType: 'org', scopeId: org, roleCode: 'SUPER_ADMIN', permissions: ['*'] }],
+    } as any)
+    const input = { action: 'save', expected_org_id: org, department_id: department, operation: 'remove' }
+    const choice = {
+      status: 'override_choice_required', choice_id: choiceId,
+      impact: { affected_count: 1, retainable_count: 0, blocked_count: 1 },
+    }
+    ;(supabaseAdmin.rpc as any).mockResolvedValueOnce({ data: choice, error: null })
+      .mockResolvedValueOnce({ data: null, error: { code: '40001', details: 'SECONDARY_DEPARTMENT_STALE' } })
+    expect(await (await POST(makeRequest(input), routeContext)).json()).toEqual(choice)
+    expect((await POST(makeRequest({ ...input, choice_id: choiceId, override_choice: 'new_baseline' }), routeContext)).status).toBe(409)
+    expect(supabaseAdmin.rpc).toHaveBeenLastCalledWith('save_member_secondary_department_change_v1', {
+      p_org_id: org, p_actor_id: 'admin-user', p_user_id: '00000000-0000-0000-0000-000000000001',
+      p_department_ids: [department], p_action: 'remove',
+      p_override_choice: 'new_baseline', p_choice_id: choiceId, p_request_id: null,
+    })
+  })
+
+  it('rejects stale organizations, unauthorized actors, mismatched choices and obsolete confirmation', async () => {
+    const org = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    const department = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const choiceId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+    const save = { action: 'save', expected_org_id: org, department_id: department, operation: 'remove' }
+    vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({
+      orgId: org, settings: {}, assignments: [{ scopeType: 'org', scopeId: org, permissions: ['org:write'] }],
+    } as any)
+    expect((await POST(makeRequest(save), routeContext)).status).toBe(403)
+    expect((await POST(makeRequest({ ...save, expected_org_id: department }), routeContext)).status).toBe(409)
+    expect((await POST(makeRequest({ ...save, choice_id: choiceId }), routeContext)).status).toBe(400)
+    const legacy = await POST(makeRequest({ action: 'confirm', expected_org_id: org, preview_id: choiceId }), routeContext)
+    expect(legacy.status).toBe(409)
+    expect(await legacy.json()).toMatchObject({ code: 'SECONDARY_DEPARTMENT_CLIENT_UPDATED' })
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 })
 

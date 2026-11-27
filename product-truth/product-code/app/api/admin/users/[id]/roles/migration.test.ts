@@ -22,6 +22,8 @@ const invitationAcceptance = readFileSync(
   join(process.cwd(), 'supabase/migrations/20261029100000_remove_local_password_auth.sql'), 'utf8',
 ).match(/create or replace function public\.accept_personnel_invitation_v1\([\s\S]*?\n\$\$;/)?.[0]
 
+const moduleMigration = (file: string) => readFileSync(join(process.cwd(), 'supabase/migrations', file), 'utf8')
+
 const org = '11111111-1111-4111-8111-111111111111'
 const otherOrg = '22222222-2222-4222-8222-222222222222'
 const root = '33333333-3333-4333-8333-333333333333'
@@ -108,6 +110,198 @@ afterEach(async () => db.close())
 const replaceSql = 'select public.admin_replace_org_roles_v1($1,$2,$3,$4) as result'
 const compareAndReplaceSql = 'select public.admin_replace_org_roles_if_current_v1($1,$2,$3,$4,$5) as result'
 const scopeSql = 'select public.admin_set_role_scope_assignment_v1($1,$2,$3,$4,$5,$6,$7) as result'
+
+async function setupRoleOverrideChoice() {
+  const shippingScope = moduleMigration('20261126114126_allow_shipping_operator_department_ledger_roles.sql')
+  const employeeOverrides = moduleMigration('20261126111603_fxiaoke_prelogin_employee_permission_overrides.sql')
+  await db.exec(`
+    create table private.employee_permission_overrides (
+      org_id uuid, user_id uuid, permission_code text, effect text, scope jsonb,
+      updated_at timestamptz default now(), updated_by uuid, pending_target_revision text
+    );
+    create table private.department_transfer_review_items (
+      org_id uuid, user_id uuid, actor_id uuid, effective_at timestamptz, kind text, previous_grant jsonb
+    );
+    create table private.org_role_metadata (org_id uuid, role_id uuid, name text, archived_at timestamptz);
+    create table public.user_departments (org_id uuid, user_id uuid, department_id uuid);
+    create table public.permission_points (
+      code text, status text, kind text, resource text, category text, action text,
+      supported_scope_types text[], dependencies text[], enforcement_consumer text
+    );
+    alter table public.roles add column owner_org_id uuid;
+    alter table public.departments add column parent_id uuid, add column name text default 'Test department';
+    insert into public.permission_points values
+      ('shipping:ledger_view','published','atomic','shipping','shipping','ledger_view',
+        array['org','department'],array[]::text[],'lib/shipping/http.ts'),
+      ('shipping:record_return','published','atomic','shipping','shipping','record_return',
+        array['org','department'],array['shipping:ledger_view'],'lib/shipping/http.ts');
+    create function private.org_role_catalog_v1(uuid,boolean)
+      returns table(id uuid,code text,permissions jsonb) language sql stable as $$
+        select definition.id, definition.code, definition.permissions
+        from public.roles as definition join public.organizations as org on org.id = $1
+        where org.status = 'active';
+      $$;
+    create function public.admin_list_org_roles_v1(uuid)
+      returns table(id uuid, code text, name text) language sql stable as $$
+        select role.id, role.code, role.name from public.roles as role;
+      $$;
+    create function public.department_automatic_role_sources_v1(uuid,uuid)
+      returns table(rule_department_id uuid, affiliation_department_id uuid, role_id uuid,
+        role_code text, role_name text, permissions text[])
+      language sql stable as $$
+        select null::uuid, null::uuid, null::uuid, null::text, null::text, null::text[] where false;
+      $$;
+    ${shippingScope.match(/create function private\.shipping_role_scope_catalog_v1\([\s\S]*?\n\$\$;/)?.[0]}
+    ${shippingScope.match(/create function private\.shipping_role_effective_scope_permissions_v1\([\s\S]*?\n\$\$;/)?.[0]}
+    ${employeeOverrides.match(/create function private\.employee_prelogin_target_revision_v1\([\s\S]*?\n\$\$;/)?.[0]}
+    ${employeeOverrides.match(/create function private\.employee_prelogin_target_v1\([\s\S]*?\n\$\$;/)?.[0]}
+    ${employeeOverrides.match(/create function private\.employee_prelogin_role_ids_v1\([\s\S]*?\n\$\$;/)?.[0]}
+    ${employeeOverrides.match(/create or replace function public\.employee_permission_overrides_v1\([\s\S]*?\n\$\$;/)?.[0]}
+    ${moduleMigration('20261127150000_confirmed_department_transfer.sql').match(/create function private\.assert_member_department_transfer_actor_v1\([\s\S]*?\n\$\$;/)?.[0]}
+    ${moduleMigration('20261127161000_department_membership_override_choice.sql').match(/create function private\.apply_employee_department_override_choice_v1\([\s\S]*?\n\$\$;/)?.[0]}
+    ${moduleMigration('20261126120100_allow_revoke_stopped_fxiaoke_pending_roles.sql').match(/create function private\.fxiaoke_prelogin_directory_members_v1\([\s\S]*?\n\$\$;/)?.[0]}
+  `)
+  await db.exec(moduleMigration('20261126092416_admin_save_member_org_roles.sql'))
+  await db.exec(moduleMigration('20261126103435_admin_add_member_org_roles.sql'))
+  const stoppedPendingMigration = moduleMigration('20261126120100_allow_revoke_stopped_fxiaoke_pending_roles.sql')
+  const publicStoppedPendingFunctions = [
+    'fxiaoke_prelogin_role_targets_v1', 'admin_replace_org_roles_if_current_v1',
+  ].flatMap(name => stoppedPendingMigration.match(new RegExp(
+    `create or replace function public\\.${name}\\([\\s\\S]*?\\n\\$\\$;`,
+  )) ?? [])
+  expect(publicStoppedPendingFunctions).toHaveLength(2)
+  for (const routine of publicStoppedPendingFunctions) await db.exec(routine)
+  await db.exec(moduleMigration('20261127154500_department_automatic_role_runtime.sql'))
+  await db.exec(moduleMigration('20261127161500_member_role_override_choice.sql'))
+
+  const applyChange = (userId: string, change: object, review: string | null = null, choice: string | null = null) =>
+    db.query<{ result: { result?: string; review_revision?: string; affected_permissions?: unknown } }>(
+      'select public.admin_apply_member_role_change_v1($1,$2,$3,$4,$5,$6) as result',
+      [root, org, userId, JSON.stringify(change), review, choice],
+    ).then(query => query.rows[0].result)
+  return { applyChange }
+}
+
+it('changes ordinary roles directly and reconciles only affected personal settings in the checked transaction', async () => {
+  const { applyChange } = await setupRoleOverrideChoice()
+  const roleChange = (roleIds: string[], previous: string[], review: string | null = null, choice: string | null = null) =>
+    applyChange(member, { kind: 'replace_org_if_current', role_ids: roleIds, expected_role_ids: previous }, review, choice)
+  const overrides = () => db.query<{ permission_code: string; effect: string }>(`
+    select permission_code, effect from private.employee_permission_overrides where user_id = $1 order by permission_code
+  `, [member]).then(query => query.rows)
+
+  await db.query("update public.roles set permissions = '[\"user:view\"]' where id = $1", [ordinaryRole])
+  await db.query(`insert into private.employee_permission_overrides(org_id,user_id,permission_code,effect,scope)
+    values ($1,$2,'shipping:owner_view','ALLOW','{"type":"self"}')`, [org, member])
+  expect(await roleChange([ordinaryRole], [])).toEqual({ result: 'saved' })
+
+  await db.query(`insert into private.employee_permission_overrides(org_id,user_id,permission_code,effect,scope)
+    values ($1,$2,'user:view','ALLOW','{"type":"org"}')`, [org, member])
+  const first = await roleChange([], [ordinaryRole])
+  expect(first).toMatchObject({
+    review_revision: expect.any(String),
+    affected_permissions: [{ permission_code: 'user:view', retainable: false }],
+  })
+  expect((await db.query('select role_id from public.user_roles where user_id = $1', [member])).rows).toEqual([{ role_id: ordinaryRole }])
+  expect(await overrides()).toEqual([
+    { permission_code: 'shipping:owner_view', effect: 'ALLOW' }, { permission_code: 'user:view', effect: 'ALLOW' },
+  ])
+  await db.query("update private.employee_permission_overrides set updated_at = clock_timestamp() where permission_code = 'user:view'")
+  await expect(roleChange([], [ordinaryRole], first.review_revision, 'retain_eligible')).rejects.toMatchObject({
+    detail: 'ROLE_OVERRIDE_REVIEW_CHANGED',
+  })
+  const current = await roleChange([], [ordinaryRole])
+  expect(await roleChange([], [ordinaryRole], current.review_revision, 'retain_eligible')).toEqual({ result: 'saved' })
+  expect(await overrides()).toEqual([
+    { permission_code: 'shipping:owner_view', effect: 'ALLOW' }, { permission_code: 'user:view', effect: 'DENY' },
+  ])
+  const restored = await roleChange([ordinaryRole], [])
+  expect(restored.affected_permissions).toEqual([{ permission_code: 'user:view', retainable: true }])
+  expect(await roleChange([ordinaryRole], [], restored.review_revision, 'new_baseline')).toEqual({ result: 'saved' })
+  expect(await overrides()).toEqual([{ permission_code: 'shipping:owner_view', effect: 'ALLOW' }])
+
+  await db.query("insert into public.users (id,org_id,status,login_enabled) values ($1,$2,'inactive',false)", [pending, org])
+  await db.query("insert into public.user_organizations (user_id,org_id,status) values ($1,$2,'invited')", [pending, org])
+  await db.query(`
+    insert into public.organization_sources (id,system_org_id,provider,status,connection_state,effective_revision,authority_scope)
+    values ($1,$2,'fxiaoke','active','verified',$1,'{"identity":"authoritative","directory":"authoritative"}')
+  `, [source, org])
+  await db.query(`
+    insert into public.external_identities (id,system_org_id,source_id,canonical_user_id,external_user_id,match_status,profile_snapshot)
+    values ($1,$2,$3,$4,'verified-id','matched',jsonb_build_object('provisionedMemberId',$4::uuid::text,'status','active'))
+  `, [identity, org, source, pending])
+  await db.query(`insert into private.employee_permission_overrides(org_id,user_id,permission_code,effect,pending_target_revision)
+    values ($1,$2,'user:view','DENY',private.employee_prelogin_target_revision_v1($1,$2,$3,$4,'verified-id'))`, [org, pending, source, identity])
+  const additive = { kind: 'add_org', role_ids: [ordinaryRole] }
+  const pendingReview = await applyChange(pending, additive)
+  expect(pendingReview.affected_permissions).toEqual([{ permission_code: 'user:view', retainable: true }])
+  expect((await db.query('select role_id from public.fxiaoke_pending_org_roles where user_id = $1', [pending])).rows).toEqual([])
+  expect(await applyChange(pending, additive, pendingReview.review_revision, 'retain_eligible')).toEqual({ result: 'pending' })
+  expect((await db.query('select role_id from public.fxiaoke_pending_org_roles where user_id = $1', [pending])).rows)
+    .toEqual([{ role_id: ordinaryRole }])
+  expect((await db.query('select role_id from public.user_roles where user_id = $1', [pending])).rows).toEqual([])
+  await db.query(`select private.personnel_insert_event_v1($1,$2,$3,'set_account_state',
+    '{}'::jsonb,'{"login_enabled":false}',null,null)`, [org, pending, root])
+  const stoppedRemoval = { kind: 'replace_org_if_current', role_ids: [], expected_role_ids: [ordinaryRole] }
+  const stoppedReview = await applyChange(pending, stoppedRemoval)
+  expect(stoppedReview.affected_permissions).toEqual([{ permission_code: 'user:view', retainable: true }])
+  expect(await applyChange(pending, stoppedRemoval, stoppedReview.review_revision, 'retain_eligible')).toEqual({ result: 'saved' })
+  expect((await db.query('select role_id from public.fxiaoke_pending_org_roles where user_id = $1', [pending])).rows).toEqual([])
+
+  expect(await roleChange([], [ordinaryRole])).toEqual({ result: 'saved' })
+  const remainingScope = 'abababab-abab-4bab-8bab-abababababab'
+  await db.query('insert into public.departments (id,org_id) values ($1,$2)', [remainingScope, org])
+  await db.query("update public.roles set permissions = '[\"shipping:ledger_view\"]' where id = $1", [ordinaryRole])
+  await db.query(`insert into public.user_roles(user_id,org_id,role_id,scope_type,scope_id)
+    values ($1,$2,$3,'department',$4),($1,$2,$3,'department',$5)`, [member, org, ordinaryRole, department, remainingScope])
+  await db.query(`insert into private.employee_permission_overrides(org_id,user_id,permission_code,effect,scope)
+    values ($1,$2,'shipping:ledger_view','ALLOW',jsonb_build_object('type','department','departments',
+      jsonb_build_array(jsonb_build_object('department_id',$3::uuid,'include_subdepartments',false))))`, [org, member, remainingScope])
+  const revoke = { kind: 'scope', role_id: ordinaryRole, scope_type: 'department', action: 'revoke' }
+  expect(await applyChange(member, { ...revoke, scope_id: department })).toEqual({ result: true })
+  const scoped = await applyChange(member, { ...revoke, scope_id: remainingScope })
+  expect(scoped.affected_permissions).toEqual([{ permission_code: 'shipping:ledger_view', retainable: false }])
+  expect(await applyChange(member, { ...revoke, scope_id: remainingScope }, scoped.review_revision, 'new_baseline')).toEqual({ result: true })
+  expect(await overrides()).toEqual([{ permission_code: 'shipping:owner_view', effect: 'ALLOW' }])
+}, 20_000)
+
+it.each(['organization-wide role', 'paused department role'] as const)(
+  'prevents a personal allowance from restoring access after removal of a %s',
+  async (binding) => {
+    const { applyChange } = await setupRoleOverrideChoice()
+    const paused = 'abababab-abab-4bab-8bab-abababababab'
+    await db.query("insert into public.departments (id,org_id,status) values ($1,$2,'inactive')", [paused, org])
+    await db.query("update public.roles set permissions = '[\"shipping:ledger_view\"]' where id = $1", [ordinaryRole])
+    const removedScope = binding === 'organization-wide role' ? org : paused
+    const scopeType = binding === 'organization-wide role' ? 'org' : 'department'
+    await db.query(`insert into public.user_roles(user_id,org_id,role_id,scope_type,scope_id)
+      values ($1,$2,$3,'department',$4),($1,$2,$3,$5,$6)`, [member, org, ordinaryRole, department, scopeType, removedScope])
+    await db.query(`insert into private.employee_permission_overrides(org_id,user_id,permission_code,effect,scope)
+      values ($1,$2,'shipping:ledger_view','ALLOW',jsonb_build_object('type','department','departments',
+        jsonb_build_array(jsonb_build_object('department_id',$3::uuid,'include_subdepartments',false),
+          jsonb_build_object('department_id',$4::uuid,'include_subdepartments',false))))`, [org, member, department, paused])
+
+    const ledgerScope = () => db.query(`select organization_wide, department_ids
+      from private.shipping_employee_permission_scope_projection_v1($1,$2,null) where permission_code = 'shipping:ledger_view'`,
+    [org, member]).then(result => result.rows)
+    const change = scopeType === 'org'
+      ? { kind: 'replace_org_if_current', role_ids: [], expected_role_ids: [ordinaryRole] }
+      : { kind: 'scope', role_id: ordinaryRole, scope_type: 'department', scope_id: paused, action: 'revoke' }
+    expect(await ledgerScope()).toEqual([{ organization_wide: false, department_ids: [department] }])
+    const review = await applyChange(member, change)
+    expect(review).toMatchObject({
+      review_revision: expect.any(String),
+      affected_permissions: [{ permission_code: 'shipping:ledger_view', retainable: false }],
+    })
+    expect((await db.query('select scope_id from public.user_roles where user_id = $1 order by scope_id', [member])).rows)
+      .toEqual(expect.arrayContaining([{ scope_id: removedScope }]))
+    expect(await applyChange(member, change, review.review_revision, 'new_baseline'))
+      .toEqual({ result: scopeType === 'org' ? 'saved' : true })
+    await db.query("update public.departments set status = 'active' where id = $1", [paused])
+    expect(await ledgerScope()).toEqual([{ organization_wide: false, department_ids: [department] }])
+  },
+  20_000,
+)
 
 async function replace(user = root, desired = [ordinaryRole], target = member, expected?: string[]) {
   const result = expected === undefined
@@ -322,3 +516,45 @@ it('retains a verified archived reservation without changing provenance and neve
     .toEqual([{ role_id: baselineRole, granted_by: actor }])
   expect((await reservation()).rows).toEqual([])
 })
+
+it('saves regular batch recipients once and keeps affected recipients pending an exact personal choice', async () => {
+  await setupRoleOverrideChoice()
+  await db.exec(moduleMigration('20261127162000_member_batch_role_override_choice.sql'))
+  await db.query("update public.roles set permissions = '[\"user:view\"]' where id = $1", [ordinaryRole])
+  await db.query(`insert into private.employee_permission_overrides(org_id,user_id,permission_code,effect,scope)
+    values ($1,$2,'user:view','ALLOW','{"type":"org"}')`, [org, member])
+  const batch = (users: string[], decisions: object[] = [], by = root) => db.query<{
+    user_id: string; outcome: string; review_revision: string | null; affected_permissions: unknown
+  }>('select * from public.admin_assign_org_member_roles_batch_v1($1,$2,$3,$4,$5,$6)',
+    [by, org, users, [ordinaryRole], JSON.stringify(decisions), 'batch-test']).then(result => result.rows)
+  const assigned = () => db.query(`select user_id from public.user_roles where role_id = $1 order by user_id`,
+    [ordinaryRole]).then(result => result.rows)
+  const baselineChoice = (review_revision: string | null) => ({ user_id: member, review_revision, choice: 'new_baseline' })
+
+  await expect(batch([member], [], actor)).rejects.toMatchObject(denied)
+  const [normal, held, self] = await batch([actor, member, root])
+  expect(normal).toMatchObject({ user_id: actor, outcome: 'saved', review_revision: null })
+  expect(self).toMatchObject({ user_id: root, outcome: 'SELF_MUTATION_FORBIDDEN' })
+  expect(held).toMatchObject({
+    user_id: member, outcome: 'ROLE_PERMISSION_REVIEW_REQUIRED', review_revision: expect.any(String),
+    affected_permissions: [{ permission_code: 'user:view', retainable: true }],
+  })
+  expect(await assigned()).toEqual([{ user_id: actor }])
+  await expect(batch([actor], [baselineChoice(held.review_revision)])).rejects.toMatchObject({ code: '22023' })
+
+  await db.query('update private.employee_permission_overrides set updated_at = clock_timestamp() where user_id = $1', [member])
+  expect(await batch([member], [baselineChoice(held.review_revision)])).toMatchObject([
+    { user_id: member, outcome: 'ROLE_OVERRIDE_REVIEW_CHANGED', review_revision: null },
+  ])
+  expect(await assigned()).toEqual([{ user_id: actor }])
+  const [fresh] = await batch([member])
+  expect(await batch([member], [baselineChoice(fresh.review_revision)])).toMatchObject([
+    { user_id: member, outcome: 'saved', review_revision: null },
+  ])
+  expect(await assigned()).toEqual([{ user_id: actor }, { user_id: member }])
+  expect((await db.query('select permission_code from private.employee_permission_overrides where user_id = $1', [member])).rows)
+    .toEqual([])
+  expect((await db.query(`select has_function_privilege('authenticated',
+    'public.admin_assign_org_member_roles_batch_v1(uuid,uuid,uuid[],uuid[],jsonb,text)', 'execute') as executable`)).rows)
+    .toEqual([{ executable: false }])
+}, 20_000)

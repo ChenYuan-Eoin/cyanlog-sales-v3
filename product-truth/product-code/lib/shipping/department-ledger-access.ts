@@ -1,5 +1,6 @@
 import type { MiddlewareRestClient } from '@/lib/middleware-rest-client'
 import { isRetiredRoleCode, resolveRolePermissions } from '@/lib/role-permission-resolution'
+import { loadDepartmentAutomaticRoleSources } from '@/lib/admin/department-automatic-role-read'
 
 export const DEPARTMENT_LEDGER_VIEW = 'shipping:ledger_view'
 const LEDGER_ITEM_PATH = /^\/api\/shipping\/ledger\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
@@ -75,13 +76,14 @@ export async function loadDepartmentLedgerScope(
   if (organizationWide) return activeTree(rest, orgId)
   const grants = explicitRoots(settings)
   const subject = { org_id: orgId, user_id: userId }
-  const [roles, memberships, leads] = await Promise.all([
+  const [roles, memberships, leads, automaticRoles] = await Promise.all([
     rest.selectRows<RoleRow>('user_roles', { ...subject, scope_type: 'department' },
       'org_id,user_id,scope_type,scope_id,roles:roles(id,code,permissions,owner_org_id)', MAX_SCOPE_ROWS),
     grants.size ? rest.selectRows<SubjectRow>('user_departments', subject, 'org_id,user_id,department_id', MAX_SCOPE_ROWS) : [],
     grants.size ? rest.selectRows<LeadRow>('department_lead_access', {
       ...subject, 'department.org_id': orgId, 'department.status': 'active', 'department.leader_id': userId,
     }, 'org_id,user_id,department_id,department:departments!department_lead_access_department_id_fkey!inner(id,org_id,status,leader_id)', MAX_SCOPE_ROWS) : [],
+    loadDepartmentAutomaticRoleSources(rest, orgId, userId),
   ])
   if ([roles, memberships, leads].some(rows => rows.length >= MAX_SCOPE_ROWS)) {
     throw new Error('Shipping department scope exceeds the verified query limit')
@@ -92,6 +94,11 @@ export async function loadDepartmentLedgerScope(
   )].flatMap(row => row.org_id === orgId && row.user_id === userId ? [grants.get(row.department_id)] : [])
     .filter((root): root is ScopeRoot => root !== undefined)
 
+  for (const assignment of automaticRoles) {
+    if (assignment.permissions.includes(DEPARTMENT_LEDGER_VIEW)) {
+      roots.push({ id: assignment.departmentId, descendants: true })
+    }
+  }
   for (const row of roles) {
     const role = row.roles
     if (row.org_id !== orgId || row.user_id !== userId || row.scope_type !== 'department' || !role?.id

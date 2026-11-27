@@ -80,12 +80,12 @@ function makeRoleListQuery(result: { data: unknown; error: unknown }) {
 
 describe('POST /api/admin/users/[id]/roles validation', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
     ;(requireAuth as any).mockResolvedValue({ id: 'admin-user' })
     vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(activeAuthority)
     ;(userHasOrgRoleCode as any).mockResolvedValue(false)
     ;(validateOrgRoleAssignment as any).mockResolvedValue({ ok: true, roleIds: [roleId] })
-    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: { result: true }, error: null })
   })
 
   it('无效 JSON 返回参数错误且不访问数据库', async () => {
@@ -166,7 +166,7 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
   it('saves the selected business roles and revokes the system role in one command', async () => {
     setMemberAuthority()
     vi.mocked(userHasOrgRoleCode).mockResolvedValue(true)
-    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: 'saved', error: null } as any)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: { result: 'saved' }, error: null } as any)
     ;(supabaseAdmin.from as any)
       .mockReturnValueOnce(makeRoleListQuery({ data: [], error: null }))
       .mockReturnValueOnce(makeRoleListQuery({ data: [{
@@ -177,10 +177,12 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
 
     expect(res.status).toBe(200)
     expect(supabaseAdmin.rpc).toHaveBeenCalledTimes(1)
-    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_save_member_org_roles_v1', {
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_apply_member_role_change_v1', {
       p_actor_id: 'admin-user', p_org_id: memberOrg, p_user_id: (await routeContext.params).id,
-      p_role_ids: [roleId], p_expected_role_ids: [roleId],
-      p_system_admin: false, p_expected_system_admin: true, p_request_id: null,
+      p_change: {
+        kind: 'member_org', role_ids: [roleId], expected_role_ids: [roleId], system_admin: false, expected_system_admin: true,
+      },
+      p_review_id: null, p_choice: null, p_request_id: null,
     })
     expect(userHasOrgRoleCode).not.toHaveBeenCalled()
   })
@@ -202,7 +204,7 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
   })
 
   it.each([
-    [{ data: 'conflict', error: null }, 'ROLE_ASSIGNMENT_CHANGED'],
+    [{ data: { result: 'conflict' }, error: null }, 'ROLE_ASSIGNMENT_CHANGED'],
     [{ data: null, error: { code: '23514', details: 'LAST_SYSTEM_SUPER_ADMIN_PROTECTED' } }, 'LAST_SYSTEM_SUPER_ADMIN_PROTECTED'],
   ])('reports an unapplied member role edit with its specific reason', async (rpcResponse, code) => {
     setMemberAuthority()
@@ -215,7 +217,7 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
 
   it('requires readback of both the regular role set and the canonical binding before reporting success', async () => {
     setMemberAuthority()
-    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: 'saved', error: null } as any)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: { result: 'saved' }, error: null } as any)
     ;(supabaseAdmin.from as any)
       .mockReturnValueOnce(makeRoleListQuery({ data: [], error: null }))
       .mockReturnValueOnce(makeRoleListQuery({ data: [{
@@ -264,12 +266,12 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     expect(body.data).toEqual([{ role_id: roleId, scope_type: 'org', scope_id: 'org-1' }])
     expect(validateOrgRoleAssignment).toHaveBeenCalledWith(expect.any(Array), 'org-1', [roleId, roleId], { action: 'replace' })
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
-      'admin_replace_org_roles_v1',
+      'admin_apply_member_role_change_v1',
       expect.objectContaining({
         p_actor_id: 'admin-user',
         p_org_id: 'org-1',
         p_user_id: '00000000-0000-0000-0000-000000000001',
-        p_role_ids: [roleId],
+        p_change: { kind: 'replace_org', role_ids: [roleId] },
       }),
     )
   })
@@ -280,10 +282,12 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     ;(supabaseAdmin.from as any).mockReturnValueOnce(lookup)
       .mockReturnValueOnce(pending)
       .mockReturnValueOnce(makeRoleListQuery({ data: [], error: null }))
-    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: 'saved', error: null })
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: { result: 'saved' }, error: null })
     const res = await POST(jsonRequest({ role_ids: [roleId], expected_role_ids: [] }), routeContext)
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
-      'admin_replace_org_roles_if_current_v1', expect.objectContaining({ p_expected_role_ids: [] }),
+      'admin_apply_member_role_change_v1', expect.objectContaining({
+        p_change: { kind: 'replace_org_if_current', role_ids: [roleId], expected_role_ids: [] },
+      }),
     )
     expect(res.status).toBe(200)
     expect(await res.json()).toMatchObject({ data: [], pending_role_ids: [roleId] })
@@ -298,14 +302,29 @@ describe('POST /api/admin/users/[id]/roles validation', () => {
     [null, { code: '42501', details: 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN' }, 409, 'LEGACY_BASELINE_ASSIGNMENT_FORBIDDEN'],
   ])('does not retry a conditional save after %j / %j', async (data, error, status, code) => {
     ;(supabaseAdmin.from as any).mockReturnValueOnce(makeUserLookupQuery({ data: { id: 'member' }, error: null }))
-    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data, error })
+    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: { result: data }, error })
     const res = await POST(jsonRequest({ role_ids: [], expected_role_ids: [roleId] }), routeContext)
     expect(res.status).toBe(status)
     expect((await res.json()).code).toBe(code)
     expect(supabaseAdmin.rpc).toHaveBeenCalledTimes(1)
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
-      'admin_replace_org_roles_if_current_v1', expect.objectContaining({ p_expected_role_ids: [roleId] }),
+      'admin_apply_member_role_change_v1', expect.objectContaining({
+        p_change: { kind: 'replace_org_if_current', role_ids: [roleId], expected_role_ids: [roleId] },
+      }),
     )
+  })
+
+  it('returns only the affected personal settings without role readback before a choice', async () => {
+    setMemberAuthority()
+    const review = {
+      review_revision: 'f0000000-0000-4000-8000-000000000099',
+      affected_permissions: [{ permission_code: 'shipping:ledger_view', retainable: false }],
+    }
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: review, error: null } as any)
+    const res = await POST(jsonRequest({ ...memberRoleEdit, expected_system_admin: false }), routeContext)
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ code: 'ROLE_PERMISSION_REVIEW_REQUIRED', ...review })
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
   it('禁止操作者修改自己的角色', async () => {

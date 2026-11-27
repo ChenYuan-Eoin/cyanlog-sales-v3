@@ -200,10 +200,16 @@ function mockExactOrgAuth(options: {
   sessionExpiresAt?: string
   employeeOverrides?: unknown[]
   employeeShippingScopes?: unknown[]
+  automaticRoles?: unknown[]
 }) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input))
     const table = url.pathname.split('/').pop()
+    if (table === 'department_automatic_role_sources_v1') {
+      expect(init?.method).toBe('POST')
+      expect(JSON.parse(String(init?.body))).toEqual({ p_org_id: options.orgId, p_user_id: 'user-1' })
+      return Response.json(options.automaticRoles ?? [])
+    }
     if (table === 'employee_permission_overrides_v1' || table === 'shipping_employee_permission_scopes_v1') {
       expect(init?.method).toBe('POST')
       expect(JSON.parse(String(init?.body))).toEqual({ p_org_id: options.orgId, p_user_id: 'user-1' })
@@ -549,6 +555,11 @@ describe('role-free federated session boundary', () => {
       [`/api/admin/users/${id}/system-super-admin`, 'PATCH'],
       [`/api/admin/users/${id}/org-super-admin`, 'PATCH'],
       [`/api/admin/users/${id}/identity-binding`, 'POST'],
+      [`/api/admin/users/${id}/department-transfer`, 'POST'],
+      [`/api/admin/users/${id}/department-transfer-review`, 'GET'],
+      [`/api/admin/users/${id}/department-transfer-review`, 'POST'],
+      [`/api/admin/departments/${id}/role-rules`, 'GET'],
+      [`/api/admin/departments/${id}/role-rules`, 'POST'],
       ['/api/admin/departments/leader-access', 'PUT'], ['/api/admin/departments/shipping-intake', 'PATCH'],
     ]
     mockExactOrgAuth({ token, orgId: 'org-a', authMethod: 'fxiaoke', roles: [{ roles: role }] })
@@ -1001,6 +1012,24 @@ describe('department-scoped workspace admission', () => {
     expect((await request('/quotes')).headers.get('location')).toBe('https://sales.cyanlog.icu/pending-access')
   })
 
+  it('admits an explicitly configured automatic role to its department workbench only', async () => {
+    const automatic = {
+      affiliation_department_id: department.id,
+      role_code: 'AUTOMATIC_WORKBENCH',
+      permissions: ['report:dept', 'config:read', 'role:manage', '*'],
+    }
+    bind({ departments: [department], automaticRoles: [automatic] })
+    const navigation = await request('/api/navigation')
+    expect(navigation.headers.get('x-middleware-request-x-user-navigation-scope')).toBe('department-workbench')
+    expect((await request('/api/dashboard/department')).status).toBe(200)
+    expect((await request('/api/roles')).status).toBe(403)
+    expect((await request('/api/shipping/ledger')).status).toBe(403)
+    expect((await request('/api/quotes')).status).toBe(403)
+
+    bind({ departments: [department], automaticRoles: [{ ...automatic, permissions: ['shipping:ledger_view'] }] })
+    expect((await request('/api/dashboard/department')).status).toBe(403)
+  })
+
   it('combines a scoped role-directory grant with the department workbench and revokes the workbench independently', async () => {
     const role = { roles: { id: 'directory', code: 'ORG_DIRECTORY', permissions: ['role:view', 'user:view'] } }
 
@@ -1262,7 +1291,7 @@ describe('middleware public API routing', () => {
 })
 
 describe('middleware exact organization authorization', () => {
-  it.each(['user:manage_login', 'user:manage_employment'])(
+  it.each(['user:manage_login', 'user:manage_employment', 'user:remove_membership'])(
     'admits a scoped %s grant to the batch POST route and rechecks the grant each request',
     async permission => {
       const token = 'member-lifecycle-batch'

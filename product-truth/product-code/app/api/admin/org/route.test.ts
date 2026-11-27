@@ -57,6 +57,14 @@ function makeQuery(result: any) {
   return chain
 }
 
+const automaticSourcesRpc = 'department_automatic_role_directory_sources_v1'
+
+function mockDirectoryRpc(payload: unknown, sources = { data: null as unknown, error: { code: 'PGRST202' } as { code: string } | null }) {
+  vi.mocked(supabaseAdmin.rpc).mockImplementation(name => Promise.resolve(
+    name === automaticSourcesRpc ? sources : { data: payload, error: null },
+  ) as never)
+}
+
 describe('GET /api/admin/org', () => {
   afterEach(() => vi.unstubAllGlobals())
   beforeEach(() => {
@@ -86,7 +94,7 @@ describe('GET /api/admin/org', () => {
       roles: [{ id: 'r-1', code: 'ADMIN', name: '管理员' }],
       spaces: [{ id: 'existing-space', department_id: 'd-2' }],
     }
-    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: payload, error: null })
+    mockDirectoryRpc(payload)
 
     const res = await GET(makeRequest())
     const body = await res.json()
@@ -124,11 +132,61 @@ describe('GET /api/admin/org', () => {
     expect(offlineProvider).not.toHaveBeenCalled()
   })
 
+  it('matches automatic sources to the readable roster without writing into manual role fields', async () => {
+    const user = {
+      id: 'u-1', role_ids: ['existing-manual-role'], role_names: '手工角色', role_codes: ['MANUAL'],
+      scoped_roles: [{ roleId: 'existing-manual-role', scopeType: 'org', scopeId: 'org-1' }],
+    }
+    const source = {
+      user_id: 'u-1', role_id: 'r-1', role_name: '部门台账', role_code: 'LEDGER',
+      rule_department_id: 'parent', affiliation_department_id: 'team', permissions: ['shipping:ledger_view'],
+    }
+    mockDirectoryRpc({
+      organization: { id: 'org-1' }, users: [user, { id: 'u-2' }],
+      departments: [{ id: 'parent', name: '销售部' }, { id: 'team', name: '销售一组' }],
+      roles: [{ id: 'r-1', code: 'LEDGER', name: '部门台账' }], spaces: [],
+    }, { data: [
+      source, source,
+      { ...source, user_id: 'not-in-visible-roster' },
+      { ...source, affiliation_department_id: 'other-department' },
+      { ...source, role_id: 'other-role' },
+    ], error: null })
+
+    const body = await (await GET(makeRequest())).json()
+
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(automaticSourcesRpc, { p_org_id: 'org-1' })
+    expect(body.role_membership_stats.automaticSourcesAvailable).toBe(true)
+    expect(body.users).toEqual([{
+      ...user, automatic_role_sources: [{
+        roleId: 'r-1', roleName: '部门台账',
+        ruleDepartmentId: 'parent', ruleDepartmentName: '销售部',
+        affiliationDepartmentId: 'team', affiliationDepartmentName: '销售一组',
+      }],
+    }, { id: 'u-2' }])
+  })
+
+  it.each([
+    { data: null, error: { code: '08006' } },
+    { data: [{ user_id: 'u-1' }], error: null },
+  ])('保留成员列表并标明自动授权暂时无法核对 %#', async (sources) => {
+    const payload = {
+      organization: { id: 'org-1' }, users: [{ id: 'u-1', role_ids: ['manual'] }], departments: [], roles: [], spaces: [],
+    }
+    mockDirectoryRpc(payload, sources)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      const res = await GET(makeRequest())
+      const body = await res.json()
+      expect(res.status).toBe(200)
+      expect(body.users).toEqual(payload.users)
+      expect(body.role_membership_stats).toMatchObject({ automaticSourcesAvailable: false, pendingAvailable: true })
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
   it('exposes role assignment only with fresh system authority in the current organization', async () => {
-    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
-      data: { organization: { id: 'org-1' }, users: [], roles: [], departments: [], spaces: [] }, error: null,
-      success: true, count: null, status: 200, statusText: 'OK',
-    })
+    mockDirectoryRpc({ organization: { id: 'org-1' }, users: [], roles: [], departments: [], spaces: [] })
     const authority = {
       settings: {}, orgId: 'org-1', canRead: true, canEdit: true, canEditPlatformRoot: true, actorPermissions: ['role:manage'],
       canListAssignableRoles: true,
@@ -196,14 +254,14 @@ describe('GET /api/admin/org', () => {
       membership_status: 'invited',
       login_enabled: false,
     }
-    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: {
+    mockDirectoryRpc({
       organization: { id: orgId },
       departments: [{ id: deptId, name: '业务部' }],
       users: [synced, synced, {
         ...synced, id: localId, directory_identity_id: null, directory_external_id: null, display_name: '本地账号',
       }],
       roles: [], spaces: [],
-    }, error: null } as never)
+    })
     vi.mocked(supabaseAdmin.from).mockImplementation(table => {
       if (table === 'organization_sources') return makeQuery({ data: [{
         id: sourceId, system_org_id: orgId, provider: 'fxiaoke', status: 'active', last_successful_sync_at: asOf,
@@ -336,6 +394,7 @@ describe('GET /api/admin/org', () => {
   it('保留成员查看时，个人关闭部门目录也不会从组织聚合返回部门信息', async () => {
     const actor = { id: 'u-1', display_name: '在职成员', primary_dept_id: 'd-1', primary_dept_name: '受限部门',
       department_ids: ['d-1'], secondary_dept_names: ['受限部门'], role_names: '管理员, 配置人员(受限部门)',
+      automatic_role_sources: [{ roleId: 'hidden-role', ruleDepartmentId: 'hidden-rule' }],
       scoped_roles: [
         { scopeType: 'org', scopeId: 'org-1', roleName: '管理员' },
         { scopeType: 'department', scopeId: 'd-1', scopeName: '受限部门', roleName: '配置人员' },
@@ -360,6 +419,8 @@ describe('GET /api/admin/org', () => {
     })
     expect(JSON.stringify(body)).not.toContain('受限部门')
     expect(JSON.stringify(body)).not.toContain('hidden-space')
+    expect(body.users[0]).not.toHaveProperty('automatic_role_sources')
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalledWith(automaticSourcesRpc, expect.anything())
   })
 
   it('显式空授权角色不能回退到原 SUPER_ADMIN 身份重新获得访问', async () => {

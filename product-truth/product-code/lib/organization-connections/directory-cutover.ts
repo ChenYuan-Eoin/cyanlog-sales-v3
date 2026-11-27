@@ -248,9 +248,41 @@ export type DirectoryCutoverClientPlan = {
   departmentChanges: DirectoryCutoverDepartmentChange[]
   identityChanges: Array<Omit<DirectoryCutoverIdentityChange, 'profileSnapshot'>>
   preserved: DirectoryCutoverPlanPayload['preserved']
+  authorityReview?: DirectoryAuthorityReviewSummary
   appliedAt?: string | null
   rolledBackAt?: string | null
   run?: DirectoryCutoverRunResult | null
+}
+
+export type DirectoryAuthorityReviewSummary = {
+  members: number
+  baselineChanges: number
+  rolesForReview: number
+  scopesForReview: number
+  personalExceptions: number
+  automaticRoleSourcesAdded?: number
+  automaticRoleSourcesRemoved?: number
+  automaticRoleScopeWidenedMembers?: number
+  automaticRoleScopeNarrowedMembers?: number
+}
+
+function authorityReviewSummary(value: unknown): DirectoryAuthorityReviewSummary {
+  const summary = objectValue(value)
+  return {
+    members: integerValue(summary.members),
+    baselineChanges: integerValue(summary.baselineChanges),
+    rolesForReview: integerValue(summary.rolesForReview),
+    scopesForReview: integerValue(summary.scopesForReview),
+    personalExceptions: integerValue(summary.personalExceptions),
+    ...(summary.automaticRoleSourcesAdded !== undefined
+      ? { automaticRoleSourcesAdded: integerValue(summary.automaticRoleSourcesAdded) } : {}),
+    ...(summary.automaticRoleSourcesRemoved !== undefined
+      ? { automaticRoleSourcesRemoved: integerValue(summary.automaticRoleSourcesRemoved) } : {}),
+    ...(summary.automaticRoleScopeWidenedMembers !== undefined
+      ? { automaticRoleScopeWidenedMembers: integerValue(summary.automaticRoleScopeWidenedMembers) } : {}),
+    ...(summary.automaticRoleScopeNarrowedMembers !== undefined
+      ? { automaticRoleScopeNarrowedMembers: integerValue(summary.automaticRoleScopeNarrowedMembers) } : {}),
+  }
 }
 
 export type DirectoryCutoverRunResult = {
@@ -913,6 +945,9 @@ function clientPlan(value: unknown, run?: unknown): DirectoryCutoverClientPlan |
     departmentChanges: Array.isArray(payload.departmentChanges) ? payload.departmentChanges as DirectoryCutoverDepartmentChange[] : [],
     identityChanges,
     preserved: payload.preserved as DirectoryCutoverPlanPayload['preserved'],
+    ...(payload.authorityReview ? {
+      authorityReview: authorityReviewSummary(objectValue(payload.authorityReview).summary),
+    } : {}),
     appliedAt: optionalString(plan.applied_at),
     rolledBackAt: optionalString(plan.rolled_back_at),
     run: run ? runResult(run) : null,
@@ -967,13 +1002,12 @@ export async function prepareDirectoryCutoverPlan(input: {
   const now = new Date()
   const expiresAt = new Date(now.getTime() + PLAN_LIFETIME_MS).toISOString()
   const result = await supabaseAdmin
-    .rpc('store_organization_directory_cutover_plan_v1', {
+    .rpc('store_organization_directory_authority_plan_v1', {
       p_system_org_id: input.orgId,
       p_target_source_id: read.binding.sourceId,
       p_connection_revision: read.binding.connectionRevision,
       p_previous_primary_source_id: payload.previousPrimarySourceId,
       p_directory_hash: payload.snapshot.directoryHash,
-      p_plan_hash: payload.planHash,
       p_plan_payload: payload,
       p_actor_id: input.actorId,
       p_expires_at: expiresAt,
@@ -996,6 +1030,12 @@ function assertUuid(value: unknown, label: string) {
 }
 
 function safeRpcFailure(error: { code?: string; details?: string; message?: string } | null) {
+  if (error?.details === 'DIRECTORY_ROLLBACK_PREVIEW_STALE') {
+    return new OrganizationConnectionError('ROLLBACK_STALE', '目录或权限已变化，请重新预览回滚影响。', 409)
+  }
+  if (error?.details === 'DIRECTORY_AUTHORITY_PREVIEW_STALE' || error?.details === 'DIRECTORY_AUTHORITY_PROJECTION_CHANGED') {
+    return new OrganizationConnectionError('PLAN_STALE', '部门归属或权限已变化，请重新预览目录差异。', 409)
+  }
   if (error?.code === '23514' && error.details === 'LAST_SYSTEM_SUPER_ADMIN_PROTECTED') {
     return new OrganizationConnectionError(
       'LAST_SYSTEM_SUPER_ADMIN_PROTECTED',
@@ -1064,17 +1104,41 @@ export async function applyDirectoryCutoverPlan(input: {
   return runResult(data)
 }
 
-export async function rollbackDirectoryCutover(input: {
+export async function previewDirectoryRollback(input: {
   orgId: string
   actorId: string
   planId: string
 }) {
   await assertDirectoryCutoverStorage()
   const planId = assertUuid(input.planId, '切源计划')
-  const { data, error } = await supabaseAdmin.rpc('rollback_organization_directory_cutover_v1', {
+  const { data, error } = await supabaseAdmin.rpc('preview_organization_directory_rollback_v1', {
     p_system_org_id: input.orgId,
     p_plan_id: planId,
     p_actor_id: input.actorId,
+  })
+  if (error || !data) throw safeRpcFailure(error)
+  const preview = objectValue(data)
+  return {
+    previewId: assertUuid(preview.previewId, '回滚确认凭据'),
+    expiresAt: stringValue(preview.expiresAt, 'preview.expiresAt'),
+    summary: authorityReviewSummary(preview.summary),
+  }
+}
+
+export async function rollbackDirectoryCutover(input: {
+  orgId: string
+  actorId: string
+  planId: string
+  previewId: string
+}) {
+  await assertDirectoryCutoverStorage()
+  const planId = assertUuid(input.planId, '切源计划')
+  const previewId = assertUuid(input.previewId, '回滚确认凭据')
+  const { data, error } = await supabaseAdmin.rpc('confirm_organization_directory_rollback_v1', {
+    p_system_org_id: input.orgId,
+    p_plan_id: planId,
+    p_actor_id: input.actorId,
+    p_preview_id: previewId,
   })
   if (error || !data) throw safeRpcFailure(error)
   return runResult(data)

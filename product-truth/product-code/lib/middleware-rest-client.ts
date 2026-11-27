@@ -9,6 +9,7 @@ export type MiddlewareRestClient = {
     select: string,
     limit?: number,
   ): Promise<T[]>
+  readRpcRows<T>(rpc: string, args: Record<string, string>): Promise<T[]>
 }
 
 function readConfig() {
@@ -37,6 +38,7 @@ function readConfig() {
 export function createMiddlewareRestClient(): MiddlewareRestClient {
   const { endpoint, serviceRoleKey } = readConfig()
   return {
+    readRpcRows: readMiddlewareRpcRows,
     async selectRows<T>(
       table: string,
       filters: Record<string, PostgrestFilterValue>,

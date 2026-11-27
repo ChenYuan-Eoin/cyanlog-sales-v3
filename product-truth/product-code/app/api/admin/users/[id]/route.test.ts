@@ -10,12 +10,6 @@ vi.mock('@/lib/org-role-permissions', async importOriginal => ({
   loadCurrentOrganizationRoleAssignments: vi.fn(),
 }))
 
-vi.mock('@/lib/admin/org-membership', async importOriginal => ({
-  ...await importOriginal<typeof import('@/lib/admin/org-membership')>(),
-  assertDepartmentInOrg: vi.fn(),
-  syncUserSalesSpaces: vi.fn(),
-}))
-
 vi.mock('@/lib/admin/org-role-authority', () => ({
   userHasOrgRoleCode: vi.fn(),
 }))
@@ -30,7 +24,6 @@ vi.mock('@/lib/supabase', () => ({
 import { requireAuth } from '@/lib/auth'
 import { loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import { readMiddlewareRpcRows } from '@/lib/middleware-rest-client'
-import { assertDepartmentInOrg } from '@/lib/admin/org-membership'
 import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
 import { supabaseAdmin } from '@/lib/supabase'
 import { DELETE, PATCH } from './route'
@@ -106,7 +99,6 @@ describe('/api/admin/users/[id] account lifecycle', () => {
     ] })
 
     ;(userHasOrgRoleCode as any).mockResolvedValue(false)
-    ;(assertDepartmentInOrg as any).mockResolvedValue({ id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' })
     ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: true, error: null })
   })
 
@@ -384,57 +376,45 @@ describe('/api/admin/users/[id] account lifecycle', () => {
     expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
   })
 
-  it('主部门调岗通过专用原子命令而不是先更新用户后补关系', async () => {
+  it('旧资料接口不能直接变更主部门', async () => {
     const departmentId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
     const lookup = makeQuery({ data: targetUser(), error: null })
     ;(supabaseAdmin.from as any).mockReturnValue(lookup)
 
     const response = await PATCH(patchRequest({ primary_dept_id: departmentId }), routeContext)
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'DEPARTMENT_TRANSFER_PREVIEW_REQUIRED' })
     expect(lookup.update).not.toHaveBeenCalled()
-    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
-      'admin_transfer_primary_department_v1',
-      expect.objectContaining({
-        p_actor_id: actorId,
-        p_org_id: orgId,
-        p_user_id: targetId,
-        p_department_id: departmentId,
-      }),
-    )
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
-  it('主部门调岗受到台账授权保护时不写入同请求其他资料', async () => {
+  it('未确认的主部门变更也不会保存同一请求里的资料字段', async () => {
     const lookup = makeQuery({ data: targetUser(), error: null })
     ;(supabaseAdmin.from as any).mockReturnValue(lookup)
-    ;(supabaseAdmin.rpc as any).mockResolvedValue({
-      data: null, error: { code: '42501', details: 'DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN' },
-    })
 
     const response = await PATCH(patchRequest({
       primary_dept_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', display_name: '未保存',
     }), routeContext)
 
-    expect(response.status).toBe(403)
-    expect(await response.json()).toMatchObject({ code: 'DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN' })
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'DEPARTMENT_TRANSFER_PREVIEW_REQUIRED' })
     expect(lookup.update).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
-  it('主部门和资料合并提交时使用一次事务，返回数据库回读', async () => {
+  it('旧客户端携带未变更的主部门时仍可保存资料', async () => {
     const departmentId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
-    const lookup = makeQuery({ data: targetUser(), error: null })
+    const lookup = makeQuery({ data: targetUser({ primary_dept_id: departmentId }), error: null })
     ;(supabaseAdmin.from as any).mockReturnValue(lookup)
     const updated = targetUser({ primary_dept_id: departmentId, display_name: '已更新' })
-    ;(supabaseAdmin.rpc as any).mockResolvedValue({ data: updated, error: null })
+    lookup.single.mockResolvedValue({ data: updated, error: null })
 
     const response = await PATCH(patchRequest({ primary_dept_id: departmentId, display_name: '已更新' }), routeContext)
 
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ data: updated })
-    expect(lookup.update).not.toHaveBeenCalled()
-    expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith(
-      'admin_update_member_profile_and_primary_department_v1',
-      expect.objectContaining({ p_department_id: departmentId, p_profile: { display_name: '已更新' } }),
-    )
+    expect(lookup.update).toHaveBeenCalledExactlyOnceWith({ display_name: '已更新' })
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 })

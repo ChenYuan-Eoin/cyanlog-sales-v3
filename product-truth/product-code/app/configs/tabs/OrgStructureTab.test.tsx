@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import '@testing-library/jest-dom/vitest'
 import type { OrgSummaryPayload, OrgSummaryUser, ScopedRoleAssignment } from '../types'
 
-vi.mock('./components/DepartmentFormDialog', () => ({ DepartmentFormDialog: () => null }))
 vi.mock('./components/UserFormDialog', () => ({
   UserFormDialog: ({ onSubmit, editingUser }: { onSubmit: (values: object) => Promise<void>; editingUser?: object }) =>
     editingUser ? null : <button onClick={() => void onSubmit({ display_name: '已新增的邀请成员' })}>提交新增成员</button>,
@@ -23,6 +22,7 @@ import OrgStructureTab from './OrgStructureTab'
 
 beforeEach(() => { vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 403 }))) })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+if (!HTMLElement.prototype.scrollIntoView) HTMLElement.prototype.scrollIntoView = () => {}
 
 it('keeps organization filters in the member list without embedding shipping settings', () => {
   const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -255,7 +255,29 @@ const statusPayload: OrgSummaryPayload = {
   ],
 }
 
-it('defaults to employed members, preserves active directory newcomers and counts department members once', () => {
+it('shows the automatic role once per employee and hides its source without department access', () => {
+  const source = {
+    roleId: 'ledger', roleName: '台账查看',
+    ruleDepartmentId: 'sales', ruleDepartmentName: '销售父部门',
+    affiliationDepartmentId: 'child', affiliationDepartmentName: '销售子部门',
+  }
+  const users = statusPayload.users.map(user => user.id === 'manual-active' ? {
+    ...user, role_names: '销售', automatic_role_sources: [source, { ...source, ruleDepartmentId: 'child' }],
+  } : user)
+  const payload = { ...statusPayload, users }
+  const view = render(<OrgStructureTab orgSummary={payload} currentUserId="actor" />)
+  fireEvent.change(screen.getByLabelText('成员状态'), { target: { value: 'all' } })
+
+  const member = within(screen.getByText('本地在职戊').closest('tr')!)
+  expect(member.getByText('销售')).toBeInTheDocument()
+  expect(member.getByText('台账查看 · 部门自动')).toBeInTheDocument()
+  view.rerender(<OrgStructureTab orgSummary={{
+    ...payload, department_access: { canRead: false, canEdit: false, canDelete: false },
+  }} currentUserId="actor" />)
+  expect(screen.queryByText('台账查看 · 部门自动')).not.toBeInTheDocument()
+})
+
+it('defaults to the verified roster overall and counts a synchronized member with multiple department links once', () => {
   render(<OrgStructureTab orgSummary={statusPayload} currentUserId="actor" />)
   expect(screen.getByText('在职待登录甲')).toBeInTheDocument()
   expect(screen.getByText('待首次登录')).toBeInTheDocument()
@@ -263,12 +285,13 @@ it('defaults to employed members, preserves active directory newcomers and count
   expect(screen.queryByText('本地停用丙')).not.toBeInTheDocument()
   expect(screen.queryByText('本地在职戊')).not.toBeInTheDocument()
   expect(screen.queryByText('目录待核对丁')).not.toBeInTheDocument()
-  expect(screen.getByRole('button', { name: /^销售父部门/ })).toHaveTextContent('1')
   const department = screen.getByRole('button', { name: /^销售父部门/ })
   department.focus()
   fireEvent.keyDown(department, { key: 'Enter' })
   expect(department).toHaveFocus()
   expect(screen.getAllByLabelText('部门成员范围')).toHaveLength(1)
+  fireEvent.change(screen.getByLabelText('成员状态'), { target: { value: 'synced' } })
+  expect(department).toHaveTextContent(/1$/)
   expect(screen.getByText('在职待登录甲')).toBeInTheDocument()
   expect(screen.getByText('共 1 人（含子部门）')).toBeInTheDocument()
 })
@@ -281,6 +304,70 @@ const directAssociationPayload: OrgSummaryPayload = {
     { ...statusPayload.users[0], id: 'child-only-association', display_name: '下级关联成员', department_ids: ['child'] },
   ],
 }
+
+it('shows department counts and the associated members on the first visit without a mutation', () => {
+  const onRefresh = vi.fn()
+  render(<OrgStructureTab orgSummary={directAssociationPayload} currentUserId="actor" onRefresh={onRefresh} />)
+
+  expect(screen.getByLabelText('成员状态')).toHaveValue('synced')
+  expect(screen.getByRole('button', { name: /^全部同步在职成员/ })).toHaveTextContent(/0$/)
+  const department = screen.getByRole('button', { name: /^销售父部门/ })
+  expect(department).toHaveTextContent(/3$/)
+
+  fireEvent.click(department)
+  expect(screen.getByLabelText('成员状态')).toHaveValue('all')
+  expect(screen.getByText('共 3 人（含子部门）')).toBeInTheDocument()
+  expect(screen.getByText('本地在职戊')).toBeInTheDocument()
+  expect(screen.getByText('本地停用丙')).toBeInTheDocument()
+  expect(screen.getByText('下级关联成员')).toBeInTheDocument()
+
+  fireEvent.change(screen.getByLabelText('部门成员范围'), { target: { value: 'direct' } })
+  expect(screen.getByText('共 2 人（仅本部门）')).toBeInTheDocument()
+  expect(screen.queryByText('下级关联成员')).not.toBeInTheDocument()
+  expect(onRefresh).not.toHaveBeenCalled()
+  expect(vi.mocked(fetch).mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
+
+  fireEvent.click(screen.getByRole('button', { name: /^全部同步在职成员/ }))
+  expect(screen.getByLabelText('成员状态')).toHaveValue('synced')
+})
+
+it('counts local, Feishu and Fxiaoke branches together by native member and department ids', () => {
+  const feishuDepartment = { id: 'feishu-dept', name: '飞书服务部', parent_name: '销售父部门', parent_id: 'sales', source: 'feishu' }
+  const fxiaokeDepartment = { id: 'fxiaoke-dept', name: '纷享交付部', parent_name: '销售父部门', parent_id: 'sales', source: 'fxiaoke' }
+  const [confirmed, , , local] = statusPayload.users
+  const fxiaokeMember = { ...confirmed, primary_dept_id: fxiaokeDepartment.id, department_ids: [fxiaokeDepartment.id] }
+  // The directory projection identifies the authoritative roster. Older Feishu
+  // links remain canonical organization memberships even without a match there.
+  const feishuMember = {
+    ...local, id: 'provisioned-via-feishu', display_name: '飞书历史成员',
+    primary_dept_id: feishuDepartment.id, department_ids: [feishuDepartment.id, 'sales'],
+  }
+  render(<OrgStructureTab orgSummary={{
+    ...statusPayload,
+    departments: [{ ...statusPayload.departments[0], source: 'manual' }, feishuDepartment, fxiaokeDepartment],
+    users: [local, feishuMember, fxiaokeMember],
+    directory_roster: { status: 'ready', asOf: appliedAt, members: [{ id: fxiaokeMember.id, departmentIds: fxiaokeMember.department_ids }] },
+  }} currentUserId="actor" />)
+
+  expect(screen.getByRole('button', { name: /^全部同步在职成员/ })).toHaveTextContent(/1$/)
+  const department = screen.getByRole('button', { name: /^销售父部门/ })
+  expect(department).toHaveTextContent(/3$/)
+  fireEvent.click(department)
+  expect(screen.getByText('共 3 人（含子部门）')).toBeInTheDocument()
+  expect(screen.getByText('本地在职戊')).toBeInTheDocument()
+  expect(screen.getByText('飞书历史成员')).toBeInTheDocument()
+  expect(screen.getByText('在职待登录甲')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: /^飞书服务部/ }))
+  expect(screen.getByText('共 1 人（含子部门）')).toBeInTheDocument()
+  expect(screen.queryByText('在职待登录甲')).not.toBeInTheDocument()
+  expect(screen.getByText('飞书历史成员')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: /^纷享交付部/ }))
+  expect(screen.getByText('共 1 人（含子部门）')).toBeInTheDocument()
+  expect(screen.getByText('在职待登录甲')).toBeInTheDocument()
+  expect(screen.queryByText('飞书历史成员')).not.toBeInTheDocument()
+})
 
 it('keeps the member list visible when a previously selected department is withdrawn', () => {
   const view = render(<OrgStructureTab orgSummary={statusPayload} currentUserId="actor" />)
@@ -302,6 +389,7 @@ it('shows direct member associations separately from zero synchronized employees
   const search = screen.getByPlaceholderText('搜索姓名、邮箱、职位...')
   fireEvent.change(search, { target: { value: '原来搜索词' } })
   fireEvent.click(screen.getByRole('button', { name: /^销售父部门/ }))
+  fireEvent.change(screen.getByLabelText('成员状态'), { target: { value: 'synced' } })
 
   expect(screen.getByLabelText('成员状态')).toHaveValue('synced')
   expect(screen.getByText('共 0 人（含子部门）')).toBeInTheDocument()
@@ -332,13 +420,64 @@ it('opens the blocked department direct members after a structured deletion refu
   fireEvent.click(await screen.findByRole('menuitem', { name: '删除' }))
   fireEvent.click(await screen.findByRole('button', { name: '删除' }))
 
-  expect(await screen.findByText('本地在职戊')).toBeInTheDocument()
+  await waitFor(() => expect(screen.getByLabelText('部门成员范围')).toHaveValue('direct'))
+  expect(screen.getByText('本地在职戊')).toBeInTheDocument()
   expect(screen.getByText('本地停用丙')).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: '销售父部门 的成员' })).toBeInTheDocument()
   expect(screen.getByLabelText('成员状态')).toHaveValue('all')
   expect(screen.getByLabelText('部门成员范围')).toHaveValue('direct')
   expect(screen.queryByText('下级关联成员')).not.toBeInTheDocument()
   expect(onRefresh).not.toHaveBeenCalled()
+})
+
+const departmentMovePayload: OrgSummaryPayload = {
+  ...departmentPermissionPayload,
+  department_access: { canRead: true, canEdit: true, canDelete: true },
+  departments: [
+    { id: 'moving', name: '待调整部门', code: 'MOVING', status: 'active', parent_name: null },
+    { id: 'new-parent', name: '新上级部门', code: 'PARENT', status: 'active', parent_name: null },
+  ],
+}
+
+async function openDepartmentEdit(onRefresh: () => void) {
+  render(<OrgStructureTab orgSummary={departmentMovePayload} currentUserId="actor" onRefresh={onRefresh} />)
+  fireEvent.pointerDown(screen.getByRole('button', { name: '管理部门 待调整部门' }), { button: 0, ctrlKey: false })
+  fireEvent.click(await screen.findByRole('menuitem', { name: '编辑' }))
+  return within(await screen.findByRole('dialog', { name: '编辑部门' }))
+}
+
+it('saves the selected higher department in one action', async () => {
+  const onRefresh = vi.fn()
+  const patch = vi.fn().mockResolvedValue(Response.json({ success: true, data: { id: 'moving' } }))
+  vi.mocked(fetch).mockImplementation(async (input, init) => input === '/api/admin/departments/moving' && init?.method === 'PATCH'
+    ? patch(JSON.parse(String(init.body))) : new Response(null, { status: 403 }))
+
+  const form = await openDepartmentEdit(onRefresh)
+  fireEvent.change(form.getByRole('textbox', { name: '部门名称' }), { target: { value: '调整中部门' } })
+  fireEvent.keyDown(form.getByRole('combobox', { name: '上级部门' }), { key: 'ArrowDown' })
+  fireEvent.keyDown(await screen.findByRole('option', { name: '新上级部门' }), { key: 'Enter' })
+  fireEvent.click(form.getByRole('button', { name: '保存' }))
+
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: '编辑部门' })).not.toBeInTheDocument())
+  expect(patch).toHaveBeenCalledExactlyOnceWith({
+    name: '调整中部门', code: 'MOVING', parent_id: 'new-parent', expected_parent_id: null, leader_id: null,
+  })
+  expect(onRefresh).toHaveBeenCalledOnce()
+})
+
+it('saves a department name edit without a second confirmation', async () => {
+  const onRefresh = vi.fn()
+  const patch = vi.fn().mockResolvedValue(Response.json({ success: true, data: { id: 'moving' } }))
+  vi.mocked(fetch).mockImplementation(async (input, init) => input === '/api/admin/departments/moving' && init?.method === 'PATCH'
+    ? patch(JSON.parse(String(init.body))) : new Response(null, { status: 403 }))
+
+  const form = await openDepartmentEdit(onRefresh)
+  fireEvent.change(form.getByRole('textbox', { name: '部门名称' }), { target: { value: '部门改名' } })
+  fireEvent.click(form.getByRole('button', { name: '保存' }))
+
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: '编辑部门' })).not.toBeInTheDocument())
+  expect(patch.mock.calls).toEqual([[{ name: '部门改名', code: 'MOVING', leader_id: null }]])
+  expect(onRefresh).toHaveBeenCalledOnce()
 })
 
 it('keeps department-only readers out of member, employee counts, and mutation controls', () => {
@@ -402,7 +541,7 @@ it('shows an unconfirmed directory count as unknown and still lets administrator
     status: 'unavailable', reason: 'DIRECTORY_UNCONFIRMED',
   } }} currentUserId="actor" />)
   expect(screen.getByText('同步在职人数待核对')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: /^销售父部门/ })).toHaveTextContent('—')
+  expect(screen.getByRole('button', { name: /^全部同步在职成员/ })).toHaveTextContent('—')
   expect(screen.queryByText('本地在职戊')).not.toBeInTheDocument()
   fireEvent.change(screen.getByLabelText('成员状态'), { target: { value: 'all' } })
   expect(screen.getByText('本地在职戊')).toBeInTheDocument()
@@ -421,7 +560,8 @@ it('lets an organization administrator view a department on its own and drill in
   }} currentUserId="actor" />)
 
   fireEvent.click(screen.getByRole('button', { name: /^销售父部门/ }))
-  expect(screen.getByRole('button', { name: /^销售父部门/ })).toHaveTextContent('2')
+  fireEvent.change(screen.getByLabelText('成员状态'), { target: { value: 'synced' } })
+  expect(screen.getByRole('button', { name: /^销售父部门/ })).toHaveTextContent(/2$/)
   expect(screen.getByText('共 2 人（含子部门）')).toBeInTheDocument()
   expect(screen.queryByText('销售空间')).not.toBeInTheDocument()
   expect(screen.queryByText('部门空间')).not.toBeInTheDocument()
@@ -528,6 +668,71 @@ it('keeps an unlinked manual member manageable when the organization aggregate n
   fireEvent.keyDown(within(row).getByRole('button', { name: '管理本地停用丙' }), { key: 'ArrowDown' })
   expect(await screen.findByRole('menuitem', { name: '编辑' })).not.toHaveAttribute('aria-disabled', 'true')
   expect(screen.getByRole('menuitem', { name: '启用用户' })).toBeInTheDocument()
+})
+
+it('opens a dedicated transfer for active local members through system authorization', async () => {
+  const manual = { ...statusPayload.users[3], directory_source: 'fxiaoke' }
+  const payload = { ...statusPayload, organization: { id: 'org-1', name: '测试组织' }, users: [manual] }
+  const moved = { ...manual, primary_dept_id: 'child', primary_dept_name: '销售子部门', department_ids: ['child'] }
+  const onRefresh = vi.fn(() => view.rerender(<OrgStructureTab
+    orgSummary={{ ...payload, users: [moved] }} currentUserId="actor" onRefresh={onRefresh} />))
+  const endpoint = `/api/admin/users/${manual.id}/department-transfer`
+  vi.mocked(fetch).mockImplementation(async url => {
+    if (url !== endpoint) return new Response(null, { status: 403 })
+    return Response.json({ status: 'applied', department_id: 'child', effective_at: '2026-11-27T08:57:00Z' })
+  })
+  const view = render(<OrgStructureTab orgSummary={{ ...payload, member_actions: { ...adminActions, assignRoles: false } }}
+    currentUserId="actor" onRefresh={onRefresh} />)
+  fireEvent.change(screen.getByLabelText('成员状态'), { target: { value: 'all' } })
+  const menu = screen.getByRole('button', { name: `管理${manual.display_name}` })
+  fireEvent.keyDown(menu, { key: 'ArrowDown' })
+  await screen.findByRole('menuitem', { name: '编辑' })
+  expect(screen.queryByRole('menuitem', { name: '调整部门' })).not.toBeInTheDocument()
+
+  view.rerender(<OrgStructureTab orgSummary={payload} currentUserId="actor" onRefresh={onRefresh} />)
+  fireEvent.keyDown(screen.getByRole('button', { name: `管理${manual.display_name}` }), { key: 'ArrowDown' })
+  fireEvent.click(await screen.findByRole('menuitem', { name: '调整部门' }))
+  expect(await screen.findByRole('dialog', { name: '调整部门' })).toBeInTheDocument()
+  expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/department-transfer'))).toBe(false)
+  fireEvent.change(screen.getByLabelText('新主部门'), { target: { value: 'child' } })
+  fireEvent.click(screen.getByRole('button', { name: '保存' }))
+  await waitFor(() => expect(onRefresh).toHaveBeenCalledOnce())
+  expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === endpoint)).toHaveLength(1)
+  const row = screen.getByText(manual.display_name).closest('tr')!
+  expect(within(row).getByText('销售子部门')).toBeInTheDocument()
+})
+
+it('keeps department transfer disabled while a directory member is pending first login', async () => {
+  const linked = statusPayload.users[0]
+  render(<OrgStructureTab orgSummary={{
+    ...statusPayload, organization: { id: 'org-1', name: '测试组织' },
+  }} currentUserId="actor" />)
+  fireEvent.keyDown(screen.getByRole('button', { name: `管理${linked.display_name}` }), { key: 'ArrowDown' })
+  const transfer = await screen.findByRole('menuitem', { name: '调整部门' })
+  expect(transfer).toHaveAttribute('aria-disabled', 'true')
+  expect(transfer).toHaveAttribute('title', '仅在职且组织成员关系有效的成员可调整部门')
+})
+
+it('lets an active directory member open manual secondary changes while their primary is source-managed', async () => {
+  const linked = { ...statusPayload.users[0], status: 'active', membership_status: 'active' as const, directory_pending_account: false }
+  render(<OrgStructureTab orgSummary={{
+    ...statusPayload, users: [linked], organization: { id: 'org-1', name: '测试组织' },
+    departments: [
+      ...statusPayload.departments.map(department => ({ ...department, source: 'fxiaoke' })),
+      { id: 'manual', name: '手工项目组', parent_name: null, source: 'manual' },
+    ],
+  }} currentUserId="actor" />)
+  fireEvent.keyDown(screen.getByRole('button', { name: `管理${linked.display_name}` }), { key: 'ArrowDown' })
+  const transfer = await screen.findByRole('menuitem', { name: '调整部门' })
+  expect(transfer).not.toHaveAttribute('aria-disabled', 'true')
+  fireEvent.click(transfer)
+  const dialog = await screen.findByRole('dialog', { name: '调整部门' })
+  const operation = within(dialog).getByLabelText('调整内容')
+  expect(operation).toHaveValue('add')
+  expect(within(operation).queryByRole('option', { name: '调整主部门' })).not.toBeInTheDocument()
+  expect(within(dialog).getByText('此处可调整 ICU 自建兼岗。')).toBeInTheDocument()
+  const departments = within(dialog).getByLabelText('新兼岗部门')
+  expect(within(departments).getAllByRole('option').map(option => option.textContent)).toEqual(['请选择部门', '手工项目组'])
 })
 
 it('does not call a previously active directory account a first-login account after local login is disabled', () => {

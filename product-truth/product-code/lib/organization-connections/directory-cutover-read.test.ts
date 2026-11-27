@@ -146,6 +146,7 @@ describe('latest directory cutover plan selection', () => {
     })],
     ['rollback', () => rollbackDirectoryCutover({
       orgId: 'org-1', actorId: 'admin-1', planId: '00000000-0000-4000-8000-000000000030',
+      previewId: '00000000-0000-4000-8000-000000000031',
     })],
   ])('explains when %s would disable the last effective super administrator', async (_operation, activate) => {
     mocks.loadVerifiedConnection.mockResolvedValueOnce({ revision: '00000000-0000-4000-8000-000000000021' })

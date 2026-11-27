@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     prepare: vi.fn(),
     apply: vi.fn(),
     rollback: vi.fn(),
+    rollbackPreview: vi.fn(),
     storageAvailable: vi.fn(),
     OrganizationConnectionError,
   }
@@ -35,6 +36,7 @@ vi.mock('@/lib/organization-connections/directory-cutover', () => ({
   prepareDirectoryCutoverPlan: mocks.prepare,
   applyDirectoryCutoverPlan: mocks.apply,
   rollbackDirectoryCutover: mocks.rollback,
+  previewDirectoryRollback: mocks.rollbackPreview,
 }))
 vi.mock('@/lib/organization-connections/errors', () => ({
   OrganizationConnectionError: mocks.OrganizationConnectionError,
@@ -117,8 +119,10 @@ describe('/api/admin/organization-sources/directory', () => {
       connectionRevision: 'revision-1', sourceRevisions,
     })
 
-    expect((await POST(request('POST', { action: 'rollback', plan_id: 'plan-1' }))).status).toBe(200)
-    expect(mocks.rollback).toHaveBeenCalledWith({ orgId: 'org-1', actorId: 'admin-1', planId: 'plan-1' })
+    expect((await POST(request('POST', { action: 'rollback_preview', plan_id: 'plan-1' }))).status).toBe(200)
+    expect(mocks.rollbackPreview).toHaveBeenCalledWith({ orgId: 'org-1', actorId: 'admin-1', planId: 'plan-1' })
+    expect((await POST(request('POST', { action: 'rollback', plan_id: 'plan-1', preview_id: 'preview-1' }))).status).toBe(200)
+    expect(mocks.rollback).toHaveBeenCalledWith({ orgId: 'org-1', actorId: 'admin-1', planId: 'plan-1', previewId: 'preview-1' })
   })
 
   it('rejects unsupported providers, malformed bodies and missing source revisions before mutation', async () => {

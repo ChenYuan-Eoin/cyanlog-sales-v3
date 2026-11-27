@@ -33,10 +33,10 @@ function grant(permissions: string[]) {
   }] })
 }
 
-function patchDepartment(body: object) {
+function patchDepartment(body: object, origin?: string) {
   return PATCH(new Request(`https://example.test/api/admin/departments/${departmentId}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(origin ? { Origin: origin } : {}) },
     body: JSON.stringify(body),
   }) as any, routeContext)
 }
@@ -130,8 +130,9 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
 
   it.each([
     ['42501', 403, 'NO_PERMISSION'],
-    ['PGRST202', 503, 'DEPARTMENT_LEAD_ACCESS_UNAVAILABLE'],
-  ])('改动部门上级在权限查询返回 %s 时停止', async (code, status, responseCode) => {
+    ['PGRST202', 503, 'DEPARTMENT_MOVE_UNAVAILABLE'],
+    ['23514', 400, 'INVALID_DEPARTMENT_MOVE'],
+  ])('改动部门上级在保存返回 %s 时停止', async (code, status, responseCode) => {
     const lookup = makeQuery({ data: { id: departmentId, parent_id: oldParentId }, error: null })
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup)
     vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: null, error: { code } } as never)
@@ -139,8 +140,9 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
     const response = await patchDepartment({ parent_id: null })
     expect(response.status).toBe(status)
     expect(await response.json()).toMatchObject({ code: responseCode })
-    expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith('admin_get_department_lead_access_v1', {
-      p_actor_id: 'admin-user', p_org_id: 'org-1', p_department_id: departmentId,
+    expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith('admin_save_department_parent_change_v1', {
+      p_actor_id: 'admin-user', p_org_id: 'org-1', p_department_id: departmentId, p_changes: { parent_id: null },
+      p_expected_parent_id: oldParentId,
     })
     expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
     expect(lookup.update).not.toHaveBeenCalled()
@@ -154,37 +156,49 @@ describe('PATCH /api/admin/departments/[id] validation', () => {
     expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
   })
 
-  it('限制新上级为同组织启用部门，并以读取到的旧上级作为更新条件', async () => {
-    const lookup = makeQuery({ data: { id: departmentId, parent_id: null }, error: null })
-    const parent = makeQuery({ data: { depth: 3, path: `/${newParentId}/` }, error: null })
-    const update = makeQuery({ data: { id: departmentId, parent_id: newParentId }, error: null })
-    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup).mockReturnValueOnce(parent).mockReturnValueOnce(update)
+  it('通过一次组织内原子命令保存完整部门改动', async () => {
+    grant(['dept:directory_view', 'dept:edit_structure', 'user:view'])
+    const lookup = makeQuery({ data: { id: departmentId, parent_id: oldParentId }, error: null })
+    const changes = { parent_id: newParentId, leader_id: null }
+    const department = { id: departmentId, parent_id: newParentId, leader_id: null, member_count: 3, depth: 2 }
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: { department }, error: null } as never)
 
-    expect((await patchDepartment({ parent_id: newParentId })).status).toBe(200)
-    expect(parent.eq.mock.calls).toEqual([['id', newParentId], ['org_id', 'org-1'], ['status', 'active']])
-    expect(update.update).toHaveBeenCalledExactlyOnceWith({ parent_id: newParentId, depth: 4 })
-    expect(update.eq.mock.calls).toEqual([['id', departmentId], ['org_id', 'org-1'], ['status', 'active']])
-    expect(update.is).toHaveBeenCalledExactlyOnceWith('parent_id', null)
+    const response = await patchDepartment({ ...changes, expected_parent_id: oldParentId }, 'https://example.test')
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ success: true, data: department })
+    expect(supabaseAdmin.rpc).toHaveBeenCalledExactlyOnceWith('admin_save_department_parent_change_v1', {
+      p_actor_id: 'admin-user', p_org_id: 'org-1', p_department_id: departmentId,
+      p_changes: changes, p_expected_parent_id: oldParentId,
+    })
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+    expect(lookup.update).not.toHaveBeenCalled()
   })
 
-  it('同组织启用上级查询无结果时拒绝改隶', async () => {
-    const lookup = makeQuery({ data: { id: departmentId, parent_id: oldParentId }, error: null })
-    const parent = makeQuery({ data: null, error: null })
-    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup).mockReturnValueOnce(parent)
+  it('其他操作已把部门移动到目标上级时返回并发冲突', async () => {
+    const lookup = makeQuery({ data: { id: departmentId, parent_id: newParentId }, error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({
+      data: null, error: { code: '40001', details: 'DEPARTMENT_PARENT_CHANGED' },
+    } as never)
 
-    expect((await patchDepartment({ parent_id: newParentId })).status).toBe(400)
-    expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
-  })
-
-  it('并发改变当前上级或停用部门时返回冲突', async () => {
-    const lookup = makeQuery({ data: { id: departmentId, parent_id: oldParentId }, error: null })
-    const update = makeQuery({ data: null, error: null })
-    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup).mockReturnValueOnce(update)
-
-    const response = await patchDepartment({ parent_id: null })
+    const response = await patchDepartment({ parent_id: newParentId, expected_parent_id: oldParentId })
     expect(response.status).toBe(409)
     expect(await response.json()).toMatchObject({ code: 'DEPARTMENT_MOVE_CHANGED' })
-    expect(update.eq).toHaveBeenCalledWith('parent_id', oldParentId)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('admin_save_department_parent_change_v1', expect.any(Object))
+    expect(lookup.update).not.toHaveBeenCalled()
+  })
+
+  it('拒绝跨站改上级请求和仅有旧上级的请求', async () => {
+    const lookup = makeQuery({ data: { id: departmentId, parent_id: oldParentId }, error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(lookup)
+
+    const unsafe = await patchDepartment({ parent_id: null, expected_parent_id: oldParentId }, 'https://other.test')
+    expect(unsafe.status).toBe(403)
+    const incomplete = await patchDepartment({ name: '新名称', expected_parent_id: oldParentId })
+    expect(incomplete.status).toBe(400)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+    expect(lookup.update).not.toHaveBeenCalled()
   })
 
   it('没有当前组织部门写权限时，不访问业务表并拒绝 DELETE', async () => {

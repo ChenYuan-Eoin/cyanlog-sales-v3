@@ -15,9 +15,12 @@ import { BuildingIcon, ShieldIcon, XIcon } from 'lucide-react'
 import type { OrgSummaryDepartment, OrgSummaryRole, ScopedRoleAssignment } from '../../types'
 import { isRetiredRoleCode, isRoleAssignableInScope } from '@/lib/role-permission-resolution'
 import { isGenericallyAssignableRole } from '../role-assignment-policy'
-import { EmployeePermissionReview } from '../EmployeePermissionOverrides'
+import { confirmAction } from '@/lib/toast'
+import type { RoleOverrideDecision, RoleOverrideReview } from '@/lib/admin/member-role-override-choice'
+import { RoleOverrideChoice } from './RoleOverrideChoice'
 
 type AssignableRole = OrgSummaryRole & { department_scope_available?: boolean }
+type SaveRole = (decision?: RoleOverrideDecision) => Promise<RoleOverrideReview | void>
 
 interface RoleAssignmentDialogProps {
   userId: string
@@ -27,13 +30,12 @@ interface RoleAssignmentDialogProps {
   organizationOnly?: boolean
   currentSystemAdmin?: boolean
   departmentAssignmentRestricted?: boolean
-  employeePermissionOrgId?: string
   currentRoles: string[]
   departments: OrgSummaryDepartment[]
   scopedRoles?: ScopedRoleAssignment[]
-  onSubmit: (roleIds: string[], systemAdmin?: boolean) => Promise<void>
-  onSubmitScoped?: (roleId: string, departmentId: string) => Promise<void>
-  onRevokeScoped?: (roleId: string, scopeType: 'department' | 'space', scopeId: string) => Promise<void>
+  onSubmit: (roleIds: string[], systemAdmin?: boolean, decision?: RoleOverrideDecision) => Promise<RoleOverrideReview | void>
+  onSubmitScoped?: (roleId: string, departmentId: string, decision?: RoleOverrideDecision) => Promise<RoleOverrideReview | void>
+  onRevokeScoped?: (roleId: string, scopeType: 'department' | 'space', scopeId: string, decision?: RoleOverrideDecision) => Promise<RoleOverrideReview | void>
   trigger?: React.ReactNode
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -48,7 +50,6 @@ export function RoleAssignmentDialog({
   organizationOnly = false,
   currentSystemAdmin,
   departmentAssignmentRestricted = currentSystemAdmin === true,
-  employeePermissionOrgId,
   departments,
   scopedRoles = [],
   onSubmit,
@@ -75,6 +76,7 @@ export function RoleAssignmentDialog({
   const showSystemAdmin = scopeType === 'org' && !organizationOnly && currentSystemAdmin !== undefined
   const [scopeId, setScopeId] = useState('')
   const [revokingKey, setRevokingKey] = useState<string | null>(null)
+  const [reviewState, setReviewState] = useState<{ review: RoleOverrideReview; save: SaveRole; closeAfterSave: boolean } | null>(null)
   const assignableRoles = roles.filter(role => isRoleAssignableInScope(role.code, scopeType, role.department_scope_available === true)
     && (!removePendingOnly || currentRoles.includes(role.id)))
   const selectedScopedRole = assignableRoles.find(role => role.id === selectedScopedRoleId)
@@ -139,6 +141,7 @@ export function RoleAssignmentDialog({
       setScopeType('org')
       setScopeId('')
       setSelectedScopedRoleId('')
+      setReviewState(null)
     }
   }, [open, userId, currentSystemAdmin])
 
@@ -152,28 +155,38 @@ export function RoleAssignmentDialog({
     ))
   }, [scopeType])
 
-  const handleSubmit = useCallback(async () => {
-    if (fetchingRoles || rolesError || loading) return
+  async function saveRole(save: SaveRole, closeAfterSave: boolean, decision?: RoleOverrideDecision) {
     setLoading(true)
     setSaveError('')
     try {
-      if (scopeType === 'org') {
-        if (showSystemAdmin) await onSubmit(selectedOrgRoles, selectedSystemAdmin)
-        else await onSubmit(selectedOrgRoles)
-      } else {
-        if (!onSubmitScoped || !selectedDepartment || !selectedScopedRole) return
-        await onSubmitScoped(selectedScopedRole.id, selectedDepartment.id)
+      const review = await save(decision)
+      if (review) {
+        setReviewState({ review, save, closeAfterSave })
+        return
       }
-      onOpenChange(false)
+      setReviewState(null)
+      if (closeAfterSave) onOpenChange(false)
     } catch (failure) {
       setSaveError(failure instanceof Error && failure.message ? failure.message : '角色保存失败，请重试。')
     } finally {
       setLoading(false)
     }
-  }, [
-    fetchingRoles, rolesError, loading, scopeType, showSystemAdmin, selectedSystemAdmin,
-    onSubmit, selectedOrgRoles, onSubmitScoped, selectedScopedRole, selectedDepartment, onOpenChange,
-  ])
+  }
+
+  async function handleSubmit() {
+    if (fetchingRoles || rolesError || loading || reviewState) return
+    if (scopeType === 'org') {
+      if (showSystemAdmin && selectedSystemAdmin !== currentSystemAdmin && !await confirmAction(
+        selectedSystemAdmin ? `授予「${userName}」系统超管权限？` : `撤销「${userName}」的系统超管权限？`,
+        { confirmText: selectedSystemAdmin ? '确认授权' : '确认撤销', danger: true },
+      )) return
+      await saveRole(decision => decision ? onSubmit(selectedOrgRoles, showSystemAdmin ? selectedSystemAdmin : undefined, decision)
+        : showSystemAdmin ? onSubmit(selectedOrgRoles, selectedSystemAdmin) : onSubmit(selectedOrgRoles), true)
+    } else if (onSubmitScoped && selectedDepartment && selectedScopedRole) {
+      await saveRole(decision => decision ? onSubmitScoped(selectedScopedRole.id, selectedDepartment.id, decision)
+        : onSubmitScoped(selectedScopedRole.id, selectedDepartment.id), true)
+    }
+  }
 
   const nonOrgScopedRoles = scopedRoles.filter(
     assignment => (assignment.scopeType === 'department' || assignment.scopeType === 'space')
@@ -200,10 +213,10 @@ export function RoleAssignmentDialog({
 
         {saveError && <p role="alert" className="text-sm text-red-700">{saveError}</p>}
 
-        {open && employeePermissionOrgId && (
-          <EmployeePermissionReview orgId={employeePermissionOrgId} userId={userId} />
-        )}
-
+        {reviewState ? (
+          <RoleOverrideChoice review={reviewState.review} busy={loading} onCancel={() => setReviewState(null)}
+            onChoose={decision => void saveRole(reviewState.save, reviewState.closeAfterSave, decision)} />
+        ) : <>
         {fetchingRoles ? (
           <div className="py-8 text-center text-slate-500">加载角色列表...</div>
         ) : rolesError ? (
@@ -285,12 +298,14 @@ export function RoleAssignmentDialog({
                       className="h-7 w-7 shrink-0 p-0"
                       aria-label={`撤销 ${assignment.roleName}（${assignment.scopeName}）`}
                       title="撤销范围授权"
-                      disabled={!onRevokeScoped || !assignment.scopeId || revokingKey === key}
+                      disabled={!onRevokeScoped || !assignment.scopeId || loading || revokingKey === key}
                       onClick={async () => {
                         if (!onRevokeScoped || !assignment.scopeId) return
                         setRevokingKey(key)
                         try {
-                          await onRevokeScoped(assignment.roleId, scopeType, assignment.scopeId)
+                          const { scopeId } = assignment
+                          await saveRole(decision => decision ? onRevokeScoped(assignment.roleId, scopeType, scopeId, decision)
+                            : onRevokeScoped(assignment.roleId, scopeType, scopeId), false)
                         } finally {
                           setRevokingKey(null)
                         }
@@ -362,6 +377,7 @@ export function RoleAssignmentDialog({
             </div>
           </>
         )}
+        </>}
       </DialogContent>
     </Dialog>
   )

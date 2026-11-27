@@ -51,7 +51,7 @@ describe('scoped role assignment route', () => {
     vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue(activeAuthority)
     vi.mocked(userHasOrgRoleCode).mockResolvedValue(false)
     vi.mocked(validateOrgRoleAssignment).mockResolvedValue({ ok: true, roleIds: [role] })
-    rpc.mockResolvedValue({ data: true, error: null })
+    rpc.mockResolvedValue({ data: { result: true }, error: null })
   })
 
   it('assigns a department role with only the server-resolved current organization', async () => {
@@ -60,10 +60,10 @@ describe('scoped role assignment route', () => {
     expect(await response.json()).toEqual({ success: true })
     expect(loadCurrentOrganizationRoleAssignments).toHaveBeenCalledExactlyOnceWith(actor)
     expect(validateOrgRoleAssignment).toHaveBeenCalledExactlyOnceWith([systemGrant], org, [role], { scopeType: 'department', action: 'assign' })
-    expect(rpc).toHaveBeenCalledExactlyOnceWith('admin_set_role_scope_assignment_v1', {
-      p_actor_id: actor, p_org_id: org, p_user_id: target, p_role_id: role,
-      p_scope_type: 'department', p_scope_id: scope, p_action: 'assign',
-      p_reason: null, p_request_id: 'test-request',
+    expect(rpc).toHaveBeenCalledExactlyOnceWith('admin_apply_member_role_change_v1', {
+      p_actor_id: actor, p_org_id: org, p_user_id: target,
+      p_change: { kind: 'scope', role_id: role, scope_type: 'department', scope_id: scope, action: 'assign', reason: null },
+      p_review_id: null, p_choice: null, p_request_id: 'test-request',
     })
   })
 
@@ -85,8 +85,8 @@ describe('scoped role assignment route', () => {
     expect(rpc).not.toHaveBeenCalled()
 
     expect((await DELETE(request('DELETE'), context())).status).toBe(200)
-    expect(rpc).toHaveBeenCalledExactlyOnceWith('admin_set_role_scope_assignment_v1', expect.objectContaining({
-      p_role_id: role, p_action: 'revoke',
+    expect(rpc).toHaveBeenCalledExactlyOnceWith('admin_apply_member_role_change_v1', expect.objectContaining({
+      p_change: expect.objectContaining({ role_id: role, action: 'revoke' }),
     }))
   })
 
@@ -106,10 +106,10 @@ describe('scoped role assignment route', () => {
     }), context())
     expect(response.status).toBe(200)
     expect(validateOrgRoleAssignment).toHaveBeenCalledExactlyOnceWith([systemGrant], org, [role], { scopeType: 'space', action: 'revoke' })
-    expect(rpc).toHaveBeenCalledExactlyOnceWith('admin_set_role_scope_assignment_v1', {
-      p_actor_id: actor, p_org_id: org, p_user_id: target, p_role_id: role,
-      p_scope_type: 'space', p_scope_id: scope, p_action: 'revoke',
-      p_reason: 'Updated roster', p_request_id: 'test-request',
+    expect(rpc).toHaveBeenCalledExactlyOnceWith('admin_apply_member_role_change_v1', {
+      p_actor_id: actor, p_org_id: org, p_user_id: target,
+      p_change: { kind: 'scope', role_id: role, scope_type: 'space', scope_id: scope, action: 'revoke', reason: 'Updated roster' },
+      p_review_id: null, p_choice: null, p_request_id: 'test-request',
     })
   })
 
@@ -121,9 +121,10 @@ describe('scoped role assignment route', () => {
     const response = await DELETE(request('DELETE', { role_id: ordinaryRole, scope_type: scopeType, scope_id: scope }), context())
     expect(response.status).toBe(200)
     expect(validateOrgRoleAssignment).toHaveBeenCalledExactlyOnceWith([systemGrant], org, [ordinaryRole], { scopeType, action: 'revoke' })
-    expect(rpc).toHaveBeenCalledExactlyOnceWith('admin_set_role_scope_assignment_v1', {
-      p_actor_id: actor, p_org_id: org, p_user_id: target, p_role_id: ordinaryRole,
-      p_scope_type: scopeType, p_scope_id: scope, p_action: 'revoke', p_reason: null, p_request_id: 'test-request',
+    expect(rpc).toHaveBeenCalledExactlyOnceWith('admin_apply_member_role_change_v1', {
+      p_actor_id: actor, p_org_id: org, p_user_id: target,
+      p_change: { kind: 'scope', role_id: ordinaryRole, scope_type: scopeType, scope_id: scope, action: 'revoke', reason: null },
+      p_review_id: null, p_choice: null, p_request_id: 'test-request',
     })
   })
 
@@ -180,7 +181,7 @@ describe('scoped role assignment route', () => {
     [{ data: null, error: { code: '23514', details: 'SHIPPING_DEPARTMENT_LEDGER_PERMISSION_REQUIRED' } }, 409, 'ROLE_SCOPE_NOT_SUPPORTED'],
     [{ data: null, error: { code: '42501' } }, 403, 'NO_PERMISSION'],
     [{ data: null, error: { code: 'PGRST202' } }, 503, 'SCOPE_ASSIGNMENT_UNAVAILABLE'],
-    [{ data: false, error: null }, 409, 'MEMBER_NOT_ELIGIBLE'],
+    [{ data: { result: false }, error: null }, 409, 'MEMBER_NOT_ELIGIBLE'],
   ])('reports database write failure %j', async (result, status, code) => {
     rpc.mockResolvedValueOnce(result)
     const response = await POST(request('POST'), context())

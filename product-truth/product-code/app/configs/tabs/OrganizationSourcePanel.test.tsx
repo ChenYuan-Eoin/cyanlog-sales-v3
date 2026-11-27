@@ -395,6 +395,34 @@ describe('OrganizationSourcePanel', () => {
     expect(screen.queryByRole('button', { name: '确认切换目录主来源' })).not.toBeInTheDocument()
   })
 
+  it('shows automatic role source changes even when employee affiliations are unchanged', async () => {
+    const current = plan({ authorityReview: {
+      members: 0, baselineChanges: 0, rolesForReview: 0, scopesForReview: 0, personalExceptions: 0,
+      automaticRoleSourcesAdded: 2, automaticRoleSourcesRemoved: 1,
+    } })
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
+      ? json({ data: { plan: current } })
+      : json({ data: { sources: [source], providers, permissions, active_primary_source_id: source.id } })))
+    render(<OrganizationSourcePanel />)
+    expect(await screen.findByText(/新增部门角色来源 2 项，结束 1 项/)).toBeVisible()
+  })
+
+  it('shows scope changes under retained role sources in the directory plan and confirmation', async () => {
+    const current = plan({ authorityReview: {
+      members: 0, baselineChanges: 0, rolesForReview: 0, scopesForReview: 0, personalExceptions: 0,
+      automaticRoleScopeWidenedMembers: 2, automaticRoleScopeNarrowedMembers: 1,
+    } })
+    vi.mocked(toast.confirmAction).mockResolvedValueOnce(false)
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).includes('/directory')
+      ? json({ data: { plan: current } })
+      : json({ data: { sources: [source], providers, permissions, active_primary_source_id: source.id } })))
+    render(<OrganizationSourcePanel />)
+    const caption = '已有部门角色的数据范围扩大 2 人，收缩 1 人。'
+    expect(await screen.findByText(new RegExp(caption))).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '确认切换目录主来源' }))
+    await waitFor(() => expect(toast.confirmAction).toHaveBeenCalledWith(expect.stringContaining(caption), expect.anything()))
+  })
+
   it('requires explicit confirmation and sends the frozen plan revision to apply', async () => {
     const current = plan()
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -421,7 +449,7 @@ describe('OrganizationSourcePanel', () => {
     })
   })
 
-  it('offers rollback only for an applied plan and sends the exact plan id', async () => {
+  it('previews permission impact before confirming rollback of the exact applied plan', async () => {
     const current = plan({
       status: 'applied', appliedAt: '2026-11-03T08:01:00.000Z',
       run: {
@@ -432,6 +460,12 @@ describe('OrganizationSourcePanel', () => {
     })
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input).includes('/directory') && init?.method === 'POST') {
+        if (JSON.parse(String(init.body)).action === 'rollback_preview') {
+          return json({ data: { preview: { previewId: 'preview-1', summary: {
+            members: 1, baselineChanges: 1, rolesForReview: 2, scopesForReview: 1, personalExceptions: 1,
+            automaticRoleScopeWidenedMembers: 0, automaticRoleScopeNarrowedMembers: 2,
+          } } } })
+        }
         return json({ data: { run: {
           runId: 'run-1', planId: current.id, status: 'rolled_back', appliedAt: current.appliedAt!, rolledBackAt: '2026-11-03T08:02:00.000Z',
           sourceId: current.targetSourceId, previousPrimarySourceId: current.previousPrimarySourceId, departments: 1, identities: 1, members: 1,
@@ -447,8 +481,13 @@ describe('OrganizationSourcePanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: '回滚本次目录切源' }))
 
     await waitFor(() => expect(toast.confirmAction).toHaveBeenCalledOnce())
-    const post = fetchMock.mock.calls.find(([url, init]) => String(url).includes('/directory') && init?.method === 'POST')
-    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ action: 'rollback', plan_id: current.id })
+    expect(toast.confirmAction).toHaveBeenCalledWith(expect.stringContaining('待复核角色 2 项'), expect.anything())
+    expect(toast.confirmAction).toHaveBeenCalledWith(expect.stringContaining('已有部门角色的数据范围扩大 0 人，收缩 2 人。'), expect.anything())
+    const posts = fetchMock.mock.calls.filter(([url, init]) => String(url).includes('/directory') && init?.method === 'POST')
+    expect(posts.map(([, init]) => JSON.parse(String(init?.body)))).toEqual([
+      { action: 'rollback_preview', plan_id: current.id },
+      { action: 'rollback', plan_id: current.id, preview_id: 'preview-1' },
+    ])
   })
 
   it('lets an administrator explicitly open Fxiaoke login after role assignment without an invitation step', async () => {

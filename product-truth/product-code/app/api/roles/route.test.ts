@@ -100,6 +100,7 @@ describe('GET /api/roles organization permissions', () => {
       }))
     vi.mocked(createMiddlewareRestClient).mockReturnValue({
       selectRows: vi.fn().mockResolvedValue(currentDefinition),
+      readRpcRows: vi.fn().mockResolvedValue([]),
     })
     vi.mocked(readMiddlewareRpcRows).mockResolvedValue([
       { permission_code: 'user:view', effect: 'DENY', scope: null },

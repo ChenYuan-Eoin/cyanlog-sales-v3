@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button'
 import { confirmAction, error, success } from '@/lib/toast'
 import type { OrganizationSourceAccess } from '@/lib/admin/organization-source-access'
 import type { OrganizationConnectionProvider, ProviderCapability } from '@/lib/organization-connections/types'
-import type { DirectoryCutoverClientPlan } from '@/lib/organization-connections/directory-cutover'
+import type { DirectoryAuthorityReviewSummary, DirectoryCutoverClientPlan } from '@/lib/organization-connections/directory-cutover'
 import { connectionPresentation } from '@/lib/organization-connections/presentation'
 import { OrganizationConnectionForm } from './OrganizationConnectionForm'
 import { DirectoryInspectionPanel } from './DirectoryInspectionPanel'
@@ -110,6 +110,16 @@ function methodLabel(method: DirectoryCutoverClientPlan['identityChanges'][numbe
     phone: '手机号',
     manual: '人工绑定',
   }[method]
+}
+
+function directoryAuthoritySummary(summary: DirectoryAuthorityReviewSummary) {
+  const automatic = (summary.automaticRoleSourcesAdded ?? 0) + (summary.automaticRoleSourcesRemoved ?? 0) > 0
+    ? `新增部门角色来源 ${summary.automaticRoleSourcesAdded ?? 0} 项，结束 ${summary.automaticRoleSourcesRemoved ?? 0} 项。`
+    : ''
+  const scope = (summary.automaticRoleScopeWidenedMembers ?? 0) + (summary.automaticRoleScopeNarrowedMembers ?? 0) > 0
+    ? `已有部门角色的数据范围扩大 ${summary.automaticRoleScopeWidenedMembers ?? 0} 人，收缩 ${summary.automaticRoleScopeNarrowedMembers ?? 0} 人。`
+    : ''
+  return `归属变化 ${summary.members} 人，部门基线变化 ${summary.baselineChanges} 人，待复核角色 ${summary.rolesForReview} 项、数据范围 ${summary.scopesForReview} 项、个人例外 ${summary.personalExceptions} 项。${automatic}${scope}`
 }
 
 function formatTime(value: string | null | undefined) {
@@ -339,7 +349,8 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
     const accepted = await confirmAction(
       `确认整体同步${providerLabel}组织目录，并将其作为目录主来源？`
       + `本次包含 ${latestPlan.snapshot.departmentCount} 个部门、${latestPlan.snapshot.employeeCount} 位员工及其归属，`
-      + '旧来源与手工数据保留；未关联员工仍会显示，不会自动开账号或改变登录状态。',
+      + '旧来源与手工数据保留；未关联员工仍会显示，不会自动开账号或改变登录状态。'
+      + (latestPlan.authorityReview ? directoryAuthoritySummary(latestPlan.authorityReview) : ''),
       { confirmText: '确认切换目录', danger: true },
     )
     if (!accepted) return
@@ -375,18 +386,29 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
   }
 
   async function rollbackLatestPlan() {
-    if (!latestPlan || !canRollback) return
-    const accepted = await confirmAction(
-      '确认回滚本次目录切源？系统只会在连接、目录和成员关系均未发生后续变化时恢复切换前的精确状态。',
-      { confirmText: '确认回滚', danger: true },
-    )
-    if (!accepted) return
+    if (!latestPlan || !canRollback || directoryAction !== null) return
     setDirectoryAction('rollback')
     try {
+      const previewResponse = await fetch('/api/admin/organization-sources/directory', {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify({ action: 'rollback_preview', plan_id: latestPlan.id }),
+      })
+      const previewBody = await previewResponse.json().catch(() => ({})) as {
+        data?: { preview?: { previewId: string; summary: DirectoryAuthorityReviewSummary } }
+        error?: string
+      }
+      const preview = previewBody.data?.preview
+      if (!previewResponse.ok || !preview) throw new Error(previewBody.error || '无法预览目录回滚。')
+      if (!await confirmAction(
+        '确认回滚本次目录切源？' + directoryAuthoritySummary(preview.summary)
+        + '回滚只恢复组织关系。已经暂停的授权仍待复核。',
+        { confirmText: '确认回滚', danger: true },
+      )) return
       const response = await fetch('/api/admin/organization-sources/directory', {
         method: 'POST',
         headers: authHeaders(true),
-        body: JSON.stringify({ action: 'rollback', plan_id: latestPlan.id }),
+        body: JSON.stringify({ action: 'rollback', plan_id: latestPlan.id, preview_id: preview.previewId }),
       })
       const body = await response.json().catch(() => ({})) as { data?: { run?: DirectoryCutoverClientPlan['run'] }; error?: string }
       const run = body.data?.run
@@ -397,7 +419,7 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
         rolledBackAt: run.rolledBackAt || new Date().toISOString(),
         run,
       } : current)
-      success('目录切源已回滚到本次操作前的状态。')
+      success('目录归属已回滚，暂停的授权仍待复核。')
       await refreshAll()
     } catch (rollbackError) {
       error(rollbackError instanceof Error ? rollbackError.message : '目录切源回滚失败。')
@@ -757,6 +779,13 @@ export function OrganizationSourcePanel({ onRefresh }: OrganizationSourcePanelPr
               保留手工部门 {latestPlan.preserved.manualDepartmentCount} 个；保留旧来源部门 {latestPlan.preserved.previousPrimaryDepartmentsRetained} 个；
               保留旧来源身份 {latestPlan.preserved.previousPrimaryIdentitiesRetained} 条。计划有效至 {formatTime(latestPlan.expiresAt)}。
             </div>
+            {latestPlan.authorityReview && (latestPlan.authorityReview.members > 0
+              || (latestPlan.authorityReview.automaticRoleSourcesAdded ?? 0) > 0
+              || (latestPlan.authorityReview.automaticRoleSourcesRemoved ?? 0) > 0
+              || (latestPlan.authorityReview.automaticRoleScopeWidenedMembers ?? 0) > 0
+              || (latestPlan.authorityReview.automaticRoleScopeNarrowedMembers ?? 0) > 0) && (
+              <p className="mt-3 text-xs text-slate-700">{directoryAuthoritySummary(latestPlan.authorityReview)}</p>
+            )}
 
             {latestPlan.conflicts.length > 0 && (
               <ul className="mt-3 space-y-1.5" aria-label="目录切源冲突">

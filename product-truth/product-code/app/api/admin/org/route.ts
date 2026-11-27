@@ -4,6 +4,7 @@
 export const preferredRegion = 'sin1'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { buildDepartmentSpaces } from '@/lib/department-spaces'
@@ -13,6 +14,7 @@ import { loadOrgRolePermissionContext, queryOrgRoles } from '@/lib/org-role-perm
 import { getMemberActionAvailability, loadOrganizationPermissionAccess, type MemberActionAvailability } from '@/lib/admin/member-actions'
 import { evaluateDepartmentStructureAccess } from '@/lib/admin/department-actions'
 import type { ScopeType } from '@/lib/scoped-access'
+import type { DepartmentAutomaticRoleSource } from '@/app/configs/types'
 
 type RoleLookup = {
   id: string
@@ -71,6 +73,7 @@ function hideDepartmentMembership(user: unknown) {
     primary_dept_name: '',
     department_ids: [],
     secondary_dept_names: [],
+    automatic_role_sources: undefined,
     scoped_roles: scopedRoles,
     role_ids: scopedRoles.map(role => role.roleId).filter(id => typeof id === 'string'),
     role_codes: scopedRoles.map(role => role.roleCode).filter(code => typeof code === 'string'),
@@ -120,6 +123,54 @@ function isOrgAdminPayload(value: unknown): value is OrgAdminPayload {
 }
 
 type OrgPayloadSource = 'directory-v2' | 'directory-v1' | 'legacy-rpc' | 'fallback'
+
+const automaticRoleDirectorySourcesSchema = z.array(z.object({
+  user_id: z.string().min(1),
+  role_id: z.string().min(1),
+  role_code: z.string().min(1),
+  role_name: z.string().min(1),
+  rule_department_id: z.string().min(1),
+  affiliation_department_id: z.string().min(1),
+  permissions: z.array(z.string().min(1)).min(1),
+}))
+
+async function readAutomaticRoleDirectorySources(orgId: string, payload: OrgAdminPayload) {
+  try {
+    const { data, error } = await supabaseAdmin.rpc('department_automatic_role_directory_sources_v1', { p_org_id: orgId })
+    if (error && ['PGRST202', '42883'].includes(error.code || '')) return null
+    if (error) throw error
+
+    const parsed = automaticRoleDirectorySourcesSchema.safeParse(data)
+    if (!parsed.success) throw new Error('INVALID_AUTOMATIC_ROLE_DIRECTORY_SOURCES')
+
+    const departmentNames = new Map(payload.departments.map(department => [department.id, department.name]))
+    const roleIds = new Set(payload.roles.flatMap(role =>
+      role && typeof role === 'object' && 'id' in role ? [role.id] : []))
+    const byMember = new Map<string, DepartmentAutomaticRoleSource[]>()
+    const seen = new Set<string>()
+    for (const source of parsed.data) {
+      const { user_id, role_id, role_name, rule_department_id, affiliation_department_id } = source
+      const ruleDepartmentName = departmentNames.get(rule_department_id)
+      const affiliationDepartmentName = departmentNames.get(affiliation_department_id)
+      if (!roleIds.has(role_id) || !ruleDepartmentName || !affiliationDepartmentName) continue
+      const key = JSON.stringify([user_id, role_id, rule_department_id, affiliation_department_id])
+      if (seen.has(key)) continue
+      seen.add(key)
+
+      const sources = byMember.get(user_id) ?? []
+      sources.push({
+        roleId: role_id, roleName: role_name,
+        ruleDepartmentId: rule_department_id, ruleDepartmentName,
+        affiliationDepartmentId: affiliation_department_id, affiliationDepartmentName,
+      })
+      byMember.set(user_id, sources)
+    }
+    return byMember
+  } catch (error) {
+    console.error('[admin/org] Automatic role sources read failed:', error instanceof Error ? error.message : 'RPC_ERROR')
+    return false as const
+  }
+}
 
 async function listOrgPayloadFromRpc(orgId: string): Promise<{ data: OrgAdminPayload; source: OrgPayloadSource }> {
   let source: OrgPayloadSource = 'directory-v2'
@@ -540,16 +591,22 @@ export async function GET(req: NextRequest) {
       data = await withTiming(timings, 'fallback_payload', () => listOrgPayload(auth.orgId))
     }
 
-    const [directoryRoster, roleMembershipBasis] = await Promise.all([
-      verifyDirectoryRoster(auth.orgId, directorySource, data),
-      readRoleMembershipBasis(auth.orgId, payloadSource, data.organization),
-    ])
     const canReadDepartments = auth.departmentAccess.canRead
     const org = data.organization as Record<string, unknown> | null
+    const [directoryRoster, roleMembershipBasis, automaticRoleSources] = await Promise.all([
+      verifyDirectoryRoster(auth.orgId, directorySource, data),
+      readRoleMembershipBasis(auth.orgId, payloadSource, data.organization),
+      canReadDepartments && org?.id === auth.orgId
+        ? withTiming(timings, 'role_sources', () => readAutomaticRoleDirectorySources(auth.orgId, data))
+        : null,
+    ])
     return NextResponse.json({
       ...data,
       organization: org ? { id: org.id, name: org.name, slug: org.slug } : undefined,
-      users: canReadDepartments ? data.users : data.users.map(hideDepartmentMembership),
+      users: canReadDepartments ? data.users.map(user => {
+        if (!user || typeof user !== 'object' || !('id' in user) || typeof user.id !== 'string') return user
+        return { ...user, automatic_role_sources: automaticRoleSources ? automaticRoleSources.get(user.id) : undefined }
+      }) : data.users.map(hideDepartmentMembership),
       departments: canReadDepartments ? data.departments : [],
       spaces: canReadDepartments ? data.spaces : [],
       department_spaces: canReadDepartments ? buildDepartmentSpaces(data.departments, data.spaces) : [],
@@ -558,7 +615,10 @@ export async function GET(req: NextRequest) {
           id, departmentIds: canReadDepartments ? departmentIds : [],
         })) }
         : directoryRoster,
-      role_membership_stats: canReadDepartments ? roleMembershipBasis : { ...roleMembershipBasis, activeSpaceIds: [] },
+      role_membership_stats: canReadDepartments ? {
+        ...roleMembershipBasis,
+        automaticSourcesAvailable: automaticRoleSources === null ? undefined : automaticRoleSources !== false,
+      } : { ...roleMembershipBasis, activeSpaceIds: [] },
       member_access: true,
       member_actions: auth.memberActions,
       department_access: auth.departmentAccess,

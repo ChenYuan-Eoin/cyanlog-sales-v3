@@ -31,6 +31,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getRequestAuthToken } from '@/lib/auth-token'
+import { loadDepartmentAutomaticRoleSources } from '@/lib/admin/department-automatic-role-read'
 import { getConfigsTabAccess, hasConfigsTabAccess } from '@/lib/configs/tab-access'
 import { createMiddlewareRestClient, type MiddlewareRestClient } from '@/lib/middleware-rest-client'
 import {
@@ -184,7 +185,10 @@ const BASELINE_READ_PATHS = new Set([
 
 const departmentDetailPath = /^\/api\/admin\/departments\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const memberDetailPath = /^\/api\/admin\/users\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/([a-z-]+))?$/i
-const memberAuthorizationPaths = new Set(['roles', 'role-scopes', 'system-super-admin', 'org-super-admin', 'identity-binding', 'permission-overrides'])
+const memberAuthorizationPaths = new Set([
+  'roles', 'role-scopes', 'system-super-admin', 'org-super-admin', 'identity-binding', 'permission-overrides',
+  'department-transfer', 'department-transfer-review',
+])
 const memberPathPermissions: Partial<Record<string, readonly OrganizationEmployeePermissionKey[]>> = {
   'PATCH ': [ORG_MEMBER_EDIT, ORG_MEMBER_MANAGE_LOGIN, ORG_MEMBER_MANAGE_EMPLOYMENT],
   'DELETE ': [ORG_MEMBER_MANAGE_EMPLOYMENT],
@@ -207,6 +211,7 @@ function isSystemAuthorizationPath(pathname: string, request: NextRequest): bool
     || (request.method === 'DELETE' && pathname.endsWith('/metadata')))) return true
   if (pathname === '/api/admin/departments/leader-access' || pathname === '/api/admin/departments/shipping-intake') return true
   if (pathname.endsWith('/permissions') && departmentDetailPath.test(pathname.slice(0, -'/permissions'.length))) return true
+  if (pathname.endsWith('/role-rules') && departmentDetailPath.test(pathname.slice(0, -'/role-rules'.length))) return true
   const memberPath = memberDetailPath.exec(pathname)?.[1]
   return !!memberPath && memberAuthorizationPaths.has(memberPath)
 }
@@ -220,6 +225,7 @@ function hasMemberRoutePermission(pathname: string, method: string, permissions:
   if (pathname === '/api/admin/users' && method === 'POST') return legacyWrite || hasPermission(permissions, ORG_MEMBER_INVITE)
   if (pathname === '/api/admin/users/batch' && method === 'POST') {
     return legacyWrite || hasPermission(permissions, ORG_MEMBER_MANAGE_LOGIN) || hasPermission(permissions, ORG_MEMBER_MANAGE_EMPLOYMENT)
+      || hasPermission(permissions, ORG_MEMBER_REMOVE_MEMBERSHIP)
   }
   const detail = memberDetailPath.exec(pathname)
   const actions = detail && memberPathPermissions[method + ' ' + (detail[1] ?? '')]
@@ -244,7 +250,7 @@ function getOrganizationRouteAccess(pathname: string, method: string, decision: 
     if (method === 'DELETE') return decision['dept:delete_structure']
   }
   if (pathname === '/api/admin/users/batch' && method === 'POST') {
-    return decision['user:manage_login'] || decision['user:manage_employment']
+    return decision[ORG_MEMBER_MANAGE_LOGIN] || decision[ORG_MEMBER_MANAGE_EMPLOYMENT] || decision[ORG_MEMBER_REMOVE_MEMBERSHIP]
   }
   if (pathname === '/api/roles' && read) return decision['role:view']
   const detail = memberDetailPath.exec(pathname)
@@ -317,13 +323,18 @@ async function canEnterDepartmentWorkspace(
   orgId: string,
   organizationSettings: unknown,
 ): Promise<boolean> {
-  const assignments = await rest.selectRows<{
-    org_id: string; user_id: string; scope_type: string; scope_id: string | null; roles: unknown
-  }>(
-    'user_roles', { user_id: userId, org_id: orgId, scope_type: 'department' },
-    'org_id,user_id,scope_type,scope_id,roles:roles(id,code,permissions,owner_org_id)', 1000,
-  )
-  const departmentIds = new Set<string>()
+  const [assignments, automaticRoles] = await Promise.all([
+    rest.selectRows<{
+      org_id: string; user_id: string; scope_type: string; scope_id: string | null; roles: unknown
+    }>(
+      'user_roles', { user_id: userId, org_id: orgId, scope_type: 'department' },
+      'org_id,user_id,scope_type,scope_id,roles:roles(id,code,permissions,owner_org_id)', 1000,
+    ),
+    loadDepartmentAutomaticRoleSources(rest, orgId, userId),
+  ])
+  const departmentIds = new Set(automaticRoles
+    .filter(role => role.permissions.includes('dept:view') || role.permissions.includes('report:dept'))
+    .map(role => role.departmentId))
   for (const assignment of assignments) {
     if (assignment.org_id !== orgId || assignment.user_id !== userId || assignment.scope_type !== 'department' || !assignment.scope_id) continue
     if (Array.isArray(assignment.roles) && assignment.roles.length !== 1) continue

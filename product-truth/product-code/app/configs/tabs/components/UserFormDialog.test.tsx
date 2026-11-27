@@ -5,9 +5,9 @@ import { UserFormDialog } from './UserFormDialog'
 
 afterEach(cleanup)
 
-it('submits a member edit without sending department data when department access is absent', async () => {
+it('keeps department changes out of profile edits even with department access', async () => {
   const submit = vi.fn<(values: object) => Promise<void>>().mockResolvedValue(undefined)
-  render(<UserFormDialog open onOpenChange={vi.fn()} onSubmit={submit} canSelectDepartment={false}
+  render(<UserFormDialog open onOpenChange={vi.fn()} onSubmit={submit} canSelectDepartment
     departments={[{ id: 'dept', name: '受限部门', parent_name: null }]}
     editingUser={{
       id: 'person', email: 'person@example.test', phone: '13900000000', display_name: '在职成员',
@@ -21,4 +21,10 @@ it('submits a member edit without sending department data when department access
   const submitted = JSON.parse(JSON.stringify(submit.mock.calls[0]?.[0]))
   expect(submitted).toMatchObject({ display_name: '新姓名' })
   expect(submitted).not.toHaveProperty('primary_dept_id')
+})
+
+it('still offers department selection when creating a member', () => {
+  render(<UserFormDialog open onOpenChange={vi.fn()} onSubmit={vi.fn()}
+    departments={[{ id: 'dept', name: '销售部', parent_name: null }]} />)
+  expect(screen.getByLabelText('主部门')).toBeInTheDocument()
 })

@@ -160,7 +160,7 @@ it('asks for confirmation before offboarding a linked employee and retains a rej
   fireEvent.click(screen.getByRole('checkbox', { name: '选择销售员工 1' }))
   fireEvent.click(screen.getByRole('button', { name: '批量办理离职' }))
   let dialog = await screen.findByRole('dialog', { name: '批量办理离职' })
-  expect(within(dialog).getByText(/纷享人事记录仍由来源同步/)).toBeInTheDocument()
+  expect(within(dialog).getByText(/外部人事记录由来源系统维护/)).toBeInTheDocument()
   fireEvent.click(within(dialog).getByRole('button', { name: '取消' }))
   expect(write).not.toHaveBeenCalled()
 
@@ -197,4 +197,39 @@ it('keeps scoped read-only access out of bulk operations', () => {
   fireEvent.click(screen.getByRole('button', { name: /^销售部门/ }))
   expect(screen.getByText('销售员工 1')).toBeInTheDocument()
   expect(screen.queryByRole('checkbox', { name: '选择销售员工 1' })).not.toBeInTheDocument()
+})
+
+it('offers bulk removal with only removal permission and reports each skipped member', async () => {
+  const local = member(1)
+  const external = { ...member(2), directory_source: 'feishu', directory_identity_id: 'linked', directory_status: 'active' }
+  const onRefresh = vi.fn()
+  const write = vi.fn().mockResolvedValue(Response.json({
+    results: [
+      { user_id: local.id, ok: true },
+      { user_id: external.id, ok: false, error: '该成员由外部通讯录管理，可在 ICU 办理离职' },
+    ],
+    succeeded: 1, failed: 1,
+  }))
+  vi.mocked(fetch).mockImplementation(async (url, init) => url === batchPath
+    ? write(init) : new Response(null, { status: 403 }))
+
+  render(<OrgStructureTab
+    orgSummary={payload([local, external], { ...permissions, removeMembership: true, manageEmployment: false, manageLogin: false, assignRoles: false })}
+    currentUserId="actor"
+    onRefresh={onRefresh}
+  />)
+  selectCurrentDepartment()
+  fireEvent.click(screen.getByRole('button', { name: '批量移出当前组织' }))
+  const dialog = await screen.findByRole('dialog', { name: '批量移出当前组织' })
+  expect(write).not.toHaveBeenCalled()
+  fireEvent.click(within(dialog).getByRole('button', { name: '确认执行' }))
+
+  expect(await screen.findByText('批量移出当前组织 · 成功 1 人，失败 1 人')).toBeInTheDocument()
+  expect(screen.getByText('销售员工 2 · 该成员由外部通讯录管理，可在 ICU 办理离职')).toBeInTheDocument()
+  expect(screen.getByRole('checkbox', { name: '选择销售员工 1' })).not.toBeChecked()
+  expect(screen.getByRole('checkbox', { name: '选择销售员工 2' })).toBeChecked()
+  expect(JSON.parse(write.mock.calls[0][0].body)).toEqual({
+    expected_org_id: orgId, action: 'remove_membership', user_ids: [local.id, external.id],
+  })
+  expect(onRefresh).toHaveBeenCalledTimes(1)
 })

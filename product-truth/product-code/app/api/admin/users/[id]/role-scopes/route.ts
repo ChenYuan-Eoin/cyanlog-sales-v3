@@ -4,6 +4,9 @@ import { AuthError, requireAuth } from '@/lib/auth'
 import { userHasOrgRoleCode, validateOrgRoleAssignment } from '@/lib/admin/org-role-authority'
 import { canManageSystemAuthorizations, loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import { supabaseAdmin } from '@/lib/supabase'
+import {
+  readRoleOverrideReview, roleMutationResult, roleOverrideDecisionSchema, ROLE_PERMISSION_REVIEW_REQUIRED,
+} from '@/lib/admin/member-role-override-choice'
 
 const SHIPPING_DEPARTMENT_LEDGER_MESSAGE = '该角色需要启用支持部门范围的「查看收寄台账」权限。'
 
@@ -12,6 +15,7 @@ const scopeSchema = z.strictObject({
   scope_type: z.enum(['department', 'space']),
   scope_id: z.guid(),
   reason: z.string().trim().max(500).optional(),
+  personal_permissions: roleOverrideDecisionSchema.optional(),
 })
 
 function failure(error: string, code: string, status: number) {
@@ -51,17 +55,25 @@ async function changeScope(req: NextRequest, userId: string, action: 'assign' | 
         ? failure('角色不存在', validation.reason, 404)
         : failure('不能通过作用域分配该角色', validation.reason, 403)
     }
-    const { data, error } = await supabaseAdmin.rpc('admin_set_role_scope_assignment_v1', {
+    const { data, error } = await supabaseAdmin.rpc('admin_apply_member_role_change_v1', {
       p_actor_id: user.id,
       p_org_id: orgId,
       p_user_id: targetId,
-      p_role_id: validation.roleIds[0],
-      p_scope_type: input.data.scope_type,
-      p_scope_id: input.data.scope_id,
-      p_action: action,
-      p_reason: input.data.reason ?? null,
+      p_change: {
+        kind: 'scope',
+        role_id: validation.roleIds[0],
+        scope_type: input.data.scope_type,
+        scope_id: input.data.scope_id,
+        action,
+        reason: input.data.reason ?? null,
+      },
+      p_review_id: input.data.personal_permissions?.review_revision ?? null,
+      p_choice: input.data.personal_permissions?.choice ?? null,
       p_request_id: req.headers.get('x-request-id')?.slice(0, 128) ?? null,
     })
+    if (error?.details === 'ROLE_OVERRIDE_REVIEW_CHANGED') {
+      return failure('角色或个人权限设置已变更，请重新选择。', 'ROLE_ASSIGNMENT_CHANGED', 409)
+    }
     if (error?.code === '23503' && error.details === 'ORG_ROLE_NOT_FOUND') {
       return failure('角色已变更，请刷新角色列表后重试。', 'ROLE_ASSIGNMENT_CHANGED', 409)
     }
@@ -80,8 +92,12 @@ async function changeScope(req: NextRequest, userId: string, action: 'assign' | 
     if (error?.code === 'PGRST202' || error?.code === '42883') {
       return failure('作用域角色服务正在更新', 'SCOPE_ASSIGNMENT_UNAVAILABLE', 503)
     }
-    if (error || typeof data !== 'boolean') return failure('作用域角色保存失败', 'SCOPE_ASSIGNMENT_FAILED', 500)
-    if (!data) return failure('成员不存在或当前状态不能分配作用域角色', 'MEMBER_NOT_ELIGIBLE', 409)
+    if (error) return failure('作用域角色保存失败', 'SCOPE_ASSIGNMENT_FAILED', 500)
+    const review = readRoleOverrideReview(data)
+    if (review) return NextResponse.json({ code: ROLE_PERMISSION_REVIEW_REQUIRED, ...review }, { status: 409 })
+    const saved = roleMutationResult(data)
+    if (typeof saved !== 'boolean') return failure('作用域角色保存失败', 'SCOPE_ASSIGNMENT_FAILED', 500)
+    if (!saved) return failure('成员不存在或当前状态不能分配作用域角色', 'MEMBER_NOT_ELIGIBLE', 409)
     return NextResponse.json({ success: true })
   } catch (error) {
     if (error instanceof AuthError) return failure('请先登录', 'UNAUTHORIZED', 401)

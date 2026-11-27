@@ -95,7 +95,7 @@ beforeEach(() => {
   failedTable = null
   failureCode = null
   mocks.from.mockReset().mockImplementation(query)
-  mocks.rpc.mockReset()
+  mocks.rpc.mockReset().mockResolvedValue({ data: [], error: null })
   vi.mocked(requireAuth).mockReset().mockResolvedValue({
     id: userId, email: null, phone: null, display_name: null, org_id: 'stale-token-org',
   })
@@ -143,6 +143,30 @@ beforeEach(() => {
 })
 
 describe('GET /api/dashboard/department', () => {
+  it('实时按部门自动角色的归属部门开放工作台，限制机会和旧空间的额外授权', async () => {
+    tables.user_roles = []
+    const source = {
+      rule_department_id: 'sales-a',
+      affiliation_department_id: 'sales-a-child',
+      role_code: 'AUTOMATIC_REPORTER',
+      permissions: ['report:dept', 'opportunity:*', '*'],
+    }
+    mocks.rpc.mockResolvedValue({ data: [source], error: null })
+    const response = await request()
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      departmentSpaces: [{ department_id: 'sales-a-child', parent_department_id: null }],
+      opportunities: [], milestones: [],
+    })
+    expect(mocks.rpc).toHaveBeenCalledWith('department_automatic_role_sources_v1', { p_org_id: orgId, p_user_id: userId })
+    expect(mocks.from).not.toHaveBeenCalledWith('sales_spaces')
+    expect(mocks.from).not.toHaveBeenCalledWith('opportunities')
+    expect((await request('?departmentId=sales-a')).status).toBe(403)
+
+    mocks.rpc.mockResolvedValue({ data: [], error: null })
+    expect((await request()).status).toBe(403)
+  })
+
   it('组合部门授权并去重，只返回同组织启用部门、分配范围机会和对应节点', async () => {
     const response = await request()
     expect(response.status).toBe(200)

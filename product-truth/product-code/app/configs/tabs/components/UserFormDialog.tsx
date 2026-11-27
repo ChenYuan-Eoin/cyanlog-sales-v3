@@ -32,7 +32,6 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { PlusIcon, UserIcon, EditIcon } from 'lucide-react'
 import type { OrgSummaryUser, OrgSummaryDepartment } from '../../types'
 import { editableOrgRoleIds, isGenericallyAssignableRole } from '../role-assignment-policy'
-import { EmployeePermissionReview } from '../EmployeePermissionOverrides'
 
 const userSchema = z.object({
   email: z.string().email('请输入有效的邮箱地址'),
@@ -50,7 +49,6 @@ interface UserFormDialogProps {
   canSelectDepartment?: boolean
   roles?: Array<{ id: string; name: string; code: string }>
   editingUser?: OrgSummaryUser | null
-  employeePermissionOrgId?: string
   onSubmit: (values: UserFormValues & { role_ids?: string[] }) => Promise<void>
   trigger?: React.ReactNode
   open?: boolean
@@ -62,13 +60,13 @@ export function UserFormDialog({
   canSelectDepartment = true,
   roles = [],
   editingUser,
-  employeePermissionOrgId,
   onSubmit,
   trigger,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: UserFormDialogProps) {
   const assignableRoles = roles.filter((role) => isGenericallyAssignableRole(role.code))
+  const showDepartment = canSelectDepartment && !editingUser
   const [internalOpen, setInternalOpen] = useState(false)
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen
   const onOpenChange = controlledOnOpenChange ?? setInternalOpen
@@ -81,7 +79,7 @@ export function UserFormDialog({
       phone: editingUser?.phone ?? '',
       display_name: editingUser?.display_name ?? '',
       title: editingUser?.title ?? '',
-      primary_dept_id: canSelectDepartment ? editingUser?.primary_dept_id ?? null : undefined,
+      primary_dept_id: showDepartment ? null : undefined,
       role_ids: editingUser
         ? editableOrgRoleIds(editingUser).filter(id => assignableRoles.some(role => role.id === id))
         : [],
@@ -92,14 +90,14 @@ export function UserFormDialog({
     async (values: UserFormValues) => {
       setLoading(true)
       try {
-        await onSubmit({ ...values, primary_dept_id: canSelectDepartment ? values.primary_dept_id : undefined })
+        await onSubmit({ ...values, primary_dept_id: showDepartment ? values.primary_dept_id : undefined })
         onOpenChange(false)
         form.reset()
       } finally {
         setLoading(false)
       }
     },
-    [canSelectDepartment, onSubmit, form, onOpenChange]
+    [showDepartment, onSubmit, form, onOpenChange]
   )
 
   return (
@@ -190,7 +188,7 @@ export function UserFormDialog({
                 </FormItem>
               )}
             />
-            {canSelectDepartment && <FormField
+            {showDepartment && <FormField
               control={form.control}
               name="primary_dept_id"
               render={({ field }) => (
@@ -214,9 +212,6 @@ export function UserFormDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                  {open && employeePermissionOrgId && editingUser && (
-                    <EmployeePermissionReview orgId={employeePermissionOrgId} userId={editingUser.id} change="主部门" />
-                  )}
                   <FormMessage />
                 </FormItem>
               )}

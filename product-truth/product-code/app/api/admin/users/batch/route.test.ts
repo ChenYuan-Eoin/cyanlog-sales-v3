@@ -19,7 +19,7 @@ vi.mock('@/lib/org-role-permissions', async (original) => ({
   ...await original<typeof import('@/lib/org-role-permissions')>(),
   loadCurrentOrganizationRoleAssignments: vi.fn(),
 }))
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: vi.fn() } }))
+vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: vi.fn(), from: vi.fn() } }))
 
 const org = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const foreignOrg = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -121,9 +121,9 @@ it('uses one organization-scoped additive command and reports effective, pending
   ])
   const response = await POST(request({ ...assignBody, user_ids: [member, pending, member, actor] }))
   expect(response.status).toBe(200)
-  expect(rpc).toHaveBeenCalledExactlyOnceWith('admin_apply_org_member_batch_v1', {
-    p_actor_id: actor, p_org_id: org, p_user_ids: [member, pending, actor], p_action: 'assign_roles',
-    p_role_ids: [role], p_request_id: 'batch-test',
+  expect(rpc).toHaveBeenCalledExactlyOnceWith('admin_assign_org_member_roles_batch_v1', {
+    p_actor_id: actor, p_org_id: org, p_user_ids: [member, pending, actor],
+    p_role_ids: [role], p_request_id: 'batch-test', p_decisions: [],
   })
   expect(await response.json()).toEqual({
     results: [
@@ -135,6 +135,49 @@ it('uses one organization-scoped additive command and reports effective, pending
   })
 })
 
+it('exposes only the projected personal choice for matching recipients and accepts a retry of that subset', async () => {
+  const review = '99999999-9999-4999-8999-999999999999'
+  mockDatabase([
+    { user_id: member, outcome: 'saved', affected_permissions: ['unrelated'] },
+    { user_id: pending, outcome: 'ROLE_PERMISSION_REVIEW_REQUIRED', review_revision: review,
+      affected_permissions: [{ permission_code: 'user:view', retainable: true, scope: { type: 'org' } }] },
+  ])
+  const response = await POST(request({ ...assignBody, user_ids: [member, pending] }))
+  expect(response.status).toBe(200)
+  expect(response.headers.get('Cache-Control')).toBe('no-store')
+  expect(await response.json()).toEqual({
+    succeeded: 1, failed: 0, needs_review: 1,
+    results: [
+      { user_id: member, ok: true },
+      { user_id: pending, ok: false, code: 'ROLE_PERMISSION_REVIEW_REQUIRED', error: '请选择个人权限处理方式',
+        review_revision: review, affected_permissions: [{ permission_code: 'user:view', retainable: true }] },
+    ],
+  })
+
+  const decision = { user_id: pending, review_revision: review, choice: 'retain_eligible' }
+  expect((await POST(request({ ...assignBody, personal_permissions: [decision] }))).status).toBe(400)
+  expect((await POST(request({ ...assignBody, user_ids: [pending], personal_permissions: [decision, decision] }))).status).toBe(400)
+  expect(rpc).toHaveBeenCalledOnce()
+
+  mockDatabase([{ user_id: pending, outcome: 'ROLE_OVERRIDE_REVIEW_CHANGED' }])
+  const retry = await POST(request({ ...assignBody, user_ids: [pending], personal_permissions: [decision] }))
+  expect(retry.status).toBe(200)
+  expect(await retry.json()).toMatchObject({ succeeded: 0, failed: 1, results: [
+    { user_id: pending, code: 'ROLE_OVERRIDE_REVIEW_CHANGED' },
+  ] })
+  expect(rpc).toHaveBeenLastCalledWith('admin_assign_org_member_roles_batch_v1', {
+    p_actor_id: actor, p_org_id: org, p_user_ids: [pending], p_role_ids: [role], p_request_id: 'batch-test',
+    p_decisions: [decision],
+  })
+})
+
+it('requires the checked native batch function and never retries through the legacy role writer', async () => {
+  mockDatabase(null, { code: 'PGRST202' })
+  const response = await POST(request(assignBody))
+  expect(response.status).toBe(503)
+  expect(rpc).toHaveBeenCalledExactlyOnceWith('admin_assign_org_member_roles_batch_v1', expect.anything())
+})
+
 it('rejects roles that became unavailable and never reports an incomplete mutation response as success', async () => {
   mockDatabase(null, { code: '23503', details: 'ORG_ROLE_NOT_FOUND' })
   let response = await POST(request(assignBody))
@@ -144,4 +187,60 @@ it('rejects roles that became unavailable and never reports an incomplete mutati
   response = await POST(request(assignBody))
   expect(response.status).toBe(500)
   expect(await response.json()).toMatchObject({ code: 'MEMBER_BATCH_UNCONFIRMED' })
+})
+
+it('removes eligible members through the single-member command while reporting the rest individually', async () => {
+  const managed = '55555555-5555-4555-8555-555555555555'
+  const protectedAdmin = '66666666-6666-4666-8666-666666666666'
+  const departed = '77777777-7777-4777-8777-777777777777'
+  const sources = '88888888-8888-4888-8888-888888888888'
+  const rows: Record<string, unknown[]> = {
+    user_organizations: [
+      { user_id: member, status: 'active' },
+      { user_id: pending, status: 'invited' },
+      { user_id: managed, status: 'active' },
+      { user_id: protectedAdmin, status: 'active' },
+      { user_id: departed, status: 'ended' },
+    ],
+    organization_sources: [{ id: sources }],
+    external_identities: [{ canonical_user_id: managed }],
+  }
+  vi.mocked(supabaseAdmin.from).mockImplementation(table => {
+    // PostgREST query chains resolve to the selected rows.
+    const query = Promise.resolve({ data: rows[table], error: null })
+    return Object.assign(query, { select: () => query, eq: () => query, in: () => query }) as unknown as ReturnType<typeof supabaseAdmin.from>
+  })
+  mockDatabase(true)
+  mockDatabase(null, { code: '42501' })
+
+  const body = { action: 'remove_membership', expected_org_id: org, user_ids: [member, actor, managed, pending, protectedAdmin, departed] }
+  const response = await POST(request(body))
+  expect(response.status).toBe(200)
+  expect(await response.json()).toEqual({
+    results: [
+      { user_id: member, ok: true },
+      { user_id: actor, ok: false, code: 'SELF_MEMBERSHIP_REMOVAL_FORBIDDEN', error: '不能将自己移出当前组织' },
+      { user_id: managed, ok: false, code: 'DIRECTORY_MEMBERSHIP_MANAGED', error: '该成员由外部通讯录管理，可在 ICU 办理离职' },
+      { user_id: pending, ok: false, code: 'INVITED_MEMBERSHIP_PROTECTED', error: '请先撤销待激活邀请' },
+      { user_id: protectedAdmin, ok: false, code: 'PROTECTED_ROLE_MUTATION_FORBIDDEN', error: '平台根管理员不能移出组织' },
+      { user_id: departed, ok: false, code: 'MEMBERSHIP_NOT_FOUND', error: '目标成员不存在、已离开或不在当前组织' },
+    ],
+    succeeded: 1, failed: 5,
+  })
+  expect(rpc).toHaveBeenCalledTimes(2)
+  for (const userId of [member, protectedAdmin]) {
+    expect(rpc).toHaveBeenCalledWith('admin_remove_tenant_membership_v1', {
+      p_actor_id: actor, p_org_id: org, p_user_id: userId,
+      p_reason: 'tenant administrator removed membership', p_request_id: 'batch-test',
+    })
+  }
+})
+
+it('keeps removal separately authorized from employment actions', async () => {
+  const authorityWithoutRemoval = { ...authority, roleCode: 'CUSTOM', permissions: ['user:view', 'user:manage_employment'] }
+  vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({ orgId: org, settings: {}, assignments: [authorityWithoutRemoval] })
+  const body = { action: 'remove_membership', expected_org_id: org, user_ids: [member] }
+  expect((await POST(request(body))).status).toBe(403)
+  expect(rpc).not.toHaveBeenCalled()
+  expect(supabaseAdmin.from).not.toHaveBeenCalled()
 })

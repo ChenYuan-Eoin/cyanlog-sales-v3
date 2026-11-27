@@ -6,6 +6,7 @@ import {
   loadLatestDirectoryCutoverPlan,
   prepareDirectoryCutoverPlan,
   rollbackDirectoryCutover,
+  previewDirectoryRollback,
 } from '@/lib/organization-connections/directory-cutover'
 import { isConfigurableProvider } from '@/lib/organization-connections/adapters'
 import { OrganizationConnectionError } from '@/lib/organization-connections/errors'
@@ -110,6 +111,11 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    if (body.action === 'rollback_preview') {
+      if (!access.apply) throw new OrganizationConnectionError('FORBIDDEN', '无权预览此组织的目录回滚。', 403)
+      return response({ preview: await previewDirectoryRollback({ orgId, actorId, planId: String(body.plan_id || '') }) })
+    }
+
     if (body.action === 'rollback') {
       if (!access.apply) throw new OrganizationConnectionError('FORBIDDEN', '无权回滚此组织的目录同步。', 403)
       return response({
@@ -117,6 +123,7 @@ export async function POST(req: NextRequest) {
           orgId,
           actorId,
           planId: String(body.plan_id || ''),
+          previewId: String(body.preview_id || ''),
         }),
       })
     }

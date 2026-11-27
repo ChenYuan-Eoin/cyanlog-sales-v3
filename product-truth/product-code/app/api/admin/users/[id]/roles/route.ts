@@ -7,6 +7,9 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { canManageSystemAuthorizations, loadCurrentOrganizationRoleAssignments } from '@/lib/org-role-permissions'
 import {
+  readRoleOverrideReview, roleMutationResult, roleOverrideDecisionSchema, ROLE_PERMISSION_REVIEW_REQUIRED,
+} from '@/lib/admin/member-role-override-choice'
+import {
   userHasOrgRoleCode,
   validateOrgRoleAssignment,
 } from '@/lib/admin/org-role-authority'
@@ -17,6 +20,7 @@ const assignOrgRolesSchema = z.object({
   expected_role_ids: orgRoleIds.optional(),
   scope_type: z.literal('org').optional().default('org'),
   scope_id: z.string().regex(/^[0-9a-f-]{36}$/i, '作用域 ID 格式不正确').nullable().optional(),
+  personal_permissions: roleOverrideDecisionSchema.optional(),
 })
 const memberOrgRolesSchema = assignOrgRolesSchema.extend({
   expected_org_id: z.guid(),
@@ -68,7 +72,7 @@ export async function POST(
       )
     }
 
-    const { role_ids, expected_role_ids } = parseResult.data
+    const { role_ids, expected_role_ids, personal_permissions } = parseResult.data
     const memberRoleEdit = memberRoleResult?.success ? memberRoleResult.data : null
 
     if (memberRoleEdit) {
@@ -110,31 +114,25 @@ export async function POST(
       )
     }
 
-    const args = {
+    const memberRoleChange = {
+      kind: memberRoleEdit ? 'member_org' : expected_role_ids === undefined ? 'replace_org' : 'replace_org_if_current',
+      role_ids: roleValidation.roleIds,
+      ...(expected_role_ids === undefined ? {} : { expected_role_ids: [...new Set(expected_role_ids)] }),
+      ...(memberRoleEdit ? {
+        system_admin: memberRoleEdit.system_admin, expected_system_admin: memberRoleEdit.expected_system_admin,
+      } : {}),
+    }
+    const { data: mutation, error: replaceError } = await supabaseAdmin.rpc('admin_apply_member_role_change_v1', {
       p_actor_id: currentUser.id,
       p_org_id: orgId,
       p_user_id: userId,
-      p_role_ids: roleValidation.roleIds,
-      p_reason: 'tenant role assignment',
-      p_request_id: req.headers.get('x-request-id'),
-    }
-    const { data: replaced, error: replaceError } = memberRoleEdit
-      ? await supabaseAdmin.rpc('admin_save_member_org_roles_v1', {
-        p_actor_id: args.p_actor_id,
-        p_org_id: args.p_org_id,
-        p_user_id: args.p_user_id,
-        p_role_ids: args.p_role_ids,
-        p_expected_role_ids: [...new Set(memberRoleEdit.expected_role_ids)],
-        p_system_admin: memberRoleEdit.system_admin,
-        p_expected_system_admin: memberRoleEdit.expected_system_admin,
-        p_request_id: args.p_request_id?.slice(0, 128) ?? null,
-      })
-      : expected_role_ids === undefined ? await supabaseAdmin.rpc('admin_replace_org_roles_v1', args)
-        : await supabaseAdmin.rpc('admin_replace_org_roles_if_current_v1', {
-        ...args,
-        p_expected_role_ids: [...new Set(expected_role_ids)],
-      })
+      p_change: memberRoleChange,
+      p_review_id: personal_permissions?.review_revision ?? null,
+      p_choice: personal_permissions?.choice ?? null,
+      p_request_id: req.headers.get('x-request-id')?.slice(0, 128) ?? null,
+    })
     if (replaceError) {
+      if (replaceError.details === 'ROLE_OVERRIDE_REVIEW_CHANGED') return assignmentChanged()
       if (memberRoleEdit && replaceError.code === '40001') return assignmentChanged()
       if (memberRoleEdit && replaceError.code === '23514') {
         const lastAdministrator = replaceError.details === 'LAST_SYSTEM_SUPER_ADMIN_PROTECTED'
@@ -157,7 +155,7 @@ export async function POST(
           code: 'PROTECTED_ROLE_MUTATION_FORBIDDEN',
         }, { status: 403 })
       }
-      if (expected_role_ids !== undefined && replaceError.code === 'PGRST202') {
+      if (replaceError.code === 'PGRST202' || replaceError.code === '42883') {
         return NextResponse.json({
           error: '角色分配服务正在更新，请稍后刷新页面重试。',
           code: 'ROLE_ASSIGNMENT_UPDATING',
@@ -166,6 +164,9 @@ export async function POST(
       console.error('Assign roles error:', replaceError)
       return NextResponse.json({ error: '分配角色失败' }, { status: 500 })
     }
+    const review = readRoleOverrideReview(mutation)
+    if (review) return NextResponse.json({ code: ROLE_PERMISSION_REVIEW_REQUIRED, ...review }, { status: 409 })
+    const replaced = roleMutationResult(mutation)
     if (replaced === 'conflict') return assignmentChanged()
     if (replaced === false || replaced === 'ineligible') {
       return NextResponse.json({

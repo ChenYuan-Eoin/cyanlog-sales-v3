@@ -243,7 +243,7 @@
     "feature_id": "F003",
     "objective": "完成组织与权限操作闭环。组织架构、外部系统接入、角色权限三个入口按原布局呈现；部门、角色和员工复用按真实系统功能划分的唯一 L1–L4 权限表。员工按权限点合并部门与角色授权、实时组织树和数据范围，再用个人差异覆盖。业务参数与授权分别校验，只有系统超管可以维护授权；使用唯一系统超管角色并保护最后一名有效超管。组织成员可维护角色、查看个人权限、停用账号和办理离职；角色成员可移除对应角色并打开同一份个人权限表。组织名单支持逐人、全选和批量操作，失败可定位到人。统计明确区分同步在职与关联成员，操作保留当前视图。先验收组织和自助收寄的实际权限与范围。",
     "activation_basis": "IN-20261126-024 将 IN-20261126-019 至 IN-20261126-023 的界面与操作缺陷合并到当前 WP82，沿用 IN-20261126-017 至 IN-20261126-018 确认的并集与个人差异覆盖，以及 IN-20261126-002 的业务参数和授权边界。",
-    "execution_workspace": "/Users/nsss/.codex/worktrees/wp82-personal-overrides/Price-v3",
+    "execution_workspace": "/Users/nsss/.codex/worktrees/wp82-org-department-release/Price-v3",
     "allowed_paths": [
       "governance/runtime-state/active-task.json",
       "governance/runtime-state/demand-inbox.jsonl",
@@ -362,7 +362,18 @@
       "blocking_acceptance_defects": [],
       "runtime_contract_version": "f003-role-permissions-v1"
     },
-    "micro_fixes": [],
+    "micro_fixes": [
+      {
+        "id": "IN-20261127-004",
+        "objective": "首次选中部门即展示真实关联成员，移出组织的单人和批量操作按同一资格执行。",
+        "scope": "部门树与成员名单统计、成员单人与批量移出"
+      },
+      {
+        "id": "IN-20261127-007",
+        "objective": "调主部门保留兼岗，二次确认后原子更新部门关系和权限，并在现有员工权限表中处理差异复核。",
+        "scope": "调部门、风险预览、最终确认和员工权限复核；保留当前组织与系统超管保护"
+      }
+    ],
     "blocking_items": []
   },
   "execution_queue": {

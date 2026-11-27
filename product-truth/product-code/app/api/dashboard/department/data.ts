@@ -3,6 +3,7 @@ import { attachHistoricalSpaceIds, buildDepartmentOptions, resolveDepartmentSpac
 import { hasPermission } from '@/lib/permissions'
 import { isRetiredRoleCode, isRoleAssignableInScope, resolveRolePermissions } from '@/lib/role-permission-resolution'
 import { supabaseAdmin } from '@/lib/supabase'
+import { DEPARTMENT_AUTOMATIC_ROLE_READ_RPC, readDepartmentAutomaticRoleRows } from '@/lib/admin/department-automatic-role-read'
 
 type ScopeType = 'org' | 'department' | 'space'
 type Role = { id: string; code: string; permissions: unknown; owner_org_id: string | null }
@@ -178,14 +179,24 @@ async function getDashboardRows(
 
 export async function getDepartmentDashboardScope(userId: string, selection: DepartmentSelection) {
   const orgId = await getCurrentOrg(userId)
-  const grants = await getCurrentGrants(userId, orgId)
+  const [grants, automaticRoles] = await Promise.all([
+    getCurrentGrants(userId, orgId),
+    supabaseAdmin.rpc(DEPARTMENT_AUTOMATIC_ROLE_READ_RPC, { p_org_id: orgId, p_user_id: userId }),
+  ])
+  if (automaticRoles.error && automaticRoles.error.code !== 'PGRST202') throw automaticRoles.error
   const organizationGrants = grants.filter(grant => grant.scopeType === 'org'
     && hasPermission(grant.permissions, 'role:manage'))
   const allDepartmentsVisible = organizationGrants.some(grant => grant.code === 'SUPER_ADMIN')
-  const departmentGrants = grants.filter(grant => grant.scopeType === 'department'
-    && (grant.permissions.includes('dept:view') || grant.permissions.includes('report:dept')))
+  const departmentRoots = [
+    ...grants.filter(grant => grant.scopeType === 'department'
+      && (grant.permissions.includes('dept:view') || grant.permissions.includes('report:dept')))
+      .map(grant => grant.scopeId),
+    ...readDepartmentAutomaticRoleRows(automaticRoles.data ?? [])
+      .filter(grant => grant.permissions.includes('dept:view') || grant.permissions.includes('report:dept'))
+      .map(grant => grant.departmentId),
+  ]
   const approvedLeadDepartments = allDepartmentsVisible ? new Set<string>() : await getApprovedLeadDepartments(userId, orgId)
-  if (!allDepartmentsVisible && departmentGrants.length === 0 && approvedLeadDepartments.size === 0) {
+  if (!allDepartmentsVisible && departmentRoots.length === 0 && approvedLeadDepartments.size === 0) {
     throw new DepartmentAccessError(selection.departmentId)
   }
 
@@ -197,7 +208,7 @@ export async function getDepartmentDashboardScope(userId: string, selection: Dep
   const roots = allDepartmentsVisible
     ? allDepartments.map(department => department.department_id)
     : [
-        ...departmentGrants.map(grant => grant.scopeId),
+        ...departmentRoots,
         ...departmentRows.filter(department => (
           department.leader_id === userId && approvedLeadDepartments.has(department.id)
         )).map(department => department.id),

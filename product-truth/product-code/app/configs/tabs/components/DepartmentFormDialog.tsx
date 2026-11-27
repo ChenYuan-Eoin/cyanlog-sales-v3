@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -63,6 +63,8 @@ export function DepartmentFormDialog({
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen
   const onOpenChange = controlledOnOpenChange ?? setInternalOpen
   const [loading, setLoading] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const busy = useRef(false)
 
   const form = useForm<DepartmentFormValues>({
     resolver: zodResolver(departmentSchema),
@@ -73,23 +75,38 @@ export function DepartmentFormDialog({
       leader_id: editingDept?.leader_id ?? null,
     },
   })
+  function changeOpen(next: boolean) {
+    if (busy.current) return
+    if (!next) {
+      setSaveError('')
+      form.reset()
+    }
+    onOpenChange(next)
+  }
 
-  const handleSubmit = useCallback(
-    async (values: DepartmentFormValues) => {
-      setLoading(true)
-      try {
-        await onSubmit(values)
-        onOpenChange(false)
-        form.reset()
-      } finally {
-        setLoading(false)
+  async function save(values: DepartmentFormValues) {
+    if (busy.current) return
+    busy.current = true
+    setLoading(true)
+    setSaveError('')
+    try {
+      await onSubmit(values)
+      form.reset()
+      onOpenChange(false)
+    } catch (error) {
+      if (error instanceof TypeError) {
+        setSaveError('连接失败，请重试。')
+      } else {
+        setSaveError(error instanceof Error && error.message ? error.message : '部门保存失败，请重试。')
       }
-    },
-    [onSubmit, form, onOpenChange]
-  )
+    } finally {
+      busy.current = false
+      setLoading(false)
+    }
+  }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={changeOpen}>
       <DialogTrigger asChild>{trigger ?? (
         <Button variant="outline" size="sm">
           <PlusIcon className="h-4 w-4 mr-1" />
@@ -104,7 +121,7 @@ export function DepartmentFormDialog({
           </DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(save)} className="space-y-4" aria-busy={loading}>
             <FormField
               control={form.control}
               name="name"
@@ -112,7 +129,7 @@ export function DepartmentFormDialog({
                 <FormItem>
                   <FormLabel>部门名称</FormLabel>
                   <FormControl>
-                    <Input placeholder="例如：销售部" {...field} />
+                    <Input placeholder="例如：销售部" {...field} disabled={loading} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -125,7 +142,7 @@ export function DepartmentFormDialog({
                 <FormItem>
                   <FormLabel>部门编码</FormLabel>
                   <FormControl>
-                    <Input placeholder="例如：SALES" {...field} />
+                    <Input placeholder="例如：SALES" {...field} disabled={loading} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -138,6 +155,7 @@ export function DepartmentFormDialog({
                 <FormItem>
                   <FormLabel>上级部门</FormLabel>
                   <Select
+                    disabled={loading}
                     value={field.value ?? 'null'}
                     onValueChange={(value) => field.onChange(value === 'null' ? null : value)}
                   >
@@ -166,6 +184,7 @@ export function DepartmentFormDialog({
                 <FormItem>
                   <FormLabel>部门主管</FormLabel>
                   <Select
+                    disabled={loading}
                     value={field.value ?? 'null'}
                     onValueChange={(value) => field.onChange(value === 'null' ? null : value)}
                   >
@@ -187,17 +206,11 @@ export function DepartmentFormDialog({
                 </FormItem>
               )}
             />
+            {saveError && <p className="text-sm text-red-700" role="alert">{saveError}</p>}
             <div className="flex justify-end gap-2 pt-4">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => onOpenChange(false)}
-                disabled={loading}
-              >
-                取消
-              </Button>
+              <Button type="button" variant="ghost" onClick={() => changeOpen(false)} disabled={loading}>取消</Button>
               <Button type="submit" disabled={loading}>
-                {loading ? '保存中...' : '保存'}
+                {loading ? '保存中…' : '保存'}
               </Button>
             </div>
           </form>

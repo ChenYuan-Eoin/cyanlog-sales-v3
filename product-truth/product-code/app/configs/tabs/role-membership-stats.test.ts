@@ -18,6 +18,12 @@ function department(id: string, status: string): OrgSummaryDepartment {
   return { id, name: id, status, parent_name: null, member_count: 0 }
 }
 
+const automatic = {
+  roleId: 'sales', roleName: '销售',
+  ruleDepartmentId: 'parent', ruleDepartmentName: '销售部',
+  affiliationDepartmentId: 'open-department', affiliationDepartmentName: '销售一部',
+}
+
 const context = {
   organization: { id: 'org', name: '当前组织' },
   departments: [department('open-department', 'active'), department('closed-department', 'inactive')],
@@ -126,5 +132,35 @@ describe('role membership statistics', () => {
     })
     expect(stats).toMatchObject({ effectiveMemberCount: null, pendingMemberCount: null, effectiveBindingCount: null })
     expect(stats.members[0]).toMatchObject({ hasOrgAssignment: true, effective: null })
+  })
+
+  it('lists automatic-only members and counts each member and effective department once', () => {
+    const secondRule = { ...automatic, ruleDepartmentId: 'open-department', ruleDepartmentName: '销售一部' }
+    const mixed = activeUser('mixed', {
+      scoped_roles: [binding('department', 'open-department')],
+      automatic_role_sources: [automatic, secondRule],
+    })
+    const stats = getRoleMembershipStats([
+      mixed, mixed, activeUser('automatic', { automatic_role_sources: [automatic] }),
+      activeUser('unavailable', { automatic_role_sources: [automatic], login_enabled: false }),
+    ], 'sales', context)
+
+    expect(stats).toMatchObject({ effectiveMemberCount: 2, effectiveBindingCount: 2, pendingMemberCount: 0 })
+    expect(stats.members.map(({ user, automaticSources, effective }) => [user.id, automaticSources, effective])).toEqual([
+      ['mixed', [automatic, secondRule], true],
+      ['automatic', [automatic], true],
+      ['unavailable', [automatic], false],
+    ])
+  })
+
+  it('does not claim an effective member or binding count when automatic sources fail to load', () => {
+    const member = activeUser('manual', { role_ids: ['sales'], scoped_roles: [binding('org', 'org')] })
+    const stats = getRoleMembershipStats([member], 'sales', {
+      ...context, role_membership_stats: { ...context.role_membership_stats, automaticSourcesAvailable: false },
+    })
+    expect(stats).toMatchObject({
+      automaticSourcesAvailable: false, effectiveMemberCount: null, effectiveBindingCount: null, pendingMemberCount: 0,
+    })
+    expect(stats.members[0]).toMatchObject({ user: member, hasOrgAssignment: true, effective: null })
   })
 })

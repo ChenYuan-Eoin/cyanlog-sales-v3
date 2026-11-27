@@ -24,6 +24,7 @@ import {
 import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, PowerOffIcon, PowerIcon, UnlockIcon, MailIcon, BanIcon, FingerprintIcon } from 'lucide-react'
 import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment, OrgSummaryRole } from '../types'
 import type { MemberActionAvailability } from '@/lib/admin/member-actions'
+import { readRoleOverrideReview, ROLE_PERMISSION_REVIEW_REQUIRED } from '@/lib/admin/member-role-override-choice'
 import { isRetiredRoleCode } from '@/lib/role-permission-resolution'
 import Fuse from 'fuse.js'
 import { success, error, confirmAction } from '@/lib/toast'
@@ -31,6 +32,7 @@ import { buildDepartmentOptions, resolveDepartmentSpaceIds } from '@/lib/departm
 import { DepartmentPermissions } from './DepartmentPermissions'
 import { EmployeePermissionOverrides, isEmployeePermissionTarget } from './EmployeePermissionOverrides'
 import { DepartmentFormDialog } from './components/DepartmentFormDialog'
+import { DepartmentTransferDialog } from './components/DepartmentTransferDialog'
 import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
 import { IdentityBindingDialog } from './components/IdentityBindingDialog'
@@ -437,23 +439,25 @@ function DepartmentTree({
           open={true}
           onOpenChange={(open) => !open && setEditDept(null)}
           onSubmit={async (values) => {
+            const previousParentId = editDept.parent_id ?? null
             const res = await fetch(`/api/admin/departments/${editDept.id}`, {
               method: 'PATCH',
               headers: buildAuthHeaders(true),
               body: JSON.stringify({
                 name: values.name,
                 code: values.code,
-                parent_id: values.parent_id,
+                ...(values.parent_id !== previousParentId
+                  ? { parent_id: values.parent_id, expected_parent_id: previousParentId } : {}),
                 ...(memberAccess ? { leader_id: values.leader_id } : {}),
               }),
             })
-            const result = await res.json()
+            const result = await res.json().catch(() => null)
             if (!res.ok) {
-              error(result.error || '更新失败')
-              throw new Error(result.error)
+              throw new Error(result?.error || '部门更新失败。')
             }
+            if (result?.success !== true) throw new Error('暂时无法核对部门保存结果，请刷新后检查。')
             success('部门更新成功')
-            await onRefresh?.()
+            void Promise.resolve().then(() => onRefresh?.()).catch(() => error('部门已更新，暂时无法刷新组织架构。'))
           }}
         />
       )}
@@ -502,6 +506,7 @@ interface MemberTableProps {
   batchScope: string
   batchRoles: OrgSummaryRole[]
   onEditUser: (user: OrgSummaryUser) => void
+  onTransferUser?: (user: OrgSummaryUser) => void
   onAssignRole: (user: OrgSummaryUser) => void
   systemAdminOrgIdForUser: (user: OrgSummaryUser) => string | undefined
   onOpenEmployeePermissions?: (user: OrgSummaryUser) => void
@@ -513,20 +518,21 @@ const memberPageSize = 10
 
 function MemberTable({
   users, canReadDepartments, currentUserId, actions, batchOrgId, batchScope, batchRoles,
-  onEditUser, onAssignRole, systemAdminOrgIdForUser, onOpenEmployeePermissions, onBindIdentity, onRefresh,
+  onEditUser, onTransferUser, onAssignRole, systemAdminOrgIdForUser, onOpenEmployeePermissions, onBindIdentity, onRefresh,
 }: MemberTableProps) {
   const [globalFilter, setGlobalFilter] = useState('')
   const query = globalFilter.trim()
   const selectionScope = JSON.stringify([batchScope, query])
   const [selection, setSelection] = useState(() => ({ scope: selectionScope, ids: new Set<string>() }))
   const [pageIndex, setPageIndex] = useState(0)
-  const allowSelection = Boolean(batchOrgId && currentUserId && (actions.manageLogin || actions.manageEmployment || actions.assignRoles))
+  const allowSelection = Boolean(batchOrgId && currentUserId
+    && (actions.manageLogin || actions.manageEmployment || actions.removeMembership || actions.assignRoles))
 
   // 使用 Fuse.js 进行模糊搜索
   const fuse = useMemo(() => {
     return new Fuse(users, {
       keys: ['display_name', 'email', 'title', 'directory_external_id', 'role_names',
-        ...(canReadDepartments ? ['primary_dept_name', 'secondary_dept_names'] : [])],
+        ...(canReadDepartments ? ['primary_dept_name', 'secondary_dept_names', 'automatic_role_sources.roleName'] : [])],
       threshold: 0.4,
     })
   }, [canReadDepartments, users])
@@ -630,11 +636,16 @@ function MemberTable({
           .map(role => role.scopeType === 'org' ? role.roleName : `${role.roleName}（${role.scopeName}）`)
           ?? (user.role_names ?? '').split(',').map(role => role.trim()).filter(Boolean)
         const pendingRoles = user.pending_org_roles?.filter(role => !isRetiredRoleCode(role.code)) ?? []
+        const automaticRoles = new Map(canReadDepartments
+          ? user.automatic_role_sources?.map(source => [source.roleId, source.roleName]) : [])
         const pendingStatus = canOnlyRevokePendingOrgRoles(user) ? '首次登录已停用' : '待首次登录生效'
         return <div className="flex flex-wrap gap-1 max-w-[170px]">
           {[...new Set(roleNames)].map(role => <Badge key={role} variant="secondary" className="text-xs">{role}</Badge>)}
+          {[...automaticRoles].map(([roleId, roleName]) => (
+            <Badge key={roleId} variant="outline" className="text-xs">{roleName} · 部门自动</Badge>
+          ))}
           {pendingRoles.map(role => <Badge key={role.id} variant="outline" className="text-xs">{role.name} · {pendingStatus}</Badge>)}
-          {roleNames.length === 0 && pendingRoles.length === 0 && <span className="text-slate-400">-</span>}
+          {roleNames.length === 0 && pendingRoles.length === 0 && automaticRoles.size === 0 && <span className="text-slate-400">-</span>}
         </div>
       },
     },
@@ -672,6 +683,10 @@ function MemberTable({
         const offboardingRestriction = directoryFirstLogin && lifecycleRestriction?.code === 'MEMBER_NOT_ELIGIBLE' ? null : lifecycleRestriction
         const lifecycleHint = lifecycleRestriction?.code === 'PROTECTED_ROLE_MUTATION_FORBIDDEN'
           ? '请先撤销系统超管角色' : lifecycleRestriction?.label
+        const transferRestriction = user.id === currentUserId ? '请由其他系统超级管理员操作'
+          : lifecycleRestriction?.code === 'PROTECTED_ROLE_MUTATION_FORBIDDEN' ? '系统超级管理员不适用此操作'
+            : (user.membership_status ?? user.status) !== 'active' || memberEmployment(user) !== 'active'
+              ? '仅在职且组织成员关系有效的成员可调整部门' : undefined
 
         return (
           <DropdownMenu>
@@ -686,6 +701,13 @@ function MemberTable({
                 <EditIcon className="h-4 w-4 mr-2" />
                 编辑
               </DropdownMenuItem>
+              {onTransferUser && (
+                <DropdownMenuItem disabled={Boolean(transferRestriction)} title={transferRestriction}
+                  onSelect={() => onTransferUser(user)}>
+                  <BuildingIcon className="h-4 w-4 mr-2" />
+                  调整部门
+                </DropdownMenuItem>
+              )}
 
               {/* P0: 分配角色 */}
               <DropdownMenuItem
@@ -875,6 +897,7 @@ function MemberTable({
                 <DropdownMenuItem
                   className="text-red-600"
                   disabled={!actions.removeMembership || Boolean(lifecycleRestriction)}
+                  title={lifecycleHint || (!actions.removeMembership ? '无移出组织权限' : undefined)}
                   onSelect={async () => {
                     if (!await confirmAction(
                       `确定要将 "${user.display_name}" 移出当前组织吗？\n只结束当前租户的成员关系、角色和数据授权，人员账户与历史审计保留。`,
@@ -907,7 +930,7 @@ function MemberTable({
         )
       },
     },
-  ], [currentUserId, actions, onEditUser, onAssignRole, systemAdminOrgIdForUser, onOpenEmployeePermissions, onBindIdentity, onRefresh])
+  ], [canReadDepartments, currentUserId, actions, onEditUser, onTransferUser, onAssignRole, systemAdminOrgIdForUser, onOpenEmployeePermissions, onBindIdentity, onRefresh])
 
   const columns = useMemo<ColumnDef<OrgSummaryUser>[]>(() => {
     const visibleColumns = canReadDepartments
@@ -985,6 +1008,7 @@ function MemberTable({
           roles={batchRoles}
           canSuspend={actions.manageLogin}
           canOffboard={actions.manageEmployment}
+          canRemoveMembership={actions.removeMembership}
           canAssignRoles={actions.assignRoles}
           authHeaders={() => buildAuthHeaders(true)}
           onClearSelection={clearSelection}
@@ -1078,7 +1102,7 @@ export default function OrgStructureTab({
   const [storedSelectedDeptId, setSelectedDeptId] = useState<string | null>(null)
   const selectedDeptId = canReadDepartments ? storedSelectedDeptId : null
   const [includeSubdepartments, setIncludeSubdepartments] = useState(true)
-  const [employmentFilter, setEmploymentFilter] = useState<MemberFilter>('synced')
+  const [filterOverride, setEmploymentFilter] = useState<MemberFilter | null>(null)
   const [memberTableVersion, setMemberTableVersion] = useState(0)
   const showDirectDepartmentMembers = useCallback((departmentId: string) => {
     setSelectedDeptId(departmentId)
@@ -1087,26 +1111,38 @@ export default function OrgStructureTab({
     setMemberTableVersion(version => version + 1)
   }, [])
   const directoryRoster = orgSummary?.directory_roster
+  const allMembersFilter = filterOverride ?? 'synced'
+  const departmentFilter = filterOverride ?? 'all'
+  const employmentFilter = selectedDeptId ? departmentFilter : allMembersFilter
   const synchronizedView = employmentFilter === 'synced'
-  const allMembersLabel = synchronizedView ? '全部同步在职成员' : '全部成员'
+  const allMembersLabel = allMembersFilter === 'synced' ? '全部同步在职成员' : '全部成员'
   const countsUnavailable = synchronizedView && directoryRoster?.status !== 'ready'
-  const statusUsers = useMemo(() => {
-    if (!synchronizedView) {
-      return users.filter(user => employmentFilter === 'all' || memberEmployment(user) === employmentFilter)
-    }
+  const synchronizedUsers = useMemo(() => {
     if (directoryRoster?.status !== 'ready') return []
     const usersById = new Map(users.map(user => [user.id, user]))
     return directoryRoster.members.flatMap(member => {
       const user = usersById.get(member.id)
       return user ? [{ ...user, department_ids: member.departmentIds }] : []
     })
-  }, [directoryRoster, users, employmentFilter, synchronizedView])
+  }, [directoryRoster, users])
+  const statusUsers = useMemo(() => {
+    if (employmentFilter === 'synced') return synchronizedUsers
+    if (employmentFilter === 'all') return users
+    return users.filter(user => memberEmployment(user) === employmentFilter)
+  }, [employmentFilter, synchronizedUsers, users])
+
+  // The organization-wide synced roster and the department's actual
+  // associations answer different questions until a status is chosen.
+  const departmentUsers = departmentFilter === employmentFilter ? statusUsers : users
+  const allMembersCount = allMembersFilter === 'synced'
+    ? directoryRoster?.status === 'ready' ? synchronizedUsers.length : '—'
+    : statusUsers.length
 
   const departmentMemberCounts = useMemo(() => {
-    if (countsUnavailable) return null
+    if (departmentFilter === 'synced' && directoryRoster?.status !== 'ready') return null
     const parents = new Map(departmentTree.map(department => [department.department_id, department.parent_department_id]))
     const counts = new Map<string, number>()
-    for (const user of statusUsers) {
+    for (const user of departmentUsers) {
       const seen = new Set<string>()
       for (const departmentId of memberDepartmentIds(user)) {
         let id: string | null = departmentId
@@ -1118,7 +1154,7 @@ export default function OrgStructureTab({
       }
     }
     return counts
-  }, [countsUnavailable, departmentTree, statusUsers])
+  }, [departmentFilter, directoryRoster?.status, departmentTree, departmentUsers])
 
   // 根据选中部门过滤成员
   const filteredUsers = useMemo(() => {
@@ -1151,6 +1187,7 @@ export default function OrgStructureTab({
 
   // 编辑用户状态
   const [editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)
+  const [transferDraft, setTransferDraft] = useState<{ orgId: string; actorId: string; member: OrgSummaryUser } | null>(null)
   const [assignmentDraft, setAssignmentDraft] = useState<{
     user: OrgSummaryUser; actorId: string; orgId?: string; roleIds: string[]; systemAdmin?: boolean
   } | null>(null)
@@ -1162,6 +1199,9 @@ export default function OrgStructureTab({
   const canDeleteDepartments = departmentAccess?.canDelete ?? actions.manageDepartments
   const isEmptyState = departments.length === 0 && users.length === 0
   const orgId = orgSummary?.organization?.id
+  const canTransferDepartment = Boolean(actions.assignRoles && canReadDepartments)
+  const transfer = canTransferDepartment && transferDraft?.orgId === orgId && transferDraft?.actorId === currentUserId
+    ? transferDraft : null
   const eligibleSystemAdminIds = orgSummary?.role_membership_stats?.systemSuperAdminAssignableMemberIds
   const systemAdminOrgIdForUser = useCallback((user: OrgSummaryUser) => {
     if (!orgId || !currentUserId || !actions.assignRoles || user.id === currentUserId) return undefined
@@ -1253,7 +1293,9 @@ export default function OrgStructureTab({
           <div className="rounded-lg border bg-white">
             <div className="border-b px-4 py-3">
               <h3 className="font-medium text-slate-900">部门结构</h3>
-              <p className="text-xs text-slate-500 mt-1">部门人数含下级，同一成员只计一次</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {departmentFilter === 'all' ? '关联成员' : MEMBER_FILTER_LABELS[departmentFilter]}人数含下级，同一成员只计一次
+              </p>
             </div>
             <div className="p-2 max-h-[680px] overflow-y-auto">
               <button
@@ -1267,7 +1309,7 @@ export default function OrgStructureTab({
                 <UsersIcon size={16} className={selectedDeptId === null ? 'text-blue-500' : 'text-slate-400'} />
                 <span className="flex-1 text-sm font-medium">{allMembersLabel}</span>
                 <Badge variant={selectedDeptId === null ? 'default' : 'outline'} className="text-xs">
-                  {countsUnavailable ? '—' : stats.userCount}
+                  {allMembersCount}
                 </Badge>
               </button>
 
@@ -1350,6 +1392,8 @@ export default function OrgStructureTab({
                   actions.manageLogin, actions.manageEmployment, actions.assignRoles])}
                 batchRoles={(orgSummary?.roles ?? []).filter(role => isGenericallyAssignableRole(role.code) && !isRetiredRoleCode(role.code))}
                 onEditUser={setEditingUser}
+                onTransferUser={canTransferDepartment && orgId && currentUserId
+                  ? member => setTransferDraft({ orgId, actorId: currentUserId, member }) : undefined}
                 systemAdminOrgIdForUser={systemAdminOrgIdForUser}
                 onAssignRole={(user) => {
                   if (!actions.assignRoles || !currentUserId) return
@@ -1378,6 +1422,7 @@ export default function OrgStructureTab({
               orgId={orgId}
               departmentId={selectedDept.id}
               authHeaders={buildAuthHeaders}
+              onRoleRulesSaved={onRefresh}
             />
           )}
         </div>
@@ -1488,9 +1533,7 @@ export default function OrgStructureTab({
       {editingUser && actions.edit && (
         <UserFormDialog
           departments={departments}
-          canSelectDepartment={canReadDepartments}
           editingUser={editingUser}
-          employeePermissionOrgId={currentUserId && actions.assignRoles && isEmployeePermissionTarget(editingUser) ? orgId : undefined}
           open={true}
           onOpenChange={(open) => !open && setEditingUser(null)}
           onSubmit={async (values) => {
@@ -1506,6 +1549,21 @@ export default function OrgStructureTab({
             }
             success('用户更新成功')
             await onRefresh?.()
+          }}
+        />
+      )}
+      {transfer && (
+        <DepartmentTransferDialog
+          key={JSON.stringify([transfer.orgId, transfer.actorId, transfer.member.id])}
+          orgId={transfer.orgId}
+          member={transfer.member}
+          departments={departments}
+          authHeaders={() => buildAuthHeaders(true)}
+          onClose={() => setTransferDraft(null)}
+          onTransferred={() => {
+            setTransferDraft(null)
+            success('部门已调整')
+            void Promise.resolve().then(() => onRefresh?.()).catch(() => error('部门已调整，暂时无法刷新成员名单。'))
           }}
         />
       )}
@@ -1539,12 +1597,11 @@ export default function OrgStructureTab({
           currentSystemAdmin={assignment.systemAdmin}
           organizationOnly={assignment.user.membership_status === 'invited'}
           departmentAssignmentRestricted={departmentAssignmentRestricted}
-          employeePermissionOrgId={isEmployeePermissionTarget(assignment.user) ? orgId : undefined}
           departments={departments}
           scopedRoles={latestAssignmentUser?.scoped_roles}
           open={true}
           onOpenChange={(open) => !open && setAssignmentDraft(null)}
-          onSubmit={async (roleIds, systemAdmin) => {
+          onSubmit={async (roleIds, systemAdmin, decision) => {
             const systemAdminFields = assignment.systemAdmin === undefined ? {} : {
               expected_org_id: assignment.orgId,
               system_admin: systemAdmin ?? assignment.systemAdmin,
@@ -1555,9 +1612,14 @@ export default function OrgStructureTab({
               headers: buildAuthHeaders(true),
               body: JSON.stringify({
                 role_ids: roleIds, expected_role_ids: assignment.roleIds, scope_type: 'org', ...systemAdminFields,
+                personal_permissions: decision,
               }),
             })
             const result = await res.json().catch(() => null)
+            if (result?.code === ROLE_PERMISSION_REVIEW_REQUIRED) {
+              const review = readRoleOverrideReview(result)
+              if (review) return review
+            }
             if (!res.ok || !result) {
               const message = result?.error || '无法确认角色保存结果，请刷新后重试。'
               if (result?.code === 'ROLE_ASSIGNMENT_CHANGED') {
@@ -1572,7 +1634,7 @@ export default function OrgStructureTab({
             success(preassigned ? '组织角色已预分配，首次登录后生效' : '角色已保存')
             await onRefresh?.()
           }}
-          onSubmitScoped={departmentAssignmentRestricted ? undefined : async (roleId, departmentId) => {
+          onSubmitScoped={departmentAssignmentRestricted ? undefined : async (roleId, departmentId, decision) => {
             const res = await fetch(`/api/admin/users/${assignment.user.id}/role-scopes`, {
               method: 'POST',
               headers: buildAuthHeaders(true),
@@ -1581,9 +1643,14 @@ export default function OrgStructureTab({
                 scope_type: 'department',
                 scope_id: departmentId,
                 reason: 'department role assignment',
+                personal_permissions: decision,
               }),
             })
             const result = await res.json()
+            if (result.code === ROLE_PERMISSION_REVIEW_REQUIRED) {
+              const review = readRoleOverrideReview(result)
+              if (review) return review
+            }
             if (!res.ok) {
               error(result.error || '分配作用域角色失败')
               throw new Error(result.error)
@@ -1591,7 +1658,7 @@ export default function OrgStructureTab({
             success('作用域角色分配成功')
             await onRefresh?.()
           }}
-          onRevokeScoped={departmentAssignmentRestricted ? undefined : async (roleId, scopeType, scopeId) => {
+          onRevokeScoped={departmentAssignmentRestricted ? undefined : async (roleId, scopeType, scopeId, decision) => {
             const res = await fetch(`/api/admin/users/${assignment.user.id}/role-scopes`, {
               method: 'DELETE',
               headers: buildAuthHeaders(true),
@@ -1600,9 +1667,14 @@ export default function OrgStructureTab({
                 scope_type: scopeType,
                 scope_id: scopeId,
                 reason: `${scopeType} role assignment revoked`,
+                personal_permissions: decision,
               }),
             })
             const result = await res.json()
+            if (result.code === ROLE_PERMISSION_REVIEW_REQUIRED) {
+              const review = readRoleOverrideReview(result)
+              if (review) return review
+            }
             if (!res.ok) {
               error(result.error || '撤销作用域角色失败')
               throw new Error(result.error)

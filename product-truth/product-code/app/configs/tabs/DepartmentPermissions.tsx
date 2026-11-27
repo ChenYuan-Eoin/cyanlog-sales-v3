@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { parseModuleCatalog, type RoleModulePermissionCatalog } from '@/lib/org-role-permission-readback'
 import { DEPARTMENT_LEDGER_VIEW } from '@/lib/shipping/department-ledger-access'
 import { buildRolePermissionDirectory } from '../permission-directory'
+import { DepartmentRoleRules } from './DepartmentRoleRules'
 import { PermissionSettingTable } from './PermissionSettingTable'
 
 type DepartmentGrant = { permissions: string[]; includeSubdepartments: boolean }
@@ -53,10 +54,11 @@ async function readDepartmentPermissions(
   }
 }
 
-export function DepartmentPermissions({ orgId, departmentId, authHeaders }: {
+export function DepartmentPermissions({ orgId, departmentId, authHeaders, onRoleRulesSaved }: {
   orgId: string
   departmentId: string
   authHeaders: (includeJson?: boolean) => HeadersInit
+  onRoleRulesSaved?: () => void | Promise<void>
 }) {
   const endpoint = `/api/admin/departments/${encodeURIComponent(departmentId)}/permissions`
   const [state, setState] = useState<DepartmentPermissionState | null>(null)
@@ -205,6 +207,8 @@ export function DepartmentPermissions({ orgId, departmentId, authHeaders }: {
           onSetGroup={changePermissions}
           onClearEntry={entry => { if (entry === 'shipping') changePermissions([DEPARTMENT_LEDGER_VIEW], false) }}
         />
+        {editable && <DepartmentRoleRules orgId={orgId} departmentId={departmentId}
+          authHeaders={authHeaders} onSaved={onRoleRulesSaved} />}
       </>}
       {feedback && (
         <div className="flex flex-wrap items-center gap-3 px-6 pb-4 text-sm">

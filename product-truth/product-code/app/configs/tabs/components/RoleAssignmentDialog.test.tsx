@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { RoleAssignmentDialog } from './RoleAssignmentDialog'
+import { confirmAction } from '@/lib/toast'
+
+vi.mock('@/lib/toast', () => ({ confirmAction: vi.fn() }))
 
 afterEach(() => {
   cleanup()
@@ -10,6 +13,7 @@ afterEach(() => {
 })
 
 beforeEach(() => {
+  vi.mocked(confirmAction).mockReset().mockResolvedValue(true)
   vi.stubGlobal('localStorage', { getItem: vi.fn(() => 'test-session') })
   vi.stubGlobal('fetch', vi.fn(async () => Response.json({
     success: true,
@@ -18,34 +22,40 @@ beforeEach(() => {
 })
 
 describe('RoleAssignmentDialog scoped assignment', () => {
-  it.each([
-    { responseOrg: 'org-1', text: '此员工有 1 项个人权限设置。保存角色分配后，个人设置仍覆盖对应权限点及数据范围。' },
-    { responseOrg: 'other-org', text: '暂时无法核对该员工的个人权限设置。' },
-  ])('checks stored overrides only for the requested organization', async ({ responseOrg, text }) => {
-    const reviewEndpoint = '/api/admin/users/user-1/permission-overrides?orgId=org-1'
-    const fetchMock = vi.fn(async (url: string) => url === reviewEndpoint
-      ? Response.json({
-        org_id: responseOrg, user_id: 'user-1', departments: [],
-        permissions: [{
-          key: 'shipping:ledger_view', base: true, effective: false, base_scope: { type: 'org' }, effective_scope: null,
-          override: { effect: 'DENY', scope: null }, sources: [], can_edit: true,
-        }],
-        shipping_permission_publication: { registered: ['shipping:ledger_view'], published: ['shipping:ledger_view'] },
-      })
-      : Response.json({ success: true, data: { roles: [{ id: 'role-1', code: 'SALES', name: '销售' }] } }))
-    vi.stubGlobal('fetch', fetchMock)
+  it('saves an unchecked ordinary role once without a general override lookup or confirmation', async () => {
     const onSubmit = vi.fn(async () => undefined)
+    const onOpenChange = vi.fn()
     render(<RoleAssignmentDialog
-      userId="user-1" userName="成员" employeePermissionOrgId="org-1"
-      currentRoles={[]} departments={[]} onSubmit={onSubmit} open onOpenChange={vi.fn()}
+      userId="user-1" userName="成员" currentRoles={['role-1']}
+      departments={[]} onSubmit={onSubmit} open onOpenChange={onOpenChange}
     />)
 
-    expect(await screen.findByText(text)).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledWith(reviewEndpoint, expect.objectContaining({ cache: 'no-store' }))
-    expect(onSubmit).not.toHaveBeenCalled()
     fireEvent.click(await screen.findByRole('checkbox', { name: /销售/ }))
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(['role-1']))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledExactlyOnceWith([]))
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(confirmAction).not.toHaveBeenCalled()
+  })
+
+  it('keeps the role form open and saves the exact change with an explicit choice only when affected', async () => {
+    const revision = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const onSubmit = vi.fn().mockResolvedValueOnce({
+      review_revision: revision,
+      affected_permissions: [{ permission_code: 'shipping:ledger_view', retainable: false }],
+    }).mockResolvedValueOnce(undefined)
+    const onOpenChange = vi.fn()
+    render(<RoleAssignmentDialog userId="user-1" userName="成员" currentRoles={['role-1']}
+      departments={[]} onSubmit={onSubmit} open onOpenChange={onOpenChange} />)
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: /销售/ }))
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    expect(await screen.findByText(/这次角色变更影响以下个人权限设置/)).toBeInTheDocument()
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith([])
+    expect(onOpenChange).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '保留仍适用的个人覆盖' }))
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(onSubmit).toHaveBeenLastCalledWith([], undefined, { review_revision: revision, choice: 'retain_eligible' })
   })
 
   it('loads later pages before exposing assignable roles', async () => {

@@ -62,8 +62,12 @@ import {
 } from './role-assignment-policy'
 import { PermissionSettingTable } from './PermissionSettingTable'
 import {
-  EmployeePermissionOverrides, EmployeePermissionReview, isEmployeePermissionTarget, readEmployeePermissionOverrideCount,
+  EmployeePermissionOverrides, isEmployeePermissionTarget,
 } from './EmployeePermissionOverrides'
+import { RoleOverrideChoice } from './components/RoleOverrideChoice'
+import {
+  readRoleOverrideReview, ROLE_PERMISSION_REVIEW_REQUIRED, type RoleOverrideReview, type RoleOverrideDecision,
+} from '@/lib/admin/member-role-override-choice'
 import { getRoleMembershipStats, type RoleMember, type RoleMembershipStats } from './role-membership-stats'
 
 // ============ Props 类型 ============
@@ -289,7 +293,7 @@ export function RoleDetailPanel({
               value="members"
               className="data-[state=active]:border-b-2 data-[state=active]:border-blue-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none h-12 px-0"
             >
-              员工分配 ({stats.members.length})
+              员工分配 ({stats.automaticSourcesAvailable === false ? '待核对' : stats.members.length})
             </TabsTrigger>
             <TabsTrigger
               value="permissions"
@@ -314,6 +318,7 @@ export function RoleDetailPanel({
             users={users}
             _departments={departments}
             members={stats.members}
+            automaticSourcesAvailable={stats.automaticSourcesAvailable}
             onRefresh={onRefresh}
           />
         </TabsContent>
@@ -357,13 +362,14 @@ interface MemberAssignmentTabProps {
   users: OrgSummaryUser[]
   _departments: OrgSummaryDepartment[]
   members: RoleMember[]
+  automaticSourcesAvailable?: boolean
   onRefresh?: () => void | Promise<void>
 }
 
 function MemberRoleStatus({ member, roleId }: { member: RoleMember; roleId: string }) {
-  const { user, hasOrgAssignment, pending, effective } = member
+  const { user, hasOrgAssignment, automaticSources, pending, effective } = member
   const hasLegacyBinding = user.scoped_roles?.some(role => role.roleId === roleId && role.scopeType === 'space')
-  if (hasOrgAssignment && !pending && effective !== false && !hasLegacyBinding) return null
+  if (hasOrgAssignment && !pending && effective !== false && !hasLegacyBinding && automaticSources.length === 0) return null
   return (
     <div className="flex flex-wrap gap-1">
       {pending && <Badge variant="outline">{canOnlyRevokePendingOrgRoles(user) ? '首次登录已停用' : '待首次登录生效'}</Badge>}
@@ -373,6 +379,13 @@ function MemberRoleStatus({ member, roleId }: { member: RoleMember; roleId: stri
       {hasLegacyBinding && (
         <Badge variant="outline">历史范围绑定</Badge>
       )}
+      {automaticSources.map(source => (
+        <Badge key={JSON.stringify([source.ruleDepartmentId, source.affiliationDepartmentId])}
+          variant="outline" className="max-w-full whitespace-normal break-words">
+          部门自动授予 · {source.ruleDepartmentName}
+          {source.ruleDepartmentId !== source.affiliationDepartmentId && `（归属 ${source.affiliationDepartmentName}）`}
+        </Badge>
+      ))}
       {effective === false && !pending && <Badge variant="outline">未生效</Badge>}
     </div>
   )
@@ -402,6 +415,7 @@ function MemberAssignmentTab({
   currentUserId,
   users,
   members,
+  automaticSourcesAvailable,
   onRefresh,
 }: MemberAssignmentTabProps) {
   const [assigning, setAssigning] = useState(false)
@@ -409,12 +423,13 @@ function MemberAssignmentTab({
   const [dialogSearch, setDialogSearch] = useState('')
   const [selection, setSelection] = useState<OrgSummaryUser | null>(null)
   const [employeePermissions, setEmployeePermissions] = useState<OrgSummaryUser | null>(null)
+  const [addReview, setAddReview] = useState<RoleOverrideReview | null>(null)
+  const [removeReview, setRemoveReview] = useState<{ userId: string; removal: RoleRemoval; review: RoleOverrideReview } | null>(null)
   const [orgAssignmentFeedback, setOrgAssignmentFeedback] = useState<{ status: 'error' | 'success'; message: string } | null>(null)
   const orgAssignmentInFlight = useRef(false)
   const isLegacySuperAdmin = roleCode === ORG_SUPER_ADMIN_ROLE_CODE
   const isRetiredBaseline = roleCode === FXIAOKE_BASELINE_ROLE_CODE
   const isSystemSuperAdmin = roleCode === 'SUPER_ADMIN'
-  const protectedRole = isSystemSuperAdmin || isLegacySuperAdmin
   const candidateIds = systemSuperAdminAuthority?.memberIds
   const canAddMembers = assignmentEditable && !isLegacySuperAdmin && !isRetiredBaseline
     && (!isSystemSuperAdmin || candidateIds !== undefined)
@@ -496,10 +511,6 @@ function MemberAssignmentTab({
     if (!dialogSearch.trim()) return availableUsers
     return fuse.search(dialogSearch).map(r => r.item)
   }, [fuse, dialogSearch, availableUsers])
-
-  const selectedPermissionTarget = !protectedRole && selection
-    ? availableUsers.find(user => user.id === selection.id && isEmployeePermissionTarget(user))
-    : undefined
 
   // 打开弹窗时重置选择
   useEffect(() => {
@@ -586,7 +597,7 @@ function MemberAssignmentTab({
 
   // 当前后端只提供单用户替换接口。为避免 N 个独立请求形成部分成功，
   // 在有原子批量端点前，每次只允许添加一名成员。
-  const handleAddMember = async () => {
+  const handleAddMember = async (decision?: RoleOverrideDecision) => {
     if (!canAddMembers || !selection || assigning) return
 
     const selectedUser = users.find((user) => user.id === selection.id)
@@ -627,18 +638,27 @@ function MemberAssignmentTab({
       const response = await fetch(`/api/admin/users/${selectedUser.id}/roles`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(businessRoleChange(selection, [...currentRoleIds, roleId], currentRoleIds)),
+        body: JSON.stringify({
+          ...businessRoleChange(selection, [...currentRoleIds, roleId], currentRoleIds), personal_permissions: decision,
+        }),
       })
 
       const data = await response.json().catch(() => ({}))
+      const review = data.code === ROLE_PERMISSION_REVIEW_REQUIRED ? readRoleOverrideReview(data) : undefined
+      if (review) {
+        setAddReview(review)
+        return
+      }
       if (!response.ok) {
         if (data.code === 'ROLE_ASSIGNMENT_CHANGED') {
+          setAddReview(null)
           setDialogOpen(false)
           await onRefresh?.()
         }
         throw new Error(typeof data.error === 'string' ? data.error : '添加成员失败')
       }
 
+      setAddReview(null)
       setDialogOpen(false)
       await onRefresh?.()
       success(data.pending_role_ids?.includes(roleId) ? `已为「${selectedUser.display_name}」预分配角色，首次登录后生效` : `已添加「${selectedUser.display_name}」`)
@@ -649,7 +669,7 @@ function MemberAssignmentTab({
     }
   }
 
-  const handleRemoveMember = async (userId: string, removal: RoleRemoval) => {
+  const handleRemoveMember = async (userId: string, removal: RoleRemoval, decision?: RoleOverrideDecision) => {
     if (!assignmentEditable || assigning) return
     const member = members.find(entry => entry.user.id === userId)
     if (!member || !removalChoices(member).some(choice => choice.scopeType === removal.scopeType && (
@@ -665,39 +685,39 @@ function MemberAssignmentTab({
     const token = localStorage.getItem('token')
     setAssigning(true)
     try {
-      let confirmation = `确定撤销「${user.display_name}」在「${removal.label}」的「${roleName}」角色授权？`
-      if (employeePermissionsOrgId && isEmployeePermissionTarget(user)) {
-        const count = await readEmployeePermissionOverrideCount(employeePermissionsOrgId, user.id, AbortSignal.timeout(2000))
-          .catch(() => null)
-        if (count === null) confirmation += '\n暂时无法核对该员工的个人权限设置。'
-        else if (count > 0) confirmation += `\n此员工有 ${count} 项个人权限设置，撤销角色授权后会保留。`
-      }
-      if (!await confirmAction(confirmation, { confirmText: '移除', danger: true })) return
-      if (token !== localStorage.getItem('token')) {
-        error('登录身份已变更，请重新操作。')
-        return
-      }
-
       const memberEndpoint = `/api/admin/users/${encodeURIComponent(userId)}`
       const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' }
       const currentRoleIds = currentBusinessRoleIds(user)
       const res = removal.scopeType === 'org'
         ? await fetch(`${memberEndpoint}/roles`, {
           method: 'POST', headers,
-          body: JSON.stringify(businessRoleChange(user, currentRoleIds.filter(id => id !== roleId), currentRoleIds)),
+          body: JSON.stringify({
+            ...businessRoleChange(user, currentRoleIds.filter(id => id !== roleId), currentRoleIds), personal_permissions: decision,
+          }),
         })
         : await fetch(`${memberEndpoint}/role-scopes`, {
           method: 'DELETE', headers,
-          body: JSON.stringify({ role_id: roleId, scope_type: removal.scopeType, scope_id: removal.scopeId }),
+          body: JSON.stringify({
+            role_id: roleId, scope_type: removal.scopeType, scope_id: removal.scopeId, personal_permissions: decision,
+          }),
         })
 
+      const data = await res.json().catch(() => ({}))
+      const review = data.code === ROLE_PERMISSION_REVIEW_REQUIRED ? readRoleOverrideReview(data) : undefined
+      if (review) {
+        setRemoveReview({ userId, removal, review })
+        return
+      }
       if (res.ok) {
+        setRemoveReview(null)
         success('角色授权已撤销')
         await onRefresh?.()
       } else {
-        const data = await res.json().catch(() => ({}))
         error(data.error || '移除失败')
-        if (data.code === 'ROLE_ASSIGNMENT_CHANGED') await onRefresh?.()
+        if (data.code === 'ROLE_ASSIGNMENT_CHANGED') {
+          setRemoveReview(null)
+          await onRefresh?.()
+        }
       }
     } catch {
       error('网络错误')
@@ -760,7 +780,7 @@ function MemberAssignmentTab({
       <div>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h4 className="min-w-0 font-medium text-slate-900">
-            角色关联成员 ({members.length})
+            角色关联成员 ({automaticSourcesAvailable === false ? '待核对' : members.length})
           </h4>
           {canAddMembers ? (
             <Button
@@ -786,6 +806,9 @@ function MemberAssignmentTab({
           <p role={orgAssignmentFeedback.status === 'error' ? 'alert' : 'status'} className={`mb-3 text-sm ${orgAssignmentFeedback.status === 'error' ? 'text-red-700' : 'text-green-700'}`}>
             {orgAssignmentFeedback.message}
           </p>
+        )}
+        {automaticSourcesAvailable === false && (
+          <p role="status" className="mb-3 text-sm text-slate-600">部门自动授权暂时无法核对。</p>
         )}
 
         {members.length > 0 ? (
@@ -819,7 +842,7 @@ function MemberAssignmentTab({
           </div>
         ) : (
           <div className="rounded-md border py-10 text-center text-sm text-slate-500 md:hidden">
-            暂无成员分配到此角色
+            {automaticSourcesAvailable === false ? '暂无可核对的成员' : '暂无成员分配到此角色'}
           </div>
         )}
 
@@ -864,7 +887,7 @@ function MemberAssignmentTab({
               ) : (
                 <TableRow>
                   <TableCell colSpan={4} className="h-24 text-center text-slate-500">
-                    暂无成员分配到此角色
+                    {automaticSourcesAvailable === false ? '暂无可核对的成员' : '暂无成员分配到此角色'}
                   </TableCell>
                 </TableRow>
               )}
@@ -874,7 +897,11 @@ function MemberAssignmentTab({
       </div>
 
       {/* 添加成员 Dialog */}
-      <Dialog open={canAddMembers && dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={canAddMembers && dialogOpen} onOpenChange={open => {
+        if (assigning) return
+        setDialogOpen(open)
+        if (!open) setAddReview(null)
+      }}>
         <DialogContent className="sm:max-w-[520px] max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -883,6 +910,10 @@ function MemberAssignmentTab({
             </DialogTitle>
           </DialogHeader>
 
+          {addReview ? (
+            <RoleOverrideChoice review={addReview} busy={assigning} onCancel={() => setAddReview(null)}
+              onChoose={decision => void handleAddMember(decision)} />
+          ) : <>
           <div className="flex-1 overflow-hidden flex flex-col gap-3 py-2">
             {orgAssignmentFeedback?.status === 'error' && (
               <p role="alert" className="shrink-0 text-sm text-red-700">{orgAssignmentFeedback.message}</p>
@@ -917,10 +948,6 @@ function MemberAssignmentTab({
                 </span>
               )}
             </div>
-
-            {dialogOpen && employeePermissionsOrgId && selectedPermissionTarget && (
-              <EmployeePermissionReview orgId={employeePermissionsOrgId} userId={selectedPermissionTarget.id} />
-            )}
 
             {/* 用户列表 */}
             <div className="flex-1 overflow-y-auto border rounded-lg">
@@ -980,12 +1007,20 @@ function MemberAssignmentTab({
               取消
             </Button>
             <Button
-              onClick={handleAddMember}
+              onClick={() => void handleAddMember()}
               disabled={!selection || assigning}
             >
               {assigning ? '添加中...' : systemSuperAdminAuthority ? '授予权限' : '添加成员到角色'}
             </Button>
           </DialogFooter>
+          </>}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={removeReview !== null} onOpenChange={open => { if (!open && !assigning) setRemoveReview(null) }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>撤销角色授权</DialogTitle></DialogHeader>
+          {removeReview && <RoleOverrideChoice review={removeReview.review} busy={assigning} onCancel={() => setRemoveReview(null)}
+            onChoose={decision => void handleRemoveMember(removeReview.userId, removeReview.removal, decision)} />}
         </DialogContent>
       </Dialog>
     </div>

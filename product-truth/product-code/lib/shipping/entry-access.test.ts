@@ -15,7 +15,7 @@ vi.mock('@/lib/org-role-permissions', () => ({
   queryOrgRoles: db.roleCatalog,
 }))
 vi.mock('@/lib/middleware-rest-client', () => ({
-  createMiddlewareRestClient: () => ({ selectRows: db.restRows }),
+  createMiddlewareRestClient: () => ({ selectRows: db.restRows, readRpcRows: vi.fn().mockResolvedValue([]) }),
   readMiddlewareRpcRows: db.rpcRows,
 }))
 vi.mock('@/lib/permission-registry', () => ({

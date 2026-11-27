@@ -5,7 +5,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { assertDepartmentInOrg, DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN } from '@/lib/admin/org-membership'
 import { userHasOrgRoleCode } from '@/lib/admin/org-role-authority'
 import { loadOrganizationPermissionAccess } from '@/lib/admin/member-actions'
 import { ORG_MEMBER_MANAGE_EMPLOYMENT, ORG_MEMBER_MANAGE_LOGIN } from '@/lib/admin/member-action-keys'
@@ -148,11 +147,12 @@ export async function PATCH(
       })
     }
 
-    if (primary_dept_id) {
-      const department = await assertDepartmentInOrg(orgId, primary_dept_id)
-      if (!department) {
-        return NextResponse.json({ error: '主部门不存在', code: 'INVALID_PRIMARY_DEPARTMENT' }, { status: 400 })
-      }
+    const currentDepartment = 'primary_dept_id' in existing ? existing.primary_dept_id : undefined
+    if (primary_dept_id !== undefined && primary_dept_id !== currentDepartment) {
+      return NextResponse.json({
+        error: '请在「调整部门」中预览权限变化并确认。',
+        code: 'DEPARTMENT_TRANSFER_PREVIEW_REQUIRED',
+      }, { status: 409 })
     }
 
     if (phone) {
@@ -197,29 +197,7 @@ export async function PATCH(
     const hasProfileChanges = Object.keys(updateData).length > 0
 
     let data: Record<string, unknown> = { ...existing }
-    if (primary_dept_id !== undefined) {
-      const args = {
-        p_actor_id: currentUser.id,
-        p_org_id: orgId,
-        p_user_id: id,
-        p_department_id: primary_dept_id,
-        p_reason: 'profile update',
-        p_request_id: req.headers.get('x-request-id'),
-      }
-      const { data: transferred, error: transferError } = hasProfileChanges
-        ? await supabaseAdmin.rpc('admin_update_member_profile_and_primary_department_v1', { ...args, p_profile: updateData })
-        : await supabaseAdmin.rpc('admin_transfer_primary_department_v1', args)
-      if (transferError?.details === DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN) {
-        return NextResponse.json({ error: '仅系统超级管理员可以调整已获收寄台账权限的部门成员。', code: DEPARTMENT_LEDGER_MEMBERSHIP_FORBIDDEN }, { status: 403 })
-      }
-      const updatedMember = hasProfileChanges && transferred && typeof transferred === 'object' && !Array.isArray(transferred)
-        ? transferred as Record<string, unknown> : null
-      if (transferError || (hasProfileChanges ? !updatedMember : transferred !== true)) {
-        console.error('Update user department transaction error:', transferError || 'target_not_updated')
-        return NextResponse.json({ error: '更新成员部门关联失败' }, { status: 500 })
-      }
-      data = updatedMember ?? { ...data, primary_dept_id }
-    } else if (hasProfileChanges) {
+    if (hasProfileChanges) {
       const mutation = supabaseAdmin.from('users').update(updateData).eq('id', id).eq('org_id', orgId)
       const selection = canReadDepartments ? mutation.select(fieldsWithDepartment) : mutation.select(fields)
       const { data: updated, error } = await selection.single()
