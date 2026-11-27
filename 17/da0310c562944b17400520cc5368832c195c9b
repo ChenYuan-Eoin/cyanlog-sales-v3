@@ -1,0 +1,36 @@
+{
+  "kind": "scoped_release_evidence",
+  "work_package": "WP82",
+  "commit": "17da0310c562944b17400520cc5368832c195c9b",
+  "organization_code_base": "3676e162796daf8369d2d69acc04765b7fad4517",
+  "previous_production": "345478150c051fae58cf722a4dc722ded6f63225",
+  "approval": "IN-20261127-019",
+  "code_checks": {
+    "github_ci": "https://github.com/ChenYuan-Eoin/cyanlog-sales-v3/actions/runs/46031614229",
+    "native_postgresql": "https://github.com/ChenYuan-Eoin/cyanlog-sales-v3/actions/runs/46031614583",
+    "original_production_schema_comparison": "https://github.com/ChenYuan-Eoin/cyanlog-sales-v3/actions/runs/46025720549",
+    "reviewed_sql_unchanged": true
+  },
+  "preview": {
+    "deployment_id": "dpl_3U4AaMMmKq7QeBNjuqW6myYJReBP",
+    "provider_source_commit": "17da0310c562944b17400520cc5368832c195c9b",
+    "scope": "isolated synthetic database",
+    "health_http_status": 200,
+    "admin_identity_http_status": 200,
+    "employee_identity_http_status": 200,
+    "directory_admin_http_status": 200,
+    "directory_employee_http_status": 403,
+    "saved_plan_applied": true,
+    "verified_scope": true,
+    "unresolved_fixture_conflicts": 2,
+    "employee_history_original_rows": 1,
+    "unrelated_row_excluded": true,
+    "hosted_receipt_sha256": "b96903115f20c4133871858d86a03a634e95a9b46ccd98d174e5d73efde26f42",
+    "oauth_upstream_exercised_in_hosted_preview": false
+  },
+  "production": {
+    "status": "unpublished",
+    "approved_migrations_applied": false,
+    "operator_acceptance": "pending"
+  }
+}
