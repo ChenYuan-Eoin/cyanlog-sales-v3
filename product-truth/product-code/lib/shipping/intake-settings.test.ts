@@ -20,7 +20,7 @@ vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: m.rpc, from: () => {
 } } }))
 import { saveIntakeDepartmentScope, saveIntakeSettings } from './intake-settings'
 
-const root = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const root = 'aaaaaaaa-aaaa-0aaa-1aaa-aaaaaaaaaaaa'
 beforeEach(() => {
   m.saved = { ...DEFAULT_INTAKE_RULES, allowedDepartmentIds: [root] }
   m.writes=[];m.conflict=false

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import IntakeConfiguration, { ShippingDepartmentAuthorization } from './intake-configuration'
 
-const root = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const root = 'aaaaaaaa-aaaa-0aaa-1aaa-aaaaaaaaaaaa'
 const child = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const other = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const orgId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'

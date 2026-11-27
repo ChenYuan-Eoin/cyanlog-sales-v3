@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import {
-  effectiveShippingDepartmentIds, intakeRulesSchema, toggleShippingDepartmentSubtree, type IntakeRules,
+  effectiveShippingDepartmentIds, intakeDepartmentIdSchema, intakeRulesSchema, toggleShippingDepartmentSubtree, type IntakeRules,
 } from '@/lib/shipping/intake-rules'
 import type { ShippingDepartment } from '@/lib/shipping/department-access'
 import { shippingWorkbenchRequest, ShippingWorkbenchRequestError } from '@/lib/shipping/workbench-client'
@@ -15,7 +15,7 @@ const departmentAuthorizationUrl = '/api/admin/departments/shipping-intake'
 const departmentIdsSchema = intakeRulesSchema.shape.allowedDepartmentIds.unwrap()
 const departmentScopeSchema = z.object({
   allowedDepartmentIds: departmentIdsSchema,
-  departments: z.array(z.object({ id: z.string().uuid(), name: z.string(), parentId: z.string().uuid().nullable() })),
+  departments: z.array(z.object({ id: intakeDepartmentIdSchema, name: z.string(), parentId: intakeDepartmentIdSchema.nullable() })),
 })
 
 export default function IntakeConfiguration({ readOnly = false }: { readOnly?: boolean }) {
