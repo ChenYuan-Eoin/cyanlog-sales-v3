@@ -264,14 +264,14 @@ describe('native organization directory landing', () => {
       `)
       const snapshot = {
         provider: 'fxiaoke' as const, externalTenantId: 'FSCID_target', checkedAt: new Date().toISOString(), complete: true,
-        scopeVerified: false, scopeEvidence: null, warnings: [], applied: false as const,
+        scopeVerified: true, scopeEvidence: 'isolated-complete-catalog', warnings: [], applied: false as const,
         departments: [
           { id: 'root', name: '公司', parentId: null, status: 'inactive' },
           { id: 'sales', name: '销售部', parentId: 'root', status: 'active' },
         ],
         employees: [
           { id: 'known-employee', name: '已有成员', departmentIds: ['sales'], primaryDepartmentId: 'sales', status: 'active', loginDisabled: false },
-          { id: 'new-employee', name: '待关联员工', departmentIds: ['sales', 'root'], primaryDepartmentId: 'root', status: 'active', loginDisabled: false, phone: '13800000001' },
+          { id: 'new-employee', name: '待关联员工', departmentIds: ['sales', 'root'], primaryDepartmentId: 'root', status: 'active', loginDisabled: false, phone: '13800000002' },
         ],
       }
       async function state() {
@@ -375,9 +375,9 @@ describe('native organization directory landing', () => {
         organizationId: org, targetSourceId: source, connectionRevision: revision, connectionVerified: true,
         sources: before.sources, identities: [], departments: [], users: [], memberships: [], organizationMemberships: [],
         snapshot: { provider: 'fxiaoke', externalTenantId: 'FSCID_target', checkedAt: new Date().toISOString(), complete: true,
-          scopeVerified: false, scopeEvidence: null, warnings: [], applied: false,
+          scopeVerified: true, scopeEvidence: 'isolated-complete-catalog', warnings: [], applied: false,
           departments: [{ id: 'root', name: '公司', parentId: null, status: 'active' }],
-          employees: [{ id: 'new', name: '新员工', departmentIds: ['root'], primaryDepartmentId: 'root', status: 'active', loginDisabled: false }],
+          employees: [{ id: 'new', name: '新员工', departmentIds: ['root'], primaryDepartmentId: 'root', status: 'active', loginDisabled: false, phone: '13800000002' }],
         },
       })
       payload.identityChanges[0].profileSnapshot.primaryDepartmentExternalId = 'missing'

@@ -19,8 +19,8 @@ const mocks = vi.hoisted(() => {
         checkedAt: '2026-11-03T08:00:00.000Z',
         complete: true,
         connectionVerified: true,
-        scopeVerified: false,
-        scopeEvidence: null,
+        scopeVerified: true,
+        scopeEvidence: 'isolated-provider-range',
         directoryHash: 'b'.repeat(64),
         departmentCount: 0,
         employeeCount: 0,
@@ -121,6 +121,19 @@ describe('latest directory cutover plan selection', () => {
     expect(mocks.rpc).not.toHaveBeenCalled()
   })
 
+  it('rejects a stored planned Fxiaoke write without independent scope evidence', async () => {
+    const { planRow } = mocks
+    mocks.getPlan.mockReturnValueOnce({ ...planRow, plan_payload: {
+      ...planRow.plan_payload, applyable: true,
+      snapshot: { ...planRow.plan_payload.snapshot, scopeVerified: false, scopeEvidence: null },
+    } })
+    await expect(applyDirectoryCutoverPlan({
+      orgId: 'org-1', actorId: 'admin-1', planId: planRow.id, planHash: planRow.plan_hash,
+      connectionRevision: planRow.plan_payload.connectionRevision, sourceRevisions: [{}] as never,
+    })).rejects.toMatchObject({ code: 'DIRECTORY_SCOPE_UNVERIFIED', status: 409 })
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
   it('requires replanning an older pending plan that would restore an ended member’s department links', async () => {
     const { planRow } = mocks
     const ended = '00000000-0000-4000-8000-000000000101'
@@ -149,6 +162,8 @@ describe('latest directory cutover plan selection', () => {
       previewId: '00000000-0000-4000-8000-000000000031',
     })],
   ])('explains when %s would disable the last effective super administrator', async (_operation, activate) => {
+    const { planRow } = mocks
+    mocks.getPlan.mockReturnValueOnce({ ...planRow, plan_payload: { ...planRow.plan_payload, targetProvider: 'feishu' } })
     mocks.loadVerifiedConnection.mockResolvedValueOnce({ revision: '00000000-0000-4000-8000-000000000021' })
     mocks.rpc.mockResolvedValueOnce({
       data: null,

@@ -391,7 +391,9 @@ export async function saveOrganizationConnection(input: {
   const row = {
     system_org_id: input.orgId,
     provider,
-    external_tenant_id: prepared.externalTenantId,
+    external_tenant_id: provider === 'fxiaoke' && existing?.effective_revision
+      ? existing.external_tenant_id
+      : prepared.externalTenantId,
     configuration_revision: configurationRevision,
     draft_credentials_ciphertext: ciphertext,
     draft_credential_envelope: SHARED_ENVELOPE,
@@ -521,15 +523,21 @@ export async function readOrganizationDirectory(input: {
   provider: string
   sourceId: string
   revision: string
+  credentialSource?: 'effective'
 }) {
   const provider = validateProvider(input.provider)
   const row = await rowBySource(input.orgId, provider)
-  if (!row || row.id !== input.sourceId || row.configuration_revision !== input.revision) {
+  const effective = input.credentialSource === 'effective'
+  const verifiedRevision = effective ? row?.effective_revision : row?.configuration_revision
+  if (!row || row.id !== input.sourceId || verifiedRevision !== input.revision) {
     throw new OrganizationConnectionError('CONFIG_CHANGED', '连接配置已改变，请刷新后重新核验。', 409)
+  }
+  if (effective && (row.status !== 'active' || row.connection_state !== 'verified')) {
+    throw new OrganizationConnectionError('CONNECTION_NOT_VERIFIED', '当前组织连接尚无已验证的生效配置。', 409)
   }
   const connectionAdapter = getConnectionAdapter(provider)
   const directoryAdapter = getDirectoryAdapter(provider)
-  const credentials = decryptDraft(row)
+  const credentials = effective ? decryptEffective(row) : decryptDraft(row)
   const verification = await connectionAdapter.verifyConnection(credentials, { systemOrgId: input.orgId })
   assertVerifiedTenant(row, verification)
   const directory = await directoryAdapter.readDirectory(
@@ -537,21 +545,29 @@ export async function readOrganizationDirectory(input: {
     { systemOrgId: input.orgId },
   )
   const current = await rowBySource(input.orgId, provider)
+  const credentialChanged = effective
+    ? current?.effective_revision !== row.effective_revision
+      || current?.effective_credentials_ciphertext !== row.effective_credentials_ciphertext
+      || current?.effective_credential_envelope !== row.effective_credential_envelope
+    : current?.draft_credentials_ciphertext !== row.draft_credentials_ciphertext
+      || current?.draft_credential_envelope !== row.draft_credential_envelope
   if (!current || current.id !== row.id || current.configuration_revision !== row.configuration_revision
     || current.external_tenant_id !== row.external_tenant_id || current.status !== row.status
     || current.connection_state !== row.connection_state
     || current.updated_at !== row.updated_at || current.storage_mode !== row.storage_mode
-    || current.draft_credentials_ciphertext !== row.draft_credentials_ciphertext) {
+    || credentialChanged) {
     throw new OrganizationConnectionError('CONFIG_CHANGED', '读取期间连接或来源发生变化，本次结果已失效，请重新核验。', 409)
   }
   return {
     binding: {
       organizationId: input.orgId, sourceId: row.id, provider,
       externalTenantId: row.external_tenant_id,
-      connectionRevision: row.configuration_revision,
+      connectionRevision: input.revision,
       sourceState: row.connection_state,
     },
+    verifiedTenantIds: verification.verifiedTenantIds ?? [verification.externalTenantId],
     sourceUpdatedAt: row.updated_at,
+    sourceConfigurationRevision: row.configuration_revision,
     directory: {
       ...directory,
       departments: directory.departments.map(department => ({ ...department, status: directoryAdapter.normalizeDirectoryStatus(department.status) })),
@@ -601,6 +617,7 @@ export async function previewOrganizationConnection(input: {
   try {
     const credentials = decryptDraft(row)
     const verification = await connectionAdapter.verifyConnection(credentials, { systemOrgId: input.orgId })
+    if (provider === 'fxiaoke' && row.effective_revision) assertVerifiedTenant(row, verification)
     connectionVerified = true
     const verifiedCredentials = verification.credentialPatch
       ? { ...credentials, ...verification.credentialPatch }
@@ -622,14 +639,16 @@ export async function previewOrganizationConnection(input: {
     const connectionResult = await supabaseAdmin
       .from('organization_sources')
       .update({
-        external_tenant_id: verification.externalTenantId,
+        external_tenant_id: provider === 'fxiaoke' && row.effective_revision
+          ? row.external_tenant_id
+          : verification.externalTenantId,
         draft_credentials_ciphertext: ciphertext,
         draft_credential_envelope: SHARED_ENVELOPE,
         draft_metadata: metadata,
         draft_check_status: 'not_checked',
         draft_checked_at: connectionCheckedAt,
         connection_state: state,
-        last_verified_at: connectionCheckedAt,
+        last_verified_at: row.effective_revision ? row.last_verified_at : connectionCheckedAt,
         last_error: null,
         last_error_at: null,
         lifecycle_audit: appendAudit(row.lifecycle_audit, {
@@ -755,6 +774,17 @@ export async function loadVerifiedConfigurationForReadOnlyMetadata(input: {
   }
 }
 
+export async function loadFxiaokeRotationDraft(input: { orgId: string; sourceId: string; revision: string; sourceUpdatedAt: string }) {
+  const row = await rowBySource(input.orgId, 'fxiaoke', input.sourceId)
+  if (!row || row.status !== 'active' || row.connection_state !== 'verified'
+    || row.configuration_revision !== input.revision || row.draft_check_status !== 'preview_ready'
+    || !row.effective_revision || row.effective_revision === input.revision
+    || row.updated_at !== input.sourceUpdatedAt || !hasIdentityAuthority(row.authority_scope)) {
+    throw new OrganizationConnectionError('CONFIG_CHANGED', '纷享凭证验证已失效，请重新发起。', 409)
+  }
+  return decryptDraft(row)
+}
+
 export async function loadVerifiedConnection(input: {
   orgId: string
   provider: string
@@ -862,14 +892,33 @@ export async function listIdentityLoginConnections(provider: OrganizationConnect
     const ids = await legacyVerifiedOrganizationIds(provider, boundedLimit, true)
     return ids.map(orgId => ({
       orgId,
-      readCredentials: async () => (await loadVerifiedConnection({ orgId, provider })).credentials,
+      read: async () => {
+        const { revision, credentials } = await loadVerifiedConnection({ orgId, provider })
+        return { revision, credentials }
+      },
     }))
   }
   // Decrypt only after the caller has verified that exactly one tenant is eligible.
   return (data || []).map(value => normalizeRow(value))
-    .filter(row => row.status === 'active' && row.connection_state === 'verified' &&
-      row.effective_revision && hasIdentityAuthority(row.authority_scope))
-    .map(row => ({ orgId: row.system_org_id, readCredentials: () => decryptEffective(row) }))
+    .filter((row): row is StoredConnectionRow & { effective_revision: string } =>
+      row.status === 'active' && row.connection_state === 'verified' &&
+      typeof row.effective_revision === 'string' && hasIdentityAuthority(row.authority_scope))
+    .map(row => ({
+      orgId: row.system_org_id,
+      read: () => ({ revision: row.effective_revision, credentials: decryptEffective(row) }),
+    }))
+}
+
+function requireReviewedFxiaokeCredentialReplacement(row: ConnectionRow) {
+  if (row.provider === 'fxiaoke' && row.status === 'active' && row.connection_state === 'verified'
+    && row.effective_revision && row.configuration_revision !== row.effective_revision
+    && hasIdentityAuthority(row.authority_scope)) {
+    throw new OrganizationConnectionError(
+      'SSO_REPLACEMENT_REQUIRES_VERIFICATION',
+      '纷享登录已开启。更换共享凭证需先验证真实员工登录，本次保留原生效连接。',
+      409,
+    )
+  }
 }
 
 /** Explicit directory activation. A dormant identity authority must not become
@@ -891,6 +940,7 @@ export async function activateDirectoryConnection(input: {
   }
   if (row.status === 'active' && row.connection_state === 'verified'
     && row.effective_revision === row.configuration_revision) return toConnectionSummary(row)
+  requireReviewedFxiaokeCredentialReplacement(row)
 
   const identityWasEffective = row.status === 'active' && row.connection_state === 'verified'
     && Boolean(row.effective_revision && row.effective_credentials_ciphertext)
@@ -948,6 +998,7 @@ export async function promoteOrganizationConnection(input: {
   if (!row.draft_credentials_ciphertext || row.draft_check_status !== 'preview_ready') {
     throw new OrganizationConnectionError('CONNECTION_NOT_VERIFIED', '连接草稿尚未验证，不能成为生效配置。', 409)
   }
+  requireReviewedFxiaokeCredentialReplacement(row)
   const now = new Date().toISOString()
   const result = await supabaseAdmin
     .from('organization_sources')

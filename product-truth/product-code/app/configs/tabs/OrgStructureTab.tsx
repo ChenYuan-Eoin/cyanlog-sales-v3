@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import {
   useReactTable,
   getCoreRowModel,
@@ -13,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import {
   Table,
   TableBody,
@@ -24,6 +26,7 @@ import {
 import { BuildingIcon, UsersIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ChevronRight as ChevronRightIconCustom, ChevronDown as ChevronDownIconCustom, PlusIcon, MoreHorizontalIcon, EditIcon, TrashIcon, UserPlusIcon, ShieldIcon, PowerOffIcon, PowerIcon, UnlockIcon, MailIcon, BanIcon, FingerprintIcon } from 'lucide-react'
 import type { OrgSummaryPayload, OrgSummaryUser, OrgSummaryDepartment, OrgSummaryRole } from '../types'
 import type { MemberActionAvailability } from '@/lib/admin/member-actions'
+import type { DirectoryCutoverClientPlan } from '@/lib/organization-connections/directory-cutover'
 import { readRoleOverrideReview, ROLE_PERMISSION_REVIEW_REQUIRED } from '@/lib/admin/member-role-override-choice'
 import { isRetiredRoleCode } from '@/lib/role-permission-resolution'
 import Fuse from 'fuse.js'
@@ -37,6 +40,7 @@ import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
 import { IdentityBindingDialog } from './components/IdentityBindingDialog'
 import { MemberBatchActions } from './components/MemberBatchActions'
+import { DirectoryChangeSummary, directoryOverview, type DirectoryOverview } from './DirectoryChangeSummary'
 import {
   canOnlyRevokePendingOrgRoles, editableCurrentOrgBusinessRoleIds, editableOrgRoleIds, getMemberRoleMutationRestriction,
   getRoleMutationRestriction, isGenericallyAssignableRole,
@@ -56,6 +60,10 @@ interface OrgStructureTabProps {
   onRefresh?: () => void | Promise<void>
   onOpenIntegrations?: () => void
 }
+
+const OrganizationDirectoryPanel = dynamic(() => import('./OrganizationSourcePanel').then(module => module.OrganizationSourcePanel), {
+  loading: () => <p role="status" className="text-xs text-slate-500">正在读取纷享组织差异…</p>,
+})
 
 const unavailableMemberActions: MemberActionAvailability = {
   edit: false,
@@ -181,6 +189,43 @@ function buildAuthHeaders(includeJson = false): HeadersInit {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
   }
+}
+
+function OrgDirectoryChanges({ onRefresh }: { onRefresh?: () => void | Promise<void> }) {
+  const [overview, setOverview] = useState<DirectoryOverview | null>(null)
+  const [open, setOpen] = useState(false)
+  const [readGeneration, setReadGeneration] = useState(0)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    async function readOverview() {
+      try {
+        const response = await fetch('/api/admin/organization-sources/directory?provider=fxiaoke', {
+          headers: buildAuthHeaders(), cache: 'no-store', signal: controller.signal,
+        })
+        const data = response.ok ? (await response.json() as { data?: { plan?: DirectoryCutoverClientPlan | null } }).data : null
+        if (controller.signal.aborted) return
+        setOverview(data?.plan?.provider === 'fxiaoke' ? directoryOverview(data.plan) : null)
+      } catch {
+        if (!controller.signal.aborted) setOverview(null)
+      }
+    }
+    void readOverview()
+    return () => controller.abort()
+  }, [readGeneration])
+
+  if (!overview && !open) return null
+
+  return <Dialog open={open} onOpenChange={next => {
+    setOpen(next)
+    if (!next) setReadGeneration(value => value + 1)
+  }}>
+    {overview && <DirectoryChangeSummary overview={overview} onOpen={() => setOpen(true)} />}
+    {open && <DialogContent className="max-w-[min(42rem,calc(100%_-_2rem))] overflow-y-auto">
+      <DialogTitle>纷享组织差异</DialogTitle>
+      <OrganizationDirectoryPanel directoryOnly onRefresh={onRefresh} />
+    </DialogContent>}
+  </Dialog>
 }
 
 // ============ 工具函数 ============
@@ -1292,7 +1337,12 @@ export default function OrgStructureTab({
         {canReadDepartments && <div className="min-w-0">
           <div className="rounded-lg border bg-white">
             <div className="border-b px-4 py-3">
-              <h3 className="font-medium text-slate-900">部门结构</h3>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <h3 className="font-medium text-slate-900">部门结构</h3>
+                {onOpenIntegrations && orgId && currentUserId && <OrgDirectoryChanges
+                  key={JSON.stringify([orgId, currentUserId])} onRefresh={onRefresh}
+                />}
+              </div>
               <p className="text-xs text-slate-500 mt-1">
                 {departmentFilter === 'all' ? '关联成员' : MEMBER_FILTER_LABELS[departmentFilter]}人数含下级，同一成员只计一次
               </p>

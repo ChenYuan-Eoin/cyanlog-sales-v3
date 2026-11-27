@@ -5,7 +5,7 @@ import { productionSchemaDatabase, type OrganizationTestDatabase } from './schem
 const mocks = vi.hoisted(() => ({ from: vi.fn() }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.from } }))
 vi.mock('./storage', () => ({ assertUnifiedConnectionStorage: vi.fn(), detectConnectionStorageMode: vi.fn(async () => 'unified') }))
-import { activateDirectoryConnection, loadOrganizationConnection, loadVerifiedConnection } from './service'
+import { activateDirectoryConnection, loadOrganizationConnection, loadVerifiedConnection, promoteOrganizationConnection } from './service'
 import { loadOrganizationSources } from '../organization-sources'
 
 const org = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -100,11 +100,17 @@ describe('directory connection activation against production DDL', () => {
     expect((await db.query<{ n: number }>('select jsonb_array_length(lifecycle_audit) n from public.organization_sources')).rows[0].n).toBe(1)
   })
 
-  it('preserves an already effective identity capability when applying a new directory configuration', async () => {
-    await db.exec(`update public.organization_sources set status='active',connection_state='verified',
-      effective_revision='55555555-5555-4555-8555-555555555555',effective_credentials_ciphertext='old',effective_credential_envelope='shared-v1'`)
-    await activateDirectoryConnection(input)
-    expect((await db.query<{ identity: string }>("select authority_scope->>'identity' as identity from public.organization_sources")).rows[0].identity).toBe('authoritative')
+  it('keeps the effective directory and SSO configuration until verified employee authentication for replacement is supported', async () => {
+    const previousRevision = '55555555-5555-4555-8555-555555555555'
+    await db.query(`update public.organization_sources set status='active',connection_state='verified',
+      effective_revision=$1,effective_credentials_ciphertext='old',effective_credential_envelope='shared-v1'`, [previousRevision])
+    for (const activate of [activateDirectoryConnection, promoteOrganizationConnection]) {
+      await expect(activate(input)).rejects.toMatchObject({ code: 'SSO_REPLACEMENT_REQUIRES_VERIFICATION' })
+    }
+    expect((await db.query(`select authority_scope->>'identity' as identity, effective_revision, effective_credentials_ciphertext
+      from public.organization_sources`)).rows[0]).toEqual({
+      identity: 'authoritative', effective_revision: previousRevision, effective_credentials_ciphertext: 'old',
+    })
   })
 
   it.each(['not_checked', 'failed'])('rejects %s drafts without changing effective data', async status => {

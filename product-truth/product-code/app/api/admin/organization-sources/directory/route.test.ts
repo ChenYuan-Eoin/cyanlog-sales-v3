@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
     latest: vi.fn(),
     prepare: vi.fn(),
     apply: vi.fn(),
+    permissionReview: vi.fn(),
     rollback: vi.fn(),
     rollbackPreview: vi.fn(),
     storageAvailable: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock('@/lib/organization-connections/directory-cutover', () => ({
   loadLatestDirectoryCutoverPlan: mocks.latest,
   prepareDirectoryCutoverPlan: mocks.prepare,
   applyDirectoryCutoverPlan: mocks.apply,
+  saveFxiaokeDirectoryPermissionReview: mocks.permissionReview,
   rollbackDirectoryCutover: mocks.rollback,
   previewDirectoryRollback: mocks.rollbackPreview,
 }))
@@ -68,11 +70,35 @@ beforeEach(() => {
   mocks.latest.mockResolvedValue(null)
   mocks.prepare.mockResolvedValue({ id: 'plan-1' })
   mocks.apply.mockResolvedValue({ runId: 'run-1' })
+  mocks.permissionReview.mockResolvedValue({ userId: 'user-1', revision: 'impact' })
   mocks.rollback.mockResolvedValue({ runId: 'run-1', status: 'rolled_back' })
   mocks.storageAvailable.mockResolvedValue(true)
 })
 
 describe('/api/admin/organization-sources/directory', () => {
+  it('requires apply access and sends one distinct explicit choice per permission to the current tenant', async () => {
+    const superAdmin = { scopeType: 'org', scopeId: 'org-1', roleCode: 'SUPER_ADMIN', permissions: ['role:manage'] }
+    mocks.assignments.mockResolvedValue([superAdmin])
+    const payload = {
+      action: 'review_permissions', plan_id: 'plan-1', plan_hash: 'a'.repeat(64), user_id: 'user-1',
+      choices: [
+        { permissionCode: 'test:one', choice: 'retain_eligible' },
+        { permissionCode: 'test:two', choice: 'new_baseline' },
+      ],
+    }
+    expect((await POST(request('POST', { ...payload, choices: [payload.choices[0], payload.choices[0]] }))).status).toBe(400)
+    expect(mocks.permissionReview).not.toHaveBeenCalled()
+    mocks.assignments.mockResolvedValueOnce([{ scopeType: 'org', scopeId: 'org-1', permissions: ['org:source_apply'] }])
+    expect((await POST(request('POST', payload))).status).toBe(403)
+    expect(mocks.permissionReview).not.toHaveBeenCalled()
+    expect((await POST(request('POST', payload))).status).toBe(200)
+    expect(mocks.permissionReview).toHaveBeenCalledOnce()
+    expect(mocks.permissionReview).toHaveBeenCalledWith({
+      orgId: 'org-1', actorId: 'admin-1', planId: 'plan-1', planHash: 'a'.repeat(64),
+      userId: 'user-1', choices: payload.choices,
+    })
+  })
+
   it('loads only the latest plan for a freshly authorized organization', async () => {
     mocks.assignments.mockResolvedValue([{ scopeType: 'org', scopeId: 'org-explicit', permissions: ['org:source_preview'] }])
     const response = await GET(request('GET', undefined, 'org-explicit'))
@@ -116,13 +142,27 @@ describe('/api/admin/organization-sources/directory', () => {
     }))).status).toBe(200)
     expect(mocks.apply).toHaveBeenCalledWith({
       orgId: 'org-1', actorId: 'admin-1', planId: 'plan-1', planHash: 'a'.repeat(64),
-      connectionRevision: 'revision-1', sourceRevisions,
+      connectionRevision: 'revision-1', sourceRevisions, beforeWrite: expect.any(Function),
     })
 
     expect((await POST(request('POST', { action: 'rollback_preview', plan_id: 'plan-1' }))).status).toBe(200)
     expect(mocks.rollbackPreview).toHaveBeenCalledWith({ orgId: 'org-1', actorId: 'admin-1', planId: 'plan-1' })
     expect((await POST(request('POST', { action: 'rollback', plan_id: 'plan-1', preview_id: 'preview-1' }))).status).toBe(200)
     expect(mocks.rollback).toHaveBeenCalledWith({ orgId: 'org-1', actorId: 'admin-1', planId: 'plan-1', previewId: 'preview-1' })
+  })
+
+  it('rechecks actor and directory permission after upstream reads and before apply', async () => {
+    mocks.apply.mockImplementationOnce(async ({ beforeWrite }) => {
+      mocks.assignments.mockResolvedValueOnce([])
+      await beforeWrite()
+      throw new Error('apply must stop when authority was revoked')
+    })
+    const result = await POST(request('POST', {
+      action: 'apply', plan_id: 'plan-1', plan_hash: 'a'.repeat(64), connection_revision: 'revision-1',
+      source_revisions: [{ id: 'source-1' }],
+    }))
+    expect(result.status).toBe(403)
+    expect(mocks.assignments).toHaveBeenCalledTimes(2)
   })
 
   it('rejects unsupported providers, malformed bodies and missing source revisions before mutation', async () => {

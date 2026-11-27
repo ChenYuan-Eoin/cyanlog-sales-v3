@@ -42,6 +42,31 @@ it('keeps organization filters in the member list without embedding shipping set
   expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/api/admin/departments/shipping-intake'))).toBe(false)
 })
 
+it('opens authorized Fxiaoke differences in a dialog without changing the selected department', async () => {
+  const payload: OrgSummaryPayload = {
+    organization: { id: 'org-diff', name: '组织' }, users: [], roles: [], spaces: [],
+    departments: [{ id: '33333333-3333-4333-8333-333333333333', name: '销售部', status: 'active', parent_name: null }],
+  }
+  vi.stubGlobal('fetch', vi.fn(async (path: string) => path.includes('/directory?provider=fxiaoke')
+    ? Response.json({ data: { plan: {
+      provider: 'fxiaoke', status: 'planned',
+      summary: { departmentsAdded: 1, departmentsUpdated: 0, departmentsToDeactivate: 0, membersLinked: 1, membersMoved: 1, conflicts: 1 },
+      snapshot: { scopeVerified: true, scopeEvidence: 'private-proof', complete: true, connectionVerified: true },
+    } } })
+    : new Response(null, { status: 403 })))
+  render(<OrgStructureTab orgSummary={payload} currentUserId="actor" onOpenIntegrations={vi.fn()} />)
+  fireEvent.click(screen.getByRole('button', { name: /^销售部/ }))
+  const overview = await screen.findByRole('button', { name: /查看纷享组织差异/ })
+  expect(overview).toHaveTextContent('关联 1')
+  expect(overview).toHaveTextContent('调岗 1')
+  expect(overview).not.toHaveTextContent('private-proof')
+  fireEvent.click(overview)
+  const dialog = await screen.findByRole('dialog', { name: '纷享组织差异' })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: '纷享组织差异' })).not.toBeInTheDocument())
+  expect(screen.getByRole('heading', { name: '销售部 的成员' })).toBeInTheDocument()
+})
+
 const appliedAt = '2026-11-09T07:54:14Z'
 const permissionDepartmentId = 'd3e767ac-0fb4-4f20-947f-a5ad0870b23d'
 const permissionOrganizationId = '267550ba-359e-4259-873d-844538fa52a1'

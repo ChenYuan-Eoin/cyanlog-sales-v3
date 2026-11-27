@@ -1,5 +1,6 @@
 // REQ: F003 / WP92. Tenant-scoped immutable directory preview, apply and rollback.
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { loadOrganizationSourceAccess, type OrganizationSourceAccess } from '@/lib/admin/organization-source-access'
 import {
   applyDirectoryCutoverPlan,
@@ -7,6 +8,9 @@ import {
   prepareDirectoryCutoverPlan,
   rollbackDirectoryCutover,
   previewDirectoryRollback,
+  saveFxiaokeDirectoryPrimaryReview,
+  saveFxiaokeDirectoryIdentityReview,
+  saveFxiaokeDirectoryPermissionReview,
 } from '@/lib/organization-connections/directory-cutover'
 import { isConfigurableProvider } from '@/lib/organization-connections/adapters'
 import { OrganizationConnectionError } from '@/lib/organization-connections/errors'
@@ -15,6 +19,13 @@ import type { OrganizationConnectionProvider } from '@/lib/organization-connecti
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
+
+const permissionChoices = z.array(z.strictObject({
+  permissionCode: z.string().trim().min(1).max(128),
+  choice: z.enum(['new_baseline', 'retain_eligible']),
+})).min(1).max(200).refine(
+  choices => new Set(choices.map(({ permissionCode }) => permissionCode)).size === choices.length,
+)
 
 function directoryProvider(value: unknown): OrganizationConnectionProvider {
   if (!isConfigurableProvider(value)) {
@@ -107,8 +118,47 @@ export async function POST(req: NextRequest) {
           planHash: String(body.plan_hash || ''),
           connectionRevision: String(body.connection_revision || ''),
           sourceRevisions: body.source_revisions as Parameters<typeof applyDirectoryCutoverPlan>[0]['sourceRevisions'],
+          beforeWrite: async () => {
+            const latest = await loadOrganizationSourceAccess(req)
+            if (!latest?.access.apply || latest.orgId !== orgId || latest.actor.id !== actorId) {
+              throw new OrganizationConnectionError('FORBIDDEN', '应用权限已变化，请重新核对。', 403)
+            }
+          },
         }),
       })
+    }
+
+    if (body.action === 'review_primary') {
+      if (!access.apply) throw new OrganizationConnectionError('FORBIDDEN', '无权处理此组织的调岗冲突。', 403)
+      return response({ decision: await saveFxiaokeDirectoryPrimaryReview({
+        orgId, actorId, planId: String(body.plan_id || ''), planHash: String(body.plan_hash || ''),
+        externalUserId: String(body.external_user_id || ''), choice: body.choice,
+      }) })
+    }
+
+    if (body.action === 'review_identity') {
+      if (!access.apply || !access.enterpriseLogin) {
+        throw new OrganizationConnectionError('FORBIDDEN', '仅当前组织系统超级管理员可核对纷享身份。', 403)
+      }
+      return response({ decision: await saveFxiaokeDirectoryIdentityReview({
+        orgId, actorId, planId: String(body.plan_id || ''), planHash: String(body.plan_hash || ''),
+        externalUserId: String(body.external_user_id || ''), choice: body.choice, userId: body.user_id,
+        evidence: body.evidence,
+      }) })
+    }
+
+    if (body.action === 'review_permissions') {
+      if (!access.apply || !access.enterpriseLogin) {
+        throw new OrganizationConnectionError('FORBIDDEN', '仅当前组织系统超级管理员可核对调岗的个人权限。', 403)
+      }
+      const choices = permissionChoices.safeParse(body.choices)
+      if (!choices.success) {
+        throw new OrganizationConnectionError('INVALID_INPUT', '请逐项选择处理方式。', 400)
+      }
+      return response({ decision: await saveFxiaokeDirectoryPermissionReview({
+        orgId, actorId, planId: String(body.plan_id || ''), planHash: String(body.plan_hash || ''),
+        userId: body.user_id, choices: choices.data,
+      }) })
     }
 
     if (body.action === 'rollback_preview') {

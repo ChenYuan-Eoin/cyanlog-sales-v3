@@ -31,6 +31,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getRequestAuthToken } from '@/lib/auth-token'
+import { fxiaokeReturnPath } from '@/lib/fxiaoke/return-path'
 import { loadDepartmentAutomaticRoleSources } from '@/lib/admin/department-automatic-role-read'
 import { getConfigsTabAccess, hasConfigsTabAccess } from '@/lib/configs/tab-access'
 import { createMiddlewareRestClient, type MiddlewareRestClient } from '@/lib/middleware-rest-client'
@@ -86,6 +87,7 @@ const HOST_REDIRECTS: Record<string, { rootPath: string; preservePath: boolean }
 const PUBLIC_API_PATHS = new Set([
   '/api/auth/providers',
   '/api/auth/login',
+  '/api/auth/fxiaoke/entry',
   '/api/auth/fxiaoke/start',
   '/api/auth/fxiaoke/callback',
   '/api/auth/invitations/accept',
@@ -286,6 +288,15 @@ function baselineReadAllowed(pathname: string): boolean {
     || /^\/api\/contracts\/[^/]+$/.test(pathname)
     || /^\/api\/knowledge\/pages\/[^/]+$/.test(pathname)
     || /^\/api\/shipping\/public\/orders\/[^/]+$/.test(pathname)
+}
+
+function buildLoginRedirect(request: NextRequest) {
+  const url = buildRedirectUrl(request, '/login')
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    const next = fxiaokeReturnPath(request.nextUrl.pathname + request.nextUrl.search)
+    if (next && next !== '/') url.searchParams.set('next', next)
+  }
+  return NextResponse.redirect(url)
 }
 
 function buildRedirectUrl(request: NextRequest, pathname: string, search = ''): URL {
@@ -581,7 +592,7 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    return NextResponse.redirect(buildRedirectUrl(request, '/login'))
+    return buildLoginRedirect(request)
   }
 
   try {
@@ -600,7 +611,7 @@ export async function middleware(request: NextRequest) {
       if (pathname.startsWith('/api/')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
-      return NextResponse.redirect(buildRedirectUrl(request, '/login'))
+      return buildLoginRedirect(request)
     }
 
     // Session management is authenticated but does not require a business role.
@@ -788,7 +799,7 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    return NextResponse.redirect(buildRedirectUrl(request, '/login'))
+    return buildLoginRedirect(request)
   }
 }
 

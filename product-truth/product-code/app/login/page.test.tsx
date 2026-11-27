@@ -35,6 +35,16 @@ describe('LoginPage enterprise identity', () => {
     expect(screen.queryByLabelText('密码')).not.toBeInTheDocument()
   })
 
+  it('passes a safe business return path to the explicit Fxiaoke login link', async () => {
+    window.history.replaceState({}, '', '/login?next=%2Fshipping%3Ftab%3Dorders')
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      providers: [{ id: 'fxiaoke', label: '纷享销客', startUrl: '/api/auth/fxiaoke/start' }],
+    })))
+    render(<LoginPage />)
+    expect((await screen.findByRole('link', { name: '使用纷享销客登录' })).getAttribute('href'))
+      .toBe('/api/auth/fxiaoke/start?next=%2Fshipping%3Ftab%3Dorders')
+  })
+
   it('never renders a dead SSO button when no provider is genuinely available', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ providers: [], providerStatus: 'paused' }), {
       status: 200,

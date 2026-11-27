@@ -50,6 +50,16 @@ export function normalizeFxiaokeDepartmentStatus(value: unknown): DirectoryLifec
   if (['2', 'deleted', '删除'].includes(normalized)) return 'deleted'
   return 'unknown'
 }
+export function normalizeIdentityPhone(value: string | null | undefined) {
+  if (!value?.trim()) return null
+  const digits = value.replace(/[^0-9]/g, '')
+  if (/^1[3-9][0-9]{9}$/.test(digits)) return `+86${digits}`
+  if (/^861[3-9][0-9]{9}$/.test(digits)) return `+${digits}`
+  if (/^[1-9][0-9]{7,14}$/.test(digits)) return `+${digits}`
+  return null
+}
+
+export type DirectoryEmployeeSourceConflict = 'primary_department' | 'employee_profile' | 'phone_claim'
 export type DirectoryEmployee = {
   id: string
   name: string
@@ -60,6 +70,7 @@ export type DirectoryEmployee = {
   employeeNumber: string | null
   email: string | null
   phone: string | null
+  sourceConflict?: DirectoryEmployeeSourceConflict
 }
 export type VerifiedEmployeeIdentity = {
   externalSubject: string

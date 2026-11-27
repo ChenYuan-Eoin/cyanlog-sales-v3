@@ -86,10 +86,53 @@ describe('Fxiaoke direct directory preview', () => {
     await expect(previewDirectory(credentials, fixture(token, page(rows, 101), page([department], 102)))).rejects.toMatchObject({ code: 'INCOMPLETE_DIRECTORY' })
     await expect(previewDirectory(credentials, fixture(token, { errorCode: 0, data: { dataList: [department] } }))).rejects.toMatchObject({ code: 'INCOMPLETE_DIRECTORY' })
   })
-  it('rejects duplicated employee identity and never matches by display name', async () => {
-    await expect(previewDirectory(credentials, fixture(token, page([department]), page([employee, { ...employee, _id: 'record2' }])))).rejects.toMatchObject({ code: 'DUPLICATE_IDENTITY' })
+  it('deduplicates identical personnel observations and never matches by display name', async () => {
+    const one = await previewDirectory(credentials, fixture(token, page([department]), page([employee])))
+    const repeated = await previewDirectory(credentials, fixture(token, page([department]), page([employee, { ...employee, _id: 'record2' }])))
+    expect(repeated.employees).toEqual(one.employees)
     const result = await previewDirectory(credentials, fixture(token, page([department]), page([employee, { ...employee, _id: 'record2', user_id: '456' }])))
     expect(result.employees).toHaveLength(2)
+  })
+  it('merges compatible secondary links for the same stable employee across pages', async () => {
+    const main = { ...employee, name: '测试员工', phone: '139-0000-0001', email: 'TEST@example.com', vice_departments: ['200'] }
+    const filling = Array.from({ length: 99 }, (_, index) => ({ ...employee, _id: `filler-${index}`, user_id: `filler-${index}` }))
+    const later = { ...main, _id: 'record-later', phone: '+86 13900000001', email: 'test@example.com', vice_departments: ['300'] }
+    const departments = [department, { ...department, _id: '200' }, { ...department, _id: '300' }]
+    const result = await previewDirectory(credentials, fixture(token, page(departments), page([main, ...filling], 101), page([later], 1)))
+    expect(result.complete).toBe(true)
+    expect(result.employees).toHaveLength(100)
+    expect(result.employees.find(row => row.id === '123')).toMatchObject({
+      primaryDepartmentId: '100', departmentIds: ['100', '200', '300'], phone: '+8613900000001', email: 'test@example.com',
+    })
+    expect(result.employees.find(row => row.id === '123')).not.toHaveProperty('sourceConflict')
+  })
+  it('isolates disagreements about primary assignment or profile and any competing phone claim', async () => {
+    const departments = [department, { ...department, _id: '200' }]
+    const observed = [
+      { ...employee, phone: '13900000001' },
+      { ...employee, _id: 'record2', phone: '13900000002' },
+      { ...employee, _id: 'record3', user_id: '456', phone: '+8613900000002' },
+      { ...employee, _id: 'record4', user_id: '789' },
+      { ...employee, _id: 'record5', user_id: '789', main_department: ['200'] },
+      { ...employee, _id: 'record6', user_id: '999', phone: '13900000003' },
+    ]
+    const result = await previewDirectory(credentials, fixture(token, page(departments), page(observed)))
+    expect(result.complete).toBe(true)
+    expect(result.employees).toMatchObject([
+      { id: '123', sourceConflict: 'employee_profile', phone: null },
+      { id: '456', sourceConflict: 'phone_claim', phone: null },
+      { id: '789', sourceConflict: 'primary_department', primaryDepartmentId: null, departmentIds: ['100', '200'] },
+      { id: '999', phone: '+8613900000003' },
+    ])
+    expect(result.employees[3]).not.toHaveProperty('sourceConflict')
+    expect(result.warnings).toContain('3 位员工的纷享记录需要核对。')
+    const missingDepartment = await previewDirectory(credentials, fixture(token, page([department]), page(observed)))
+    expect(missingDepartment.complete).toBe(false)
+  })
+  it('keeps a repeated raw cursor record a pagination error even when its personnel fields agree', async () => {
+    const first = Array.from({ length: 100 }, (_, index) => ({ ...employee, _id: `record-${index}`, user_id: `staff-${index}` }))
+    const request = fixture(token, page([department]), page(first, 101), page([first[0]], 1))
+    await expect(previewDirectory(credentials, request)).rejects.toMatchObject({ code: 'INCOMPLETE_DIRECTORY' })
   })
   it('uses main_department instead of record ownership and merges supplementary departments', async () => {
     const request = fixture(
@@ -104,7 +147,7 @@ describe('Fxiaoke direct directory preview', () => {
       departmentIds: ['100', '200'],
     })
   })
-  it('fails closed when the ownership department is missing or ambiguous', async () => {
+  it('fails closed when an employee has no explicit primary department', async () => {
     const missing = await previewDirectory(credentials, fixture(
       token,
       page([department]),
@@ -113,15 +156,18 @@ describe('Fxiaoke direct directory preview', () => {
     expect(missing.complete).toBe(false)
     expect(missing.employees[0].primaryDepartmentId).toBeNull()
     expect(missing.warnings.join('')).toContain('没有唯一的归属部门')
+  })
 
+  it('quarantines a single personnel row with multiple explicit primary departments', async () => {
     const ambiguous = await previewDirectory(credentials, fixture(
       token,
       page([department, { ...department, _id: '200', name: '华东销售部' }]),
-      page([{ ...employee, main_department: ['100', '200'], vice_departments: [] }]),
+      page([{ ...employee, main_department: ['100', '200'], status: '1' }, { ...employee, _id: 'record2', user_id: '456' }]),
     ))
-    expect(ambiguous.complete).toBe(false)
-    expect(ambiguous.employees[0].primaryDepartmentId).toBeNull()
-    expect(ambiguous.warnings.join('')).toContain('没有唯一的归属部门')
+    expect(ambiguous.complete).toBe(true)
+    expect(ambiguous.employees[0]).toMatchObject({ sourceConflict: 'primary_department', primaryDepartmentId: null, status: 'unknown' })
+    expect(ambiguous.employees[1]).not.toHaveProperty('sourceConflict')
+    expect(ambiguous.warnings).toContain('1 位员工的纷享记录需要核对。')
   })
   it('normalizes documented Fxiaoke lifecycle values and blocks unknown statuses', async () => {
     const departments = [

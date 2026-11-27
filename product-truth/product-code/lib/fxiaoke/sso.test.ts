@@ -14,18 +14,19 @@ import { resolveConfiguredOAuthOrganization } from './sso'
 
 const first = '00000001-0000-0000-0000-000000000000'
 const second = '22222222-2222-4222-8222-222222222222'
-const configured = (orgId: string) => ({ orgId, readCredentials: mocks.credentials })
+const configured = (orgId: string) => ({ orgId, read: mocks.credentials })
+const revision = '33333333-3333-4333-8333-333333333333'
 const credentials = { appId: 'FSAID_test', expectedEa: 'example' }
 
 describe('Fxiaoke SSO organization resolution', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.organizations.mockResolvedValue([configured(first)])
-    mocks.credentials.mockResolvedValue(credentials)
+    mocks.credentials.mockResolvedValue({ revision, credentials })
   })
 
   it('resolves exactly one verified organization and refuses to guess across tenants', async () => {
-    await expect(resolveConfiguredOAuthOrganization()).resolves.toEqual({ orgId: first, credentials })
+    await expect(resolveConfiguredOAuthOrganization()).resolves.toEqual({ orgId: first, revision, credentials })
     expect(mocks.organizations).toHaveBeenCalledWith('fxiaoke', 2)
     expect(mocks.credentials).toHaveBeenCalledTimes(1)
 

@@ -13,7 +13,7 @@ vi.mock('./adapters', () => ({
   getConnectionAdapter: () => ({ verifyConnection: mocks.verify }),
   getDirectoryAdapter: () => ({ readDirectory: mocks.read, normalizeDirectoryStatus: (status: string) => status === 'resigned' ? 'inactive' : status }),
 }))
-import { inspectOrganizationDirectory, loadOrganizationConnection } from './service'
+import { inspectOrganizationDirectory, loadOrganizationConnection, readOrganizationDirectory } from './service'
 
 const input = { orgId: 'org-1', provider: 'fxiaoke', sourceId: 'source-1', revision: 'revision-1' }
 const source = {
@@ -57,6 +57,38 @@ beforeEach(() => {
 })
 
 describe('inspection service read-only boundaries', () => {
+  it('reads only the active directory credentials while the replacement draft check is failed', async () => {
+    beforeRead = afterRead = {
+      ...source, status: 'active', connection_state: 'verified', draft_check_status: 'failed',
+      effective_revision: 'effective-revision', effective_credentials_ciphertext: 'effective-ciphertext',
+      effective_credential_envelope: 'v1',
+    }
+    const report = await readOrganizationDirectory({
+      ...input, revision: 'effective-revision', credentialSource: 'effective',
+    })
+    expect(report).toMatchObject({
+      binding: { connectionRevision: 'effective-revision' }, sourceConfigurationRevision: input.revision,
+    })
+    expect(mocks.decrypt).toHaveBeenCalledExactlyOnceWith(
+      { sourceId: input.sourceId, systemOrgId: input.orgId, provider: input.provider },
+      'effective-ciphertext', 'v1', expect.anything(),
+    )
+    expect(mocks.write).not.toHaveBeenCalled()
+  })
+
+  it('rejects live directory results when the effective revision changes during the read', async () => {
+    beforeRead = {
+      ...source, status: 'active', connection_state: 'verified', effective_revision: 'effective-revision',
+      effective_credentials_ciphertext: 'effective-ciphertext', effective_credential_envelope: 'v1',
+    }
+    afterRead = { ...beforeRead, effective_revision: 'new-effective-revision' }
+    await expect(readOrganizationDirectory({
+      ...input, revision: 'effective-revision', credentialSource: 'effective',
+    })).rejects.toMatchObject({ code: 'CONFIG_CHANGED' })
+    expect(mocks.read).toHaveBeenCalledOnce()
+    expect(mocks.write).not.toHaveBeenCalled()
+  })
+
   it.each(['unified', 'legacy_fxiaoke_read_only'])('reads %s without reviving a disabled source or persisting verification', async mode => {
     mocks.mode.mockResolvedValue(mode)
     const report = await inspectOrganizationDirectory(input)

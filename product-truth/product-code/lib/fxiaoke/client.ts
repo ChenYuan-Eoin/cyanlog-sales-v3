@@ -6,7 +6,9 @@ import {
   FxiaokeError,
   normalizeFxiaokeDepartmentStatus,
   normalizeFxiaokePersonnelStatus,
+  normalizeIdentityPhone,
   type Credentials,
+  type DirectoryEmployee,
   type DirectoryPreview,
   type VerifiedEmployeeIdentity,
 } from './contracts'
@@ -35,6 +37,83 @@ function name(value: unknown): string {
 }
 function optionalText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function readPersonnelRow(row: Row): DirectoryEmployee {
+  const primaryDepartmentIds = [...new Set(ids(row.main_department))]
+  const phone = optionalText(row.phone)
+  return {
+    id: id(row.user_id),
+    name: name(row.name),
+    departmentIds: [...new Set([...primaryDepartmentIds, ...ids(row.vice_departments)])].sort(),
+    // PersonnelObj main_department is the employee primary department;
+    // data_own_department controls record ownership and is not a membership.
+    primaryDepartmentId: primaryDepartmentIds.length === 1 ? primaryDepartmentIds[0] : null,
+    status: normalizeFxiaokePersonnelStatus(row.status),
+    loginDisabled: typeof row.is_pause_login === 'boolean' ? row.is_pause_login : null,
+    employeeNumber: optionalText(row.employee_number),
+    email: optionalText(row.email)?.toLowerCase() ?? null,
+    phone: normalizeIdentityPhone(phone) ?? phone,
+    ...(primaryDepartmentIds.length > 1 ? { sourceConflict: 'primary_department' } : {}),
+  }
+}
+
+function observedValues(values: (string | null)[]) {
+  return [...new Set(values.filter(value => value !== null))].sort()
+}
+
+function groupPersonnelRows(rows: Row[]): DirectoryEmployee[] {
+  const byIdentity = new Map<string, DirectoryEmployee[]>()
+  for (const row of rows) {
+    const employee = readPersonnelRow(row)
+    const records = byIdentity.get(employee.id) ?? []
+    records.push(employee)
+    byIdentity.set(employee.id, records)
+  }
+
+  const disputedPhones = new Set<string>()
+  const employees = [...byIdentity.values()].map<DirectoryEmployee>(records => {
+    const first = records[0]
+    if (records.length === 1 && !first.sourceConflict) return first
+
+    const departmentIds = [...new Set(records.flatMap(record => record.departmentIds))].sort()
+    const primaries = new Set(records.map(record => record.primaryDepartmentId))
+    const primaryConflict = primaries.size > 1 || records.some(record => record.sourceConflict === 'primary_department')
+    const names = observedValues(records.map(record => record.name))
+    const statuses = new Set(records.map(record => record.status))
+    const loginStates = new Set(records.map(record => record.loginDisabled))
+    const employeeNumbers = observedValues(records.map(record => record.employeeNumber))
+    const emails = observedValues(records.map(record => record.email))
+    const phones = observedValues(records.map(record => record.phone))
+    const profileConflict = [names.length, statuses.size, loginStates.size, employeeNumbers.length, emails.length, phones.length]
+      .some(count => count > 1)
+
+    if (!primaryConflict && !profileConflict) {
+      return { ...first, departmentIds, employeeNumber: employeeNumbers[0] ?? null, email: emails[0] ?? null, phone: phones[0] ?? null }
+    }
+
+    // No competing contact data leaves the grouping step. Other identities
+    // claiming any of these phones also require review before they can be used.
+    for (const candidate of phones) {
+      const number = normalizeIdentityPhone(candidate)
+      if (number) disputedPhones.add(number)
+    }
+    const sourceConflict: DirectoryEmployee['sourceConflict'] = primaryConflict ? 'primary_department' : 'employee_profile'
+    return {
+      ...first, name: names[0], departmentIds,
+      primaryDepartmentId: primaryConflict ? null : first.primaryDepartmentId,
+      status: 'unknown',
+      loginDisabled: null, employeeNumber: null, email: null, phone: null, sourceConflict,
+    }
+  })
+
+  return employees.map(employee => {
+    const phone = normalizeIdentityPhone(employee.phone)
+    if (!employee.sourceConflict && phone && disputedPhones.has(phone)) {
+      return { ...employee, status: 'unknown', loginDisabled: null, phone: null, sourceConflict: 'phone_claim' }
+    }
+    return employee
+  })
 }
 
 export type FxiaokeObjectSummary = {
@@ -254,35 +333,16 @@ export async function previewDirectory(credentials: Credentials, request: typeof
     parentId: ids(row.parent_id)[0] || null,
     status: normalizeFxiaokeDepartmentStatus(row.status),
   }))
-  const employees = employeeRows.map(row => {
-    const primaryDepartmentIds = ids(row.main_department)
-    const departmentIds = [...new Set([
-      ...primaryDepartmentIds,
-      ...ids(row.vice_departments),
-    ])]
-    return {
-      id: id(row.user_id),
-      name: name(row.name),
-      departmentIds,
-      // PersonnelObj main_department is the employee primary department;
-      // data_own_department controls record ownership and is not a membership.
-      primaryDepartmentId: primaryDepartmentIds.length === 1 ? primaryDepartmentIds[0] : null,
-      status: normalizeFxiaokePersonnelStatus(row.status),
-      loginDisabled: typeof row.is_pause_login === 'boolean' ? row.is_pause_login : null,
-      employeeNumber: optionalText(row.employee_number),
-      email: optionalText(row.email),
-      phone: optionalText(row.phone),
-    }
-  })
-  if (new Set(employees.map(item => item.id)).size !== employees.length) throw new FxiaokeError('DUPLICATE_IDENTITY', '多个人员记录对应同一员工 ID，需先处理纷享人员数据。', 409)
+  const employees = groupPersonnelRows(employeeRows)
+  const consistentEmployees = employees.filter(item => !item.sourceConflict)
   const departmentIds = new Set(departments.map(item => item.id))
   const missingDepartmentParents = departments.some(item => item.parentId && !departmentIds.has(item.parentId))
   const employeesMissingDepartments = employees.some(item => item.departmentIds.some(departmentId => !departmentIds.has(departmentId)))
-  const employeesWithoutDepartments = employees.filter(item => item.departmentIds.length === 0)
-  const employeesWithoutPrimaryDepartments = employees.filter(item => !item.primaryDepartmentId)
+  const employeesWithoutDepartments = consistentEmployees.filter(item => item.departmentIds.length === 0)
+  const employeesWithoutPrimaryDepartments = consistentEmployees.filter(item => !item.primaryDepartmentId)
   const unknownDepartmentStatuses = departments.filter(item => item.status === 'unknown')
-  const unknownEmployeeStatuses = employees.filter(item => item.status === 'unknown')
-  const unknownLoginStates = employees.filter(item => item.loginDisabled === null)
+  const unknownEmployeeStatuses = consistentEmployees.filter(item => item.status === 'unknown')
+  const unknownLoginStates = consistentEmployees.filter(item => item.loginDisabled === null)
   const complete = departments.length > 0
     && employees.length > 0
     && !missingDepartmentParents
@@ -303,6 +363,7 @@ export async function previewDirectory(credentials: Credentials, request: typeof
   if (unknownDepartmentStatuses.length) warnings.push(`${unknownDepartmentStatuses.length} 个部门的生命周期状态无法识别，切源将整批阻断。`)
   if (unknownEmployeeStatuses.length) warnings.push(`${unknownEmployeeStatuses.length} 位员工的在职状态无法识别，切源将整批阻断。`)
   if (unknownLoginStates.length) warnings.push(`${unknownLoginStates.length} 位员工的禁止登录状态未知；这些成员不能获得寄件权限。`)
+  if (consistentEmployees.length !== employees.length) warnings.push(`${employees.length - consistentEmployees.length} 位员工的纷享记录需要核对。`)
   return { ea: credentials.expectedEa, corpId: token.openUserId, checkedAt: new Date().toISOString(), departments, employees, complete, warnings, visibility: 'authorized_scope', applied: false }
 }
 

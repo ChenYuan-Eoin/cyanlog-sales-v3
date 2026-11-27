@@ -874,7 +874,7 @@ describe('role-free federated session boundary', () => {
     req.cookies.get = vi.fn().mockReturnValue({ value: 'sso-token' })
     const response = await middleware(req)
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('https://sales.cyanlog.icu/login')
+    expect(response.headers.get('location')).toBe('https://sales.cyanlog.icu/login?next=%2Fpending-access')
   })
 
   it('rejects an existing SSO session after directory employment is suspended', async () => {
@@ -1172,11 +1172,11 @@ describe('department-scoped workspace admission', () => {
 describe('middleware public API routing', () => {
   it('requires login for the proposal page and every former anonymous intake route', async () => {
     const portal = await middleware(makeRequest('https://sales.cyanlog.icu/sales-portal', { host: 'sales.cyanlog.icu' }))
-    const workbench = await middleware(makeRequest('https://sales.cyanlog.icu/shipping', { host: 'sales.cyanlog.icu' }))
+    const workbench = await middleware(makeRequest('https://sales.cyanlog.icu/shipping?tab=orders', { host: 'sales.cyanlog.icu' }))
     expect(portal.status).toBe(307)
-    expect(portal.headers.get('location')).toBe('https://sales.cyanlog.icu/login')
+    expect(portal.headers.get('location')).toBe('https://sales.cyanlog.icu/login?next=%2Fsales-portal')
     expect(workbench.status).toBe(307)
-    expect(workbench.headers.get('location')).toBe('https://sales.cyanlog.icu/login')
+    expect(workbench.headers.get('location')).toBe('https://sales.cyanlog.icu/login?next=%2Fshipping%3Ftab%3Dorders')
     for (const path of ['/api/shipping/public/options', '/api/shipping/public/orders', '/api/shipping/public/orders/' + 'a'.repeat(43)]) {
       expect((await middleware(makeRequest('https://sales.cyanlog.icu' + path, { host: 'sales.cyanlog.icu' }))).status).toBe(401)
     }
@@ -1192,7 +1192,7 @@ describe('middleware public API routing', () => {
 
     expect(brandAsset.status).toBe(200)
     expect(brandNeighbor.status).toBe(307)
-    expect(brandNeighbor.headers.get('location')).toBe('https://sales.cyanlog.icu/login')
+    expect(brandNeighbor.headers.get('location')).toBe('https://sales.cyanlog.icu/login?next=%2Fbranding%2Fprivate')
   })
 
   it('allows invitation activation without opening the rest of member administration', async () => {

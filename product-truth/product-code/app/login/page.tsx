@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { BrandMark } from '@/components/branding/BrandMark'
 import { useBranding } from '@/components/branding/BrandingProvider'
 import LoginForm from './LoginForm'
+import { fxiaokeReturnPath } from '@/lib/fxiaoke/return-path'
 
 type EnterpriseProviderState =
   | { status: 'loading' }
@@ -27,6 +28,9 @@ const SSO_ERROR_MESSAGES: Record<string, string> = {
   SSO_DISPATCH_UNAVAILABLE: '寄件平台的企业登录服务暂未就绪，请重新发起登录。',
   SSO_PROVIDER_FAILED: '纷享登录服务暂时不可用，请稍后重试。',
   SSO_ENTERPRISE_MISMATCH: '当前纷享员工不属于系统绑定企业，登录已拒绝。',
+  SSO_ACCOUNT_PENDING: '账号关联待核对，请联系管理员。',
+  SSO_ACCOUNT_DISABLED: '账号已停用，请联系管理员。',
+  SSO_CONFIGURATION_CHANGED: '纷享登录配置已变更，请重新发起登录。',
   SSO_IDENTITY_REJECTED: '纷享身份验证未通过，请联系管理员核对企业账号及授权。',
   SSO_SESSION_FAILED: '系统会话创建失败，请稍后重试。',
   SSO_START_FAILED: '企业登录暂时无法启动，请稍后重试。',
@@ -72,10 +76,12 @@ export default function LoginPage() {
           setEnterpriseProvider({ status: data.providerStatus === 'paused' || data.providerStatus === 'not_configured' ? data.providerStatus : 'unavailable' })
           return
         }
+        const next = fxiaokeReturnPath(new URLSearchParams(window.location.search).get('next'))
+        const startUrl = next ? `${provider.startUrl}?${new URLSearchParams({ next })}` : provider.startUrl
         setEnterpriseProvider({
           status: 'available',
           label: provider.label,
-          startUrl: provider.startUrl,
+          startUrl,
         })
       })
       .catch(error => {

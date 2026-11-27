@@ -117,6 +117,9 @@ export const fxiaokeDirectoryAdapter: DirectoryAdapter = {
     const parsed = storedSchema.parse(credentials)
     try {
       const preview = await previewDirectory(parsed, directoryTransportForOrganization(context.systemOrgId))
+      if (parsed.expectedCorpId && preview.corpId !== parsed.expectedCorpId) {
+        throw new OrganizationConnectionError('ENTERPRISE_MISMATCH', '目录读取的企业与已验证的纷享企业不一致。', 409)
+      }
       return {
         checkedAt: preview.checkedAt,
         complete: preview.complete,

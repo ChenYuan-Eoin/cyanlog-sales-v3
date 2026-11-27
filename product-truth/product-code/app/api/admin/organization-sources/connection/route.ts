@@ -10,6 +10,7 @@ import {
   activateDirectoryConnection,
 } from '@/lib/organization-connections'
 import { detectConnectionStorageMode } from '@/lib/organization-connections/storage'
+import { prepareFxiaokeCredentialRotation, promoteFxiaokeCredentialRotation, readFxiaokeCredentialRotation } from '@/lib/fxiaoke/credential-rotation'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -39,8 +40,14 @@ async function authorize(req: NextRequest, run: (orgId: string, actorId: string,
 }
 
 export async function GET(req: NextRequest) {
-  return authorize(req, async (orgId, _actorId, access) => {
+  return authorize(req, async (orgId, actorId, access) => {
     const provider = req.nextUrl.searchParams.get('provider') || ''
+    if (req.nextUrl.searchParams.get('view') === 'employee-verification' && provider === 'fxiaoke') {
+      if (!access.enterpriseLogin || !access.apply) throw new OrganizationConnectionError('FORBIDDEN', '只有组织超管可以验证共享凭证。', 403)
+      const sourceId = req.nextUrl.searchParams.get('sourceId')
+      if (!sourceId || !UUID.test(sourceId)) throw new OrganizationConnectionError('INVALID_INPUT', '纷享来源无效。', 400)
+      return response(await readFxiaokeCredentialRotation(orgId, actorId, sourceId))
+    }
     const capability = listOrganizationConnectionProviders().find(item => item.key === provider)
     if (!capability?.configurable) {
       throw new OrganizationConnectionError('PROVIDER_NOT_CONFIGURABLE', '该组织提供方尚未接入连接配置。', 400)
@@ -79,6 +86,23 @@ export async function POST(req: NextRequest) {
       if (!access.connect) throw new OrganizationConnectionError('FORBIDDEN', '无权验证此组织的外部连接。', 403)
       const { connection, preview } = await previewOrganizationConnection({ orgId, actorId, provider, revision: body.revision })
       return response({ connection, preview: access.preview ? preview : null })
+    }
+    if (provider === 'fxiaoke' && (body.action === 'prepare_employee_verification' || body.action === 'activate_verified_credentials')) {
+      const origin = req.headers.get('origin')
+      if ((origin && origin !== req.nextUrl.origin) || !access.enterpriseLogin || !access.apply) {
+        throw new OrganizationConnectionError('FORBIDDEN', '只有组织超管可以验证并启用纷享共享凭证。', 403)
+      }
+      if (typeof body.revision !== 'string' || !UUID.test(body.revision)) {
+        throw new OrganizationConnectionError('INVALID_INPUT', '请重新读取当前配置。', 400)
+      }
+      if (body.action === 'prepare_employee_verification' && typeof body.memberId === 'string' && UUID.test(body.memberId)) {
+        return response(await prepareFxiaokeCredentialRotation({ orgId, actorId, revision: body.revision, memberId: body.memberId }))
+      }
+      if (body.action === 'activate_verified_credentials' && typeof body.trialId === 'string' && UUID.test(body.trialId)) {
+        await promoteFxiaokeCredentialRotation({ orgId, actorId, revision: body.revision, trialId: body.trialId })
+        return response({ connection: await loadOrganizationConnection(orgId, provider) })
+      }
+      throw new OrganizationConnectionError('INVALID_INPUT', '请选择要验证的员工，或重新读取验证结果。', 400)
     }
     if (body.action === 'activate_directory' && typeof body.revision === 'string' && UUID.test(body.revision)) {
       if (!access.apply) throw new OrganizationConnectionError('FORBIDDEN', '无权启用此组织的目录连接。', 403)

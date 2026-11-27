@@ -1,6 +1,7 @@
 // F003 / WP94. Resolve only pre-established stable identities to canonical users.
 import { supabaseAdmin } from '@/lib/supabase'
 import { FxiaokeError } from './contracts'
+export { normalizeIdentityPhone } from './contracts'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const CORP_ID = /^FSCID_[A-Za-z0-9_-]{1,128}$/
@@ -26,15 +27,6 @@ type UserRow = {
 
 function storageUnavailable() {
   return new FxiaokeError('IDENTITY_STORE_UNAVAILABLE', '身份映射暂时不可用，请稍后重试。', 503)
-}
-
-export function normalizeIdentityPhone(value: string | null | undefined) {
-  if (!value?.trim()) return null
-  const digits = value.replace(/[^0-9]/g, '')
-  if (/^1[3-9][0-9]{9}$/.test(digits)) return `+86${digits}`
-  if (/^861[3-9][0-9]{9}$/.test(digits)) return `+${digits}`
-  if (/^[1-9][0-9]{7,14}$/.test(digits)) return `+${digits}`
-  return null
 }
 
 async function findIdentitySource(orgId: string) {

@@ -56,6 +56,16 @@ describe('read-only directory observation', () => {
     expect(buildDirectoryInspection(binding, { ...input, departments: [], employees: [] })).toMatchObject({ dataStatus: 'empty', structure: { complete: true } })
   })
 
+  it('reports a disputed personnel row separately from directory structure and hides contact values', () => {
+    const input = directory()
+    input.employees[0] = { ...input.employees[0], primaryDepartmentId: null, status: 'unknown', sourceConflict: 'primary_department' }
+    const report = buildDirectoryInspection(binding, input)
+    expect(report.structure).toMatchObject({ complete: true, issues: [{ code: 'employee_source_conflict', externalId: 'person-1' }] })
+    expect(report.employees).toMatchObject([{ sourceConflict: 'primary_department' }])
+    expect(report.contentHash).not.toBe(buildDirectoryInspection(binding, directory()).contentHash)
+    expect(JSON.stringify(report)).not.toContain('private-')
+  })
+
   it('explains cycles, missing parents, duplicates, unknown status and invalid personnel relationships', () => {
     const input = directory()
     input.departments[0].parentId = 'sales'

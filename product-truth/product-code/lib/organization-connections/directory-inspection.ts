@@ -19,7 +19,7 @@ export type DirectoryInspectionIssue = {
 }
 
 type Department = AdapterDirectoryRead['departments'][number]
-type Employee = Pick<AdapterDirectoryRead['employees'][number], 'id' | 'name' | 'departmentIds' | 'primaryDepartmentId' | 'status'>
+type Employee = Pick<AdapterDirectoryRead['employees'][number], 'id' | 'name' | 'departmentIds' | 'primaryDepartmentId' | 'status' | 'sourceConflict'>
 
 export type DirectoryInspection = {
   version: 'f003-directory-inspection-v2'
@@ -48,8 +48,9 @@ export function buildDirectoryInspection(
   // remain visible as invalid input rather than being silently repaired.
   const byId = <T extends { id: string }>(a: T, b: T) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0
   const departments = directory.departments.map(({ id, name, parentId, status }) => ({ id, name, parentId, status })).sort(byId)
-  const employees = directory.employees.map(({ id, name, departmentIds, primaryDepartmentId, status }) => ({
+  const employees = directory.employees.map(({ id, name, departmentIds, primaryDepartmentId, status, sourceConflict }) => ({
     id, name, departmentIds: [...departmentIds].sort(), primaryDepartmentId, status,
+    ...(sourceConflict ? { sourceConflict } : {}),
   })).sort(byId)
   const issues: DirectoryInspectionIssue[] = []
   const add = (code: string, entity: DirectoryInspectionIssue['entity'], externalId: string | null, message: string) => {
@@ -81,10 +82,14 @@ export function buildDirectoryInspection(
   for (const employee of employees) {
     if (!employee.id || employeeIds.has(employee.id)) add('duplicate_or_empty_id', 'employee', employee.id, '员工标识为空或重复。')
     employeeIds.add(employee.id)
-    if (!knownStatuses.has(employee.status)) add('unknown_status', 'employee', employee.id, '员工状态尚未识别。')
-    if (!employee.departmentIds.length) add('missing_department', 'employee', employee.id, '员工没有部门关系。')
     if (employee.departmentIds.some(id => !departmentById.has(id))) add('department_not_read', 'employee', employee.id, '员工所属部门未出现在本次读取结果中。')
     if (new Set(employee.departmentIds).size !== employee.departmentIds.length) add('duplicate_department_relation', 'employee', employee.id, '员工部门关系重复。')
+    if (employee.sourceConflict) {
+      add('employee_source_conflict', 'employee', employee.id, '该员工的纷享记录需要核对。')
+      continue
+    }
+    if (!knownStatuses.has(employee.status)) add('unknown_status', 'employee', employee.id, '员工状态尚未识别。')
+    if (!employee.departmentIds.length) add('missing_department', 'employee', employee.id, '员工没有部门关系。')
     if (!employee.primaryDepartmentId || !employee.departmentIds.includes(employee.primaryDepartmentId)) add('invalid_primary_department', 'employee', employee.id, '员工主属部门缺失或不属于其部门关系。')
   }
   if (!directory.complete) add('provider_snapshot_incomplete', 'directory', null, '提供方读取尚未通过完整性检查。')
@@ -100,7 +105,7 @@ export function buildDirectoryInspection(
     applied: false,
     departments,
     employees,
-    structure: { complete: issues.length === 0, issues },
+    structure: { complete: issues.every(issue => issue.code === 'employee_source_conflict'), issues },
     // IN-20261105-001: functional readback, with no manual roster/export gate.
     // This observation does not grant directory write or cutover authority.
     dataStatus: departments.length || employees.length ? 'present' : 'empty',

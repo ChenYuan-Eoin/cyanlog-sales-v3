@@ -110,6 +110,137 @@ function json(data: unknown, status = 200) {
 }
 
 describe('OrganizationSourcePanel', () => {
+  it('submits a scope manifest for the current effective source and refreshes the directory preview', async () => {
+    const current = { ...source, provider: 'fxiaoke' }
+    const manifest = {
+      tenant: { ea: 'enterprise', corpId: 'FSCID_test' },
+      principal: { appId: 'FSAID_test', apiUserId: 'employee-reader' },
+      capturedAt: new Date().toISOString(),
+      scope: { rootDepartmentId: 'root', wholeCompany: true, includesStopped: true, unfiltered: true },
+      evidence: { departmentExportSha256: '1'.repeat(64), employeeExportSha256: '2'.repeat(64) },
+      departments: [{ id: 'root', parentId: null, status: 'active' }],
+      employees: [{ id: 'employee-1', status: 'active', primaryDepartmentId: 'root', secondaryDepartmentIds: [] }],
+    }
+    const calls = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/scope-proof')) return json({ data: { proof: {
+        departmentCount: 1, employeeCount: 1, expiresAt: new Date(Date.now() + 60000).toISOString(),
+      } } })
+      if (String(input).includes('/directory')) {
+        const value = plan({ provider: 'fxiaoke' })
+        if (init?.method !== 'POST') {
+          value.snapshot.scopeVerified = false
+          value.snapshot.scopeEvidence = null
+          value.applyable = false
+        }
+        return json({ data: { plan: value, directory_cutover: { available: true, reason: null } } })
+      }
+      return json({ data: { sources: [current], providers, permissions } })
+    })
+    vi.stubGlobal('fetch', calls)
+    render(<OrganizationSourcePanel />)
+    fireEvent.click(await screen.findByText('核对全公司读取范围'))
+    const attachment = screen.getByLabelText('目录核对清单')
+    fireEvent.change(attachment, { target: { files: [new File([JSON.stringify(manifest)], 'scope.json', { type: 'application/json' })] } })
+    fireEvent.click(screen.getByRole('button', { name: '核对读取范围' }))
+    expect(await screen.findByText(/已核实 1 个部门及 1 位人员/)).toBeVisible()
+    await waitFor(() => expect(calls.mock.calls.some(([, options]) => options?.body === JSON.stringify({ action: 'preview', provider: 'fxiaoke' }))).toBe(true))
+    const submission = calls.mock.calls.find(([url]) => String(url).endsWith('/scope-proof'))
+    expect(JSON.parse(String(submission?.[1]?.body))).toEqual({
+      sourceId: current.id, connectionRevision: current.effectiveConnectionRevision, ...manifest,
+    })
+    expect(toast.confirmAction).not.toHaveBeenCalled()
+  })
+
+  it('stages distinct review choices and refreshes the stored plan before any directory apply', async () => {
+    const previous = plan({ provider: 'fxiaoke', previousPrimarySourceId: source.id, permissionReviews: [{
+      userId: 'employee-2', displayName: '员工乙', revision: 'impact-1',
+      permissions: [{ permissionCode: 'test:retained', retainable: true }, { permissionCode: 'test:new', retainable: false }],
+    }] })
+    const refreshed = { ...previous, permissionReviews: [] }
+    const calls = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/directory')) {
+        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null
+        if (body?.action === 'review_permissions') return json({ data: { decision: { userId: 'employee-2' } } })
+        return json({ data: { plan: body?.action === 'preview' ? refreshed : previous, directory_cutover: { available: true, reason: null } } })
+      }
+      return json({ data: { sources: [{ ...source, provider: 'fxiaoke' }], providers, permissions } })
+    })
+    vi.stubGlobal('fetch', calls)
+    render(<OrganizationSourcePanel />)
+
+    const eligible = await screen.findByRole('combobox', { name: '员工乙 · test:retained' })
+    const limited = screen.getByRole('combobox', { name: '员工乙 · test:new' })
+    const save = screen.getByRole('button', { name: '保存权限核对' })
+    expect(save).toBeDisabled()
+    expect(limited).not.toHaveTextContent('保留仍适用的个人例外')
+    fireEvent.change(eligible, { target: { value: 'retain_eligible' } })
+    fireEvent.change(limited, { target: { value: 'new_baseline' } })
+    fireEvent.click(save)
+    await waitFor(() => expect(screen.queryByRole('region', { name: '个人权限待核对' })).not.toBeInTheDocument())
+    const writes = calls.mock.calls.flatMap(([, init]) => typeof init?.body === 'string' ? [JSON.parse(init.body)] : [])
+    expect(writes).toEqual([
+      { action: 'review_permissions', plan_id: previous.id, plan_hash: previous.planHash, user_id: 'employee-2',
+        choices: [{ permissionCode: 'test:retained', choice: 'retain_eligible' }, { permissionCode: 'test:new', choice: 'new_baseline' }] },
+      { action: 'preview', provider: 'fxiaoke' },
+    ])
+  })
+
+  it('waits for the selected employee to verify the draft before offering deliberate credential activation', async () => {
+    const revision = '00000000-0000-4000-8000-000000000003'
+    const memberId = 'employee-1'
+    const trialId = 'trial-1'
+    const trialPath = '/api/auth/fxiaoke/start?trial=' + 'a'.repeat(48)
+    let verified = false
+    let issued = false
+    let enabled = false
+    const calls = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const target = String(input)
+      if (target.includes('/connection?')) {
+        return json({ data: {
+          employees: [{ id: memberId, name: '测试员工甲' }],
+          trial: issued ? { id: trialId, memberId, expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            verifiedAt: verified ? new Date().toISOString() : null } : null,
+        } })
+      }
+      if (target.endsWith('/connection') && typeof init?.body === 'string') {
+        const { action } = JSON.parse(init.body)
+        if (action === 'prepare_employee_verification') {
+          issued = true
+          return json({ data: { trialPath } })
+        }
+        enabled = true
+        return json({ data: {} })
+      }
+      if (target.includes('/directory')) {
+        return json({ data: { plan: null, directory_cutover: { available: true, reason: null } } })
+      }
+      return json({ data: { providers, permissions, sources: [{
+        ...source, provider: 'fxiaoke', connectionRevision: revision,
+        effectiveConnectionRevision: enabled ? revision : source.effectiveConnectionRevision,
+      }] } })
+    })
+    vi.stubGlobal('fetch', calls)
+
+    render(<OrganizationSourcePanel />)
+    fireEvent.click(await screen.findByRole('button', { name: '开始员工验证' }))
+    const employee = await screen.findByRole('combobox', { name: '测试员工' })
+    fireEvent.change(employee, { target: { value: memberId } })
+    fireEvent.click(screen.getByRole('button', { name: '生成验证链接' }))
+    expect(await screen.findByRole('textbox', { name: '员工验证链接' }))
+      .toHaveValue(new URL(trialPath, window.location.origin).href)
+    expect(screen.queryByRole('button', { name: '启用新凭证' })).not.toBeInTheDocument()
+
+    verified = true
+    fireEvent.click(screen.getByRole('button', { name: '刷新验证结果' }))
+    fireEvent.click(await screen.findByRole('button', { name: '启用新凭证' }))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('已启用通过员工验证的新凭证。'))
+    expect(toast.confirmAction).toHaveBeenCalled()
+    expect(calls).toHaveBeenCalledWith('/api/admin/organization-sources/connection', expect.objectContaining({
+      method: 'POST', body: expect.stringContaining('activate_verified_credentials'),
+    }))
+  })
+
+
   it('shows source status without exposing mutation controls or a directory plan for view-only access', async () => {
     const readOnly = { view: true, connect: false, preview: false, apply: false, enterpriseLogin: false }
     const fxiaokeSource = { ...source, provider: 'fxiaoke' }
@@ -378,6 +509,60 @@ describe('OrganizationSourcePanel', () => {
     expect(await screen.findByText(/部门与人员关系：校验通过/)).toBeInTheDocument()
     expect(screen.queryByText(/范围证据缺失/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '确认切换目录主来源' })).toBeEnabled()
+  })
+
+  it('keeps a fully paginated Fxiaoke read with unproven scope read-only and preserves it after a failed check', async () => {
+    const readonly = plan({ provider: 'fxiaoke', snapshot: { ...plan().snapshot, scopeVerified: false, scopeEvidence: null } })
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/directory')) {
+        return init?.method === 'POST' ? json({ error: '通讯录暂时无法读取' }, 502) : json({ data: { plan: readonly } })
+      }
+      return json({ data: { sources: [{ ...source, provider: 'fxiaoke', lastSuccessfulSyncAt: '2026-11-03T00:00:00Z' }], providers, permissions } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<OrganizationSourcePanel />)
+    expect(await screen.findByText('读取范围待核实，只可预览')).toBeVisible()
+    expect(screen.getByText('本次检查保留已生效的人员状态和部门关系。')).toBeVisible()
+    expect(screen.queryByRole('button', { name: '应用变更' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '生成差异确认单' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('保留上次检查结果')
+    expect(screen.getByText('读取范围待核实，只可预览')).toBeVisible()
+    expect(screen.getByText(/上次生效/)).toBeVisible()
+  })
+
+  it('applies independent Fxiaoke changes while keeping review items visible', async () => {
+    const current = plan({
+      provider: 'fxiaoke', previousPrimarySourceId: 'source-2',
+      summary: { ...plan().summary, departmentsAdded: 0, conflicts: 1, membersAdded: 0, membersLinked: 1, membersMoved: 1 },
+      conflicts: [{ kind: 'identity_requires_review', externalId: 'private-subject', message: '员工丙的手机号待核对。' }],
+    })
+    const run: NonNullable<DirectoryCutoverClientPlan['run']> = {
+      runId: 'run-1', planId: current.id, status: 'applied', appliedAt: '2026-11-03T08:01:00.000Z', rolledBackAt: null,
+      sourceId: current.targetSourceId, previousPrimarySourceId: current.previousPrimarySourceId, departments: 1, identities: 1, members: 1,
+    }
+    let applied = false
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/directory')) {
+        if (init?.method === 'POST') {
+          applied = true
+          return json({ data: { run } })
+        }
+        return json({ data: { plan: applied ? { ...current, status: 'applied', run } : current } })
+      }
+      return json({ data: { sources: [{ ...source, provider: 'fxiaoke' }], providers, permissions } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<OrganizationSourcePanel />)
+    expect(await screen.findByText('可应用独立变更')).toBeVisible()
+    expect(screen.getByText('关联 1')).toBeVisible()
+    expect(screen.getByText('调岗 1')).toBeVisible()
+    expect(screen.getByRole('region', { name: '待核对' })).toHaveTextContent('员工丙的手机号待核对。')
+    expect(screen.queryByText(/provider-admin-scope-proof|private-subject/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '应用变更' }))
+    expect(await screen.findByText('已应用')).toBeVisible()
+    expect(toast.confirmAction).toHaveBeenCalledWith(expect.stringContaining('1 项待核对内容会保留'), expect.anything())
+    expect(screen.getByText('员工丙的手机号待核对。')).toBeVisible()
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
   })
 
   it('renders the immutable plan, preservation counts and blocks conflicted plans', async () => {

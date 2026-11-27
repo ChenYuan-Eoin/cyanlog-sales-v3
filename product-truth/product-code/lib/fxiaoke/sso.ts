@@ -33,8 +33,8 @@ export async function resolveConfiguredOAuthOrganization() {
 
   const connection = connections[0]
   try {
-    const credentials = await connection.readCredentials()
-    return { orgId: connection.orgId, credentials: credentials as unknown as Credentials }
+    const { revision, credentials } = await connection.read()
+    return { orgId: connection.orgId, revision, credentials: credentials as unknown as Credentials }
   } catch {
     throw new FxiaokeError('CREDENTIALS_UNREADABLE', '纷享企业登录配置暂时无法读取。', 503)
   }

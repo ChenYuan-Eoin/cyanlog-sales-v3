@@ -111,20 +111,20 @@ function input(overrides: Partial<DirectoryCutoverInput> = {}): DirectoryCutover
 }
 
 describe('directory cutover plan', () => {
-  it('accepts a verified whole directory without a separate export or scope proof', () => {
+  it.each([[false, null], [true, '  ']])('keeps an unproven directory read preview-only (%s, %s)', (scopeVerified, scopeEvidence) => {
     const base = input()
     const plan = buildDirectoryCutoverPlan(input({
       snapshot: {
         ...base.snapshot,
         complete: true,
-        scopeVerified: false,
-        scopeEvidence: null,
+        scopeVerified,
+        scopeEvidence,
       },
     }))
 
-    expect(plan.snapshot).toMatchObject({ complete: true, scopeVerified: false, scopeEvidence: null })
-    expect(plan.applyable).toBe(true)
-    expect(plan.conflicts).toEqual([])
+    expect(plan.snapshot).toMatchObject({ complete: true, scopeVerified, scopeEvidence })
+    expect(plan.applyable).toBe(false)
+    expect(plan.conflicts).toContainEqual(expect.objectContaining({ kind: 'directory_scope_unverified' }))
   })
 
   it('creates a deterministic applyable plan with evidence matching and preserves manual and old-source data', () => {
@@ -284,11 +284,10 @@ describe('directory cutover plan', () => {
       },
     }))
 
-    expect(plan.applyable).toBe(true)
-    expect(plan.identityChanges).toEqual([expect.objectContaining({ canonicalUserId: expect.any(String), createsMember: true, matchMethod: 'none', departmentExternalIds: ['dept-sales'] })])
-    expect(plan.userDepartmentChanges).toHaveLength(1)
-    expect(plan.userDepartmentChanges[0].userId).not.toBe(alice)
-    expect(plan.conflicts).toEqual([])
+    expect(plan.applyable).toBe(false)
+    expect(plan.identityChanges).toEqual([])
+    expect(plan.userDepartmentChanges).toEqual([])
+    expect(plan.conflicts).toContainEqual(expect.objectContaining({ kind: 'identity_requires_review' }))
   })
 
   it('keeps ambiguous account candidates unlinked without dropping the directory employee', () => {
@@ -301,11 +300,12 @@ describe('directory cutover plan', () => {
       },
     }))
 
-    expect(plan.applyable).toBe(true)
-    expect(plan.identityChanges).toEqual([expect.objectContaining({ canonicalUserId: expect.any(String), createsMember: true, matchMethod: 'none' })])
-    expect(plan.userDepartmentChanges).toHaveLength(1)
-    expect(plan.userDepartmentChanges[0].userId).not.toBe(alice)
-    expect(plan.conflicts).toEqual([])
+    expect(plan.applyable).toBe(false)
+    expect(plan.identityChanges).toEqual([])
+    expect(plan.userDepartmentChanges).toEqual([])
+    expect(plan.conflicts).toContainEqual(expect.objectContaining({
+      kind: 'identity_requires_review', candidateUserIds: [alice, bob],
+    }))
   })
 
   it('preserves an explicit manual identity binding until trusted evidence conflicts with it', () => {
@@ -348,5 +348,168 @@ describe('directory cutover plan', () => {
     expect(plan.conflicts).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'ambiguous_primary_source' }),
     ]))
+  })
+
+  it('isolates a disputed upstream personnel record without treating it as a departure or new member', () => {
+    const base = input()
+    const known = base.snapshot.employees[0]
+    const plan = buildDirectoryCutoverPlan(input({
+      sources: [targetSource({ authorityScope: { directory: 'authoritative' } })],
+      organizationMemberships: [{ userId: alice, orgId: org, primaryDepartmentId: feishuDepartment,
+        status: 'active', employmentStatus: 'active', isDefault: true, createdAt: base.users[0].updatedAt }],
+      snapshot: {
+        ...base.snapshot,
+        departments: [...base.snapshot.departments, { id: 'dept-second', name: '第二部门', parentId: null, status: 'active' }],
+        employees: [
+          { ...known, departmentIds: ['dept-sales', 'dept-second'], primaryDepartmentId: null, status: 'inactive', sourceConflict: 'primary_department' },
+          { ...known, id: 'independent-employee', name: '独立新人', employeeNumber: null, phone: '13800000100' },
+        ],
+      },
+    }))
+
+    expect(plan.applyable).toBe(true)
+    expect(plan.conflicts).toEqual([])
+    expect(plan.reviewConflicts).toContainEqual(expect.objectContaining({
+      kind: 'employee_source_conflict', externalId: known.id,
+    }))
+    expect(plan.identityChanges.map(change => change.externalUserId)).toEqual(['independent-employee'])
+    expect(plan.userDepartmentChanges.map(change => change.externalUserId)).toEqual(['independent-employee'])
+    expect(plan.summary).toMatchObject({ membersAdded: 1, membersOffboarded: 0 })
+  })
+
+  it('links an existing owner and plans an ordinary move while isolating independent conflicts', () => {
+    const base = input()
+    const oldDepartment = '00000000-0000-4000-8000-000000000204'
+    const secondaryDepartment = '00000000-0000-4000-8000-000000000205'
+    const member = base.snapshot.employees[0]
+    const existingOwner = { ...member, id: 'owner-a', phone: '+86 138-0000-0001' }
+    const movingMember = { ...member, id: 'moving-b', employeeNumber: 'E002', name: '乙', phone: null }
+    const blockedMember = { ...member, id: 'conflict-c', employeeNumber: null, name: '丙', phone: null }
+    const dependent = { ...blockedMember, id: 'depends-on-parent', departmentIds: ['dept-orphan'], primaryDepartmentId: 'dept-orphan' }
+    const newMember = { ...blockedMember, id: 'genuine-new', name: '新员工', phone: '13800000004' }
+    const cases = input({
+      sources: [source({ authorityScope: {}, syncMode: 'enrichment' }), targetSource({ authorityScope: { directory: 'authoritative' } })],
+      departments: [
+        ...base.departments,
+        { ...base.departments[0], id: oldDepartment, source: 'fxiaoke', externalId: 'dept-old' },
+        { ...base.departments[0], id: secondaryDepartment, source: 'fxiaoke', externalId: 'dept-secondary' },
+      ],
+      users: base.users.map(user => user.id === alice
+        ? { ...user, phone: '13800000001', phoneVerified: true }
+        : { ...user, primaryDepartmentId: oldDepartment }),
+      identities: [{
+        ...base.identities[0], externalUserId: movingMember.id, canonicalUserId: bob,
+        profileSnapshot: { primaryDepartmentExternalId: 'dept-old' },
+      }, base.identities[1]],
+      organizationMemberships: base.users.map(user => ({
+        userId: user.id, orgId: org, status: 'active', employmentStatus: 'active', isDefault: true,
+        createdAt: user.updatedAt, primaryDepartmentId: user.id === bob ? oldDepartment : feishuDepartment,
+      })),
+      memberships: [
+        ...base.memberships,
+        { userId: bob, departmentId: oldDepartment, orgId: org, source: 'fxiaoke', isPrimary: true, joinedAt: base.users[0].updatedAt },
+        { userId: bob, departmentId: secondaryDepartment, orgId: org, source: 'fxiaoke', isPrimary: false, joinedAt: base.users[0].updatedAt },
+      ],
+      snapshot: {
+        ...base.snapshot,
+        departments: [
+          ...base.snapshot.departments,
+          { id: 'dept-old', name: '旧部门', parentId: null, status: 'active' },
+          { id: 'dept-secondary', name: '兼岗', parentId: null, status: 'active' },
+          { id: 'dept-orphan', name: '待核对部门', parentId: 'dept-not-present', status: 'active' },
+        ],
+        employees: [existingOwner, movingMember, blockedMember, dependent, newMember],
+      },
+    })
+    const plan = buildDirectoryCutoverPlan(cases)
+    expect(plan.applyable).toBe(true)
+    expect(plan.conflicts).toEqual([])
+    expect(plan.reviewConflicts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'missing_parent_department', externalId: 'dept-orphan' }),
+      expect.objectContaining({ kind: 'identity_requires_review', externalId: blockedMember.id }),
+      expect.objectContaining({ kind: 'employee_missing_department', externalId: dependent.id }),
+    ]))
+    expect(plan.identityChanges).toContainEqual(expect.objectContaining({
+      externalUserId: existingOwner.id, canonicalUserId: alice, createsMember: false, matchMethod: 'phone',
+    }))
+    expect(plan.summary).toMatchObject({ membersAdded: 1, membersLinked: 1, membersMoved: 1, membersOffboarded: 0 })
+    const historicalShipment = { orgId: org, createdBy: alice }
+    const linkedOwner = plan.identityChanges.find(change => change.externalUserId === existingOwner.id)?.canonicalUserId
+    expect(historicalShipment).toMatchObject({ orgId: plan.organizationId, createdBy: linkedOwner })
+    expect(plan.userDepartmentChanges).toContainEqual(expect.objectContaining({
+      userId: bob, primaryDepartmentExternalId: 'dept-sales', departmentExternalIds: ['dept-sales', 'dept-secondary'],
+    }))
+    expect(plan.userDepartmentChanges.map(change => change.externalUserId)).not.toContain(blockedMember.id)
+    expect(plan.userDepartmentChanges.map(change => change.externalUserId)).not.toContain(dependent.id)
+    expect(plan.userDepartmentChanges.map(change => change.externalUserId)).not.toContain(existingOwner.id)
+
+    const narrowed = buildDirectoryCutoverPlan({
+      ...cases,
+      snapshot: { ...cases.snapshot, scopeVerified: false, scopeEvidence: null },
+    })
+    expect(narrowed.snapshot.employeeCount).toBe(plan.snapshot.employeeCount)
+    expect(narrowed.applyable).toBe(false)
+    expect(narrowed.summary.membersOffboarded).toBe(0)
+    expect(narrowed.userDepartmentChanges.find(change => change.userId === bob)?.departmentExternalIds).toContain('dept-secondary')
+
+    const recycled = buildDirectoryCutoverPlan({ ...cases, phoneHistory: [{ phone: '13800000001', userId: bob }] })
+    expect(recycled.identityChanges.map(change => change.externalUserId)).not.toContain(existingOwner.id)
+    expect(recycled.reviewConflicts).toContainEqual(expect.objectContaining({
+      kind: 'identity_requires_review', externalId: existingOwner.id, candidateUserIds: [alice, bob],
+    }))
+    const identityReview = recycled.reviewConflicts?.find(item => item.externalId === existingOwner.id)?.identityReview
+    expect(identityReview).toMatchObject({
+      factsHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      linkUserIds: [alice],
+      canCreate: false,
+      incoming: expect.objectContaining({ maskedPhone: '+86••••0001' }),
+    })
+    const choice = {
+      externalUserId: existingOwner.id, factsHash: identityReview?.factsHash ?? '',
+      choice: 'link_existing' as const, userId: alice,
+    }
+    const reviewedCases = { ...cases, phoneHistory: [{ phone: '13800000001', userId: bob }], identityDecisions: [choice] }
+    const reviewed = buildDirectoryCutoverPlan(reviewedCases)
+    expect(reviewed.identityChanges).toContainEqual(expect.objectContaining({
+      externalUserId: existingOwner.id, canonicalUserId: alice, matchMethod: 'manual', createsMember: false,
+    }))
+    expect(reviewed.reviewConflicts?.some(row => row.kind === 'identity_requires_review' && row.externalId === existingOwner.id)).toBe(false)
+    const blockedChoice = buildDirectoryCutoverPlan({ ...reviewedCases, identityDecisions: [{ ...choice, userId: bob }] })
+    expect(blockedChoice.identityChanges.map(change => change.externalUserId)).not.toContain(existingOwner.id)
+    const identityChanged = buildDirectoryCutoverPlan({
+      ...reviewedCases,
+      snapshot: { ...cases.snapshot, employees: cases.snapshot.employees.map(row => row.id === existingOwner.id
+        ? { ...row, employeeNumber: 'new-evidence' } : row) },
+    })
+    expect(identityChanged.reviewConflicts).toContainEqual(expect.objectContaining({
+      externalId: existingOwner.id, kind: 'identity_requires_review',
+    }))
+
+    const diverged = {
+      ...cases,
+      organizationMemberships: cases.organizationMemberships.map(row => row.userId === bob
+        ? { ...row, primaryDepartmentId: manualDepartment }
+        : row),
+    }
+    expect(buildDirectoryCutoverPlan(diverged).reviewConflicts).toContainEqual(expect.objectContaining({
+      externalId: movingMember.id, kind: 'employee_primary_review',
+      primaryReview: expect.objectContaining({ userId: bob, currentDepartmentId: manualDepartment, incomingDepartmentExternalId: 'dept-sales' }),
+    }))
+    const retained = { ...diverged, primaryDecisions: [{
+      externalUserId: movingMember.id, userId: bob, currentDepartmentId: manualDepartment,
+      incomingDepartmentExternalId: 'dept-sales', choice: 'keep_local' as const,
+    }] }
+    expect(buildDirectoryCutoverPlan(retained).reviewConflicts?.map(item => item.externalId)).not.toContain(movingMember.id)
+    expect(buildDirectoryCutoverPlan(retained).userDepartmentChanges.map(change => change.userId)).not.toContain(bob)
+    const incomingChanged = buildDirectoryCutoverPlan({
+      ...retained,
+      snapshot: { ...retained.snapshot, employees: retained.snapshot.employees.map(employee => employee.id === movingMember.id
+        ? { ...employee, primaryDepartmentId: 'dept-secondary', departmentIds: ['dept-secondary'] }
+        : employee) },
+    })
+    expect(incomingChanged.reviewConflicts).toContainEqual(expect.objectContaining({
+      externalId: movingMember.id, kind: 'employee_primary_review',
+      primaryReview: expect.objectContaining({ incomingDepartmentExternalId: 'dept-secondary' }),
+    }))
   })
 })

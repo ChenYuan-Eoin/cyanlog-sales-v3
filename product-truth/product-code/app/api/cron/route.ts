@@ -5,10 +5,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { processQueuedContractAnalysisJobs } from '@/lib/contract-analysis'
 import { getRequestId, logRouteDone, logRouteFailure, logRouteStart } from '@/lib/observability'
+import { runDueFxiaokeDirectoryChecks } from '@/lib/organization-connections/directory-check-schedule'
 import { createDueShipmentReviewReminders } from '@/lib/shipping/collaboration'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 export async function GET(req: NextRequest) {
   return handleCron(req)
@@ -130,6 +132,18 @@ async function runCronTasks(): Promise<Array<{ task: string; status: string; dur
     tasks.push({ task: `shipping_review_reminders:${result.orders}:${result.reminders}`, status: 'completed', duration: Date.now() - shippingStart })
   } catch {
     tasks.push({ task: 'shipping_review_reminders', status: 'failed', duration: Date.now() - shippingStart })
+  }
+
+  const directoryStart = Date.now()
+  try {
+    const directory = await runDueFxiaokeDirectoryChecks()
+    tasks.push({
+      task: `fxiaoke_directory_checks:${directory.checked}:${directory.failed}`,
+      status: directory.failed ? 'failed' : 'completed',
+      duration: Date.now() - directoryStart,
+    })
+  } catch {
+    tasks.push({ task: 'fxiaoke_directory_checks', status: 'failed' })
   }
 
   return tasks

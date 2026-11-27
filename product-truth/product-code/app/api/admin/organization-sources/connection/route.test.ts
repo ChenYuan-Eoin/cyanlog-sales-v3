@@ -23,6 +23,9 @@ const mocks = vi.hoisted(() => {
     save: vi.fn(),
     preview: vi.fn(),
     activate: vi.fn(),
+    prepareRotation: vi.fn(),
+    promoteRotation: vi.fn(),
+    readRotation: vi.fn(),
     storageMode: vi.fn(),
     OrganizationConnectionError,
   }
@@ -40,6 +43,11 @@ vi.mock('@/lib/organization-connections', () => ({
   previewOrganizationConnection: mocks.preview,
   activateDirectoryConnection: mocks.activate,
   OrganizationConnectionError: mocks.OrganizationConnectionError,
+}))
+vi.mock('@/lib/fxiaoke/credential-rotation', () => ({
+  prepareFxiaokeCredentialRotation: mocks.prepareRotation,
+  promoteFxiaokeCredentialRotation: mocks.promoteRotation,
+  readFxiaokeCredentialRotation: mocks.readRotation,
 }))
 vi.mock('@/lib/organization-connections/storage', () => ({
   detectConnectionStorageMode: mocks.storageMode,
@@ -75,12 +83,14 @@ function request(method = 'GET', input?: {
   orgId?: string
   provider?: string
   rawBody?: string
+  origin?: string
 }) {
   const url = new URL('http://localhost/api/admin/organization-sources/connection')
   if (input?.provider) url.searchParams.set('provider', input.provider)
   return new NextRequest(url, {
     method,
     headers: {
+      ...(input?.origin ? { origin: input.origin } : {}),
       ...(input?.orgId ? { 'x-org-id': input.orgId } : {}),
       ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
     },
@@ -233,6 +243,26 @@ describe('/api/admin/organization-sources/connection', () => {
     expect(mocks.activate).toHaveBeenCalledWith({ orgId: 'org-1', actorId: 'admin-1', provider: 'fxiaoke', configurationRevision: revision })
     mocks.activate.mockClear()
     expect((await POST(request('POST', { body, orgId: 'foreign-org' }))).status).toBe(403)
+    expect(mocks.activate).not.toHaveBeenCalled()
+  })
+
+  it('requires the current organization superadmin and same origin for staged credential replacement', async () => {
+    const revision = '00000000-0000-4000-8000-000000000001'
+    const memberId = '00000000-0000-4000-8000-000000000002'
+    const trialId = '00000000-0000-4000-8000-000000000003'
+    const body = { provider: 'fxiaoke', action: 'prepare_employee_verification', revision, memberId }
+    expect((await POST(request('POST', { body }))).status).toBe(403)
+    expect(mocks.prepareRotation).not.toHaveBeenCalled()
+
+    mocks.assignments.mockResolvedValue([{
+      roleCode: 'SUPER_ADMIN', scopeType: 'org', scopeId: 'org-1', permissions: ['role:manage'],
+    }])
+    expect((await POST(request('POST', { body, origin: 'https://example.org' }))).status).toBe(403)
+    expect(mocks.prepareRotation).not.toHaveBeenCalled()
+    expect((await POST(request('POST', { body }))).status).toBe(200)
+    expect(mocks.prepareRotation).toHaveBeenCalledWith({ orgId: 'org-1', actorId: 'admin-1', revision, memberId })
+    expect((await POST(request('POST', { body: { ...body, action: 'activate_verified_credentials', trialId } }))).status).toBe(200)
+    expect(mocks.promoteRotation).toHaveBeenCalledWith({ orgId: 'org-1', actorId: 'admin-1', revision, trialId })
     expect(mocks.activate).not.toHaveBeenCalled()
   })
 

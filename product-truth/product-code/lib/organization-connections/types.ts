@@ -1,3 +1,5 @@
+import type { DirectoryEmployeeSourceConflict } from '@/lib/fxiaoke/contracts'
+
 export const ORGANIZATION_CONNECTION_PROVIDERS = ['feishu', 'fxiaoke', 'wecom', 'dingtalk'] as const
 export type OrganizationConnectionProvider = typeof ORGANIZATION_CONNECTION_PROVIDERS[number]
 export type ConnectionState = 'unconfigured' | 'configured' | 'verified' | 'failed' | 'disabled'
@@ -77,6 +79,7 @@ export type DirectoryPreview = {
     employeeNumber?: string | null
     email?: string | null
     phone?: string | null
+    sourceConflict?: DirectoryEmployeeSourceConflict
   }>
   warnings: string[]
   applied: false
