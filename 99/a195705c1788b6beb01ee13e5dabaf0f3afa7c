@@ -1,0 +1,48 @@
+{
+  "kind": "scoped_release_evidence",
+  "work_package": "WP35",
+  "commit": "99a195705c1788b6beb01ee13e5dabaf0f3afa7c",
+  "previous_production": "17da0310c562944b17400520cc5368832c195c9b",
+  "user_feedback": "IN-20261128-001",
+  "code": {
+    "ci_run": "https://github.com/ChenYuan-Eoin/cyanlog-sales-v3/actions/runs/46037366085",
+    "checks": "Lint, type check, Test, Build and Security Audit (Report) success",
+    "changed_files": 2,
+    "code_only": true
+  },
+  "preview": {
+    "deployment_id": "dpl_DpikMm57bUidQFnu328ySjRsiFea",
+    "provider_source_commit": "99a195705c1788b6beb01ee13e5dabaf0f3afa7c",
+    "health_http_status": 200,
+    "operator_mobile_viewport": [
+      393,
+      852
+    ],
+    "operator_desktop_viewport": [
+      1280,
+      900
+    ],
+    "pages": [
+      1,
+      2,
+      1
+    ],
+    "readback_counts": [
+      50,
+      2,
+      50
+    ],
+    "empty_selection_disabled": true,
+    "eligible_selection_enabled": true,
+    "button_visible_after_long_scroll": true,
+    "desktop_original_action_position": true,
+    "browser_artifact_sha256": "d6ad6096b5ab16b9f4b4adbf2085d2d1bfd119c74098eebbe074c4d5827b03ed",
+    "db_readback_sha256": "37e1b7d7c23dae091bb1b0284b242228552779aa5ed9e67a57ccf4564c2d38c2",
+    "isolated_synthetic_data": true
+  },
+  "production": {
+    "status": "not_pushed",
+    "database_migrations": 0,
+    "safari_acceptance": "pending"
+  }
+}
