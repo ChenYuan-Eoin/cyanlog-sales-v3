@@ -13,7 +13,7 @@
     "supabase/migrations/20261127165500_fxiaoke_directory_permission_reviews.sql": "8774f79fc95d9927e27c5e36f6a92628d2459e62133024ddf8513824fc4a8bb2",
     "supabase/migrations/20261127170000_fxiaoke_directory_scope_proof.sql": "f7c6a59fc7b0f600a63b0735a9f282658fcea61747bfea2b6e98b532a52b0de6",
     "supabase/migrations/20261127170500_fxiaoke_existing_member_login.sql": "8028327bc56f474ed8b7b164bc0e018ff6bfb407e1bf0646e9b2fa3c1974e19b",
-    "supabase/migrations/20261127171000_fxiaoke_observed_phone_history.sql": "ce2e8b9a07553e7028084244fbfc62ebfeffd83c0850ce300897318839ebd66c"
+    "supabase/migrations/20261127171000_fxiaoke_observed_phone_history.sql": "6e779d4a6f5950281ebd3d97107dd907cb04223c01b93827b7aa28850e3b25cf"
   },
   "findings": [
     "Membership inserts explicitly supply gen_random_uuid(); conflict updates preserve the existing membership_id. Native organization membership is inserted before department relationships to satisfy the production composite FK.",
@@ -33,12 +33,12 @@
     "Refreshed from the authenticated read-only Supabase Production catalog captured at 2026-11-27T11:35:48.937Z on PostgreSQL 17.6. It contains 20 tables and 30 functions and only schema metadata. The historic pre-cutover baseline and original migration hashes are preserved.",
     "The role usage check now references private.department_automatic_role_rules. Capture explicitly selects that table and follows its foreign keys; the existing pending Fxiaoke roles and invitations already cover departure-trigger targets. The verifier still requires exact catalog equality.",
     "A disposable native PostgreSQL 17.6 instance exactly reproduced the refreshed catalog. Service-role fixtures verified stopped-login revoke-only visibility, departure cleanup, blocked direct parent edits, and a retired role visible through a real automatic department role reference.",
-    "The WP82 migration review covers the exact eight additional files. Each migration opens and commits one transaction. The permission review is installed before the scope-proof wrapper and existing-member login eligibility updates credential rotation last.",
+    "The WP82 migration review covers the exact nine additional files. Each migration opens and commits one transaction. The permission review is installed before the scope-proof wrapper and existing-member login eligibility updates credential rotation last.",
     "Fxiaoke confirmation verifies the current organization, source, tenant and effective credential revision, the current matching roster proof, and the immutable plan. Unverified roster coverage keeps directory changes in preview. Applied receipts replay through the original validation chain.",
     "Contact conflicts keep the affected employee in review. Independent scope verification requires known lifecycle and primary and secondary memberships, and confirms an exact roster match. Scope shrink leaves employment and membership unchanged.",
     "The linked-member login transaction keeps the existing canonical ICU user and business record owner. Invited users retain the first-login rules. Rotation requires the linked employee trial to match the approved draft revision.",
     "The native PostgreSQL 17.6 rehearsal includes the live schema-only capabilities for pending role revocation and controlled parent changes. Browser database roles remain excluded from privileged directory, credential and proof functions.",
-    "Live Production metadata showed that phone history was never installed. The additive migration with no historical user rewrites records observed numbers, preserves existing verified flags, and allows parallel observations so competing ownership can be isolated during a directory review. An existing legacy recorder is preserved.",
+    "Live Production metadata showed that phone history was never installed. The additive migration with no historical user rewrites records observed numbers, preserves existing verified flags, and allows parallel observations so competing ownership can be isolated during a directory review. An existing legacy recorder is preserved. Changing to a different normalized number clears the previous verification in the same profile update.",
     "Directory confirmation rechecks the effective organization-scoped grant inside the existing organization lock. The canonical system administrator and exact delegated org:source_apply grant use their established scope rules."
   ],
   "catalogSha256": "7be4e8861689438ffcae2495940cf4b0d8ada3be6a465fcbb5d40f521c34c764"

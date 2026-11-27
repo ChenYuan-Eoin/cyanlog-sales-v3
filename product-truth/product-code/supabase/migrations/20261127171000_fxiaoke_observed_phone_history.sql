@@ -2,9 +2,9 @@ begin;
 
 set local lock_timeout = '5s';
 
--- Record observed numbers for directory conflict checks without rewriting the
--- employee's phone or its verification status. Older environments may already
--- have the original phone history table and recorder.
+-- Record observed numbers for directory conflict checks without rewriting
+-- existing profiles. Older environments may already have the original phone
+-- history table and recorder.
 do $$
 begin
   if pg_catalog.to_regclass('public.phone_history') is null then
@@ -71,13 +71,32 @@ begin
 end;
 $$;
 
+-- A verified number belongs to the current employee profile. A differently
+-- formatted copy of the same number retains its existing verification.
+create function private.clear_changed_directory_phone_verification_v1()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if private.directory_observed_phone_v1(new.phone)
+    is distinct from private.directory_observed_phone_v1(old.phone) then
+    new.phone_verified := false;
+  end if;
+  return new;
+end;
+$$;
+
 revoke all on function private.directory_observed_phone_v1(text),
-  private.record_directory_observed_phone_v1()
+  private.record_directory_observed_phone_v1(),
+  private.clear_changed_directory_phone_verification_v1()
   from public, anon, authenticated, service_role;
 
 -- Hold writes while creating the recorder and taking an initial snapshot.
 -- Conflicting holders are recorded independently for later review.
 lock table public.users in share row exclusive mode;
+
+create trigger users_clear_changed_directory_phone_verification
+before update of phone on public.users
+for each row when (old.phone is distinct from new.phone)
+execute function private.clear_changed_directory_phone_verification_v1();
 do $$
 begin
   if not exists (
