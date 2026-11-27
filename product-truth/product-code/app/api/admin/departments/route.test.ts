@@ -22,6 +22,16 @@ import { supabaseAdmin } from '@/lib/supabase'
 import type { ScopedRoleAssignment } from '@/lib/scoped-access'
 import { GET, POST } from './route'
 
+const parentId = '00000000-0000-0000-0000-000000000002'
+
+function createChild() {
+  return POST(new Request('https://example.test/api/admin/departments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: '承接组', code: 'TEAM', parent_id: parentId }),
+  }) as any)
+}
+
 function grant(permissions: string[], scopeType: ScopedRoleAssignment['scopeType'] = 'org', scopeId = 'org-1') {
   vi.mocked(loadCurrentOrganizationRoleAssignments).mockResolvedValue({ orgId: 'org-1', settings: {}, assignments: [{
     scopeType, scopeId, permissions, roleCode: 'DEPARTMENTS', roleId: 'role-1', roleName: '部门', grantedAt: null,
@@ -87,6 +97,42 @@ describe('POST /api/admin/departments validation', () => {
       name: '销售部',
       code: 'SALES',
     }))
+  })
+
+  it('只在当前组织有效上级下创建子部门', async () => {
+    grant(['dept:directory_view', 'dept:edit_structure'])
+    const uniqueness = makeQuery({ data: null, error: null })
+    const parent = makeQuery({ data: { depth: 2 }, error: null })
+    const insert = makeQuery({ data: { id: 'new-dept' }, error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(uniqueness).mockReturnValueOnce(parent).mockReturnValueOnce(insert)
+
+    expect((await createChild()).status).toBe(201)
+    expect(parent.eq).toHaveBeenCalledWith('org_id', 'org-1')
+    expect(parent.eq).toHaveBeenCalledWith('status', 'active')
+    expect(insert.insert).toHaveBeenCalledWith(expect.objectContaining({ parent_id: parentId, depth: 3 }))
+  })
+
+  it('上级在预检前归档时不会提交子部门', async () => {
+    grant(['dept:directory_view', 'dept:edit_structure'])
+    const absent = makeQuery({ data: null, error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(absent).mockReturnValueOnce(absent)
+
+    const response = await createChild()
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'DEPARTMENT_PARENT_UNAVAILABLE' })
+    expect(absent.insert).not.toHaveBeenCalled()
+  })
+
+  it('上级在预检后归档时转达事务拒绝', async () => {
+    grant(['dept:directory_view', 'dept:edit_structure'])
+    vi.mocked(supabaseAdmin.from)
+      .mockReturnValueOnce(makeQuery({ data: null, error: null }))
+      .mockReturnValueOnce(makeQuery({ data: { depth: 2 }, error: null }))
+      .mockReturnValueOnce(makeQuery({ data: null, error: { code: '23514', details: 'DEPARTMENT_PARENT_UNAVAILABLE' } }))
+
+    const response = await createChild()
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'DEPARTMENT_PARENT_UNAVAILABLE' })
   })
 
   it('目录只读授权仅允许读取当前组织的部门树', async () => {

@@ -40,6 +40,7 @@ import { UserFormDialog } from './components/UserFormDialog'
 import { RoleAssignmentDialog } from './components/RoleAssignmentDialog'
 import { IdentityBindingDialog } from './components/IdentityBindingDialog'
 import { MemberBatchActions } from './components/MemberBatchActions'
+import { ArchivedDepartmentsPanel, DepartmentDisposalPanel } from './components/DepartmentDisposalPanel'
 import { DirectoryChangeSummary, directoryOverview, type DirectoryOverview } from './DirectoryChangeSummary'
 import {
   canOnlyRevokePendingOrgRoles, editableCurrentOrgBusinessRoleIds, editableOrgRoleIds, getMemberRoleMutationRestriction,
@@ -275,11 +276,16 @@ interface DepartmentTreeProps {
   onMemberBindingsBlocked?: (departmentId: string) => void
   onRefresh?: () => void | Promise<void>
   className?: string
+  disposalSelection?: Set<string>
+  onToggleDisposal?: (id: string, checked: boolean) => void
+  onOpenDisposal?: (id: string) => void
+  onOpenIntegrations?: () => void
 }
 
 function DepartmentTree({
   departments, users, memberCounts, memberAccess, canEdit, canDelete, showRootAdd,
   selectedDeptId, onSelectDept, onMemberBindingsBlocked, onRefresh, className,
+  disposalSelection, onToggleDisposal, onOpenDisposal, onOpenIntegrations,
 }: DepartmentTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [editDept, setEditDept] = useState<OrgSummaryDepartment | null>(null)
@@ -354,97 +360,112 @@ function DepartmentTree({
 
     return (
       <div key={dept.id}>
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => handleDeptClick(dept.id, hasChildren)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault()
-              handleDeptClick(dept.id, hasChildren)
-            }
-          }}
-          className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition group ${
-            isSelected
-              ? 'bg-blue-50 text-blue-900 hover:bg-blue-100'
-              : 'hover:bg-slate-50'
-          }`}
-          style={{ paddingLeft: `${depth * 20 + 12}px` }}
-        >
-          {/* Expand/collapse button */}
+        <div className="flex items-center gap-1">
+          {disposalSelection && onToggleDisposal && (
+            <Checkbox aria-label={`纳入处置 ${dept.name}`} checked={disposalSelection.has(dept.id)}
+              onCheckedChange={checked => onToggleDisposal(dept.id, checked === true)} />
+          )}
           <div
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-slate-200/50"
-            onClick={(e) => {
-              e.stopPropagation()
-              if (hasChildren) toggleExpand(dept.id)
+            role="button"
+            tabIndex={0}
+            onClick={() => handleDeptClick(dept.id, hasChildren)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                handleDeptClick(dept.id, hasChildren)
+              }
             }}
+            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition group ${
+              isSelected
+                ? 'bg-blue-50 text-blue-900 hover:bg-blue-100'
+                : 'hover:bg-slate-50'
+            }`}
+            style={{ paddingLeft: `${depth * 20 + 12}px` }}
           >
-            {hasChildren ? (
-              isExpanded ? (
-                <ChevronDownIconCustom size={14} className={isSelected ? 'text-blue-400' : 'text-slate-400'} />
+            {/* Expand/collapse button */}
+            <div
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-slate-200/50"
+              onClick={(e) => {
+                e.stopPropagation()
+                if (hasChildren) toggleExpand(dept.id)
+              }}
+            >
+              {hasChildren ? (
+                isExpanded ? (
+                  <ChevronDownIconCustom size={14} className={isSelected ? 'text-blue-400' : 'text-slate-400'} />
+                ) : (
+                  <ChevronRightIconCustom size={14} className={isSelected ? 'text-blue-400' : 'text-slate-400'} />
+                )
               ) : (
-                <ChevronRightIconCustom size={14} className={isSelected ? 'text-blue-400' : 'text-slate-400'} />
-              )
-            ) : (
-              <span className={`h-1.5 w-1.5 rounded-full ${isSelected ? 'bg-blue-300' : 'bg-slate-300'}`} />
-            )}
-          </div>
+                <span className={`h-1.5 w-1.5 rounded-full ${isSelected ? 'bg-blue-300' : 'bg-slate-300'}`} />
+              )}
+            </div>
 
-          {/* Department name + leader */}
-          <div className="min-w-0 flex-1 truncate">
-            <span className={`text-sm font-medium ${isSelected ? 'text-blue-900' : 'text-slate-900'}`}>
-              {dept.name}
-            </span>
-            {dept.status === 'inactive' && <span className="ml-1 text-xs text-slate-400">已停用</span>}
-            {dept.leader_name && (
-              <span className="ml-1 text-xs text-amber-600">
-                👤 {dept.leader_name}
+            {/* Department name + leader */}
+            <div className="min-w-0 flex-1 truncate">
+              <span className={`text-sm font-medium ${isSelected ? 'text-blue-900' : 'text-slate-900'}`}>
+                {dept.name}
               </span>
-            )}
+              {dept.status === 'inactive' && <span className="ml-1 text-xs text-slate-400">已停用</span>}
+              {dept.leader_name && (
+                <span className="ml-1 text-xs text-amber-600">
+                  👤 {dept.leader_name}
+                </span>
+              )}
+            </div>
+
+            {/* Actions: Edit / Delete */}
+            {(canEdit || canDelete) && <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`管理部门 ${dept.name}`}
+                  className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity rounded p-1 hover:bg-slate-200/50"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreHorizontalIcon size={14} className="text-slate-400" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canEdit && <DropdownMenuItem onSelect={() => setEditDept(dept)}>
+                  <EditIcon className="h-4 w-4 mr-2" />
+                  编辑
+                </DropdownMenuItem>}
+                {canEdit && <DropdownMenuItem onSelect={() => { setAddDeptParentId(dept.parent_id ? dept.parent_id : null); setAddDeptOpen(true); }}>
+                  <PlusIcon className="h-4 w-4 mr-2" />
+                  添加同级部门
+                </DropdownMenuItem>}
+                {canEdit && <DropdownMenuItem onSelect={() => { setAddDeptParentId(dept.id); setAddDeptOpen(true); }}>
+                  <PlusIcon className="h-4 w-4 mr-2" />
+                  添加下级部门
+                </DropdownMenuItem>}
+                {canDelete && onOpenDisposal && (!dept.source || dept.source === 'manual') && <DropdownMenuItem
+                  onSelect={() => onOpenDisposal(dept.id)}
+                >
+                  <TrashIcon className="h-4 w-4 mr-2" />
+                  归档处置
+                </DropdownMenuItem>}
+                {canDelete && onOpenDisposal && dept.source && dept.source !== 'manual' && onOpenIntegrations && (
+                  <DropdownMenuItem onSelect={onOpenIntegrations}>前往外部系统接入</DropdownMenuItem>
+                )}
+                {canDelete && !onOpenDisposal && <DropdownMenuItem
+                  className="text-red-600"
+                  disabled={deletingDept?.id === dept.id}
+                  onSelect={() => handleDelete(dept)}
+                >
+                  <TrashIcon className="h-4 w-4 mr-2" />
+                  {deletingDept?.id === dept.id ? '删除中...' : '删除'}
+                </DropdownMenuItem>}
+              </DropdownMenuContent>
+            </DropdownMenu>}
+
+            {/* Member count */}
+            {memberAccess && <Badge variant={isSelected ? 'default' : 'outline'} className="shrink-0 text-xs">
+              {memberCounts ? memberCounts.get(dept.id) ?? 0 : '—'}
+            </Badge>}
           </div>
 
-          {/* Actions: Edit / Delete */}
-          {(canEdit || canDelete) && <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label={`管理部门 ${dept.name}`}
-                className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity rounded p-1 hover:bg-slate-200/50"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MoreHorizontalIcon size={14} className="text-slate-400" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {canEdit && <DropdownMenuItem onSelect={() => setEditDept(dept)}>
-                <EditIcon className="h-4 w-4 mr-2" />
-                编辑
-              </DropdownMenuItem>}
-              {canEdit && <DropdownMenuItem onSelect={() => { setAddDeptParentId(dept.parent_id ? dept.parent_id : null); setAddDeptOpen(true); }}>
-                <PlusIcon className="h-4 w-4 mr-2" />
-                添加同级部门
-              </DropdownMenuItem>}
-              {canEdit && <DropdownMenuItem onSelect={() => { setAddDeptParentId(dept.id); setAddDeptOpen(true); }}>
-                <PlusIcon className="h-4 w-4 mr-2" />
-                添加下级部门
-              </DropdownMenuItem>}
-              {canDelete && <DropdownMenuItem
-                className="text-red-600"
-                disabled={deletingDept?.id === dept.id}
-                onSelect={() => handleDelete(dept)}
-              >
-                <TrashIcon className="h-4 w-4 mr-2" />
-                {deletingDept?.id === dept.id ? '删除中...' : '删除'}
-              </DropdownMenuItem>}
-            </DropdownMenuContent>
-          </DropdownMenu>}
-
-          {/* Member count */}
-          {memberAccess && <Badge variant={isSelected ? 'default' : 'outline'} className="shrink-0 text-xs">
-            {memberCounts ? memberCounts.get(dept.id) ?? 0 : '—'}
-          </Badge>}
         </div>
-
         {isExpanded && hasChildren && (
           <div>
             {children.map(child => renderDepartment(child, depth + 1))}
@@ -1139,13 +1160,21 @@ export default function OrgStructureTab({
 }: OrgStructureTabProps) {
   const departmentAccess = orgSummary?.department_access
   const canReadDepartments = departmentAccess?.canRead !== false
-  const departments = useMemo(() => canReadDepartments ? orgSummary?.departments ?? [] : [],
-    [canReadDepartments, orgSummary?.departments])
+  const orgId = orgSummary?.organization?.id
+  const disposalScope = JSON.stringify([orgId, currentUserId])
+  const [disposalView, setDisposalView] = useState<{ scope: string; mode: 'disposal' | 'archives'; ids: Set<string> } | null>(null)
+  const [archiveOverlay, setArchiveOverlay] = useState<{ scope: string; ids: Set<string> } | null>(null)
+  const archivedHere = archiveOverlay?.scope === disposalScope ? archiveOverlay.ids : null
+  const departments = useMemo(() => canReadDepartments
+    ? (orgSummary?.departments ?? []).filter(row => !archivedHere?.has(row.id) && row.status !== 'archived')
+    : [], [canReadDepartments, orgSummary?.departments, archivedHere])
+  const activeTreeDepartments = useMemo(() => departments.filter(row => !row.status || row.status === 'active'), [departments])
   const users = useMemo(() => orgSummary?.users ?? [], [orgSummary?.users])
   const departmentTree = useMemo(() => buildDepartmentOptions(departments), [departments])
   const orgDepartmentIds = useMemo(() => departmentTree.map(department => department.department_id), [departmentTree])
   const [storedSelectedDeptId, setSelectedDeptId] = useState<string | null>(null)
-  const selectedDeptId = canReadDepartments ? storedSelectedDeptId : null
+  const selectedDeptId = canReadDepartments && storedSelectedDeptId && orgDepartmentIds.includes(storedSelectedDeptId)
+    ? storedSelectedDeptId : null
   const [includeSubdepartments, setIncludeSubdepartments] = useState(true)
   const [filterOverride, setEmploymentFilter] = useState<MemberFilter | null>(null)
   const [memberTableVersion, setMemberTableVersion] = useState(0)
@@ -1220,15 +1249,12 @@ export default function OrgStructureTab({
 
   // 统计信息
   const stats = useMemo(() => ({
-    deptCount: (orgSummary?.departments ?? []).length,
+    deptCount: activeTreeDepartments.length,
     userCount: statusUsers.length,
     filteredCount: filteredUsers.length,
-  }), [orgSummary, statusUsers.length, filteredUsers.length])
+  }), [activeTreeDepartments.length, statusUsers.length, filteredUsers.length])
 
-  const selectedDept = useMemo(() => {
-    const departments = orgSummary?.departments ?? []
-    return departments.find(d => d.id === selectedDeptId) ?? null
-  }, [orgSummary, selectedDeptId])
+  const selectedDept = useMemo(() => departments.find(d => d.id === selectedDeptId) ?? null, [departments, selectedDeptId])
 
   // 编辑用户状态
   const [editingUser, setEditingUser] = useState<OrgSummaryUser | null>(null)
@@ -1242,8 +1268,47 @@ export default function OrgStructureTab({
   const actions = orgSummary?.member_actions ?? unavailableMemberActions
   const canEditDepartments = departmentAccess?.canEdit ?? actions.manageDepartments
   const canDeleteDepartments = departmentAccess?.canDelete ?? actions.manageDepartments
-  const isEmptyState = departments.length === 0 && users.length === 0
-  const orgId = orgSummary?.organization?.id
+  const isEmptyState = activeTreeDepartments.length === 0 && users.length === 0
+  const activeDisposal = disposalView?.scope === disposalScope ? disposalView : null
+  const disposalActor = users.find(row => row.id === currentUserId)
+  const canManageDisposal = Boolean(orgId && disposalActor && canReadDepartments && userHasSystemAdminAssignment(disposalActor, orgId)
+    && (canDeleteDepartments || canEditDepartments || actions.manageLogin || actions.manageEmployment))
+  const canReadArchives = Boolean(orgId && currentUserId && canReadDepartments)
+  const currentDisposalMode = activeDisposal?.mode === 'disposal' && canManageDisposal ? 'disposal'
+    : activeDisposal?.mode === 'archives' && canReadArchives ? 'archives' : null
+  const disposalIds = useMemo(() => activeDisposal ? [...activeDisposal.ids].sort() : [], [activeDisposal])
+  function openDisposal(departmentId?: string) {
+    setDisposalView(previous => {
+      const ids = new Set(previous?.scope === disposalScope ? previous.ids : [])
+      if (departmentId) ids.add(departmentId)
+      return { scope: disposalScope, mode: 'disposal', ids }
+    })
+  }
+  function openArchives() {
+    setDisposalView(previous => ({ scope: disposalScope, mode: 'archives',
+      ids: new Set(previous?.scope === disposalScope ? previous.ids : []) }))
+  }
+  function toggleDisposal(departmentId: string, checked: boolean) {
+    setDisposalView(previous => {
+      if (previous?.scope !== disposalScope || previous.mode !== 'disposal') return previous
+      const ids = new Set(previous.ids)
+      if (checked) ids.add(departmentId)
+      else ids.delete(departmentId)
+      return { ...previous, ids }
+    })
+  }
+  function hideArchived(ids: string[]) {
+    if (!ids.length) return
+    setArchiveOverlay(previous => ({ scope: disposalScope,
+      ids: new Set([...(previous?.scope === disposalScope ? previous.ids : []), ...ids]) }))
+    setSelectedDeptId(previous => previous && ids.includes(previous) ? null : previous)
+  }
+  function showRestored(id: string) {
+    setArchiveOverlay(previous => {
+      if (previous?.scope !== disposalScope || !previous.ids.has(id)) return previous
+      return { ...previous, ids: new Set([...previous.ids].filter(archived => archived !== id)) }
+    })
+  }
   const canTransferDepartment = Boolean(actions.assignRoles && canReadDepartments)
   const transfer = canTransferDepartment && transferDraft?.orgId === orgId && transferDraft?.actorId === currentUserId
     ? transferDraft : null
@@ -1273,10 +1338,14 @@ export default function OrgStructureTab({
     return (
       <div className="space-y-4">
         <StatCard icon={<BuildingIcon size={18} />} label="部门" value={stats.deptCount} />
+        {canReadArchives && <Button type="button" size="sm" variant="outline" onClick={openArchives}>已归档部门</Button>}
+        {currentDisposalMode === 'archives' && orgId && <ArchivedDepartmentsPanel key={disposalScope} orgId={orgId}
+          departments={departments} authHeaders={buildAuthHeaders} canRestore={false} onRestored={showRestored}
+          onRefresh={onRefresh} onOpenIntegrations={onOpenIntegrations} />}
         <div className="rounded-lg border bg-white p-4">
           <h3 className="mb-3 font-medium text-slate-900">部门结构</h3>
           <DepartmentTree
-            departments={departments}
+            departments={activeTreeDepartments}
             users={[]}
             memberCounts={null}
             memberAccess={false}
@@ -1343,6 +1412,12 @@ export default function OrgStructureTab({
                   key={JSON.stringify([orgId, currentUserId])} onRefresh={onRefresh}
                 />}
               </div>
+              {(canManageDisposal || canReadArchives) && <div className="mt-2 flex flex-wrap gap-1">
+                {canManageDisposal && <Button type="button" size="sm" variant="outline"
+                  aria-pressed={currentDisposalMode === 'disposal'} onClick={() => openDisposal()}>批量处置</Button>}
+                {canReadArchives && <Button type="button" size="sm" variant="outline"
+                  aria-pressed={currentDisposalMode === 'archives'} onClick={openArchives}>已归档部门</Button>}
+              </div>}
               <p className="text-xs text-slate-500 mt-1">
                 {departmentFilter === 'all' ? '关联成员' : MEMBER_FILTER_LABELS[departmentFilter]}人数含下级，同一成员只计一次
               </p>
@@ -1366,7 +1441,7 @@ export default function OrgStructureTab({
               <div className="border-t my-2" />
 
               <DepartmentTree
-                departments={departments}
+                departments={activeTreeDepartments}
                 users={users}
                 memberCounts={departmentMemberCounts}
                 memberAccess
@@ -1376,6 +1451,10 @@ export default function OrgStructureTab({
                 onSelectDept={setSelectedDeptId}
                 onMemberBindingsBlocked={showDirectDepartmentMembers}
                 onRefresh={onRefresh}
+                disposalSelection={currentDisposalMode === 'disposal' ? activeDisposal?.ids : undefined}
+                onToggleDisposal={toggleDisposal}
+                onOpenDisposal={canManageDisposal ? openDisposal : undefined}
+                onOpenIntegrations={onOpenIntegrations}
               />
             </div>
           </div>
@@ -1383,6 +1462,16 @@ export default function OrgStructureTab({
 
         {/* 中间成员列表 */}
         <div className="min-w-0 space-y-4">
+          {currentDisposalMode && <Button type="button" size="sm" variant="ghost" onClick={() => setDisposalView(null)}>返回成员列表</Button>}
+          {currentDisposalMode === 'disposal' && orgId && <DepartmentDisposalPanel key={disposalScope}
+            orgId={orgId} departmentIds={disposalIds} departments={departments} authHeaders={buildAuthHeaders}
+            initialEmploymentFilter={employmentFilter === 'all' ? 'all' : 'active'} canArchive={canDeleteDepartments}
+            canReparent={canEditDepartments} onArchived={hideArchived} onRefresh={onRefresh}
+            onOpenIntegrations={onOpenIntegrations} />}
+          {currentDisposalMode === 'archives' && orgId && <ArchivedDepartmentsPanel key={disposalScope}
+            orgId={orgId} departments={departments} authHeaders={buildAuthHeaders} canRestore={canManageDisposal && canEditDepartments}
+            onRestored={showRestored} onRefresh={onRefresh} onOpenIntegrations={onOpenIntegrations} />}
+          {!currentDisposalMode && <>
           <div className="rounded-lg border bg-white">
             <div className="border-b px-6 py-4">
               <div className="flex items-center justify-between">
@@ -1475,6 +1564,7 @@ export default function OrgStructureTab({
               onRoleRulesSaved={onRefresh}
             />
           )}
+          </>}
         </div>
 
         <div className="min-w-0 space-y-4">

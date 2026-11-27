@@ -24,6 +24,12 @@ function validationError(result: z.ZodError) {
   )
 }
 
+function unavailableParent() {
+  return NextResponse.json({
+    error: '上级部门已停用或不可用，请重新选择。', code: 'DEPARTMENT_PARENT_UNAVAILABLE',
+  }, { status: 409 })
+}
+
 async function assertUserInOrg(orgId: string, userId: string | null | undefined) {
   if (!userId) {
     return null
@@ -122,11 +128,14 @@ export async function POST(req: NextRequest) {
         .select('depth')
         .eq('id', parent_id)
         .eq('org_id', orgId)
-        .single()
+        .eq('status', 'active')
+        .maybeSingle()
 
-      if (parentError || !parent) {
-        return NextResponse.json({ error: '上级部门不存在' }, { status: 400 })
+      if (parentError) {
+        console.error('Read parent department error:', parentError)
+        return NextResponse.json({ error: '无法核对上级部门，请稍后重试。' }, { status: 500 })
       }
+      if (!parent) return unavailableParent()
       depth = (parent.depth || 0) + 1
     }
 
@@ -155,6 +164,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) {
+      if (error.code === '23514' && error.details === 'DEPARTMENT_PARENT_UNAVAILABLE') return unavailableParent()
       console.error('Create department error:', error)
       return NextResponse.json({ error: '创建部门失败' }, { status: 500 })
     }

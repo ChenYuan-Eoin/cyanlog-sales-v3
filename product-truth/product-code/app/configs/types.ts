@@ -647,7 +647,7 @@ export type OrgDirectoryRoster =
 export interface OrgSummaryPayload {
   organization?: {
     id: string
-    name: string
+    name?: string
     slug?: string | null
   }
   users: OrgSummaryUser[]

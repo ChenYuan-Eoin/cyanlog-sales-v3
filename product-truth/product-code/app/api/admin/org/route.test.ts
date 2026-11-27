@@ -365,6 +365,7 @@ describe('GET /api/admin/org', () => {
     const response = await GET(req)
     const body = await response.json()
     expect(response.status).toBe(200)
+    expect(body.organization).toEqual({ id: 'org-1' })
     expect(body).toMatchObject({
       departments: [{ id: 'dept-1', name: '部门甲', parent_name: null }],
       users: [], roles: [], spaces: [], member_access: false,

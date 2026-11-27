@@ -1,7 +1,7 @@
 {
   "status": "approved",
   "reviewer": "Codex / approved WP92 dependency and WP82 release review",
-  "reviewedAt": "2026-11-27T11:36:24.320Z",
+  "reviewedAt": "2026-11-27T12:36:55.681Z",
   "migrations": {
     "supabase/migrations/20261103090000_unified_organization_connections.sql": "ab99b807a91baf8587cd2908a1d75c895f3541e3d48eae045c5b47541745b2af",
     "supabase/migrations/20261103120000_organization_directory_cutover.sql": "64309804840cbb30c3b83c0ab737d6415c38a27fed85df747afb7108e9407179",
@@ -13,7 +13,9 @@
     "supabase/migrations/20261127165500_fxiaoke_directory_permission_reviews.sql": "8774f79fc95d9927e27c5e36f6a92628d2459e62133024ddf8513824fc4a8bb2",
     "supabase/migrations/20261127170000_fxiaoke_directory_scope_proof.sql": "f7c6a59fc7b0f600a63b0735a9f282658fcea61747bfea2b6e98b532a52b0de6",
     "supabase/migrations/20261127170500_fxiaoke_existing_member_login.sql": "8028327bc56f474ed8b7b164bc0e018ff6bfb407e1bf0646e9b2fa3c1974e19b",
-    "supabase/migrations/20261127171000_fxiaoke_observed_phone_history.sql": "6e779d4a6f5950281ebd3d97107dd907cb04223c01b93827b7aa28850e3b25cf"
+    "supabase/migrations/20261127171000_fxiaoke_observed_phone_history.sql": "6e779d4a6f5950281ebd3d97107dd907cb04223c01b93827b7aa28850e3b25cf",
+    "supabase/migrations/20261127171500_manual_department_disposal.sql": "fcdf3a6621d4c16472c9756c50fbcc284d7be5155cac56f3fa4576df1be5e0a5",
+    "supabase/migrations/20261127172000_guard_manual_department_parent_on_insert.sql": "c5b9420553c2eba2b3fc8ec3d199b700b5b6b4c007c2bb8a6b26be7304b743ac"
   },
   "findings": [
     "Membership inserts explicitly supply gen_random_uuid(); conflict updates preserve the existing membership_id. Native organization membership is inserted before department relationships to satisfy the production composite FK.",
@@ -39,7 +41,14 @@
     "The linked-member login transaction keeps the existing canonical ICU user and business record owner. Invited users retain the first-login rules. Rotation requires the linked employee trial to match the approved draft revision.",
     "The native PostgreSQL 17.6 rehearsal includes the live schema-only capabilities for pending role revocation and controlled parent changes. Browser database roles remain excluded from privileged directory, credential and proof functions.",
     "Live Production metadata showed that phone history was never installed. The additive migration with no historical user rewrites records observed numbers, preserves existing verified flags, and allows parallel observations so competing ownership can be isolated during a directory review. An existing legacy recorder is preserved. Changing to a different normalized number clears the previous verification in the same profile update.",
-    "Directory confirmation rechecks the effective organization-scoped grant inside the existing organization lock. The canonical system administrator and exact delegated org:source_apply grant use their established scope rules."
+    "Directory confirmation rechecks the effective organization-scoped grant inside the existing organization lock. The canonical system administrator and exact delegated org:source_apply grant use their established scope rules.",
+    "Manual disposal is bound to an immutable current organization plan with scoped roles, validates affected rows after taking organization and entity locks, and returns row-level blocked, applied or unchanged results.",
+    "Department archive preserves the original ID and historical references. Restoring an eligible archive preserves its original ID without reinstating removed memberships or permissions. Deleting or adding a child department uses the current organization lock and validates that the parent is active.",
+    "Native PostgreSQL 17.6 tests use two different connections to verify both write orders with the existing production parent-change and offboarding triggers. Archive-first rejects the later child insert. Child-first blocks the subsequent archive while the new dependent child remains.",
+    "The disposal SQL and route accept up to 1,000 entries in the department selection and in each action list. Local HTTP through PostgREST and PostgreSQL 17.6 verified 201 and 405 distinct primary transfers on one plan per submission, alongside selected secondary removals. Readback matched the complete intended result. A list of 1,001 entries is rejected.",
+    "Per-member disposal checks filter the shared effective affiliation query by canonical user before building relation rows. Whole-roster and archive checks still use the same unfiltered relation query. Targeted and whole-roster-filtered results matched in the HTTP fixture, including rehearsals with and without analyzed statistics.",
+    "One member's selected secondary removals share one native snapshot, permission decision and transactional save. A changed selection cannot reuse that decision. The native single-secondary path and existing add limit are preserved.",
+    "An archive preview reports remaining member or child blockers after planned actions are accounted for, and still reports an active sales space when the planned actions clear the other dependencies. The write path checks the department and current relations again."
   ],
   "catalogSha256": "7be4e8861689438ffcae2495940cf4b0d8ada3be6a465fcbb5d40f521c34c764"
 }

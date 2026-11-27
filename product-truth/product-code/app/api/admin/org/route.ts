@@ -566,6 +566,7 @@ export async function GET(req: NextRequest) {
       const departments = await getOrgDepartments(auth.orgId)
       const names = new Map(departments.map(department => [department.id, department.name]))
       return NextResponse.json({
+        organization: { id: auth.orgId },
         departments: departments.map(({ id, name, code, depth, parent_id }) => ({
           id, name, code, depth, parent_id,
           parent_name: parent_id ? names.get(parent_id) ?? null : null,
